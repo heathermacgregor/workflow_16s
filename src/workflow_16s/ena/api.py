@@ -177,50 +177,51 @@ class MetadataFetcher:
         self, ena_study_accession: str, max_workers: int = 5
     ) -> pd.DataFrame:
         """Get combined study and sample metadata."""
-        parent_task = self.progress.add_task(
-            f"[bold]Processing {ena_study_accession}", total=3
-        )
-
-        try:
-            study_task = self.progress.add_task(
-                "[white]Fetching study metadata...".ljust(50),
-                parent=parent_task,
-                total=1,
+        with self.track():
+            parent_task = self.progress.add_task(
+                f"[bold]Processing {ena_study_accession}", total=3
             )
-            study_df = self.get_study_metadata(ena_study_accession)
-            self.progress.update(study_task, completed=1)
-            self.progress.advance(parent_task)
 
-            samples = study_df["sample_accession"].dropna().unique().tolist()
-            sample_task = self.progress.add_task(
-                "[white]Fetching sample metadata...".ljust(50),
-                parent=parent_task,
-                total=len(samples),
-            )
-            sample_df = self.get_sample_metadata_concurrent(
-                sample_task, samples, max_workers
-            )
-            self.progress.advance(parent_task)
+            try:
+                study_task = self.progress.add_task(
+                    "[white]Fetching study metadata...".ljust(50),
+                    parent=parent_task,
+                    total=1,
+                )
+                study_df = self.get_study_metadata(ena_study_accession)
+                self.progress.update(study_task, completed=1)
+                self.progress.advance(parent_task)
 
-            merge_task = self.progress.add_task(
-                "[white]Merging study and sample metadata...".ljust(50),
-                parent=parent_task,
-                total=1,
-            )
-            merged_df = study_df.merge(
-                sample_df,
-                on="sample_accession",
-                how="left",
-                suffixes=("_study", ""),
-            )
-            self.progress.update(merge_task, completed=1)
-            self.progress.advance(parent_task)
+                samples = study_df["sample_accession"].dropna().unique().tolist()
+                sample_task = self.progress.add_task(
+                    "[white]Fetching sample metadata...".ljust(50),
+                    parent=parent_task,
+                    total=len(samples),
+                )
+                sample_df = self.get_sample_metadata_concurrent(
+                    sample_task, samples, max_workers
+                )
+                self.progress.advance(parent_task)
 
-            return merged_df
+                merge_task = self.progress.add_task(
+                    "[white]Merging study and sample metadata...".ljust(50),
+                    parent=parent_task,
+                    total=1,
+                )
+                merged_df = study_df.merge(
+                    sample_df,
+                    on="sample_accession",
+                    how="left",
+                    suffixes=("_study", ""),
+                )
+                self.progress.update(merge_task, completed=1)
+                self.progress.advance(parent_task)
 
-        finally:
-            self.progress.remove_task(parent_task)
+                return merged_df
 
+            finally:
+                self.progress.remove_task(parent_task)
+                
     def __enter__(self):
         if not self._auto_start:
             self.progress.start()
