@@ -30,7 +30,7 @@ from workflow_16s.logger import setup_logging
 from workflow_16s import ena
 from workflow_16s.utils import file_utils, misc_utils, dir_utils
 from workflow_16s.metadata.per_dataset import SubsetDataset
-from workflow_16s.sequences.sequence_utils import CutAdapt, BasicStats, FastQC, SeqKit
+from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
 
 # Rich progress bar imports
 
