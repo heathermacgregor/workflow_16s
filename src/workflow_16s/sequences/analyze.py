@@ -52,7 +52,7 @@ class PrimerChecker:
         forward = {}
         reverse = {}
         for region, (fwd, rev) in self.primer_regions.items():
-            rev_comp = str(Seq(rev).reverse_complement()
+            rev_comp = str(Seq(rev).reverse_complement())
             forward[region] = self._create_primer_pattern(fwd)
             reverse[region] = self._create_primer_pattern(rev_comp)
         return forward, reverse
@@ -502,4 +502,3 @@ def clean_temp_files(temp_files: Dict[str, List[Path]]):
                 f.unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"Failed to delete {f}: {e}")
-              
