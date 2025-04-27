@@ -83,7 +83,7 @@ class PrimerChecker:
         
         return pd.DataFrame.from_dict(dict(results), orient='index')
 
-    def _analyze_single_run(self, run_id: str, files: List[Union[str, Path]]]) -> Dict[str, float]:
+    def _analyze_single_run(self, run_id: str, files: List[Union[str, Path]]) -> Dict[str, float]:
         """Analyze a single sequencing run with precompiled patterns."""
         logger.info(f"Processing run {run_id}")
         primer_results = {}
