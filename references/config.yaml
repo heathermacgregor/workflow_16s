@@ -8,7 +8,7 @@ Dataset List: "/usr2/people/macgregor/workflow_16s/references/datasets.txt"
 Dataset Information: "/usr2/people/macgregor/workflow_16s/references/datasets.tsv"
 
 # The main directory for files to be written to
-Project Directory: "/usr2/people/macgregor/mtv_project"
+Project Directory: "/usr2/people/macgregor/mtv_final"
 
 # The directory where manual metadata files are stored as TSVs
 Manual Metadata Directory: "/usr2/people/macgregor/workflow_16s/references/manual_metadata"
@@ -38,10 +38,15 @@ BLAST:
 FastQC:
   run: True
   path: "/usr2/people/macgregor/fastqc/FastQC/fastqc"
-    
+
+#
+SeqKit:
+  run: True
+  path: "/usr2/people/macgregor/..."
+  
 # Cutadapt Processing Parameters
 Cutadapt:
-  run: True
+  run: False
   path: "/usr2/people/macgregor/..."
   start_trim: 0
   end_trim: 0
@@ -56,7 +61,7 @@ QIIME 2:
   # one, see: https://docs.qiime2.org/2024.10/install/native/
   Conda Environment: "/usr2/people/macgregor/miniconda3/envs/qiime2-amplicon-2024.10"
   Per-Dataset:
-    path: "/usr2/people/macgregor/workflow_16s/src/workflow_16s/qiime/execute_per_dataset.py"
+    path: "/usr2/people/macgregor/workflow_16s/src/workflow_16s/qiime/workflows/per_dataset_run.py"
     # Toggles whether to rerun per-dataset QIIME2 processing, regardless of whether output
     # files already exist.
     hard_rerun: True
