@@ -6,54 +6,59 @@ Comprehensive workflow for microbial community analysis from raw data to process
 # ===================================== IMPORTS ====================================== #
 
 # Standard library imports
-import itertools
-import logging
+
 import os
 import re
 import shutil
 import subprocess
+import logging
 import warnings
-from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
+from collections import Counter
+import itertools
+from pprint import pprint
 
 # Third-party imports
+
 import pandas as pd
 
 # Custom module imports
-from workflow_16s import ena
+
 from workflow_16s.config import get_config
 from workflow_16s.logger import setup_logging
-from workflow_16s.per_dataset.subset_dataset import SubsetDatasets
-from workflow_16s.sequences.sequence_utils import (
-    CutadaptPipeline,
-    FastQCPipeline,
-    get_sequencing_statistics,
-)
-from workflow_16s.utils import dir_utils, file_utils, misc_utils
+from workflow_16s import ena
+from workflow_16s.utils import file_utils, misc_utils, dir_utils
+from workflow_16s.metadata.per_dataset import SubsetDataset
+from workflow_16s.sequences.sequence_utils import CutAdapt, BasicStats, FastQC, SeqKit
 
 # Rich progress bar imports
+
 from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
+    BarColumn,
+    MofNCompleteColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
 
-# =============================== GLOBAL CONFIGURATION =============================== #
+
+# ================================= GLOBAL VARIABLES ================================= #
+
 
 DEFAULT_CONFIG = Path("/usr2/people/macgregor/workflow_16s/references/config.yaml")
 DEFAULT_CLASSIFIER = "silva-138-99-515-806"
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # Initialize logging
+
 logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore")
 
-# ================================== QIIME EXECUTION ================================= #
+
+# ================================= QIIME EXECUTION ================================== #
 
 
 def execute_per_dataset_qiime_workflow(
@@ -79,6 +84,7 @@ def execute_per_dataset_qiime_workflow(
         RuntimeError: If any critical workflow step fails
     """
     # Create directory structure with sanitized primer sequences
+
     sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
     qiime_dir = (
         subset_dirs["qiime"]
@@ -99,12 +105,14 @@ def execute_per_dataset_qiime_workflow(
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate input files
+
     metadata_path = metadata_dir / "sample-metadata.tsv"
     manifest_path = qiime_dir / "manifest.tsv"
     file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
     file_utils.write_manifest_tsv(seq_paths, manifest_path)
 
     # Build QIIME command components
+
     qiime_config = cfg["QIIME 2"]["Per-Dataset"]
     command = [
         "conda",
@@ -142,12 +150,13 @@ def execute_per_dataset_qiime_workflow(
     ]
 
     # Add conditional flags
+
     if qiime_config.get("hard_rerun", False):
         command.append("--hard_rerun")
     if qiime_config.get("Trim Sequences", {}).get("run", False):
         command.append("--trim_sequences")
-
     # Execute command with enhanced logging
+
     try:
         logger.info(f"Executing QIIME command: {' '.join(command)}")
         result = subprocess.run(
@@ -159,7 +168,6 @@ def execute_per_dataset_qiime_workflow(
         )
         logger.debug("QIIME STDOUT:\n%s", result.stdout)
         logger.debug("QIIME STDERR:\n%s", result.stderr)
-
     except subprocess.CalledProcessError as e:
         error_msg = (
             f"QIIME execution failed with code {e.returncode}:\n"
@@ -168,8 +176,8 @@ def execute_per_dataset_qiime_workflow(
         )
         logger.error(error_msg)
         raise RuntimeError("QIIME workflow failure") from e
-
     # Validate output files
+
     expected_outputs = [
         metadata_path,
         manifest_path,
@@ -186,7 +194,6 @@ def execute_per_dataset_qiime_workflow(
         raise RuntimeError(
             f"Missing required QIIME outputs: {', '.join(map(str, missing_outputs))}"
         )
-
     return {
         "metadata": metadata_path,
         "manifest": manifest_path,
@@ -196,7 +203,7 @@ def execute_per_dataset_qiime_workflow(
     }
 
 
-# =============================== SEQUENCE PROCESSING ================================ #
+# ================================ SEQUENCE PROCESSING =============================== #
 
 
 def process_sequences(
@@ -211,7 +218,8 @@ def process_sequences(
         Tuple containing paths to processed sequences and statistics DataFrame
     """
     # Download raw sequences
-    fetcher = ena.api.SeqFetcher(
+
+    fetcher = ena.api.SequenceFetcher(
         fastq_dir=subset_dirs["raw_seqs"], max_workers=cfg.get("max_workers", 16)
     )
     raw_seqs_paths = fetcher.download_run_fastq_concurrent(
@@ -219,21 +227,26 @@ def process_sequences(
     )
 
     # Initial quality assessment
-    raw_stats = get_sequencing_statistics(raw_seqs_paths)
+
+    seq_analyzer = BasicStats()
+    raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
     raw_df = pd.DataFrame(
         [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
     )
 
     if cfg["FastQC"]["run"]:
-        FastQCPipeline(
+        FastQC(
             fastq_paths=raw_seqs_paths,
             output_dir=subset_dirs["raw_seqs"],
             fastqc_path=cfg["FastQC"]["path"],
         ).run_pipeline()
-
+    if cfg["SeqKit"]["run"]:
+        raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(raw_seqs_paths)
+        pprint(raw_stats_seqkit["overall"])
     # Sequence trimming with Cutadapt
+
     if cfg["Cutadapt"]["run"]:
-        trimmed_seqs_paths, cutadapt_results = CutadaptPipeline(
+        trimmed_seqs_paths, cutadapt_results, cutadapt_proc_time = CutAdaptPipeline(
             fastq_dir=subset_dirs["raw_seqs"],
             trimmed_fastq_dir=subset_dirs["trimmed_seqs"],
             primer_fwd=subset["pcr_primer_fwd_seq"],
@@ -247,15 +260,18 @@ def process_sequences(
             rerun=True,
             region=subset["target_subfragment"],
         ).run(fastq_paths=raw_seqs_paths)
+        print(cutadapt_proc_time)
 
         # Post-trimming analysis
-        trimmed_stats = get_sequencing_statistics(trimmed_seqs_paths)
+
+        trimmed_stats = seq_analyzer.calculate_statistics(trimmed_seqs_paths)
         trimmed_df = pd.DataFrame(
             [{"Metric": k, "Trimmed": v} for k, v in trimmed_stats["overall"].items()]
         )
         processed_paths = trimmed_seqs_paths
 
         # Generate comparative statistics
+
         stats_df = pd.merge(raw_df, trimmed_df, on="Metric")
         stats_df["Percent Change"] = (
             (stats_df["Trimmed"] - stats_df["Raw"]) / stats_df["Raw"]
@@ -265,15 +281,13 @@ def process_sequences(
         stats_df = raw_df
         stats_df["Trimmed"] = None
         stats_df["Percent Change"] = None
-
     # Formatting for reporting
+
     numeric_cols = ["Raw", "Trimmed", "Percent Change"]
     stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
-        lambda x: f"{x:.2f}%"
-        if isinstance(x, float) and x != x
-        else f"{x:.2f}"
-        if x
-        else ""
+        lambda x: (
+            f"{x:.2f}%" if isinstance(x, float) and x != x else f"{x:.2f}" if x else ""
+        )
     )
 
     logger.info(
@@ -284,50 +298,63 @@ def process_sequences(
     )
 
     if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"]:
-        FastQCPipeline(
+        FastQC(
             fastq_paths=processed_paths,
             output_dir=subset_dirs["trimmed_seqs"],
             fastqc_path=cfg["FastQC"]["path"],
         ).run_pipeline()
-
+    if cfg["SeqKit"]["run"] and cfg["Cutadapt"]["run"]:
+        raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(processed_paths)
+        pprint(raw_stats_seqkit["overall"])
     return processed_paths, stats_df
 
 
-# ================================== MAIN WORKFLOW =================================== #
+# =================================== MAIN WORKFLOW ================================== #
 
 
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow with enhanced error handling."""
     try:
         # Extract information from the config YAML file
+
         cfg = get_config(config_path)
         # Set up directory structure for the designated project
+
         project_dir = dir_utils.SubDirs(cfg["Project Directory"])
         # Set up logging
+
         logger = setup_logging(project_dir.logs)
 
         # Load the list of datasets to process
+
         datasets = file_utils.load_datasets_list(cfg["Dataset List"])
         # Load the dataframe of dataset information
+
         datasets_info = file_utils.load_datasets_info(cfg["Dataset Information"])
 
         # Iterate through datasets
+
         success_subsets = []
         failed_subsets = []
 
-        for dataset in [datasets[1]]:
+        for dataset in [datasets[11]]:
             try:
-                subsets = SubsetDatasets(cfg)
+                subsets = SubsetDataset(cfg)
                 subsets.process(
                     dataset, file_utils.fetch_first_match(datasets_info, dataset)
                 )
 
                 for subset in subsets.success:
                     try:
-                        subset_dirs = project_dir.dataset_dirs(dataset=subset["dataset"])
+                        subset_dirs = project_dir.dataset_dirs(
+                            dataset=subset["dataset"]
+                        )
 
                         seq_paths, stats = process_sequences(
-                            cfg=cfg, subset_dirs=subset_dirs, subset=subset, logger=logger
+                            cfg=cfg,
+                            subset_dirs=subset_dirs,
+                            subset=subset,
+                            logger=logger,
                         )
 
                         qiime_outputs = execute_per_dataset_qiime_workflow(
@@ -341,6 +368,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                         success_subsets.append(subset["dataset"])
 
                         # Cleanup intermediate files if configured
+
                         if cfg.get("Clean Up FASTQ", True):
                             for dir_type in ["raw_seqs", "trimmed_seqs"]:
                                 dir_path = subset_dirs[dir_type]
@@ -355,20 +383,20 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                             logger.info(
                                 f"Cleaned up intermediate files for {subset['dataset']}"
                             )
-
                     except Exception as subset_error:
                         logger.error(
                             f"Failed processing subset {subset['dataset']}: {str(subset_error)}"
                         )
 
                         failed_subsets.append((subset["dataset"], str(subset_error)))
-
             except Exception as dataset_error:
-                logger.error(f"Failed processing dataset {dataset}: {str(dataset_error)}")
+                logger.error(
+                    f"Failed processing dataset {dataset}: {str(dataset_error)}"
+                )
 
                 failed_subsets.append((dataset, str(dataset_error)))
-
         # Final report
+
         logger.info(
             f"Processing complete. Success: {len(success_subsets)}, Failures: {len(failed_subsets)}"
         )
@@ -377,7 +405,6 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             logger.info("Failure details:")
             for dataset, error in failed_subsets:
                 logger.info(f"- {dataset}: {error}")
-
     except Exception as global_error:
         logger.critical(f"Fatal pipeline error: {str(global_error)}", exc_info=True)
         raise
