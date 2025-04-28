@@ -735,6 +735,7 @@ class FastQC:
                 '-q',
                 str(fastq_path)
             ]
+            print(' '.join(cmd))
             try:
                 subprocess.run(
                     cmd,
