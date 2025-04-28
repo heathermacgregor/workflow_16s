@@ -1,9 +1,9 @@
 name: workflow_16s
 channels:
-  - bioconda
-  - conda-forge
-  - biobakery
   - defaults
+  - conda-forge
+  - bioconda
+  - biobakery
 dependencies:
   - fastqc=0.11.9
   - _libgcc_mutex=0.1=conda_forge
