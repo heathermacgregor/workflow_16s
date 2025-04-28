@@ -15,6 +15,30 @@ then
     conda install -c conda-forge mamba
 fi
 
+# Check if fastqc is installed
+echo "Checking if fastqc is installed..."
+if ! command -v fastqc &> /dev/null
+then
+    echo "FastQC not found, installing FastQC..."
+    mamba install -c bioconda fastqc
+    # Ensure fastqc is added to the path
+    export PATH="$CONDA_PREFIX/bin:$PATH"
+else
+    echo "FastQC is already installed."
+fi
+
+# Check if seqkit is installed
+echo "Checking if seqkit is installed..."
+if ! command -v seqkit &> /dev/null
+then
+    echo "Seqkit not found, installing Seqkit..."
+    mamba install -c bioconda seqkit
+    # Ensure seqkit is added to the path
+    export PATH="$CONDA_PREFIX/bin:$PATH"
+else
+    echo "Seqkit is already installed."
+fi
+
 # Check if the environment already exists
 if conda env list | grep -q "$ENV_NAME"
 then
