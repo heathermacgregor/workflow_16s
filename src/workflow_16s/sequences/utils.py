@@ -725,11 +725,20 @@ class FastQC:
     def _run_fastqc_analyses(self):
         """Execute FastQC analyses with parallel processing."""
         self.results_dir.mkdir(parents=True, exist_ok=True)
-
+        # Get Conda environment's bin path
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if not conda_prefix:
+            raise RuntimeError("Conda environment not activated!")
+        
+        fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
+        if not fastqc_bin.exists():
+            raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
         def process_file(sample: str, fastq_path: Path):
+            
             cmd = [
-                "conda", "run", "-n", "workflow_16s", 
-                str(self.fastqc_path),
+                #"conda", "run", "-n", "workflow_16s", 
+                #str(self.fastqc_path),
+                str(fastqc_bin),
                 '-o', str(self.results_dir),
                 '-f', 'fastq',
                 '-q',
