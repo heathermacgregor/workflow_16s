@@ -15,7 +15,7 @@ from Bio.Seq import Seq
 
 import qiime2
 from qiime2 import Artifact
-from qiime2.plugins import demux
+from qiime2.plugins import demux, taxa
 from qiime2.plugins.cutadapt.methods import trim_single, trim_paired
 from qiime2.plugins.demux.visualizers import summarize as summarize_demux
 from qiime2.plugins.dada2.methods import (
@@ -562,3 +562,20 @@ def multiple_sequence_alignment(
         save_and_export_with_print(rooted_tree, out_dir, "rooted_tree")
 
     return alignment, tree, rooted_tree
+
+
+def collapse_to_genus(
+    output_dir: Union[str, Path],
+    table: Artifact,
+    taxonomy: Artifact,
+):
+    """"""
+    collapsed_table = taxa.actions.collapse(
+        table=feature_table,
+        taxonomy=taxonomy,
+        level=6
+    ).collapsed_table
+    
+    save_and_export_with_print(collapsed_table, output_dir, "table_6")
+    
+    return collapsed_table
