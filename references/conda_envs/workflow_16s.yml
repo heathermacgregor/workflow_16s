@@ -6,7 +6,6 @@ channels:
   - defaults
 dependencies:
   - fastqc=0.11.9
-  - seqkit=0.16.0
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
   - alsa-lib=1.2.13=hb9d3cd8_0
