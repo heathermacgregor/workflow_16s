@@ -50,8 +50,11 @@ from rich.progress import (
 
 # ================================= GLOBAL VARIABLES ================================= #
 
-
-DEFAULT_CONFIG = Path("/usr2/people/macgregor/workflow_16s/references/config.yaml")
+DEFAULT_CONFIG = (
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))) 
+    / "references" 
+    / "config.yaml"
+)
 DEFAULT_CLASSIFIER = "silva-138-99-515-806"
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
