@@ -13,9 +13,15 @@ then
     conda install -c conda-forge mamba
 fi
 
-# Create the conda environment from the YAML file using mamba
-echo "Creating conda environment from environment.yml using mamba..."
-mamba env create --file ./references/conda_envs/workflow_16s.yml --prefix "$ENV_PATH"
+# Check if the environment already exists
+if conda env list | grep -q "$ENV_NAME"
+then
+    echo "The environment '$ENV_NAME' already exists. Activating the environment..."
+else
+    # Create the conda environment from the YAML file using mamba if it doesn't exist
+    echo "The environment '$ENV_NAME' does not exist. Creating the environment from environment.yml using mamba..."
+    mamba env create --file ./references/conda_envs/workflow_16s.yml --prefix "$ENV_PATH"
+fi
 
 # Activate the environment
 echo "Activating the conda environment..."
