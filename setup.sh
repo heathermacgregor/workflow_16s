@@ -20,7 +20,7 @@ echo "Checking if fastqc is installed..."
 if ! command -v fastqc &> /dev/null
 then
     echo "FastQC not found, installing FastQC..."
-    mamba install -c bioconda fastqc
+    mamba install -c bioconda fastqc -y
     # Ensure fastqc is added to the path
     export PATH="$CONDA_PREFIX/bin:$PATH"
 else
@@ -32,7 +32,7 @@ echo "Checking if seqkit is installed..."
 if ! command -v seqkit &> /dev/null
 then
     echo "Seqkit not found, installing Seqkit..."
-    mamba install -c bioconda seqkit
+    mamba install -c bioconda seqkit -y
     # Ensure seqkit is added to the path
     export PATH="$CONDA_PREFIX/bin:$PATH"
 else
