@@ -701,11 +701,19 @@ class FastQC:
 
     def _validate_environment(self):
         """Verify required dependencies and paths."""
-        if not self.fastqc_path.exists():
-            raise FileNotFoundError(f"FastQC executable not found at {self.fastqc_path}")
+        # Get Conda environment's bin path
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        print(conda_prefix)
+        if not conda_prefix:
+            raise RuntimeError("Conda environment not activated!")
+        
+        fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
+        print(fastqc_bin)
+        if not fastqc_bin.exists():
+            raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
         try:
             subprocess.run(
-                ["conda", "run", "-n", "workflow_16s", str(self.fastqc_path), '-v'],
+                [str(fastqc_bin), '-v'],
                 check=True,
                 capture_output=True,
                 text=True
@@ -727,10 +735,12 @@ class FastQC:
         self.results_dir.mkdir(parents=True, exist_ok=True)
         # Get Conda environment's bin path
         conda_prefix = os.environ.get("CONDA_PREFIX")
+        print(conda_prefix)
         if not conda_prefix:
             raise RuntimeError("Conda environment not activated!")
         
         fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
+        print(fastqc_bin)
         if not fastqc_bin.exists():
             raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
         def process_file(sample: str, fastq_path: Path):
