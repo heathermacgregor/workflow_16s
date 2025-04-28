@@ -55,6 +55,13 @@ DEFAULT_CONFIG = (
     / "references" 
     / "config.yaml"
 )
+DEFAULT_PER_DATASET = (
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))) 
+    / "src" 
+    / "qiime"
+    / "workflows"
+    / "per_dataset_run.py"
+)
 DEFAULT_CLASSIFIER = "silva-138-99-515-806"
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
@@ -174,7 +181,7 @@ def execute_per_dataset_qiime_workflow(
         "--prefix",
         str(cfg["QIIME 2"]["Conda Environment"]),
         "python",
-        str(qiime_config["path"]),
+        str(DEFAULT_PER_DATASET),#str(qiime_config["path"]),
         "--qiime_dir",
         str(qiime_dir),
         "--metadata_tsv",
@@ -384,7 +391,9 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
         
         # Load the dataframe of dataset information
         datasets_info = file_utils.load_datasets_info(cfg["Dataset Information"])
-        
+    except Exception as e:
+        print(e)
+    try:
         # Iterate through datasets
         success_subsets = []
         success_qiime_outputs = {}
