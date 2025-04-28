@@ -469,7 +469,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 f"Processing complete. Success: {len(success_subsets)}, Failures: {len(failed_subsets)}"
             )
 
-            print(success_qiime_subsets)
+            print(success_qiime_outputs)
 
             if failed_subsets:
                 logger.info("Failure details:")
@@ -480,7 +480,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
             #success_qiime_subsets = [find_required_files(project_dir.dataset_dirs(dataset=dataset)) for dataset in datasets]
             #success_qiime_subsets = [item for item in success_qiime_subsets if item is not None]
-            print(success_qiime_subsets)
+            success_qiime_subsets = success_qiime_outputs
 
             metadata_dfs = [file_utils.import_metadata_tsv(i["sample-metadata.tsv"]) for i in success_qiime_subsets]
             metadata_df = pd.concat(metadata_dfs)
