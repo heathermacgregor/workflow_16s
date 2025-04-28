@@ -571,7 +571,7 @@ def collapse_to_genus(
 ):
     """"""
     collapsed_table = taxa.actions.collapse(
-        table=feature_table,
+        table=table,
         taxonomy=taxonomy,
         level=6
     ).collapsed_table
