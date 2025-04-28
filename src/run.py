@@ -309,7 +309,24 @@ def process_sequences(
         ).run_pipeline()
     if cfg["SeqKit"]["run"]:
         raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(raw_seqs_paths)
-        pprint(raw_stats_seqkit["overall"])
+        stats = raw_stats_seqkit["overall"]
+        output = (
+            "\n=== Summary ===\n"
+            f"Total Samples: {stats['total_samples']}\n"
+            f"Total Files: {stats['total_files']}\n"
+            f"Total Sequences: {stats['total_sequences']:,}\n"
+            f"Total Bases: {stats['total_bases']:,}\n\n"
+            "=== Length Distribution ===\n"
+            f"Average Length: {stats['avg_length']:.2f}\n"
+            f"Minimum Length: {stats['min_length']}\n"
+            f"Maximum Length: {stats['max_length']}\n\n"
+            "=== Most Common Lengths ===\n"
+            + ''.join(
+                f"{rank:>2}. {length:3} bp - {count:>9,} sequences\n"
+                for rank, (length, count) in enumerate(stats['most_common_lengths'], start=1)
+            )
+        )
+        logger.info(output)
     # Sequence trimming with Cutadapt
 
     if cfg["Cutadapt"]["run"]:
