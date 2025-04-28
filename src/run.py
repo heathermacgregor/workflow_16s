@@ -482,21 +482,24 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             #success_qiime_subsets = [item for item in success_qiime_subsets if item is not None]
             success_qiime_subsets = success_qiime_outputs
 
-            metadata_dfs = [file_utils.import_metadata_tsv(i["sample-metadata.tsv"]) for i in success_qiime_subsets]
+            #metadata_dfs = [file_utils.import_metadata_tsv(i["sample-metadata.tsv"]) for i in success_qiime_subsets]
+            # Corrected by using the actual metadata key from your data:
+            metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) for i in success_qiime_subsets.values()]
             metadata_df = pd.concat(metadata_dfs)
             metadata_df = metadata_df.drop(['bam_galaxy', 'bam_bytes', 'bam_aspera', 'bam_md5', 'bam_ftp', 'secondary_sample_accession', 'submission_accession', 'secondary_study_accession', 'library_name'], axis=1)
             print(metadata_df)
             for col in metadata_df.columns:
                 logger.info(col)
                 logger.info(metadata_df[col].value_counts())
-
-            table_dfs = [file_utils.import_features_biom(i["feature-table.biom"]) for i in success_qiime_subsets]
+            # Corrected by using the actual metadata key from your data:
+            table_dfs = [file_utils.import_features_biom(i['table_6']) for i in success_qiime_subsets.values()]
+            #table_dfs = [file_utils.import_features_biom(i["feature-table.biom"]) for i in success_qiime_subsets]
             for df in table_dfs:
                 print(df.shape)
-
-            taxonomy_dicts = [file_utils.Taxonomy(i["taxonomy.tsv"]).taxonomy for i in success_qiime_subsets]
-            for d in taxonomy_dicts:
-                print(len(d))
+            
+            #taxonomy_dicts = [file_utils.Taxonomy(i["taxonomy.tsv"]).taxonomy for i in success_qiime_subsets]
+            #for d in taxonomy_dicts:
+            #    print(len(d))
 
         except Exception as global_error:
             logger.critical(f"Fatal pipeline error: {str(global_error)}", exc_info=True)
