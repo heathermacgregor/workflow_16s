@@ -23,9 +23,9 @@ then
     echo "Creating $QIIME_ENV environment..."
     OS=$(uname -s)
     if [ "$OS" = "Linux" ]; then
-        YAML_URL="https://data.qiime2.org/distro/core/qiime2-2024.10-py310-linux-conda.yml"
+        YAML_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-linux-conda.yml"
     elif [ "$OS" = "Darwin" ]; then
-        YAML_URL="https://data.qiime2.org/distro/core/qiime2-2024.10-py310-osx-conda.yml"
+        YAML_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
     else
         echo "Unsupported operating system: $OS"
         exit 1
