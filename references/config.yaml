@@ -8,7 +8,7 @@ Dataset List: "./datasets.txt"
 Dataset Information: "./datasets.tsv"
 
 # The main directory for files to be written to
-Project Directory: ".../test"
+Project Directory: "../../test"
 
 # The directory where manual metadata files are stored as TSVs
 Manual Metadata Directory: "./manual_metadata"
