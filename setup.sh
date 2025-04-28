@@ -40,6 +40,35 @@ else
     echo "The $QIIME_ENV environment already exists."
 fi
 
+# Add Silva classifier installation
+CLASSIFIER_DIR="$SCRIPT_DIR/references/classifier"
+CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
+CLASSIFIER_URL="https://data.qiime2.org/2024.10/common/silva-138-99-515-806-classifier.qza"
+
+echo "Checking for SILVA classifier..."
+mkdir -p "$CLASSIFIER_DIR"
+
+if [ ! -f "$CLASSIFIER_FILE" ]; then
+    echo "Downloading SILVA classifier..."
+    if command -v wget &> /dev/null; then
+        wget -O "$CLASSIFIER_FILE" "$CLASSIFIER_URL"
+    elif command -v curl &> /dev/null; then
+        curl -L "$CLASSIFIER_URL" -o "$CLASSIFIER_FILE"
+    else
+        echo "Error: Need wget or curl to download classifier"
+        exit 1
+    fi
+    
+    # Verify download success
+    if [ ! -f "$CLASSIFIER_FILE" ]; then
+        echo "Failed to download SILVA classifier"
+        exit 1
+    fi
+    echo "Successfully downloaded SILVA classifier"
+else
+    echo "SILVA classifier already exists at: $CLASSIFIER_FILE"
+fi
+
 # Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME"
 then
