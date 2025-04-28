@@ -14,7 +14,6 @@ from qiime2 import Artifact, Metadata
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
-from logger import setup_logging
 from utils import create_dir, get_average_lengths, get_truncation_lengths
 
 from api.api_io import construct_file_path, output_files_exist, load_with_print
