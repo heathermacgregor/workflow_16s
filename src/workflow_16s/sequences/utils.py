@@ -705,7 +705,7 @@ class FastQC:
             raise FileNotFoundError(f"FastQC executable not found at {self.fastqc_path}")
         try:
             subprocess.run(
-                [str(self.fastqc_path), '-v'],
+                ["conda", "run", "-n", "workflow_16s", str(self.fastqc_path), '-v'],
                 check=True,
                 capture_output=True,
                 text=True
