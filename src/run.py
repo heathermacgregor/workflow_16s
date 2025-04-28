@@ -178,8 +178,10 @@ def execute_per_dataset_qiime_workflow(
     command = [
         "conda",
         "run",
-        "--prefix",
-        f'{os.getcwd()}/{str(cfg["QIIME 2"]["Conda Environment"])}',
+        #"--prefix",
+        #f'{os.getcwd()}/{str(cfg["QIIME 2"]["Conda Environment"])}',
+        "--name",
+        str(cfg["QIIME 2"]["Conda Environment"]),
         "python",
         str(DEFAULT_PER_DATASET),#str(qiime_config["path"]),
         "--qiime_dir",
