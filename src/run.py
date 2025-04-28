@@ -7,7 +7,7 @@ Comprehensive workflow for microbial community analysis from raw data to process
 
 # Standard library imports
 
-import os
+import os, sys
 import re
 import shutil
 import subprocess
