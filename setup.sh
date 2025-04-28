@@ -40,34 +40,43 @@ else
     echo "The $QIIME_ENV environment already exists."
 fi
 
-# Add Silva classifier installation
-CLASSIFIER_DIR="$SCRIPT_DIR/references/classifier"
-CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
-CLASSIFIER_URL="https://data.qiime2.org/2024.10/common/silva-138-99-515-806-classifier.qza"
+# Add Silva database files installation
+CLASSIFIER_DIR="$SCRIPT_DIR/references/classifiers"
+SILVA_FILES=(
+    "silva-138-99-515-806-classifier.qza"
+    "silva-138-99-seqs-515-806.qza"
+    "silva-138-99-tax-515-806.qza"
+)
+BASE_URL="https://data.qiime2.org/2024.10/common"
 
-echo "Checking for SILVA classifier..."
+echo "Checking for SILVA database files..."
 mkdir -p "$CLASSIFIER_DIR"
 
-if [ ! -f "$CLASSIFIER_FILE" ]; then
-    echo "Downloading SILVA classifier..."
-    if command -v wget &> /dev/null; then
-        wget -O "$CLASSIFIER_FILE" "$CLASSIFIER_URL"
-    elif command -v curl &> /dev/null; then
-        curl -L "$CLASSIFIER_URL" -o "$CLASSIFIER_FILE"
-    else
-        echo "Error: Need wget or curl to download classifier"
-        exit 1
-    fi
+for FILE in "${SILVA_FILES[@]}"; do
+    FILE_PATH="$CLASSIFIER_DIR/$FILE"
+    FILE_URL="$BASE_URL/$FILE"
     
-    # Verify download success
-    if [ ! -f "$CLASSIFIER_FILE" ]; then
-        echo "Failed to download SILVA classifier"
-        exit 1
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "Downloading $FILE..."
+        if command -v wget &> /dev/null; then
+            wget -O "$FILE_PATH" "$FILE_URL"
+        elif command -v curl &> /dev/null; then
+            curl -L "$FILE_URL" -o "$FILE_PATH"
+        else
+            echo "Error: Need wget or curl to download files"
+            exit 1
+        fi
+        
+        # Verify download success
+        if [ ! -f "$FILE_PATH" ]; then
+            echo "Failed to download $FILE"
+            exit 1
+        fi
+        echo "Successfully downloaded $FILE"
+    else
+        echo "$FILE already exists at: $FILE_PATH"
     fi
-    echo "Successfully downloaded SILVA classifier"
-else
-    echo "SILVA classifier already exists at: $CLASSIFIER_FILE"
-fi
+done
 
 # Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME"
