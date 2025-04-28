@@ -300,7 +300,7 @@ def process_sequences(
         FastQC(
             fastq_paths=raw_seqs_paths,
             output_dir=subset_dirs["raw_seqs"],
-            fastqc_path=cfg["FastQC"]["path"],
+            fastqc_path="fastqc"#cfg["FastQC"]["path"],
         ).run_pipeline()
     if cfg["SeqKit"]["run"]:
         raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(raw_seqs_paths)
@@ -363,7 +363,7 @@ def process_sequences(
         FastQC(
             fastq_paths=processed_paths,
             output_dir=subset_dirs["trimmed_seqs"],
-            fastqc_path=cfg["FastQC"]["path"],
+            fastqc_path="fastqc",#cfg["FastQC"]["path"],
         ).run_pipeline()
     if cfg["SeqKit"]["run"] and cfg["Cutadapt"]["run"]:
         raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(processed_paths)
