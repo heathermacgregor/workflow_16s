@@ -3,15 +3,15 @@ ENA:
   email: "macgregor@berkeley.edu"
 
 # List of datasets
-Dataset List: "/usr2/people/macgregor/workflow_16s/references/datasets.txt"
+Dataset List: "./datasets.txt"
 # Experimental details for each dataset
-Dataset Information: "/usr2/people/macgregor/workflow_16s/references/datasets.tsv"
+Dataset Information: "./datasets.tsv"
 
 # The main directory for files to be written to
 Project Directory: "/usr2/people/macgregor/mtv_final"
 
 # The directory where manual metadata files are stored as TSVs
-Manual Metadata Directory: "/usr2/people/macgregor/workflow_16s/references/manual_metadata"
+Manual Metadata Directory: "./manual_metadata"
 
 # How to determine what PCR primers to use
 PCR Primers: "manual"
@@ -32,12 +32,12 @@ Sequence Validation:
     
 # BLAST Database Parameters
 BLAST:
-  path: "/usr2/people/macgregor/mtv_project/references/hrm_workflow/blast/silva_16s/SILVA_16S_db"
+  path: "./blast/silva_16s/SILVA_16S_db"
     
 # FastQC Processing Parameters
 FastQC:
   run: True
-  path: "/usr2/people/macgregor/fastqc/FastQC/fastqc"
+  path: ".../fastqc/FastQC/fastqc"
 
 #
 SeqKit:
@@ -59,9 +59,9 @@ Cutadapt:
 QIIME 2:
   # Enter the path to your QIIME 2 Amplicon conda environment below. If you do not have
   # one, see: https://docs.qiime2.org/2024.10/install/native/
-  Conda Environment: "/usr2/people/macgregor/miniconda3/envs/qiime2-amplicon-2024.10"
+  Conda Environment: ".../qiime2-amplicon-2024.10"
   Per-Dataset:
-    path: "/usr2/people/macgregor/workflow_16s/src/workflow_16s/qiime/workflows/per_dataset_run.py"
+    path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     # Toggles whether to rerun per-dataset QIIME2 processing, regardless of whether output
     # files already exist.
     hard_rerun: True
@@ -86,7 +86,7 @@ QIIME 2:
     Taxonomic Classification:
       run: True
       hard_rerun: True
-      classifier_dir: "/usr2/people/macgregor/mtv_project/references/hrm_workflow/classifier/silva-138-99-515-806"
+      classifier_dir: "./classifier/silva-138-99-515-806"
       classifier: "silva-138-99-515-806"
       classify_method: "sklearn"
       maxaccepts: 50
