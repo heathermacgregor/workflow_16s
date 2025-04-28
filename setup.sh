@@ -41,7 +41,7 @@ else
 fi
 
 # Add Silva database files installation
-CLASSIFIER_DIR="$SCRIPT_DIR/references/classifiers"
+CLASSIFIER_DIR="$SCRIPT_DIR/references/classifier/silva-138-99-515-806"
 SILVA_FILES=(
     "silva-138-99-515-806-classifier.qza"
     "silva-138-99-seqs-515-806.qza"
