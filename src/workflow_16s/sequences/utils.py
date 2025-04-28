@@ -170,14 +170,12 @@ class SeqKit:
         
         # Get basic statistics
         stats_output = self._run_seqkit([
-            "conda", "run", "-n", "workflow_16s", 
             "seqkit", "stats", "-T", "--all", str(fpath)
         ])
         stats = self._parse_stats(stats_output)
         
         # Get length distribution
         lengths_output = self._run_seqkit([
-            "conda", "run", "-n", "workflow_16s", 
             "seqkit", "fx2tab", "-n", "-l", str(fpath)
         ])
         length_counts = Counter(
@@ -703,12 +701,10 @@ class FastQC:
         """Verify required dependencies and paths."""
         # Get Conda environment's bin path
         conda_prefix = os.environ.get("CONDA_PREFIX")
-        print(conda_prefix)
         if not conda_prefix:
             raise RuntimeError("Conda environment not activated!")
         
         fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
-        print(fastqc_bin)
         if not fastqc_bin.exists():
             raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
         try:
@@ -735,12 +731,10 @@ class FastQC:
         self.results_dir.mkdir(parents=True, exist_ok=True)
         # Get Conda environment's bin path
         conda_prefix = os.environ.get("CONDA_PREFIX")
-        print(conda_prefix)
         if not conda_prefix:
             raise RuntimeError("Conda environment not activated!")
         
         fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
-        print(fastqc_bin)
         if not fastqc_bin.exists():
             raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
         def process_file(sample: str, fastq_path: Path):
@@ -754,7 +748,6 @@ class FastQC:
                 '-q',
                 str(fastq_path)
             ]
-            print(' '.join(cmd))
             try:
                 subprocess.run(
                     cmd,
