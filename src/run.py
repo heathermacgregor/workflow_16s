@@ -376,13 +376,14 @@ def process_sequences(
     )
     stats_df = stats_df.dropna(axis=1, how='all')
 
-
+    """
     logger.info(
         f"\n{'[Dataset]'.ljust(DEFAULT_N)} {subset['dataset']}\n"
         f"{'[Platform]'.ljust(DEFAULT_N)} {subset['instrument_platform']}\n"
         f"{'[Layout]'.ljust(DEFAULT_N)} {subset['library_layout']}\n"
         f"{stats_df.to_string(index=False)}"
     )
+    """
 
     if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"]:
         FastQC(
