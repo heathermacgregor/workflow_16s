@@ -58,6 +58,7 @@ DEFAULT_CONFIG = (
 DEFAULT_PER_DATASET = (
     Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))) 
     / "src" 
+    / "workflow_16s"
     / "qiime"
     / "workflows"
     / "per_dataset_run.py"
