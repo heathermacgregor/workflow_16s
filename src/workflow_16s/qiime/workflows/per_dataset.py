@@ -29,6 +29,8 @@ from api.api import (
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
+DEFAULT_N = 20
+
 # ==================================== FUNCTIONS ===================================== #
 
 
@@ -100,7 +102,7 @@ class Dataset:
             if not self._output_files_exist(["rep-seqs", "table", "stats", "taxonomy", "table_6"]):
                 self._process_sequences()
         except Exception as e:
-            print(f"\t🞫 Workflow failed: {e}")
+            print(f"  🞫 Workflow failed: {e}")
             raise
 
     def _process_sequences(self) -> None:
@@ -111,10 +113,10 @@ class Dataset:
 
         if self.params["trim_sequences"]:
             seqs = self._import_sequences()
-            print("\t✔ Successfully imported sequences.")
+            print("  ✔ Imported raw sequences")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("\t✔ Calculated initial sequence statistics.")
+            print("  ✔ Calculated raw sequence statistics")
 
             trim_length = stats["trunc_len_f"]
 
@@ -125,10 +127,10 @@ class Dataset:
                 n_cores=32,
                 save_intermediates=True,
             )
-            print("\t✔ Completed sequence trimming.")
+            print("  ✔ Completed sequence trimming")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("\t✔ Updated stats post-trimming.")
+            print("  ✔ Updated statistics post-trimming")
 
             counts_file = (
                 self.qiime_dir
@@ -137,17 +139,17 @@ class Dataset:
             )
         else:
             seqs = self._import_sequences()
-            print("\t✔ Successfully imported sequences.")
+            print("  ✔ Imported trimmed sequences")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("\t✔ Calculated trimmed sequence statistics.")
+            print("  ✔ Calculated trimmed sequence statistics")
 
             counts_file = (
                 self.qiime_dir / "demux-stats" / "per-sample-fastq-counts.tsv"
             )
 
         seqs = filter_samples_for_denoising(seqs=seqs, counts_file=counts_file)
-        print("\t✔ Filtered low-count samples")
+        print("  ✔ Filtered low-count samples")
 
         if layout == "paired":
             trunc_params = (stats["trunc_len_f"], stats["trunc_len_r"])
@@ -155,17 +157,17 @@ class Dataset:
             trunc_params = (stats["trunc_len"], 0)
 
         rep_seqs, table, stats = self._denoise_sequences(seqs, *trunc_params)
-        print("\t✔ Completed denoising pipeline")
+        print("  ✔ Completed denoising pipeline")
 
         taxonomy = self._taxonomic_classification(rep_seqs)
-        print("\t✔ Assigned taxonomy to features")
+        print("  ✔ Assigned taxonomy to features")
         
         collapsed_table = collapse_to_genus(
             output_dir=self.qiime_dir,
             table=table,
             taxonomy=taxonomy,
         )
-        print("\t✔ Collapsed table to genus level")
+        print("  ✔ Collapsed table to genus level")
 
     def _import_sequences(self) -> Any:
         """Import sequences from manifest file or load existing artifact."""
@@ -173,13 +175,13 @@ class Dataset:
             try:
                 return load_with_print(self.qiime_dir, self.file_registry["seqs"].stem)
             except Exception as e:
-                print(f"\t🞫 Reload failed: {e}. Reimporting sequences.")
+                print(f"  🞫 Reload failed: {e}. Reimporting sequences.")
 
         return self._import_seqs_from_manifest()
 
     def _import_seqs_from_manifest(self) -> Any:
         """Import raw sequence data using QIIME2 manifest format."""
-        print(f"\t⟲ Importing sequences from: {self.file_registry['manifest']}...")
+        print(f"  ⟲ Importing sequences from [{self.file_registry['manifest']}]")
         try:
             return import_seqs_from_manifest(
                 output_dir=self.qiime_dir,
@@ -187,7 +189,7 @@ class Dataset:
                 library_layout=self.params["library_layout"],
             )
         except Exception as e:
-            raise RuntimeError(f"\t🞫 Sequence import failed: {e}")
+            raise RuntimeError(f"  🞫 Sequence import failed: {e}")
 
     def _calculate_sequence_stats(self, seqs: Artifact) -> Dict[str, float]:
         """Calculate sequence length metrics from demultiplexing statistics."""
@@ -204,8 +206,8 @@ class Dataset:
             quality_threshold=25,
         )
 
-        print(f"{'Average Length'.ljust(50)}: {avg_len_f} / {avg_len_r}")
-        print(f"{'Truncation Length'.ljust(50)}: {trunc_len_f} / {trunc_len_r}")
+        print(f"    {'Average Length'.ljust(DEFAULT_N)}: {avg_len_f} / {avg_len_r}")
+        print(f"    {'Truncation Length'.ljust(DEFAULT_N)}: {trunc_len_f} / {trunc_len_r}")
 
         return {
             "avg_len_f": avg_len_f,
@@ -225,12 +227,12 @@ class Dataset:
         """Trim adapter sequences and quality filter with restart capability."""
         if self._output_files_exist(["trimmed-seqs"]):
             try:
-                print("\t⟲ Reloading trimmed sequences...")
+                print("  ⟲ Reloading trimmed sequences...")
                 return load_with_print(
                     self.qiime_dir, self.file_registry["trimmed-seqs"].stem
                 )
             except Exception as e:
-                print(f"\t🞫 Reload failed: {e}. Reprocessing sequences.")
+                print(f"  🞫 Reload failed: {e}. Reprocessing sequences.")
 
         return self._perform_trimming(
             seqs, trim_length, minimum_length, n_cores, save_intermediates
@@ -246,10 +248,10 @@ class Dataset:
     ) -> Any:
         """Execute primer removal and quality trimming using CutAdapt."""
         print(
-            "\t⟲ Trimming sequences with parameters:\n"
-            f"\t   Primers: {self.params['fwd_primer']} / {self.params['rev_primer']}\n"
-            f"\t   Trim Length: {trim_length}\n"
-            f"\t   Minimum Length: {minimum_length}"
+            "  ⟲ Trimming sequences with parameters:\n"
+            f"    • Primers:        {self.params['fwd_primer']} / {self.params['rev_primer']}\n"
+            f"    • Trim Length:    {trim_length}\n"
+            f"    • Minimum Length: {minimum_length}"
         )
         return trim_sequences(
             output_dir=self.qiime_dir,
@@ -271,14 +273,14 @@ class Dataset:
         """Perform ASV/OTU clustering and chimera removal."""
         if self._output_files_exist(["rep-seqs", "table", "stats"]):
             try:
-                print("\t⟲ Loading cached denoising results...")
+                print("  ⟲ Loading cached denoising results...")
                 return (
                     load_with_print(self.qiime_dir, "rep-seqs"),
                     load_with_print(self.qiime_dir, "table"),
                     load_with_print(self.qiime_dir, "stats"),
                 )
             except Exception as e:
-                print(f"\t🞫 Reload failed: {e}. Reprocessing denoising.")
+                print(f"  🞫 Reload failed: {e}. Reprocessing denoising.")
 
         return self._perform_denoising(seqs, trunc_len_f, trunc_len_r)
 
@@ -306,16 +308,16 @@ class Dataset:
         """Assign taxonomy using pre-trained classifier."""
         if self._output_files_exist(["taxonomy"]):
             try:
-                print("\t⟲ Loading cached taxonomy...")
+                print("  ⟲ Loading cached taxonomy...")
                 return load_with_print(self.qiime_dir, "taxonomy")
             except Exception as e:
-                print(f"\t🞫 Reload failed: {e}. Reclassifying taxonomy.")
+                print(f"  🞫 Reload failed: {e}. Reclassifying taxonomy.")
 
         return self._assign_taxonomy(rep_seqs)
 
     def _assign_taxonomy(self, rep_seqs: Artifact) -> Artifact:
         """Execute taxonomic classification using q2-feature-classifier."""
-        print(f"\t⟲ Using classifier: {self.params['classifier']}")
+        print(f"  ⟲ Using classifier: {self.params['classifier']}")
         return classify_taxonomy(
             output_dir=self.qiime_dir,
             rep_seqs=rep_seqs,
@@ -345,8 +347,8 @@ class WorkflowRunner:
         try:
             self.workflow = Dataset(self.args)
             self.workflow.run_workflow()
-            print("\t✔ Workflow completed successfully!")
+            print("  ✔ Workflow completed successfully!")
             return True
         except Exception as e:
-            print(f"\t🞫 Workflow execution failed: {e}")
+            print(f"  🞫 Workflow execution failed: {e}")
             return False
