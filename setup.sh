@@ -12,7 +12,7 @@ echo "Checking if mamba is installed..."
 if ! command -v mamba &> /dev/null
 then
     echo "Mamba not found, installing mamba..."
-    conda install -c conda-forge mamba
+    conda install -y -c conda-forge mamba
 fi
 
 # Check if fastqc is installed
@@ -20,7 +20,7 @@ echo "Checking if fastqc is installed..."
 if ! command -v fastqc &> /dev/null
 then
     echo "FastQC not found, installing FastQC..."
-    mamba install -c bioconda fastqc -y
+    mamba install -y -c bioconda fastqc
     # Ensure fastqc is added to the path
     export PATH="$CONDA_PREFIX/bin:$PATH"
 else
@@ -32,7 +32,7 @@ echo "Checking if seqkit is installed..."
 if ! command -v seqkit &> /dev/null
 then
     echo "Seqkit not found, installing Seqkit..."
-    mamba install -c bioconda seqkit -y
+    mamba install -y -c bioconda seqkit 
     # Ensure seqkit is added to the path
     export PATH="$CONDA_PREFIX/bin:$PATH"
 else
