@@ -25,12 +25,12 @@ import pandas as pd
 
 # Custom module imports
 
-from workflow_16s.config import get_config
-from workflow_16s.logger import setup_logging
-from workflow_16s import ena
-from workflow_16s.utils import file_utils, misc_utils, dir_utils
-from workflow_16s.metadata.per_dataset import SubsetDataset
-from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
+from .config import get_config
+from .logger import setup_logging
+from .ena import ena
+from .utils import file_utils, misc_utils, dir_utils
+from .metadata.per_dataset import SubsetDataset
+from .sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
 
 # Rich progress bar imports
 
