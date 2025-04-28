@@ -170,12 +170,14 @@ class SeqKit:
         
         # Get basic statistics
         stats_output = self._run_seqkit([
+            "conda", "run", "-n", "workflow_16s", 
             "seqkit", "stats", "-T", "--all", str(fpath)
         ])
         stats = self._parse_stats(stats_output)
         
         # Get length distribution
         lengths_output = self._run_seqkit([
+            "conda", "run", "-n", "workflow_16s", 
             "seqkit", "fx2tab", "-n", "-l", str(fpath)
         ])
         length_counts = Counter(
@@ -352,7 +354,7 @@ class CutAdapt:
     def run_cutadapt(parameters: Dict) -> Union[str, None]:
         """Runs CutAdapt with specified parameters."""
         try:
-            command = ["cutadapt", "--report=minimal"]
+            command = ["conda", "run", "-n", "workflow_16s", "cutadapt", "--report=minimal"]
             if parameters["cores"] is not None:
                 command.extend(["--cores", str(parameters["cores"])])
             if (
@@ -726,6 +728,7 @@ class FastQC:
 
         def process_file(sample: str, fastq_path: Path):
             cmd = [
+                "conda", "run", "-n", "workflow_16s", 
                 str(self.fastqc_path),
                 '-o', str(self.results_dir),
                 '-f', 'fastq',
