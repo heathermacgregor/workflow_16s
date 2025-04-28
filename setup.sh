@@ -29,6 +29,17 @@ fi
 echo "Activating the conda environment..."
 source activate "$ENV_PATH"
 
+# Check if fastqc is available in PATH or at the given path
+if ! command -v fastqc &> /dev/null; then
+    echo "Error: 'fastqc' executable not found in PATH."
+    echo "Please install FastQC or provide the correct path."
+    exit 1
+fi
+
+# If fastqc is found, proceed with the workflow
+echo "FastQC found. Running analysis..."
+fastqc --version  # Example: Print version to confirm it works
+
 # Run the Python script 'run.py'
 echo "Running the Python script 'run.py'..."
 python "$SCRIPT_DIR/src/run.py"
