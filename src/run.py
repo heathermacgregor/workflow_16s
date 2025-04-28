@@ -252,6 +252,7 @@ def execute_per_dataset_qiime_workflow(
         / qiime_config["Taxonomic Classification"]["classifier"]
         / "taxonomy"
         / "taxonomy.tsv",
+        qiime_dir / "table_6" / "feature-table.biom",
     ]
 
     missing_outputs = file_utils.missing_output_files(expected_outputs)
@@ -265,6 +266,7 @@ def execute_per_dataset_qiime_workflow(
         "table": expected_outputs[2],
         "rep_seqs": expected_outputs[3],
         "taxonomy": expected_outputs[4],
+        "table_6": expected_outputs[5],
     }
 
 
@@ -429,7 +431,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                 logger=logger,
                             )
 
-                            success_qiime_outputs[subset["datasets"]] = qiime_outputs
+                            success_qiime_outputs[subset["dataset"]] = qiime_outputs
                             success_subsets.append(subset["dataset"])
 
                             # Cleanup intermediate files if configured
@@ -476,8 +478,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
 
 
-            success_qiime_subsets = [find_required_files(project_dir.dataset_dirs(dataset=dataset)) for dataset in datasets]
-            success_qiime_subsets = [item for item in success_qiime_subsets if item is not None]
+            #success_qiime_subsets = [find_required_files(project_dir.dataset_dirs(dataset=dataset)) for dataset in datasets]
+            #success_qiime_subsets = [item for item in success_qiime_subsets if item is not None]
             print(success_qiime_subsets)
 
             metadata_dfs = [file_utils.import_metadata_tsv(i["sample-metadata.tsv"]) for i in success_qiime_subsets]
