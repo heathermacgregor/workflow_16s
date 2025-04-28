@@ -6,7 +6,6 @@ channels:
   - defaults
 dependencies:
   - qt
-  - pyqt  # If you need PyQt (Qt bindings for Python)
   - fastqc=0.11.9
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
