@@ -7,7 +7,7 @@ SCRIPT_DIR=$(dirname "$(realpath "$0")")
 ENV_NAME="workflow_16s"
 ENV_PATH="$SCRIPT_DIR/$ENV_NAME"
 
-# Ensure mamba is installed (if it's not already in the system, you can install it via conda)
+# Ensure mamba is installed
 echo "Checking if mamba is installed..."
 if ! command -v mamba &> /dev/null
 then
@@ -15,36 +15,57 @@ then
     conda install -y -c conda-forge mamba
 fi
 
-# Check if the environment already exists
+# Create qiime2 environment if it doesn't exist
+QIIME_ENV="qiime2-amplicon-2024.10"
+echo "Checking if $QIIME_ENV environment exists..."
+if ! conda env list | grep -q "$QIIME_ENV"
+then
+    echo "Creating $QIIME_ENV environment..."
+    OS=$(uname -s)
+    if [ "$OS" = "Linux" ]; then
+        YAML_URL="https://data.qiime2.org/distro/core/qiime2-2024.10-py310-linux-conda.yml"
+    elif [ "$OS" = "Darwin" ]; then
+        YAML_URL="https://data.qiime2.org/distro/core/qiime2-2024.10-py310-osx-conda.yml"
+    else
+        echo "Unsupported operating system: $OS"
+        exit 1
+    fi
+    
+    mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
+    if [ $? -ne 0 ]; then
+        echo "Failed to create $QIIME_ENV environment"
+        exit 1
+    fi
+else
+    echo "The $QIIME_ENV environment already exists."
+fi
+
+# Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME"
 then
     echo "The environment '$ENV_NAME' already exists. Activating the environment..."
 else
-    # Create the conda environment from the YAML file using mamba if it doesn't exist
+    # Create workflow environment
     echo "The environment '$ENV_NAME' does not exist. Creating the environment from environment.yml using mamba..."
     mamba env create --file "$SCRIPT_DIR/references/conda_envs/workflow_16s.yml" --prefix "$ENV_PATH"
 fi
 
-# Activate the environment
+# Activate the workflow environment
 echo "Activating the conda environment..."
 source activate "$ENV_PATH"
 
-# Check if fastqc is available in PATH or at the given path
+# Check if fastqc is available
 if ! command -v fastqc &> /dev/null; then
     echo "Error: 'fastqc' executable not found in PATH."
     echo "Please install FastQC or provide the correct path."
     exit 1
 fi
 
-# If fastqc is found, proceed with the workflow
-echo "FastQC found. Running analysis..."
-fastqc --version  # Example: Print version to confirm it works
-
-# Run the Python script 'run.py'
+# Run Python script
 echo "Running the Python script 'run.py'..."
 python "$SCRIPT_DIR/src/run.py"
 
-# Deactivate the environment after running the script
+# Deactivate environment
 echo "Deactivating the conda environment..."
 conda deactivate
 
