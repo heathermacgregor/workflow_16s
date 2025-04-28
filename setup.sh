@@ -54,11 +54,16 @@ fi
 echo "Activating the conda environment..."
 source activate "$ENV_PATH"
 
-# Check if fastqc is available
+# Check if fastqc is available and install if missing
 if ! command -v fastqc &> /dev/null; then
-    echo "Error: 'fastqc' executable not found in PATH."
-    echo "Please install FastQC or provide the correct path."
-    exit 1
+    echo "FastQC not found. Installing FastQC..."
+    mamba install -y -c bioconda fastqc
+    
+    # Verify installation
+    if ! command -v fastqc &> /dev/null; then
+        echo "Failed to install FastQC. Please install manually."
+        exit 1
+    fi
 fi
 
 # Run Python script
