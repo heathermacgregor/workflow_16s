@@ -64,6 +64,7 @@ DEFAULT_PER_DATASET = (
     / "per_dataset_run.py"
 )
 DEFAULT_CLASSIFIER = "silva-138-99-515-806"
+DEFAULT_N = 20
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # Initialize logging
@@ -312,14 +313,14 @@ def process_sequences(
         stats = raw_stats_seqkit["overall"]
         output = (
             "\n=== Summary ===\n"
-            f"Total Samples: {stats['total_samples']}\n"
-            f"Total Files: {stats['total_files']}\n"
-            f"Total Sequences: {stats['total_sequences']:,}\n"
-            f"Total Bases: {stats['total_bases']:,}\n\n"
+            f"{'Total Samples'.ljust(DEFAULT_N)}: {stats['total_samples']}\n"
+            f"{'Total Files'.ljust(DEFAULT_N)}: {stats['total_files']}\n"
+            f"{'Total Sequences'.ljust(DEFAULT_N)}: {stats['total_sequences']:,}\n"
+            f"{'Total Bases'.ljust(DEFAULT_N)}: {stats['total_bases']:,}\n\n"
             "=== Length Distribution ===\n"
-            f"Average Length: {stats['avg_length']:.2f}\n"
-            f"Minimum Length: {stats['min_length']}\n"
-            f"Maximum Length: {stats['max_length']}\n\n"
+            f"{'Average Length'.ljust(DEFAULT_N)}: {stats['avg_length']:.2f}\n"
+            f"{'Minimum Length'.ljust(DEFAULT_N)}: {stats['min_length']}\n"
+            f"{'Maximum Length'.ljust(DEFAULT_N)}: {stats['max_length']}\n\n"
             "=== Most Common Lengths ===\n"
             + ''.join(
                 f"{rank:>2}. {length:3} bp - {count:>9,} sequences\n"
@@ -377,9 +378,9 @@ def process_sequences(
 
 
     logger.info(
-        f"\n{'[Dataset]'.ljust(30)} {subset['dataset']}\n"
-        f"{'[Platform]'.ljust(30)} {subset['instrument_platform']}\n"
-        f"{'[Layout]'.ljust(30)} {subset['library_layout']}\n"
+        f"\n{'[Dataset]'.ljust(DEFAULT_N)} {subset['dataset']}\n"
+        f"{'[Platform]'.ljust(DEFAULT_N)} {subset['instrument_platform']}\n"
+        f"{'[Layout]'.ljust(DEFAULT_N)} {subset['library_layout']}\n"
         f"{stats_df.to_string(index=False)}"
     )
 
