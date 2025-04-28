@@ -93,7 +93,7 @@ class Dataset:
 
     def _load_metadata(self) -> None:
         """Load and validate QIIME2 metadata file for sample information."""
-        print(f"\t⟲ Importing metadata from {self.file_registry['metadata']}...")
+        print(f"  ⟲ Importing metadata from {self.file_registry['metadata']}...")
         self.metadata = qiime2.Metadata.load(str(self.file_registry["metadata"]))
 
     def run_workflow(self) -> None:
