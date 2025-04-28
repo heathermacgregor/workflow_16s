@@ -47,15 +47,16 @@ SILVA_FILES=(
     "silva-138-99-tax-515-806.qza"
 )
 CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
-BASE_URL="https://data.qiime2.org/2024.10/common"
+QIIME_BASE_URL="https://data.qiime2.org/2024.10/common"
+ZENODO_CLASSIFIER_URL="https://zenodo.org/records/15299267/files/silva-138-99-515-806-classifier.qza"
 
 echo "Checking for SILVA database files..."
 mkdir -p "$CLASSIFIER_DIR"
 
-# First download the base files
+# First download sequence and taxonomy files from QIIME2
 for FILE in "${SILVA_FILES[@]}"; do
     FILE_PATH="$CLASSIFIER_DIR/$FILE"
-    FILE_URL="$BASE_URL/$FILE"
+    FILE_URL="$QIIME_BASE_URL/$FILE"
     
     if [ ! -f "$FILE_PATH" ]; then
         echo "Downloading $FILE..."
@@ -78,29 +79,27 @@ for FILE in "${SILVA_FILES[@]}"; do
     fi
 done
 
-# Now create classifier if needed
+# Now download classifier from Zenodo
 if [ ! -f "$CLASSIFIER_FILE" ]; then
-    echo "Creating classifier artifact..."
+    echo "Downloading classifier from Zenodo..."
     
-    # Activate QIIME2 environment
-    source activate "$QIIME_ENV"
-    
-    # Train classifier
-    qiime feature-classifier fit-classifier-naive-bayes \
-        --i-reference-reads "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
-        --i-reference-taxonomy "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
-        --o-classifier "$CLASSIFIER_FILE"
-    
-    # Cleanup and deactivate
-    conda deactivate
-    
-    if [ ! -f "$CLASSIFIER_FILE" ]; then
-        echo "Failed to create classifier artifact"
+    if command -v wget &> /dev/null; then
+        wget --no-verbose --show-progress -O "$CLASSIFIER_FILE" "$ZENODO_CLASSIFIER_URL" || { echo "Download failed"; rm -f "$CLASSIFIER_FILE"; exit 1; }
+    elif command -v curl &> /dev/null; then
+        curl -# -L "$ZENODO_CLASSIFIER_URL" -o "$CLASSIFIER_FILE" || { echo "Download failed"; rm -f "$CLASSIFIER_FILE"; exit 1; }
+    else
+        echo "Error: Need wget or curl to download classifier"
         exit 1
     fi
-    echo "Successfully created classifier artifact"
+    
+    # Verify classifier download
+    if [ ! -f "$CLASSIFIER_FILE" ]; then
+        echo "Failed to download classifier from Zenodo"
+        exit 1
+    fi
+    echo "Successfully downloaded classifier from Zenodo"
 else
-    echo "Classifier artifact already exists at: $CLASSIFIER_FILE"
+    echo "Classifier already exists at: $CLASSIFIER_FILE"
 fi
 
 # Check if the workflow environment exists
