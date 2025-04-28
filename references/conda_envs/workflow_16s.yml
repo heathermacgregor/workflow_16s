@@ -1,48 +1,24 @@
 name: workflow_16s
 channels:
   - conda-forge
-  - defaults
   - bioconda
+  - defaults
   - biobakery
-  - anaconda
 dependencies:
   - python=3.9
-  # Core dependencies
   - fastqc=0.11.9
   - biom-format=2.1.16
   - biopython=1.85
   - cutadapt=5.0
-  - pysam=0.20.0
-  - mamba=1.0.0
-  
-  # Fixed packages with version constraints
-  - openjdk=11.0.16
-  - opencv=4.5.2
+  - dnaio=1.2.2
+  - h5py=3.12.1
+  - matplotlib=3.7.1
+  - numpy=1.24.3
   - scikit-learn=1.1.2
   - scipy=1.10.0
-  - numpy=1.24.3
-  - matplotlib=3.7.1
-  
-  # Simplified system libraries (remove build hashes)
-  - zlib=1.2.13
-  - openssl=1.1.1
-  - libuuid=1.0.3
-  - libwebp=1.2.2
-  - libxml2=2.10.3
-  - sqlite=3.41.0
-  
-  # Conda-forge prioritized packages
-  - qt-main=6.4.3
-  - pyside6=6.3.1
-  - lz4-c=1.9.4
-  - brotli=1.1.0
-  
-  # Visualization stack
   - seaborn=0.11.2
-  - networkx=3.0
+  - pysam=0.20.0
   - tqdm=4.64.1
-  
-  # Removed problematic packages (find alternatives if needed):
-  # - _libgcc_mutex=0.1  # Managed automatically by conda
-  # - libmamba-core=2.1.0  # Part of mamba installation
-  # - libnbconvert=6.7.2  # Part of jupyter stack
+  - openjdk=11.0.16
+  - mamba=1.0.0
+  - pip=23.0.1
