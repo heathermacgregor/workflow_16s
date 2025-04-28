@@ -86,6 +86,7 @@ class Dataset:
             "taxonomy": construct_file_path(self.qiime_dir, "taxonomy"),
             "alignment": construct_file_path(self.qiime_dir, "alignment"),
             "tree": construct_file_path(self.qiime_dir, "tree"),
+            "table_6": construct_file_path(self.qiime_dir, "table_6")
         }
 
     def _load_metadata(self) -> None:
@@ -96,7 +97,7 @@ class Dataset:
     def run_workflow(self) -> None:
         """Execute main processing pipeline with error handling and restart capability."""
         try:
-            if not self._output_files_exist(["rep-seqs", "table", "stats"]):
+            if not self._output_files_exist(["rep-seqs", "table", "stats", "taxonomy", "table_6"]):
                 self._process_sequences()
         except Exception as e:
             print(f"Workflow failed: {e}")
