@@ -485,7 +485,7 @@ def classify_taxonomy(
                     "perc_identity": perc_identity, "query_cov": query_cov}
             if classify_method == "reads":
                 ref_reads = load_with_print(
-                    Path(classifier_dir), f"{classifier}-seqs", "qza"
+                    Path(classifier_dir), "silva-138-99-seqs-515-806", "qza"
                 )
                 args["reference_reads"] = ref_reads
             elif classify_method == "db":
