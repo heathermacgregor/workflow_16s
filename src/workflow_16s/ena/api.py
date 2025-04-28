@@ -62,9 +62,9 @@ class MetadataFetcher:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40, complete_style="red", finished_style="green"),
             MofNCompleteColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeElapsedColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeRemainingColumn(),
         )
         self._auto_start = auto_start_progress
@@ -261,9 +261,9 @@ class SequenceFetcher:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             MofNCompleteColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeElapsedColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeRemainingColumn(),
         )
 
