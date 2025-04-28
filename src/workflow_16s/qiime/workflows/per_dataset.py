@@ -14,6 +14,7 @@ from qiime2 import Artifact, Metadata
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
+from logger import setup_logging
 from utils import create_dir, get_average_lengths, get_truncation_lengths
 
 from api.api_io import construct_file_path, output_files_exist, load_with_print
@@ -23,6 +24,7 @@ from api.api import (
     filter_samples_for_denoising,
     denoise_sequences,
     classify_taxonomy,
+    collapse_to_genus,
 )
 
 # Suppress warnings
@@ -157,6 +159,13 @@ class Dataset:
 
         taxonomy = self._taxonomic_classification(rep_seqs)
         print("Assigned taxonomy to features")
+        
+        collapsed_table = collapse_to_genus(
+            output_dir=self.qiime_dir,
+            table=table,
+            taxonomy=taxonomy,
+        )
+        print("Collapsed table to genus level")
 
     def _import_sequences(self) -> Any:
         """Import sequences from manifest file or load existing artifact."""
