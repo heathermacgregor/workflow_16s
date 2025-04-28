@@ -5,6 +5,7 @@ channels:
   - bioconda
   - biobakery
 dependencies:
+  - python=3.9
   - fastqc=0.11.9
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
