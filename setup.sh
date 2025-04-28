@@ -43,15 +43,16 @@ fi
 # Add Silva database files installation
 CLASSIFIER_DIR="$SCRIPT_DIR/references/classifier/silva-138-99-515-806"
 SILVA_FILES=(
-    "silva-138-99-515-806-classifier.qza"
     "silva-138-99-seqs-515-806.qza"
     "silva-138-99-tax-515-806.qza"
 )
+CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
 BASE_URL="https://data.qiime2.org/2024.10/common"
 
 echo "Checking for SILVA database files..."
 mkdir -p "$CLASSIFIER_DIR"
 
+# First download the base files
 for FILE in "${SILVA_FILES[@]}"; do
     FILE_PATH="$CLASSIFIER_DIR/$FILE"
     FILE_URL="$BASE_URL/$FILE"
@@ -59,17 +60,16 @@ for FILE in "${SILVA_FILES[@]}"; do
     if [ ! -f "$FILE_PATH" ]; then
         echo "Downloading $FILE..."
         if command -v wget &> /dev/null; then
-            wget -O "$FILE_PATH" "$FILE_URL"
+            wget --no-verbose --show-progress -O "$FILE_PATH" "$FILE_URL" || { echo "Download failed"; rm -f "$FILE_PATH"; exit 1; }
         elif command -v curl &> /dev/null; then
-            curl -L "$FILE_URL" -o "$FILE_PATH"
+            curl -# -L "$FILE_URL" -o "$FILE_PATH" || { echo "Download failed"; rm -f "$FILE_PATH"; exit 1; }
         else
             echo "Error: Need wget or curl to download files"
             exit 1
         fi
         
-        # Verify download success
         if [ ! -f "$FILE_PATH" ]; then
-            echo "Failed to download $FILE"
+            echo "Failed to download $FILE - URL might be incorrect or file unavailable"
             exit 1
         fi
         echo "Successfully downloaded $FILE"
@@ -77,6 +77,46 @@ for FILE in "${SILVA_FILES[@]}"; do
         echo "$FILE already exists at: $FILE_PATH"
     fi
 done
+
+# Now create classifier if needed
+if [ ! -f "$CLASSIFIER_FILE" ]; then
+    echo "Creating classifier artifact..."
+    
+    # Activate QIIME2 environment
+    source activate "$QIIME_ENV"
+    
+    # Create temporary directory
+    TEMP_DIR=$(mktemp -d)
+    
+    # Import sequences and taxonomy
+    qiime tools import \
+        --type 'FeatureData[Sequence]' \
+        --input-path "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
+        --output-path "$TEMP_DIR/sequences.qza"
+
+    qiime tools import \
+        --type 'FeatureData[Taxonomy]' \
+        --input-path "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
+        --output-path "$TEMP_DIR/taxonomy.qza"
+
+    # Train classifier
+    qiime feature-classifier fit-classifier-naive-bayes \
+        --i-reference-reads "$TEMP_DIR/sequences.qza" \
+        --i-reference-taxonomy "$TEMP_DIR/taxonomy.qza" \
+        --o-classifier "$CLASSIFIER_FILE"
+    
+    # Cleanup and deactivate
+    rm -rf "$TEMP_DIR"
+    conda deactivate
+    
+    if [ ! -f "$CLASSIFIER_FILE" ]; then
+        echo "Failed to create classifier artifact"
+        exit 1
+    fi
+    echo "Successfully created classifier artifact"
+else
+    echo "Classifier artifact already exists at: $CLASSIFIER_FILE"
+fi
 
 # Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME"
