@@ -60,7 +60,8 @@ DEFAULT_MIN_SEQ_LENGTH = 150
 DEFAULT_N_CORES = 16
 DEFAULT_TARGET_REGION = 'V4'
 DEFAULT_MAX_WORKERS = 1
-DEFAULT_FASTQC_PATH = '/usr2/people/macgregor/fastqc/FastQC/fastqc'
+#DEFAULT_FASTQC_PATH = '/usr2/people/macgregor/fastqc/FastQC/fastqc'
+DEFAULT_FASTQC_PATH = 'fastqc'
 DEFAULT_RERUN_CUTADAPT = True
 
 # ==================================== FUNCTIONS ===================================== #
