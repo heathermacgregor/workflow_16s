@@ -85,28 +85,13 @@ if [ ! -f "$CLASSIFIER_FILE" ]; then
     # Activate QIIME2 environment
     source activate "$QIIME_ENV"
     
-    # Create temporary directory
-    TEMP_DIR=$(mktemp -d)
-    
-    # Import sequences and taxonomy
-    qiime tools import \
-        --type 'FeatureData[Sequence]' \
-        --input-path "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
-        --output-path "$TEMP_DIR/sequences.qza"
-
-    qiime tools import \
-        --type 'FeatureData[Taxonomy]' \
-        --input-path "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
-        --output-path "$TEMP_DIR/taxonomy.qza"
-
     # Train classifier
     qiime feature-classifier fit-classifier-naive-bayes \
-        --i-reference-reads "$TEMP_DIR/sequences.qza" \
-        --i-reference-taxonomy "$TEMP_DIR/taxonomy.qza" \
+        --i-reference-reads "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
+        --i-reference-taxonomy "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
         --o-classifier "$CLASSIFIER_FILE"
     
     # Cleanup and deactivate
-    rm -rf "$TEMP_DIR"
     conda deactivate
     
     if [ ! -f "$CLASSIFIER_FILE" ]; then
