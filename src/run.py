@@ -373,11 +373,13 @@ def process_sequences(
             f"{x:.2f}%" if isinstance(x, float) and x != x else f"{x:.2f}" if x else ""
         )
     )
+    stats_df = stats_df.dropna(axis=1, how='all')
+
 
     logger.info(
-        f"{subset['dataset']} Statistics\n"
-        f"Platform: {subset['instrument_platform']}\n"
-        f"Layout: {subset['library_layout']}\n"
+        f"\n{'[Dataset]'.ljust(30)} {subset['dataset']}\n"
+        f"{'[Platform]'.ljust(30)} {subset['instrument_platform']}\n"
+        f"{'[Layout]'.ljust(30)} {subset['library_layout']}\n"
         f"{stats_df.to_string(index=False)}"
     )
 
