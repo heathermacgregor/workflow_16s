@@ -55,7 +55,7 @@ def load_with_print(
     """Constructs a file path and loads a QIIME 2 artifact from it."""
     file_path = str(construct_file_path(file_dir, prefix, suffix))
     artifact = Artifact.load(file_path)
-    print(f"{'Loaded from':{n}.{n}}: {file_path}")
+    print(f"{'  Loaded from':{n}.{n}}: {file_path}")
     return artifact
 
 
@@ -69,7 +69,7 @@ def save_with_print(
     """"""
     file_path = str(construct_file_path(file_dir, prefix, suffix))
     artifact.save(file_path)
-    print(f"{'Saved to':{n}.{n}}: {file_path}")
+    print(f"{'  Saved to':{n}.{n}}: {file_path}")
 
 
 def export_with_print(
@@ -84,7 +84,7 @@ def export_with_print(
     dir_path = str(file_path).strip(suffix).strip(".")
     Path(dir_path).mkdir(parents=True, exist_ok=True)
     artifact.export_data(str(dir_path))
-    print(f"{'Exported to':{n}.{n}}: {file_path}")
+    print(f"{'  Exported to':{n}.{n}}: {file_path}")
 
 
 def save_and_export_with_print(
