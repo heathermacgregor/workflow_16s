@@ -53,7 +53,7 @@ ZENODO_CLASSIFIER_URL="https://zenodo.org/records/15299267/files/silva-138-99-51
 echo "Checking for SILVA database files..."
 mkdir -p "$CLASSIFIER_DIR"
 
-# First download sequence and taxonomy files from QIIME2
+# Download sequence and taxonomy files from QIIME2
 for FILE in "${SILVA_FILES[@]}"; do
     FILE_PATH="$CLASSIFIER_DIR/$FILE"
     FILE_URL="$QIIME_BASE_URL/$FILE"
@@ -79,25 +79,44 @@ for FILE in "${SILVA_FILES[@]}"; do
     fi
 done
 
-# Now download classifier from Zenodo
+# Try downloading classifier from Zenodo
 if [ ! -f "$CLASSIFIER_FILE" ]; then
-    echo "Downloading classifier from Zenodo..."
+    echo "Attempting classifier download from Zenodo..."
     
     if command -v wget &> /dev/null; then
-        wget --no-verbose --show-progress -O "$CLASSIFIER_FILE" "$ZENODO_CLASSIFIER_URL" || { echo "Download failed"; rm -f "$CLASSIFIER_FILE"; exit 1; }
+        wget --no-verbose --show-progress -O "$CLASSIFIER_FILE" "$ZENODO_CLASSIFIER_URL" || DL_FAILED=true
     elif command -v curl &> /dev/null; then
-        curl -# -L "$ZENODO_CLASSIFIER_URL" -o "$CLASSIFIER_FILE" || { echo "Download failed"; rm -f "$CLASSIFIER_FILE"; exit 1; }
+        curl -# -L "$ZENODO_CLASSIFIER_URL" -o "$CLASSIFIER_FILE" || DL_FAILED=true
     else
         echo "Error: Need wget or curl to download classifier"
         exit 1
     fi
     
-    # Verify classifier download
-    if [ ! -f "$CLASSIFIER_FILE" ]; then
-        echo "Failed to download classifier from Zenodo"
-        exit 1
+    # If download failed, generate classifier
+    if [ ${DL_FAILED} ] || [ ! -f "$CLASSIFIER_FILE" ]; then
+        echo "Zenodo download failed, generating classifier..."
+        rm -f "$CLASSIFIER_FILE" 2>/dev/null
+        
+        # Activate QIIME2 environment
+        source activate "$QIIME_ENV"
+        
+        # Generate classifier
+        qiime feature-classifier fit-classifier-naive-bayes \
+            --i-reference-reads "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
+            --i-reference-taxonomy "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
+            --o-classifier "$CLASSIFIER_FILE"
+        
+        # Deactivate environment
+        conda deactivate
+        
+        if [ ! -f "$CLASSIFIER_FILE" ]; then
+            echo "Failed to generate classifier artifact"
+            exit 1
+        fi
+        echo "Successfully generated classifier artifact"
+    else
+        echo "Successfully downloaded classifier from Zenodo"
     fi
-    echo "Successfully downloaded classifier from Zenodo"
 else
     echo "Classifier already exists at: $CLASSIFIER_FILE"
 fi
