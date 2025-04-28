@@ -285,9 +285,9 @@ class SeqKit:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40),
             MofNCompleteColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeElapsedColumn(),
-            TextColumn("•"),
+            TextColumn("[white]•"),
             TimeRemainingColumn(),
         ]
         
