@@ -505,7 +505,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             # Corrected by using the actual metadata key from your data:
             metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) for i in success_qiime_subsets.values()]
             metadata_df = pd.concat(metadata_dfs)
-            metadata_df = metadata_df.drop(['bam_galaxy', 'bam_bytes', 'bam_aspera', 'bam_md5', 'bam_ftp', 'secondary_sample_accession', 'submission_accession', 'secondary_study_accession', 'library_name'], axis=1)
+            #metadata_df = metadata_df.drop(['bam_galaxy', 'bam_bytes', 'bam_aspera', 'bam_md5', 'bam_ftp', 'secondary_sample_accession', 'submission_accession', 'secondary_study_accession', 'library_name'], axis=1)
             print(metadata_df)
             for col in metadata_df.columns:
                 logger.info(col)
