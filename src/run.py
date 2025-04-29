@@ -125,7 +125,9 @@ def find_required_files(test):
 
 
 def execute_per_dataset_qiime_workflow(
-    subset_dirs: Dict[str, Path],
+    qiime_dir: Union[str, Path],
+    metadata_path: Union[str, Path],
+    manifest_path: Union[str, Path],
     subset: Dict[str, Union[str, Path, bool, dict]],
     cfg: Dict[str, Any],
     seq_paths: List[Path],
@@ -146,33 +148,6 @@ def execute_per_dataset_qiime_workflow(
     Raises:
         RuntimeError: If any critical workflow step fails
     """
-    # Create directory structure with sanitized primer sequences
-
-    sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
-    qiime_dir = (
-        subset_dirs["qiime"]
-        / subset["instrument_platform"].lower()
-        / subset["library_layout"].lower()
-        / subset["target_subfragment"].lower()
-        / f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_REV_{sanitize(subset['pcr_primer_rev_seq'])}"
-    )
-    qiime_dir.mkdir(parents=True, exist_ok=True)
-
-    metadata_dir = (
-        subset_dirs["metadata"]
-        / subset["instrument_platform"].lower()
-        / subset["library_layout"].lower()
-        / subset["target_subfragment"].lower()
-        / f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_REV_{sanitize(subset['pcr_primer_rev_seq'])}"
-    )
-    metadata_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generate input files
-
-    metadata_path = metadata_dir / "sample-metadata.tsv"
-    manifest_path = qiime_dir / "manifest.tsv"
-    file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
-    file_utils.write_manifest_tsv(seq_paths, manifest_path)
 
     # Build QIIME command components
 
@@ -433,9 +408,12 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
                     for subset in subsets.success:
                         try:
-                            subset_dirs = project_dir.dataset_dirs(
-                                dataset=subset["dataset"]
+                            subset_dirs = project_dir.subset_dirs(
+                                subset=subset
                             )
+                        
+                            metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
+                            file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
 
                             seq_paths, stats = process_sequences(
                                 cfg=cfg,
@@ -444,8 +422,13 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                 logger=logger,
                             )
 
+                            manifest_path = subset_dirs["qiime"] / "manifest.tsv"
+                            file_utils.write_manifest_tsv(seq_paths, manifest_path)
+
                             qiime_outputs = execute_per_dataset_qiime_workflow(
-                                subset_dirs=subset_dirs,
+                                qiime_dir=subset_dirs["qiime"],
+                                metadata_path=metadata_path,
+                                manifest_path=manifest_path,
                                 subset=subset,
                                 cfg=cfg,
                                 seq_paths=seq_paths,
@@ -473,14 +456,14 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
                         except Exception as subset_error:
                             logger.error(
-                                f"Failed processing subset {subset['dataset']}: {str(subset_error)}"
+                                f"❌ Failed processing subset {subset['dataset']}: {str(subset_error)}"
                             )
 
                             failed_subsets.append((subset["dataset"], str(subset_error)))
 
                 except Exception as dataset_error:
                     logger.error(
-                        f"Failed processing dataset {dataset}: {str(dataset_error)}"
+                        f"❌ Failed processing dataset {dataset}: {str(dataset_error)}"
                     )
 
                     failed_subsets.append((dataset, str(dataset_error)))
@@ -523,7 +506,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             #    print(len(d))
 
         except Exception as global_error:
-            logger.critical(f"Fatal pipeline error: {str(global_error)}", exc_info=True)
+            logger.critical(f"❌ Fatal pipeline error: {str(global_error)}", exc_info=True)
             raise
     except Exception as e:
         print(e)
