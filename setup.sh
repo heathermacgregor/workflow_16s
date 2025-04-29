@@ -157,6 +157,8 @@ ENV_NAME="workflow_16s"
 
 # Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME" 
+then
+    echo "✅ Conda environment '$ENV_NAME' already exists."
 else
     # Create workflow environment
     echo "🔄 Creating the environment '$ENV_NAME' from environment.yml using mamba..."
