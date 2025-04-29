@@ -31,14 +31,39 @@ then
         exit 1
     fi
 
-    echo "⟲ Trying to create environment with mamba..."
+    echo "⟲ Trying to create environment with mamba using URL..."
     mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
+    
     if [ $? -ne 0 ]; then
-        echo "⚠ mamba failed, trying with conda instead..."
-        conda env create -n "$QIIME_ENV" --file "$YAML_URL"
-        if [ $? -ne 0 ]; then
-            echo "🞫 Failed to create $QIIME_ENV environment with both mamba and conda"
+        echo "⚠ Mamba failed with URL, attempting local download..."
+        YAML_FILE=$(basename "$YAML_URL")
+        
+        # Download YAML file
+        if command -v wget &> /dev/null; then
+            wget "$YAML_URL"
+        elif command -v curl &> /dev/null; then
+            curl -LO "$YAML_URL"
+        else
+            echo "🞫 Neither wget nor curl found. Cannot download YAML."
             exit 1
+        fi
+        
+        if [ ! -f "$YAML_FILE" ]; then
+            echo "🞫 Failed to download YAML file from $YAML_URL"
+            exit 1
+        fi
+        
+        echo "⟲ Retrying with mamba using local YAML file..."
+        mamba env create -n "$QIIME_ENV" --file "$YAML_FILE"
+        
+        if [ $? -ne 0 ]; then
+            echo "⚠ Mamba failed with local file, trying conda..."
+            conda env create -n "$QIIME_ENV" --file "$YAML_FILE"
+            
+            if [ $? -ne 0 ]; then
+                echo "🞫 Failed to create $QIIME_ENV environment with both mamba and conda"
+                exit 1
+            fi
         fi
     fi
     echo "✅ $QIIME_ENV environment created successfully"
