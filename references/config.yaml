@@ -36,10 +36,10 @@ BLAST:
     
 # FastQC Processing Parameters
 FastQC:
-  run: True
+  run: False
   
 SeqKit:
-  run: True
+  run: False
   
 Cutadapt:
   run: False
