@@ -41,7 +41,7 @@ then
         elif command -v curl &> /dev/null; then
             curl -LO "$YAML_URL"
         else
-            echo "❌ Neither wget nor curl found. Cannot download YAML."
+            echo "❌ Error: Need wget or curl to download files"
             exit 1
         fi
         
@@ -66,9 +66,9 @@ then
             fi
         fi
     fi
-    echo "✅ $QIIME_ENV environment created successfully"
+    echo "✅ Conda environment '$QIIME_ENV' created successfully"
 else
-    echo "✅ $QIIME_ENV environment already exists"
+    echo "✅ Conda environment '$QIIME_ENV' already exists"
 fi
 
 # Add Silva database files installation
@@ -104,7 +104,7 @@ for FILE in "${SILVA_FILES[@]}"; do
             echo "❌ Failed to download $FILE - URL might be incorrect or file unavailable"
             exit 1
         fi
-        echo "✅ Successfully downloaded $FILE"
+        echo "✅ Downloaded $FILE"
     else
         echo "  $FILE ➤ $FILE_PATH"
     fi
@@ -119,7 +119,7 @@ if [ ! -f "$CLASSIFIER_FILE" ]; then
     elif command -v curl &> /dev/null; then
         curl -# -L "$ZENODO_CLASSIFIER_URL" -o "$CLASSIFIER_FILE" || DL_FAILED=true
     else
-        echo "❌ Error: Need wget or curl to download classifier"
+        echo "❌ Error: Need wget or curl to download files"
         exit 1
     fi
     
@@ -144,9 +144,9 @@ if [ ! -f "$CLASSIFIER_FILE" ]; then
             echo "❌ Failed to generate classifier artifact"
             exit 1
         fi
-        echo "✅ Successfully generated classifier artifact"
+        echo "✅ Generated classifier artifact"
     else
-        echo "✅ Successfully downloaded classifier from Zenodo"
+        echo "✅ Downloaded classifier from Zenodo"
     fi
 else
     echo "  silva-138-99-515-806-classifier.qza ➤ $CLASSIFIER_FILE"
@@ -158,7 +158,7 @@ ENV_NAME="workflow_16s"
 # Check if the workflow environment exists
 if conda env list | grep -q "$ENV_NAME" 
 then
-    echo "✅ Conda environment '$ENV_NAME' already exists."
+    echo "✅ Conda environment '$ENV_NAME' already exists"
 else
     # Create workflow environment
     echo "🔄 Creating the environment '$ENV_NAME' from environment.yml using mamba..."
@@ -181,7 +181,7 @@ if ! command -v fastqc &> /dev/null; then
     
     # Verify installation
     if ! command -v fastqc &> /dev/null; then
-        echo "❌ Failed to install FastQC. Please install manually."
+        echo "❌ Failed to install FastQC"
         exit 1
     fi
 fi
