@@ -54,7 +54,6 @@ Cutadapt:
 QIIME 2:
   Per-Dataset:
     path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
-    """Comment"""
     # Toggles whether to rerun per-dataset QIIME2 processing, regardless of whether output files already exist.
     hard_rerun: True
     n_threads: 32
