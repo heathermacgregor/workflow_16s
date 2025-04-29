@@ -30,15 +30,20 @@ then
         echo "🞫 Unsupported operating system: $OS"
         exit 1
     fi
-    
+
+    echo "⟲ Trying to create environment with mamba..."
     mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
     if [ $? -ne 0 ]; then
-        echo "🞫 Failed to create $QIIME_ENV environment"
-        echo "mamba env create -n '$QIIME_ENV' --file '$YAML_URL'"
-        exit 1
+        echo "⚠ mamba failed, trying with conda instead..."
+        conda env create -n "$QIIME_ENV" --file "$YAML_URL"
+        if [ $? -ne 0 ]; then
+            echo "🞫 Failed to create $QIIME_ENV environment with both mamba and conda"
+            exit 1
+        fi
     fi
+    echo "✅ $QIIME_ENV environment created successfully"
 else
-    echo "The $QIIME_ENV environment already exists"
+    echo "✔ $QIIME_ENV environment already exists"
 fi
 
 # Add Silva database files installation
