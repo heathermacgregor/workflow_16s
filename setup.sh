@@ -148,11 +148,11 @@ if ! command -v fastqc &> /dev/null; then
 fi
 
 # Run Python script
-echo "Running the Python script 'run.py'..."
-python "$SCRIPT_DIR/src/run.py"
+#echo "Running the Python script 'run.py'..."
+#python "$SCRIPT_DIR/src/run.py"
 
 # Deactivate environment
 echo "Deactivating the conda environment..."
 conda deactivate
 
-echo "Environment setup and script execution complete!"
+echo "Environment setup complete!"
