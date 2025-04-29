@@ -77,4 +77,28 @@ class SubDirs:
             dataset_dir.mkdir(parents=True, exist_ok=True)
             
         return dataset_dirs
+
+    def subset_dirs(self, dataset: str):
+        subset_dirs = {}               
+        dirs = {
+            'tmp': self.tmp,
+            'metadata': self.metadata_per_dataset,
+            'raw_seqs': self.raw_seq_data_per_dataset,
+            'trimmed_seqs': self.trimmed_seq_data_per_dataset,
+            'qiime': self.qiime_data_per_dataset,
+        }
+        sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)  
+        for name, _dir in dirs.items():
+            subset_dir = (
+                _dir
+                / subset["dataset"]
+                / subset["instrument_platform"].lower()
+                / subset["library_layout"].lower()
+                / subset["target_subfragment"].lower()
+                / f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_REV_{sanitize(subset['pcr_primer_rev_seq'])}"
+            )
+            subset_dirs[name] = subset_dir
+            subset_dir.mkdir(parents=True, exist_ok=True)
+            
+        return subset_dirs
     
