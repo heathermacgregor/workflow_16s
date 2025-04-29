@@ -153,15 +153,16 @@ def execute_per_dataset_qiime_workflow(
 
     qiime_config = cfg["QIIME 2"]["Per-Dataset"]
     # Step 1: Get full path to the QIIME 2 conda environment
-    def get_conda_env_path(env_name):
+    def get_conda_env_path(env_name_substring):
         try:
             result = subprocess.run(["conda", "env", "list"], capture_output=True, text=True, check=True)
             for line in result.stdout.splitlines():
-                if line.startswith(env_name):
+                if env_name_substring in line:
                     return line.split()[-1]
-            raise ValueError(f"Conda environment '{env_name}' not found.")
+            raise ValueError(f"Conda environment containing '{env_name_substring}' not found.")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Error finding conda environment: {e}")
+
     
     qiime_env_name = "qiime2-amplicon-2024.10"
     qiime_env_path = get_conda_env_path(qiime_env_name)
