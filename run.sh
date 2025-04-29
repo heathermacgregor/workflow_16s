@@ -33,11 +33,11 @@ if [ -z "$ENV_PATH" ]; then
     echo "❌ Error: Could not find the path for environment '$ENV_NAME'"
     exit 1
 fi
-echo "The full path of the '$ENV_NAME' environment is: $ENV_PATH"
+#echo "The full path of the '$ENV_NAME' environment is: $ENV_PATH"
 
 # Save the path to a file for downstream usage
-echo "$ENV_PATH" > "$SCRIPT_DIR/workflow_16s_env_path.txt"
-echo "✅ Environment path saved to $SCRIPT_DIR/workflow_16s_env_path.txt"
+#echo "$ENV_PATH" > "$SCRIPT_DIR/workflow_16s_env_path.txt"
+#echo "✅ Environment path saved to $SCRIPT_DIR/workflow_16s_env_path.txt"
 
 # Activate the environment
 log "🔄 Activating the conda environment '$ENV_NAME'..."
