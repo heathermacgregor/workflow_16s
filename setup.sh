@@ -34,6 +34,7 @@ then
     mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
     if [ $? -ne 0 ]; then
         echo "🞫 Failed to create $QIIME_ENV environment"
+        echo "mamba env create -n '$QIIME_ENV' --file '$YAML_URL'"
         exit 1
     fi
 else
