@@ -32,7 +32,7 @@ then
     mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
     
     if [ $? -ne 0 ]; then
-        echo "⚠ Mamba failed with URL, attempting local download..."
+        echo "⚠️ Mamba failed with URL, attempting local download..."
         YAML_FILE=$(basename "$YAML_URL")
         
         # Download YAML file with cleanup handler
@@ -57,7 +57,7 @@ then
         mamba env create -n "$QIIME_ENV" --file "$YAML_FILE"
         
         if [ $? -ne 0 ]; then
-            echo "⚠ Mamba failed with local file, trying conda..."
+            echo "⚠️ Mamba failed with local file, trying conda..."
             conda env create -n "$QIIME_ENV" --file "$YAML_FILE"
             
             if [ $? -ne 0 ]; then
@@ -106,7 +106,7 @@ for FILE in "${SILVA_FILES[@]}"; do
         fi
         echo "✅ Successfully downloaded $FILE"
     else
-        echo "$FILE already exists at: $FILE_PATH"
+        echo "  $FILE ➤ $FILE_PATH"
     fi
 done
 
@@ -149,23 +149,29 @@ if [ ! -f "$CLASSIFIER_FILE" ]; then
         echo "✅ Successfully downloaded classifier from Zenodo"
     fi
 else
-    echo "Classifier already exists at: $CLASSIFIER_FILE"
+    echo "  silva-138-99-515-806-classifier.qza ➤ $CLASSIFIER_FILE"
 fi
 
 # Set the environment name and the path where the environment will be created
 ENV_NAME="workflow_16s"
 
 # Check if the workflow environment exists
-if conda env list | grep -q "$ENV_NAME"
-then
-    echo "🔄 Activating the conda environment '$ENV_NAME'..."
-    source activate "$ENV_NAME"
+if conda env list | grep -q "$ENV_NAME" 
 else
     # Create workflow environment
     echo "🔄 Creating the environment '$ENV_NAME' from environment.yml using mamba..."
     mamba env create -n "$ENV_NAME" --file "$SCRIPT_DIR/references/conda_envs/workflow_16s.yml" 
 fi
 
+echo "🔄 Activating the conda environment '$ENV_NAME'..."
+source activate "$ENV_NAME"
+
+if ! command -v mamba &> /dev/null
+then
+    echo "🔄 Installing mamba..."
+    conda install -y -c conda-forge mamba
+fi
+    
 # Check if fastqc is available and install if missing
 if ! command -v fastqc &> /dev/null; then
     echo "🔄 Installing FastQC..."
