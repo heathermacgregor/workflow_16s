@@ -42,13 +42,13 @@
 ### ⟦ Project Directory ⟧
 - **Default**: ``````
   
-### ⟦ ⟧
+### ⟦ Manual Metadata Directory ⟧
 - **Default**: ``````
   
-### ⟦ ⟧
+### ⟦ PCR Primers ⟧
 - **Default**: ``````
   
-### ⟦ ⟧
+### ⟦ Target Subfragment ⟧
 - **Default**: ``````
   
 
