@@ -78,7 +78,7 @@ class SubDirs:
             
         return dataset_dirs
 
-    def subset_dirs(self, dataset: str):
+    def subset_dirs(self, subset: str):
         subset_dirs = {}               
         dirs = {
             'tmp': self.tmp,
