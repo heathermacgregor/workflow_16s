@@ -27,10 +27,22 @@ if ! conda env list | grep -qE "^$ENV_NAME\s"; then
     exit 1
 fi
 
+# Determine the full path of the workflow_16s environment
+ENV_PATH=$(conda env list | grep -w "$ENV_NAME" | awk '{print $NF}')
+if [ -z "$ENV_PATH" ]; then
+    echo "❌ Error: Could not find the path for environment '$ENV_NAME'"
+    exit 1
+fi
+echo "The full path of the '$ENV_NAME' environment is: $ENV_PATH"
+
+# Save the path to a file for downstream usage
+echo "$ENV_PATH" > "$SCRIPT_DIR/workflow_16s_env_path.txt"
+echo "✅ Environment path saved to $SCRIPT_DIR/workflow_16s_env_path.txt"
+
 # Activate the environment
 log "🔄 Activating the conda environment '$ENV_NAME'..."
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_NAME"
+conda activate "$ENV_PATH"
 
 # Check if the Python script exists
 if [[ ! -f "$PYTHON_SCRIPT" ]]; then
