@@ -27,13 +27,17 @@ EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
 ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
 
 # Check if the environment exists
+# Check if the environment exists
 if [ -n "$EXACT_ENV_EXISTS" ]; then
     echo "✅ Exact environment '$ENV_NAME' already exists"
 elif [ -n "$ALT_ENV_NAME" ]; then
     ENV_NAME="$ALT_ENV_NAME"
     echo "✅ Found existing environment with matching suffix: '$ENV_NAME'"
-else ! conda env list | grep -qE "^$ENV_NAME\s"; then
-    echo "❌ Conda environment '$ENV_NAME' does not exist."
+else
+    echo "❌ No suitable conda environment found"
+    echo "   Expected either:"
+    echo "   - Exact name: '$ENV_NAME'"
+    echo "   - Or name ending with: 'workflow_16s'"
     exit 1
 fi
 
