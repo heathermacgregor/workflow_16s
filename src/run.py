@@ -72,9 +72,6 @@ ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore")
 
-
-from pathlib import Path
-
 def find_required_files(test):
     """
     Expects test to be a dict with keys:
