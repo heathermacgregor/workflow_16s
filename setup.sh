@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Get the absolute path of the directory where the script is located
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 
@@ -152,17 +151,28 @@ else
     echo "  silva-138-99-515-806-classifier.qza ➤ $CLASSIFIER_FILE"
 fi
 
-# Set the environment name and the path where the environment will be created
+# Set the base environment name
 ENV_NAME="workflow_16s"
 
-# Check if the workflow environment exists
-if conda env list | grep -q "$ENV_NAME" 
-then
-    echo "✅ Conda environment '$ENV_NAME' already exists"
+# Check for existing environments
+echo "🔄 Checking for existing 16s workflow environments..."
+EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
+ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
+
+# Determine which environment to use/create
+if [ -n "$EXACT_ENV_EXISTS" ]; then
+    echo "✅ Exact environment '$ENV_NAME' already exists"
+elif [ -n "$ALT_ENV_NAME" ]; then
+    ENV_NAME="$ALT_ENV_NAME"
+    echo "✅ Found existing environment with matching suffix: '$ENV_NAME'"
 else
-    # Create workflow environment
-    echo "🔄 Creating the environment '$ENV_NAME' from environment.yml using mamba..."
-    mamba env create -n "$ENV_NAME" --file "$SCRIPT_DIR/references/conda_envs/workflow_16s.yml" 
+    echo "🔄 Creating new environment '$ENV_NAME' from environment.yml..."
+    mamba env create -n "$ENV_NAME" --file "$SCRIPT_DIR/references/conda_envs/workflow_16s.yml"
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to create environment '$ENV_NAME'"
+        exit 1
+    fi
 fi
 
 echo "🔄 Activating the conda environment '$ENV_NAME'..."
