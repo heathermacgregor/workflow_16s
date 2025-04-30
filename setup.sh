@@ -4,7 +4,7 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 
 # Ensure mamba is installed
-echo "🔄 Checking if mamba is installed..."
+echo "🔍 Checking if mamba is installed..."
 if ! command -v mamba &> /dev/null
 then
     echo "🔄 Installing mamba..."
@@ -13,15 +13,15 @@ fi
 
 # Create qiime2 environment if it doesn't exist
 QIIME_ENV="qiime2-amplicon-2024.10"
-echo "🔄 Checking if $QIIME_ENV environment exists..."
+echo "🔍 Checking if $QIIME_ENV environment exists..."
 if ! conda env list | grep -q "$QIIME_ENV"
 then
     echo "🔄 Creating $QIIME_ENV environment..."
     OS=$(uname -s)
     if [ "$OS" = "Linux" ]; then
-        YAML_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-linux-conda.yml"
+        YAML_URL="https://data.qiime2.org/distro/amplicon/$QIIME_ENV-py310-linux-conda.yml"
     elif [ "$OS" = "Darwin" ]; then
-        YAML_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
+        YAML_URL="https://data.qiime2.org/distro/amplicon/$QIIME_ENV-py310-osx-conda.yml"
     else
         echo "❌ Unsupported operating system: $OS"
         exit 1
@@ -49,7 +49,7 @@ then
             exit 1
         fi
         
-        # Set cleanup trap to remove YAML file on script exit
+        # Remove YAML file on script exit
         trap "rm -f $YAML_FILE" EXIT
         
         echo "🔄 Retrying with mamba using local YAML file..."
@@ -80,7 +80,7 @@ CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
 QIIME_BASE_URL="https://data.qiime2.org/2024.10/common"
 ZENODO_CLASSIFIER_URL="https://zenodo.org/records/15299267/files/silva-138-99-515-806-classifier.qza"
 
-echo "🔄 Checking for SILVA database files..."
+echo "🔍 Checking for SILVA database files..."
 mkdir -p "$CLASSIFIER_DIR"
 
 # Download sequence and taxonomy files from QIIME2
@@ -105,7 +105,7 @@ for FILE in "${SILVA_FILES[@]}"; do
         fi
         echo "✅ Downloaded $FILE"
     else
-        echo "  $FILE ➤ $FILE_PATH"
+        echo "  $FILE: $FILE_PATH"
     fi
 done
 
@@ -130,7 +130,7 @@ if [ ! -f "$CLASSIFIER_FILE" ]; then
         # Activate QIIME2 environment
         source activate "$QIIME_ENV"
         
-        # Generate classifier
+        # Generate classifier with QIIME
         qiime feature-classifier fit-classifier-naive-bayes \
             --i-reference-reads "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
             --i-reference-taxonomy "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
@@ -155,7 +155,7 @@ fi
 ENV_NAME="workflow_16s"
 
 # Check for existing environments
-echo "🔄 Checking for existing 16s workflow environments..."
+echo "🔍 Checking for existing 16s workflow environments..."
 EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
 ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
 
@@ -175,9 +175,11 @@ else
     fi
 fi
 
+# ACtivate environment
 echo "🔄 Activating the conda environment '$ENV_NAME'..."
 source activate "$ENV_NAME"
 
+# Check if mamba is available and install if missing
 if ! command -v mamba &> /dev/null
 then
     echo "🔄 Installing mamba..."
@@ -195,10 +197,6 @@ if ! command -v fastqc &> /dev/null; then
         exit 1
     fi
 fi
-
-# Run Python script
-#echo "Running the Python script 'run.py'..."
-#python "$SCRIPT_DIR/src/run.py"
 
 # Deactivate environment
 echo "🔄 Deactivating the conda environment..."
