@@ -136,7 +136,7 @@ class Dataset:
             if not self._output_files_exist(["rep-seqs", "table", "stats", "taxonomy", "table_6"]):
                 self._process_sequences()
         except Exception as e:
-            print(f"  🞫 Workflow failed: {e}")
+            print(f"  ❌ Workflow failed: {e}")
             raise
 
     def _process_sequences(self) -> None:
@@ -209,7 +209,7 @@ class Dataset:
             try:
                 return load_with_print(self.qiime_dir, self.file_registry["seqs"].stem)
             except Exception as e:
-                print(f"  🞫 Reload failed: {e}. Reimporting sequences.")
+                print(f"  ❌ Reload failed: {e}. Reimporting sequences.")
 
         return self._import_seqs_from_manifest()
 
@@ -223,7 +223,7 @@ class Dataset:
                 library_layout=self.params["library_layout"],
             )
         except Exception as e:
-            raise RuntimeError(f"  🞫 Sequence import failed: {e}")
+            raise RuntimeError(f"  ❌ Sequence import failed: {e}")
 
     def _calculate_sequence_stats(self, seqs: Artifact) -> Dict[str, float]:
         """Calculate sequence length metrics from demultiplexing statistics."""
@@ -266,7 +266,7 @@ class Dataset:
                     self.qiime_dir, self.file_registry["trimmed-seqs"].stem
                 )
             except Exception as e:
-                print(f"  🞫 Reload failed: {e}. Reprocessing sequences.")
+                print(f"  ❌ Reload failed: {e}. Reprocessing sequences.")
 
         return self._perform_trimming(
             seqs, trim_length, minimum_length, n_cores, save_intermediates
@@ -314,7 +314,7 @@ class Dataset:
                     load_with_print(self.qiime_dir, "stats"),
                 )
             except Exception as e:
-                print(f"  🞫 Reload failed: {e}. Reprocessing denoising.")
+                print(f"  ❌ Reload failed: {e}. Reprocessing denoising.")
 
         return self._perform_denoising(seqs, trunc_len_f, trunc_len_r)
 
@@ -345,7 +345,7 @@ class Dataset:
                 print("  ⟲ Loading cached taxonomy...")
                 return load_with_print(self.qiime_dir, "taxonomy")
             except Exception as e:
-                print(f"  🞫 Reload failed: {e}. Reclassifying taxonomy.")
+                print(f"  ❌ Reload failed: {e}. Reclassifying taxonomy.")
 
         return self._assign_taxonomy(rep_seqs)
 
@@ -385,5 +385,5 @@ class WorkflowRunner:
             print("  ✔ Workflow completed successfully!")
             return True
         except Exception as e:
-            print(f"  🞫 Workflow execution failed: {e}")
+            print(f"  ❌ Workflow execution failed: {e}")
             return False
