@@ -17,27 +17,25 @@ log() {
 
 # Check if conda is available
 if ! command -v conda &> /dev/null; then
-    log "❌ Conda is not installed or not available in PATH."
+    echo "❌ Conda is not installed or not available in PATH."
     exit 1
 fi
+
+# Check for existing environments
+echo "🔍 Checking for existing 16s workflow environments..."
+EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
+ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
 
 # Check if the environment exists
-if ! conda env list | grep -qE "^$ENV_NAME\s"; then
-    log "❌ Conda environment '$ENV_NAME' does not exist."
+if [ -n "$EXACT_ENV_EXISTS" ]; then
+    echo "✅ Exact environment '$ENV_NAME' already exists"
+elif [ -n "$ALT_ENV_NAME" ]; then
+    ENV_NAME="$ALT_ENV_NAME"
+    echo "✅ Found existing environment with matching suffix: '$ENV_NAME'"
+else ! conda env list | grep -qE "^$ENV_NAME\s"; then
+    echo "❌ Conda environment '$ENV_NAME' does not exist."
     exit 1
 fi
-
-# Determine the full path of the workflow_16s environment
-ENV_PATH=$(conda env list | grep -w "$ENV_NAME" | awk '{print $NF}')
-if [ -z "$ENV_PATH" ]; then
-    echo "❌ Error: Could not find the path for environment '$ENV_NAME'"
-    exit 1
-fi
-#echo "The full path of the '$ENV_NAME' environment is: $ENV_PATH"
-
-# Save the path to a file for downstream usage
-#echo "$ENV_PATH" > "$SCRIPT_DIR/workflow_16s_env_path.txt"
-#echo "✅ Environment path saved to $SCRIPT_DIR/workflow_16s_env_path.txt"
 
 # Activate the environment
 log "🔄 Activating the conda environment '$ENV_NAME'..."
