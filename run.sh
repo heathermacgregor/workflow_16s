@@ -44,7 +44,7 @@ fi
 # Activate the environment
 echo "🔄 Activating the conda environment '$ENV_NAME'..."
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_PATH"
+conda activate "$ENV_NAME"
 
 # Check if the Python script exists
 if [[ ! -f "$PYTHON_SCRIPT" ]]; then
