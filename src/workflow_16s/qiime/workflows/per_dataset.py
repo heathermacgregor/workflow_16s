@@ -1,6 +1,8 @@
 # ================================== IMPORTS ================================== #
 
 import os
+import glob
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -33,6 +35,38 @@ DEFAULT_N = 20
 
 # ==================================== FUNCTIONS ===================================== #
 
+def clean_qiime_dir(qiime_dir: Union[str, Path]):
+    # Define the subdirectories to clean
+    subdirs_to_clean = [
+        'demux-stats',
+        'trimmed-seqs_demux-stats'
+    ]
+    
+    # List of files and directories to remove
+    files_to_remove = ['data.jsonp']
+    extensions_to_remove = ['*.html', '*.pdf']
+    dirs_to_remove = ['dist', 'q2templateassets']
+    
+    # Iterate through the specified subdirectories
+    for subdir in subdirs_to_clean:
+        subdir_path = os.path.join(qiime_dir, subdir)
+        
+        if os.path.exists(subdir_path):
+            # Clean up files
+            for file_name in files_to_remove:
+                file_path = os.path.join(subdir_path, file_name)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            
+            for ext in extensions_to_remove:
+                for file_path in glob.glob(os.path.join(subdir_path, ext)):
+                    os.remove(file_path)
+            
+            # Clean up directories and their contents
+            for dir_name in dirs_to_remove:
+                dir_path = os.path.join(subdir_path, dir_name)
+                if os.path.isdir(dir_path):
+                    shutil.rmtree(dir_path)
 
 class Dataset:
     """16S rRNA sequencing data processing workflow for microbiome analysis.
@@ -347,6 +381,7 @@ class WorkflowRunner:
         try:
             self.workflow = Dataset(self.args)
             self.workflow.run_workflow()
+            clean_qiime_dir(qiime_dir=self.args["qiime_dir"])
             print("  ✔ Workflow completed successfully!")
             return True
         except Exception as e:
