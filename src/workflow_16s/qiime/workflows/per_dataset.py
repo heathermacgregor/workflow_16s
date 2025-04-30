@@ -147,10 +147,10 @@ class Dataset:
 
         if self.params["trim_sequences"]:
             seqs = self._import_sequences()
-            print("  ✔ Imported raw sequences")
+            print("  ✅ Imported raw sequences")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("  ✔ Calculated raw sequence statistics")
+            print("  ✅ Calculated raw sequence statistics")
 
             trim_length = stats["trunc_len_f"]
 
@@ -161,10 +161,10 @@ class Dataset:
                 n_cores=32,
                 save_intermediates=True,
             )
-            print("  ✔ Completed sequence trimming")
+            print("  ✅ Completed sequence trimming")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("  ✔ Updated statistics post-trimming")
+            print("  ✅ Updated statistics post-trimming")
 
             counts_file = (
                 self.qiime_dir
@@ -173,17 +173,17 @@ class Dataset:
             )
         else:
             seqs = self._import_sequences()
-            print("  ✔ Imported trimmed sequences")
+            print("  ✅ Imported trimmed sequences")
 
             stats = self._calculate_sequence_stats(seqs)
-            print("  ✔ Calculated trimmed sequence statistics")
+            print("  ✅ Calculated trimmed sequence statistics")
 
             counts_file = (
                 self.qiime_dir / "demux-stats" / "per-sample-fastq-counts.tsv"
             )
 
         seqs = filter_samples_for_denoising(seqs=seqs, counts_file=counts_file)
-        print("  ✔ Filtered low-count samples")
+        print("  ✅ Filtered low-count samples")
 
         if layout == "paired":
             trunc_params = (stats["trunc_len_f"], stats["trunc_len_r"])
@@ -191,17 +191,17 @@ class Dataset:
             trunc_params = (stats["trunc_len"], 0)
 
         rep_seqs, table, stats = self._denoise_sequences(seqs, *trunc_params)
-        print("  ✔ Completed denoising pipeline")
+        print("  ✅ Completed denoising pipeline")
 
         taxonomy = self._taxonomic_classification(rep_seqs)
-        print("  ✔ Assigned taxonomy to features")
+        print("  ✅ Assigned taxonomy to features")
         
         collapsed_table = collapse_to_genus(
             output_dir=self.qiime_dir,
             table=table,
             taxonomy=taxonomy,
         )
-        print("  ✔ Collapsed table to genus level")
+        print("  ✅ Collapsed table to genus level")
 
     def _import_sequences(self) -> Any:
         """Import sequences from manifest file or load existing artifact."""
@@ -382,7 +382,7 @@ class WorkflowRunner:
             self.workflow = Dataset(self.args)
             self.workflow.run_workflow()
             clean_qiime_dir(qiime_dir=self.args["qiime_dir"])
-            print("  ✔ Workflow completed successfully!")
+            print("  ✅ Workflow completed successfully!")
             return True
         except Exception as e:
             print(f"  ❌ Workflow execution failed: {e}")
