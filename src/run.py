@@ -45,12 +45,12 @@ from rich.progress import (
 
 # ================================= GLOBAL VARIABLES ================================= #
 DEFAULT_CONFIG = (
-    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
     / "references"
     / "config.yaml"
 )
 DEFAULT_PER_DATASET = (
-    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) 
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))) 
     / "src" / "workflow_16s" / "qiime" / "workflows" / "per_dataset_run.py"
 )
 DEFAULT_CLASSIFIER = "silva-138-99-515-806"
