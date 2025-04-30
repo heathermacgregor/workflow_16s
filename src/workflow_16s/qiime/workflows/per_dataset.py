@@ -385,5 +385,6 @@ class WorkflowRunner:
             print("  ✅ Workflow completed successfully!")
             return True
         except Exception as e:
+            clean_qiime_dir(qiime_dir=self.args["qiime_dir"])
             print(f"  ❌ Workflow execution failed: {e}")
             return False
