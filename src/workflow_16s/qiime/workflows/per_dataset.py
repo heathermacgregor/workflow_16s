@@ -127,7 +127,7 @@ class Dataset:
 
     def _load_metadata(self) -> None:
         """Load and validate QIIME2 metadata file for sample information."""
-        print(f"  ⟲ Importing metadata from {self.file_registry['metadata']}...")
+        print(f"  🔄 Importing metadata from {self.file_registry['metadata']}...")
         self.metadata = qiime2.Metadata.load(str(self.file_registry["metadata"]))
 
     def run_workflow(self) -> None:
@@ -215,7 +215,7 @@ class Dataset:
 
     def _import_seqs_from_manifest(self) -> Any:
         """Import raw sequence data using QIIME2 manifest format."""
-        print(f"  ⟲ Importing sequences from [{self.file_registry['manifest']}]")
+        print(f"  🔄 Importing sequences from [{self.file_registry['manifest']}]")
         try:
             return import_seqs_from_manifest(
                 output_dir=self.qiime_dir,
@@ -261,7 +261,7 @@ class Dataset:
         """Trim adapter sequences and quality filter with restart capability."""
         if self._output_files_exist(["trimmed-seqs"]):
             try:
-                print("  ⟲ Reloading trimmed sequences...")
+                print("  🔄 Reloading trimmed sequences...")
                 return load_with_print(
                     self.qiime_dir, self.file_registry["trimmed-seqs"].stem
                 )
@@ -282,7 +282,7 @@ class Dataset:
     ) -> Any:
         """Execute primer removal and quality trimming using CutAdapt."""
         print(
-            "  ⟲ Trimming sequences with parameters:\n"
+            "  🔄 Trimming sequences with parameters:\n"
             f"    • Primers:        {self.params['fwd_primer']} / {self.params['rev_primer']}\n"
             f"    • Trim Length:    {trim_length}\n"
             f"    • Minimum Length: {minimum_length}"
@@ -307,7 +307,7 @@ class Dataset:
         """Perform ASV/OTU clustering and chimera removal."""
         if self._output_files_exist(["rep-seqs", "table", "stats"]):
             try:
-                print("  ⟲ Loading cached denoising results...")
+                print("  🔄 Loading cached denoising results...")
                 return (
                     load_with_print(self.qiime_dir, "rep-seqs"),
                     load_with_print(self.qiime_dir, "table"),
@@ -342,7 +342,7 @@ class Dataset:
         """Assign taxonomy using pre-trained classifier."""
         if self._output_files_exist(["taxonomy"]):
             try:
-                print("  ⟲ Loading cached taxonomy...")
+                print("  🔄 Loading cached taxonomy...")
                 return load_with_print(self.qiime_dir, "taxonomy")
             except Exception as e:
                 print(f"  ❌ Reload failed: {e}. Reclassifying taxonomy.")
@@ -351,7 +351,7 @@ class Dataset:
 
     def _assign_taxonomy(self, rep_seqs: Artifact) -> Artifact:
         """Execute taxonomic classification using q2-feature-classifier."""
-        print(f"  ⟲ Using classifier: {self.params['classifier']}")
+        print(f"  🔄 Using classifier: {self.params['classifier']}")
         return classify_taxonomy(
             output_dir=self.qiime_dir,
             rep_seqs=rep_seqs,
