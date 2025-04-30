@@ -42,16 +42,18 @@ else
 fi
 
 # Activate the environment
-log "🔄 Activating the conda environment '$ENV_NAME'..."
+echo "🔄 Activating the conda environment '$ENV_NAME'..."
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_PATH"
 
 # Check if the Python script exists
 if [[ ! -f "$PYTHON_SCRIPT" ]]; then
-    log "❌ Python script '$PYTHON_SCRIPT' not found."
+    echo "❌ Python script '$PYTHON_SCRIPT' not found."
     conda deactivate
     exit 1
 fi
+
+echo $CONDA_DEFAULT_ENV
 
 # Run the Python script
 log "🔄 Running the Python script '$PYTHON_SCRIPT'..."
