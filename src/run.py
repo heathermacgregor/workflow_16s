@@ -141,7 +141,7 @@ def execute_per_dataset_qiime_workflow(
         command.append("--trim_sequences")
 
     try:
-        logger.info(f"Executing QIIME command: {' '.join(command)}")
+        logger.info(f"\nExecuting QIIME command: {str(' '.join(command)).replace(" --", " \\\n--")}")
         result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         logger.debug("QIIME STDOUT:\n%s", result.stdout)
         logger.debug("QIIME STDERR:\n%s", result.stderr)
