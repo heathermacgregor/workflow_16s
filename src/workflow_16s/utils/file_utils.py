@@ -1,6 +1,6 @@
 # ===================================== IMPORTS ====================================== #
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import re
 import pandas as pd
@@ -106,7 +106,6 @@ def import_metadata_tsv(tsv_path: Union[str, Path], index_col: str = '#SampleID'
     return pd.read_csv(tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col).sort_index()
 
 
-
 def import_features_biom(biom_path: Union[str, Path]) -> pd.DataFrame:
     """"""
     table = load_table(biom_path)
@@ -116,8 +115,27 @@ def import_features_biom(biom_path: Union[str, Path]) -> pd.DataFrame:
     
     data = table.matrix_data.toarray()
     return pd.DataFrame(data, index=feature_ids, columns=sample_ids)
+    
 
+def load_and_merge_biom_tables(biom_paths) -> Table:
+    """Load and merge multiple BIOM tables with validation."""
+    tables = []
+    for path in biom_paths:
+        try:
+            tables.append(load_table(path))
+        except Exception as e:
+            logger.warning(f"Failed to load {path}: {str(e)}")
+            continue
 
+    if not tables:
+        raise ValueError("No valid BIOM tables loaded")
+    
+    merged_table = tables[0]
+    for table in tables[1:]:
+        merged_table = merged_table.merge(table)
+    logger.info(f"Merged table dimensions: {merged_table.shape}")
+    return merged_table
+    
 
 def import_seqs_fasta(fasta_path: Union[str, Path]) -> pd.DataFrame:
     """"""
