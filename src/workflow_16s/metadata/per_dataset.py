@@ -431,12 +431,22 @@ class SubsetDataset:
 
             # Log dataset information
 
-            logger.info(
-                f"\n[Dataset] {dataset.upper()}".ljust(50)
-                + f"\n[Type] {info.get('dataset_type', '').upper()}".ljust(50)
-                + f"\n[Primers] {info.get('pcr_primer_fwd_seq', '')} / "
-                + f"{info.get('pcr_primer_rev_seq', '')}"
+            dataset_info_text = (
+                  f"\n[Dataset]             {dataset.upper()}".ljust(50)
+                + f"\n[Type]                {info.get('dataset_type', '').upper()}".ljust(50)
+                + f"\n[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})".ljust(50)
+                + f"\n[Library Layout]      {info.get('library_layout', '').upper()}".ljust(50)
+                + f"\n[Primers]             {info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})".ljust(50)
+                + f"\n                      {info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})".ljust(50)
+                + f"\n[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}".ljust(50)
+                + f"\n[Publications]        {citations[0]}".ljust(50)
             )
+            
+            if len(citations) > 1:
+                for citation in citations[1:]:
+                    dataset_info_text += f"\n                      {citation}".ljust(50)
+
+            logger.info(dataset_info_text)
 
             # Metadata retrieval
 
