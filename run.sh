@@ -17,7 +17,7 @@ log() {
 
 # Check if conda is available
 if ! command -v conda &> /dev/null; then
-    echo "❌ Conda is not installed or not available in PATH."
+    echo "❌ Conda is not installed or not available in PATH"
     exit 1
 fi
 
@@ -26,7 +26,6 @@ echo "🔍 Checking for existing 16s workflow environments..."
 EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
 ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
 
-# Check if the environment exists
 # Check if the environment exists
 if [ -n "$EXACT_ENV_EXISTS" ]; then
     echo "✅ Exact environment '$ENV_NAME' already exists"
@@ -48,7 +47,7 @@ conda activate "$ENV_NAME"
 
 # Check if the Python script exists
 if [[ ! -f "$PYTHON_SCRIPT" ]]; then
-    echo "❌ Python script '$PYTHON_SCRIPT' not found."
+    echo "❌ Python script '$PYTHON_SCRIPT' not found"
     conda deactivate
     exit 1
 fi
@@ -63,4 +62,4 @@ python "$PYTHON_SCRIPT"
 log "🔄 Deactivating the conda environment..."
 conda deactivate
 
-log "✅ Workflow completed successfully."
+log "✅ Workflow completed successfully!"
