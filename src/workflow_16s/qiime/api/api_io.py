@@ -1,7 +1,9 @@
 # ===================================== IMPORTS ====================================== #
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
+import warnings
 
 import qiime2
 from qiime2 import Artifact
@@ -9,6 +11,10 @@ from qiime2 import Artifact
 # ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_N = 20
+
+# Set environment variable and suppress warnings
+os.environ["TMPDIR"] = "/opt/tmp"
+warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
 
