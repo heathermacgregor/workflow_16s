@@ -1,205 +1,150 @@
 #!/bin/bash
+set -euo pipefail  # Exit on error, unset variables, and pipe failures
 
-# Get the absolute path of the directory where the script is located
+# Get absolute path of the script's directory
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 
-# Ensure mamba is installed
-echo "🔍 Checking if mamba is installed..."
-if ! command -v mamba &> /dev/null
-then
-    echo "🔄 Installing mamba..."
+# Conda Installation Checks
+echo "🔍 Checking Conda installation..."
+if ! command -v conda &>/dev/null; then
+    echo "❌ Error: Conda not found. Please install Conda and ensure it's in your PATH."
+    exit 1
+fi
+
+if ! conda --version &>/dev/null; then
+    echo "❌ Error: Conda installation appears corrupted. Please verify your installation."
+    exit 1
+fi
+
+# Conda Initialization
+echo "🔄 Initializing Conda..."
+CONDA_BASE=$(conda info --base)
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
+
+# Ensure base environment is active
+if [[ -z "${CONDA_DEFAULT_ENV}" ]]; then
+    echo "⚠️ Warning: No Conda environment active"
+    echo "🔄 Activating base environment..."
+    conda activate base
+    echo "✅ Activated base environment"
+fi
+
+# Mamba Setup
+echo "🔍 Checking Mamba installation..."
+if ! command -v mamba &>/dev/null; then
+    echo "🔄 Installing Mamba..."
     conda install -y -c conda-forge mamba
 fi
 
-# Create qiime2 environment if it doesn't exist
+# QIIME2 Environment Setup
 QIIME_ENV="qiime2-amplicon-2024.10"
-echo "🔍 Checking if $QIIME_ENV environment exists..."
-if ! conda env list | grep -q "$QIIME_ENV"
-then
-    echo "🔄 Creating $QIIME_ENV environment..."
-    OS=$(uname -s)
-    if [ "$OS" = "Linux" ]; then
-        YAML_URL="https://data.qiime2.org/distro/amplicon/$QIIME_ENV-py310-linux-conda.yml"
-    elif [ "$OS" = "Darwin" ]; then
-        YAML_URL="https://data.qiime2.org/distro/amplicon/$QIIME_ENV-py310-osx-conda.yml"
-    else
-        echo "❌ Unsupported operating system: $OS"
-        exit 1
-    fi
+YAML_URL="https://data.qiime2.org/distro/amplicon/${QIIME_ENV}-py310-$(uname -s | tr '[:upper:]' '[:lower:]')-conda.yml"
 
-    echo "🔄 Trying to create environment with mamba using URL..."
-    mamba env create -n "$QIIME_ENV" --file "$YAML_URL"
+echo "🔍 Checking for '${QIIME_ENV}' environment..."
+if ! conda env list | grep -q "${QIIME_ENV}"; then
+    echo "🔄 Creating QIIME2 environment..."
     
-    if [ $? -ne 0 ]; then
-        echo "⚠️ Mamba failed with URL, attempting local download..."
-        YAML_FILE=$(basename "$YAML_URL")
+    # Handle different OS cases
+    case "$(uname -s)" in
+        Linux|Darwin) ;;
+        *) echo "❌ Error: Unsupported operating system"; exit 1 ;;
+    esac
+
+    if ! mamba env create -n "${QIIME_ENV}" --file "${YAML_URL}"; then
+        echo "⚠️ Remote YAML failed, trying local download..."
+        YAML_FILE=$(basename "${YAML_URL}")
         
-        # Download YAML file with cleanup handler
-        if command -v wget &> /dev/null; then
-            wget "$YAML_URL"
-        elif command -v curl &> /dev/null; then
-            curl -LO "$YAML_URL"
-        else
-            echo "❌ Error: Need wget or curl to download files"
+        # Download YAML with cleanup trap
+        trap "rm -f ${YAML_FILE}" EXIT
+        echo "🔄 Downloading YAML file..."
+        curl -LO "${YAML_URL}" || wget "${YAML_URL}"
+        
+        if [[ ! -f "${YAML_FILE}" ]]; then
+            echo "❌ Error: Failed to download YAML file"
             exit 1
         fi
         
-        if [ ! -f "$YAML_FILE" ]; then
-            echo "❌ Failed to download YAML file from $YAML_URL"
-            exit 1
-        fi
-        
-        # Remove YAML file on script exit
-        trap "rm -f $YAML_FILE" EXIT
-        
-        echo "🔄 Retrying with mamba using local YAML file..."
-        mamba env create -n "$QIIME_ENV" --file "$YAML_FILE"
-        
-        if [ $? -ne 0 ]; then
-            echo "⚠️ Mamba failed with local file, trying conda..."
-            conda env create -n "$QIIME_ENV" --file "$YAML_FILE"
-            
-            if [ $? -ne 0 ]; then
-                echo "❌ Failed to create $QIIME_ENV environment with both mamba and conda"
-                exit 1
-            fi
+        # Attempt creation with mamba/conda
+        if ! mamba env create -n "${QIIME_ENV}" --file "${YAML_FILE}"; then
+            echo "⚠️ Mamba failed, trying Conda..."
+            conda env create -n "${QIIME_ENV}" --file "${YAML_FILE}" || {
+                echo "❌ Error: Failed to create environment"; exit 1
+            }
         fi
     fi
-    echo "✅ Conda environment '$QIIME_ENV' created successfully"
+    echo "✅ Created QIIME2 environment"
 else
-    echo "✅ Conda environment '$QIIME_ENV' already exists"
+    echo "✅ Found existing QIIME2 environment"
 fi
 
-# Add Silva database files installation
-CLASSIFIER_DIR="$SCRIPT_DIR/references/classifier/silva-138-99-515-806"
-SILVA_FILES=(
+# SILVA Classifier Setup
+CLASSIFIER_DIR="${SCRIPT_DIR}/references/classifier/silva-138-99-515-806"
+mkdir -p "${CLASSIFIER_DIR}"
+
+declare -a SILVA_FILES=(
     "silva-138-99-seqs-515-806.qza"
     "silva-138-99-tax-515-806.qza"
 )
-CLASSIFIER_FILE="$CLASSIFIER_DIR/silva-138-99-515-806-classifier.qza"
 QIIME_BASE_URL="https://data.qiime2.org/2024.10/common"
-ZENODO_CLASSIFIER_URL="https://zenodo.org/records/15299267/files/silva-138-99-515-806-classifier.qza"
+CLASSIFIER_FILE="${CLASSIFIER_DIR}/silva-138-99-515-806-classifier.qza"
 
-echo "🔍 Checking for SILVA database files..."
-mkdir -p "$CLASSIFIER_DIR"
-
-# Download sequence and taxonomy files from QIIME2
+echo "🔍 Verifying SILVA classifier components..."
 for FILE in "${SILVA_FILES[@]}"; do
-    FILE_PATH="$CLASSIFIER_DIR/$FILE"
-    FILE_URL="$QIIME_BASE_URL/$FILE"
-    
-    if [ ! -f "$FILE_PATH" ]; then
-        echo "🔄 Downloading $FILE..."
-        if command -v wget &> /dev/null; then
-            wget --no-verbose --show-progress -O "$FILE_PATH" "$FILE_URL" || { echo "Download failed"; rm -f "$FILE_PATH"; exit 1; }
-        elif command -v curl &> /dev/null; then
-            curl -# -L "$FILE_URL" -o "$FILE_PATH" || { echo "Download failed"; rm -f "$FILE_PATH"; exit 1; }
-        else
-            echo "❌ Error: Need wget or curl to download files"
-            exit 1
-        fi
-        
-        if [ ! -f "$FILE_PATH" ]; then
-            echo "❌ Failed to download $FILE - URL might be incorrect or file unavailable"
-            exit 1
-        fi
-        echo "✅ Downloaded $FILE"
-    else
-        echo "  $FILE: $FILE_PATH"
+    FILE_PATH="${CLASSIFIER_DIR}/${FILE}"
+    if [[ ! -f "${FILE_PATH}" ]]; then
+        echo "🔄 Downloading ${FILE}..."
+        curl -#L "${QIIME_BASE_URL}/${FILE}" -o "${FILE_PATH}" || 
+        wget --progress=bar "${QIIME_BASE_URL}/${FILE}" -O "${FILE_PATH}" || {
+            echo "❌ Download failed"; exit 1
+        }
     fi
 done
 
-# Try downloading classifier from Zenodo
-if [ ! -f "$CLASSIFIER_FILE" ]; then
-    echo "🔄 Attempting classifier download from Zenodo..."
+echo "🔍 Checking classifier artifact..."
+if [[ ! -f "${CLASSIFIER_FILE}" ]]; then
+    echo "🔄 Attempting Zenodo download..."
+    ZENODO_URL="https://zenodo.org/records/15299267/files/silva-138-99-515-806-classifier.qza"
     
-    if command -v wget &> /dev/null; then
-        wget --no-verbose --show-progress -O "$CLASSIFIER_FILE" "$ZENODO_CLASSIFIER_URL" || DL_FAILED=true
-    elif command -v curl &> /dev/null; then
-        curl -# -L "$ZENODO_CLASSIFIER_URL" -o "$CLASSIFIER_FILE" || DL_FAILED=true
-    else
-        echo "❌ Error: Need wget or curl to download files"
-        exit 1
-    fi
-    
-    # If download failed, generate classifier
-    if [ ${DL_FAILED} ] || [ ! -f "$CLASSIFIER_FILE" ]; then
-        echo "🔄 Generating classifier..."
-        rm -f "$CLASSIFIER_FILE" 2>/dev/null
-        
-        # Activate QIIME2 environment
-        source activate "$QIIME_ENV"
-        
-        # Generate classifier with QIIME
+    if ! (curl -#L "${ZENODO_URL}" -o "${CLASSIFIER_FILE}" || 
+          wget --progress=bar "${ZENODO_URL}" -O "${CLASSIFIER_FILE}"); then
+        echo "⚠️ Download failed, generating classifier..."
+        conda activate "${QIIME_ENV}"
         qiime feature-classifier fit-classifier-naive-bayes \
-            --i-reference-reads "$CLASSIFIER_DIR/silva-138-99-seqs-515-806.qza" \
-            --i-reference-taxonomy "$CLASSIFIER_DIR/silva-138-99-tax-515-806.qza" \
-            --o-classifier "$CLASSIFIER_FILE"
-        
-        # Deactivate environment
+            --i-reference-reads "${CLASSIFIER_DIR}/silva-138-99-seqs-515-806.qza" \
+            --i-reference-taxonomy "${CLASSIFIER_DIR}/silva-138-99-tax-515-806.qza" \
+            --o-classifier "${CLASSIFIER_FILE}"
         conda deactivate
-        
-        if [ ! -f "$CLASSIFIER_FILE" ]; then
-            echo "❌ Failed to generate classifier artifact"
-            exit 1
-        fi
-        echo "✅ Generated classifier artifact"
-    else
-        echo "✅ Downloaded classifier from Zenodo"
     fi
+    echo "✅ Classifier setup complete"
+fi
+
+# Workflow Environment
+WORKFLOW_ENV="workflow_16s"
+ENV_YAML="${SCRIPT_DIR}/references/conda_envs/workflow_16s.yml"
+
+echo "🔍 Checking workflow environment..."
+EXISTING_ENV=$(conda env list | awk -v env="${WORKFLOW_ENV}" '$1 == env {print $1}')
+
+if [[ -n "${EXISTING_ENV}" ]]; then
+    echo "✅ Found existing workflow environment"
 else
-    echo "  silva-138-99-515-806-classifier.qza ➤ $CLASSIFIER_FILE"
+    echo "🔄 Creating workflow environment..."
+    mamba env create -n "${WORKFLOW_ENV}" --file "${ENV_YAML}" || {
+        echo "❌ Error: Failed to create workflow environment"; exit 1
+    }
+    echo "✅ Created workflow environment"
 fi
 
-# Set the base environment name
-ENV_NAME="workflow_16s"
+# Final Checks
+echo "🔍 Validating environment setup..."
+conda activate "${WORKFLOW_ENV}"
 
-# Check for existing environments
-echo "🔍 Checking for existing 16s workflow environments..."
-EXACT_ENV_EXISTS=$(conda env list | awk '{print $1}' | grep -x "$ENV_NAME")
-ALT_ENV_NAME=$(conda env list | awk '/^[^#]/ {print $1}' | grep -E 'workflow_16s$' | head -n 1)
-
-# Determine which environment to use/create
-if [ -n "$EXACT_ENV_EXISTS" ]; then
-    echo "✅ Exact environment '$ENV_NAME' already exists"
-elif [ -n "$ALT_ENV_NAME" ]; then
-    ENV_NAME="$ALT_ENV_NAME"
-    echo "✅ Found existing environment with matching suffix: '$ENV_NAME'"
-else
-    echo "🔄 Creating new environment '$ENV_NAME' from environment.yml..."
-    mamba env create -n "$ENV_NAME" --file "$SCRIPT_DIR/references/conda_envs/workflow_16s.yml"
-    
-    if [ $? -ne 0 ]; then
-        echo "❌ Failed to create environment '$ENV_NAME'"
-        exit 1
-    fi
-fi
-
-# ACtivate environment
-echo "🔄 Activating the conda environment '$ENV_NAME'..."
-source activate "$ENV_NAME"
-
-# Check if mamba is available and install if missing
-if ! command -v mamba &> /dev/null
-then
-    echo "🔄 Installing mamba..."
-    conda install -y -c conda-forge mamba
-fi
-    
-# Check if fastqc is available and install if missing
-if ! command -v fastqc &> /dev/null; then
+if ! command -v fastqc &>/dev/null; then
     echo "🔄 Installing FastQC..."
-    mamba install -y -c bioconda fastqc
-    
-    # Verify installation
-    if ! command -v fastqc &> /dev/null; then
-        echo "❌ Failed to install FastQC"
-        exit 1
-    fi
+    mamba install -y -c bioconda fastqc || {
+        echo "❌ Error: FastQC installation failed"; exit 1
+    }
 fi
 
-# Deactivate environment
-echo "🔄 Deactivating the conda environment..."
 conda deactivate
-
-echo "✅ Environment setup complete!"
+echo "✅ Environment setup completed successfully"
