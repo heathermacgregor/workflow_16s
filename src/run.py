@@ -243,11 +243,14 @@ def process_sequences(
         )
         stats_df = stats_df.dropna(axis=1, how='all')
 
-    if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"]:
+    if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"] and process_seqs:
         FastQC(fastq_paths=processed_paths, output_dir=subset_dirs["trimmed_seqs"]).run_pipeline()
-    if cfg["SeqKit"]["run"] and cfg["Cutadapt"]["run"]:
+    if cfg["SeqKit"]["run"] and cfg["Cutadapt"]["run"] and process_seqs:
         SeqKit(max_workers=8).analyze_samples(processed_paths)
-    return processed_paths, stats_df
+    if process_seqs:
+        return processed_paths, stats_df
+    else:
+        return raw_seqs_paths, pd.DataFrame()
 
 # =================================== MAIN WORKFLOW ================================== #
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
