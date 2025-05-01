@@ -2,23 +2,14 @@
 ENA:
   email: "macgregor@berkeley.edu"
 
-# List of datasets
 Dataset List: "./datasets.txt"
-# Experimental details for each dataset
 Dataset Information: "./datasets.tsv"
 
-# The main directory for files to be written to
-Project Directory: "../../test"
-
-# The directory where manual metadata files are stored as TSVs
 Manual Metadata Directory: "../../manual_metadata"
 
-# How to determine what PCR primers to use
+Project Directory: "../../test"
+
 PCR Primers: "manual"
-# What target subfragment sequences will be trimmed to
-# If 'any': use dataset-specific PCR primers to trim, compare at the genera level downstream
-# Otherwise, select for datasets who target subfragment(s) include the specified subfragment,
-# use standard primers for the specified subfragment to trim, compare at the ASV level downstream
 Target Subfragment: "any"
 
 Clean Up FASTQ: True
@@ -55,7 +46,7 @@ QIIME 2:
   Per-Dataset:
     path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     # Toggles whether to rerun per-dataset QIIME2 processing, regardless of whether output files already exist.
-    hard_rerun: True
+    hard_rerun: False
     n_threads: 32
     Trim Sequences:
       # [QIIME 2][Trim Sequences][run] should be False if [Cutadapt][run] is True
