@@ -236,12 +236,12 @@ def process_sequences(
         stats_df = raw_df
         stats_df["Trimmed"] = None
         stats_df["Percent Change"] = None
-
-    numeric_cols = ["Raw", "Trimmed", "Percent Change"]
-    stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
-        lambda x: f"{x:.2f}%" if isinstance(x, float) and x != x else f"{x:.2f}" if x else ""
-    )
-    stats_df = stats_df.dropna(axis=1, how='all')
+    if process_seqs:
+        numeric_cols = ["Raw", "Trimmed", "Percent Change"]
+        stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
+            lambda x: f"{x:.2f}%" if isinstance(x, float) and x != x else f"{x:.2f}" if x else ""
+        )
+        stats_df = stats_df.dropna(axis=1, how='all')
 
     if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"]:
         FastQC(fastq_paths=processed_paths, output_dir=subset_dirs["trimmed_seqs"]).run_pipeline()
