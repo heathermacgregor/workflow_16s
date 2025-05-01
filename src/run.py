@@ -231,7 +231,7 @@ def process_sequences(
         trimmed_df = pd.DataFrame([{"Metric": k, "Trimmed": v} for k, v in trimmed_stats["overall"].items()])
         stats_df = pd.merge(raw_df, trimmed_df, on="Metric")
         stats_df["Percent Change"] = ((stats_df["Trimmed"] - stats_df["Raw"]) / stats_df["Raw"]) * 100
-    else:
+    elif process_seqs:
         processed_paths = raw_seqs_paths
         stats_df = raw_df
         stats_df["Trimmed"] = None
