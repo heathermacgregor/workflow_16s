@@ -184,10 +184,11 @@ def process_sequences(
     raw_seqs_paths = fetcher.download_run_fastq_concurrent(
         subset["metadata"].set_index("run_accession", drop=False)
     )
-
-    seq_analyzer = BasicStats()
-    raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
-    raw_df = pd.DataFrame([{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()])
+    process_seqs = False
+    if process_seqs:
+        seq_analyzer = BasicStats()
+        raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
+        raw_df = pd.DataFrame([{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()])
 
     if cfg["FastQC"]["run"]:
         FastQC(fastq_paths=raw_seqs_paths, output_dir=subset_dirs["raw_seqs"]).run_pipeline()
@@ -210,7 +211,7 @@ def process_sequences(
         )
         logger.info(output)
 
-    if cfg["Cutadapt"]["run"]:
+    if cfg["Cutadapt"]["run"] and process_seqs:
         trimmed_seqs_paths, cutadapt_results, cutadapt_proc_time = CutAdapt(
             fastq_dir=subset_dirs["raw_seqs"],
             trimmed_fastq_dir=subset_dirs["trimmed_seqs"],
