@@ -35,6 +35,9 @@ def get_average_lengths(
     """
     def _calculate_avg_length(file_path: Union[str, Path]) -> float:
         """Calculate average length from a single summary file."""
+        file_path = Path(file_path)
+        if not file_path.exists():
+            return 0.0
         df = pd.read_csv(file_path, sep="\t", header=None)
         count_row = df[df.iloc[:, 0] == "count"].iloc[0, 1:].astype(int)
         total_reads = count_row.iloc[0]
@@ -64,6 +67,9 @@ def get_truncation_lengths(
     """
     def _find_trunc_pos(file_path: Union[str, Path]) -> int:
         """Identify truncation position from quality metrics."""
+        file_path = Path(file_path)
+        if not file_path.exists():
+            return 0
         df = pd.read_csv(file_path, sep="\t", header=None)
         median_qualities = df[df.iloc[:, 0] == "50%"].iloc[0, 1:].astype(float)
         return next(
