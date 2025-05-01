@@ -52,7 +52,7 @@ activate_environment() {
     log "🔄 Initializing Conda..."
     source "$(conda info --base)/etc/profile.d/conda.sh"
 
-    log "🔌 Activating ${ENV_NAME}..."
+    log "🔄 Activating ${ENV_NAME}..."
     if ! conda activate "${ENV_NAME}"; then
         log "❌ Failed to activate environment: ${ENV_NAME}"
         exit 1
