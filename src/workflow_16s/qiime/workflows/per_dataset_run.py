@@ -3,10 +3,15 @@
 import os
 import sys
 from pathlib import Path
+import warnings
 
 import argparse
 
 # ================================== LOCAL IMPORTS =================================== #
+
+# Set environment variable and suppress warnings
+os.environ["TMPDIR"] = "/opt/tmp"
+warnings.filterwarnings("ignore")
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
