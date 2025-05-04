@@ -277,11 +277,11 @@ def filter_samples_for_denoising(
         ].index.tolist()
     elif 'sequence count' in df.columns:
         # Single-end: only sequence count must meet min_reads
-        valid = df[df["sequence count"] >= min_reads].index.tolist()
+        valid = df[df["forward sequence count"] >= min_reads].index.tolist()
     else:
         raise ValueError(
             "Counts file must contain either 'forward sequence count' and 'reverse sequence count' columns (paired-end) "
-            "or 'sequence count' column (single-end)."
+            "or 'forward sequence count' column (single-end)."
         )
     
     keep_tsv = counts_path.parent / "keep_samples.tsv"
