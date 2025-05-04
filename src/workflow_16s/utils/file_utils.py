@@ -6,6 +6,7 @@ import re
 import pandas as pd
 from Bio import SeqIO
 from biom import load_table
+from biom.table import Table
 
 import logging
 logger = logging.getLogger('workflow_16s')
