@@ -333,7 +333,7 @@ class Dataset:
     ) -> Tuple[Artifact, Artifact, Artifact]:
         """Execute DADA2 or Deblur denoising algorithm."""
         print(
-            "  🔄 Denoising with with {self.params['denoise_algorithm']} parameters:\n"
+            f"  🔄 Denoising with with {self.params['denoise_algorithm']} parameters:\n"
             f"    • Library Layout:      {self.params["library_layout"].lower()}\n"
             f"    • Instrument Platform: {self.params["instrument_platform"].lower()}\n"
             f"    • Trunc Length:        {trunc_len_f} / {trunc_len_r}\n"
