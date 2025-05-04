@@ -244,8 +244,8 @@ class Dataset:
             quality_threshold=25,
         )
 
-        print(f"    {'Average Length'.ljust(DEFAULT_N)}: {avg_len_f} / {avg_len_r}")
-        print(f"    {'Truncation Length'.ljust(DEFAULT_N)}: {trunc_len_f} / {trunc_len_r}")
+        print(f"      {'Average Length'.ljust(DEFAULT_N)}: {avg_len_f} / {avg_len_r}")
+        print(f"      {'Truncation Length'.ljust(DEFAULT_N)}: {trunc_len_f} / {trunc_len_r}")
 
         return {
             "avg_len_f": avg_len_f,
@@ -329,7 +329,13 @@ class Dataset:
         trunc_len_r: int,
     ) -> Tuple[Artifact, Artifact, Artifact]:
         """Execute DADA2 or Deblur denoising algorithm."""
-        print(f"Starting {self.params['denoise_algorithm']} denoising")
+        print(
+            "  🔄 Denoising with with {self.params['denoise_algorithm']} parameters:\n"
+            f"    • Library Layout:      {self.params["library_layout"].lower()}\n"
+            f"    • Instrument Platform: {self.params["instrument_platform"].lower()}\n"
+            f"    • Trunc Length:        {trunc_len_f} / {trunc_len_r}\n"
+            f"    • Chimera Method:      {self.params["chimera_method"]}"
+        )
         return denoise_sequences(
             output_dir=self.qiime_dir,
             seqs=seqs,
