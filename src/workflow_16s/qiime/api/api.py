@@ -403,6 +403,16 @@ def denoise_sequences(
         else:
             raise ValueError(f"Denoise algorithm '{algorithm}' not recognized.")
     elif "454" in platform:
+        func = denoise_16S
+        # https://docs.qiime2.org/2024.10/plugins/available/deblur/denoise-16S/
+        args = {
+            "demultiplexed_seqs": seqs,
+            "trim_length": trim_length,
+            "hashed_feature_ids": True,
+            "sample_stats": True,
+            "jobs_to_start": n_threads,
+        }
+        """
         func = denoise_pyro
         # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-pyro/
         args = {
@@ -412,6 +422,7 @@ def denoise_sequences(
             "hashed_feature_ids": True,
             "n_threads": n_threads,
         }
+        """
     else:
         raise ValueError(f"Platform '{platform}' not recognized.")
 
