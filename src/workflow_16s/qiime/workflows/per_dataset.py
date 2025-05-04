@@ -334,10 +334,10 @@ class Dataset:
         """Execute DADA2 or Deblur denoising algorithm."""
         print(
             f"  🔄 Denoising with with {self.params['denoise_algorithm']} parameters:\n"
-            f"    • Library Layout:      {self.params["library_layout"].lower()}\n"
-            f"    • Instrument Platform: {self.params["instrument_platform"].lower()}\n"
+            f"    • Library Layout:      {self.params['library_layout'].lower()}\n"
+            f"    • Instrument Platform: {self.params['instrument_platform'].lower()}\n"
             f"    • Trunc Length:        {trunc_len_f} / {trunc_len_r}\n"
-            f"    • Chimera Method:      {self.params["chimera_method"]}"
+            f"    • Chimera Method:      {self.params['chimera_method']}"
         )
         return denoise_sequences(
             output_dir=self.qiime_dir,
