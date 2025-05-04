@@ -323,7 +323,10 @@ class Dataset:
             try:
                 return self._perform_denoising(seqs, trunc_len_f, trunc_len_r)
             except Exception as e:
-                return self._perform_denoising(seqs, 250, 220)  
+                try:
+                    return self._perform_denoising(seqs, 250, 220)  
+                except Exception as e:
+                    return self._perform_denoising(seqs, 250, 0)  
 
     def _perform_denoising(
         self,
