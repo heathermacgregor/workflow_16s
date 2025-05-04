@@ -256,7 +256,10 @@ def filter_samples_for_denoising(
 
     Args:
         seqs:        Demultiplexed sequence artifact
-        counts_file: TSV file with forward and reverse sequence counts
+        counts_file: TSV file with sequence counts. For paired-end reads, this should
+                     include 'forward sequence count' and 'reverse sequence count'
+                     columns. For single-end reads, it should include a 'sequence count'
+                     column.
         min_reads:   Minimum reads required to retain a sample
 
     Returns:
@@ -264,17 +267,29 @@ def filter_samples_for_denoising(
     """
     counts_path = Path(counts_file)
     df = pd.read_csv(counts_path, sep="\t", index_col=0)
-    valid = df[
-        (df["forward sequence count"] >= min_reads)
-        & (df["reverse sequence count"] >= min_reads)
-    ].index.tolist()
-
+    
+    # Determine if paired-end or single-end based on columns
+    if 'forward sequence count' in df.columns and 'reverse sequence count' in df.columns:
+        # Paired-end: both forward and reverse must meet min_reads
+        valid = df[
+            (df["forward sequence count"] >= min_reads) &
+            (df["reverse sequence count"] >= min_reads)
+        ].index.tolist()
+    elif 'sequence count' in df.columns:
+        # Single-end: only sequence count must meet min_reads
+        valid = df[df["sequence count"] >= min_reads].index.tolist()
+    else:
+        raise ValueError(
+            "Counts file must contain either 'forward sequence count' and 'reverse sequence count' columns (paired-end) "
+            "or 'sequence count' column (single-end)."
+        )
+    
     keep_tsv = counts_path.parent / "keep_samples.tsv"
     with open(keep_tsv, "w") as f:
         f.write("#SampleID\tDescription\n")
         for sample in valid:
             f.write(f"{sample}\tvalid\n")
-
+    
     metadata = qiime2.Metadata.load(str(keep_tsv))
     return demux.methods.filter_samples(demux=seqs, metadata=metadata).filtered_demux
 
