@@ -95,7 +95,7 @@ class Dataset:
         self._validate_inputs()
         self._create_directories()
         self._setup_file_registry()
-        self._load_metadata()
+        #self._load_metadata()
 
     def _validate_inputs(self) -> None:
         """Verify required input files exist before processing."""
