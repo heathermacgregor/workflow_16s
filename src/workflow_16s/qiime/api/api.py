@@ -275,7 +275,7 @@ def filter_samples_for_denoising(
             (df["forward sequence count"] >= min_reads) &
             (df["reverse sequence count"] >= min_reads)
         ].index.tolist()
-    elif 'sequence count' in df.columns:
+    elif 'forward sequence count' in df.columns:
         # Single-end: only sequence count must meet min_reads
         valid = df[df["forward sequence count"] >= min_reads].index.tolist()
     else:
