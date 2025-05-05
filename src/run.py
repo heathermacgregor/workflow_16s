@@ -271,7 +271,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 try:
                     subsets = SubsetDataset(cfg)
                     subsets.process(dataset, file_utils.fetch_first_match(datasets_info, dataset))
-
+                    print(file_utils.fetch_first_match(datasets_info, dataset))
                     for subset in subsets.success:
                         try:
                             subset_dirs = project_dir.subset_dirs(subset=subset)
