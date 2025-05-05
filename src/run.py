@@ -261,7 +261,6 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
         logger = setup_logging(project_dir.logs)
         datasets = file_utils.load_datasets_list(cfg["Dataset List"])
         datasets_info = file_utils.load_datasets_info(cfg["Dataset Information"])
-        print(datasets_info)
         try:
             success_subsets = []
             success_qiime_outputs = {}
@@ -271,7 +270,6 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 try:
                     subsets = SubsetDataset(cfg)
                     subsets.process(dataset, file_utils.fetch_first_match(datasets_info, dataset))
-                    print(file_utils.fetch_first_match(datasets_info, dataset))
                     for subset in subsets.success:
                         try:
                             subset_dirs = project_dir.subset_dirs(subset=subset)
