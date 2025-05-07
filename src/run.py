@@ -106,38 +106,47 @@ def execute_per_dataset_qiime_workflow(
     logger: logging.Logger,
 ) -> Dict[str, Path]:
     """Execute QIIME2 workflow with comprehensive error handling."""
-    qiime_config = cfg["QIIME 2"]["Per-Dataset"]
+    qiime_config = cfg["qiime2"]["per_dataset"]
     
     def get_conda_env_path(env_name_substring):
         try:
-            result = subprocess.run(["conda", "env", "list"], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                ["conda", "env", "list"], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
             for line in result.stdout.splitlines():
                 if env_name_substring in line:
                     return line.split()[-1]
-            raise ValueError(f"Conda environment containing '{env_name_substring}' not found.")
+            raise ValueError(
+                f"Conda environment containing '{env_name_substring}' not found."
+            )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Error finding conda environment: {e}")
 
     qiime_env_path = get_conda_env_path("qiime2-amplicon-2024.10")
     command = [
-        "conda", "run", "--prefix", qiime_env_path, "python", str(DEFAULT_PER_DATASET),
+        "conda", "run", 
+        "--prefix", qiime_env_path, 
+        "python", str(qiime_config["script_path"]),
         "--qiime_dir", str(qiime_dir),
         "--metadata_tsv", str(metadata_path),
         "--manifest_tsv", str(manifest_path),
-        "--library_layout", str(subset["library_layout"].lower()),
-        "--instrument_platform", str(subset["instrument_platform"].lower()),
+        "--library_layout", str(subset["library_layout"]).lower(),
+        "--instrument_platform", str(subset["instrument_platform"]).lower(),
         "--fwd_primer", str(subset["pcr_primer_fwd_seq"]),
         "--rev_primer", str(subset["pcr_primer_rev_seq"]),
-        "--classifier_dir", str(qiime_config["Taxonomic Classification"]["classifier_dir"]),
-        "--classifier", str(qiime_config["Taxonomic Classification"]["classifier"]),
-        "--classify_method", str(qiime_config["Taxonomic Classification"]["classify_method"].lower()),
-        "--retain_threshold", str(qiime_config["Filter"]["retain_threshold"]),
-        "--chimera_method", str(qiime_config["Denoise Sequences"]["chimera_method"]),
-        "--denoise_algorithm", str(qiime_config["Denoise Sequences"]["denoise_algorithm"]),
+        "--classifier_dir", str(qiime_config["taxonomy"]["classifier_dir"]),
+        "--classifier", str(qiime_config["taxonomy"]["classifier"]),
+        "--classify_method", str(qiime_config["taxonomy"]["classify_method"]).lower(),
+        "--retain_threshold", str(qiime_config["filter"]["retain_threshold"]),
+        "--chimera_method", str(qiime_config["denoise"]["chimera_method"]),
+        "--denoise_algorithm", str(qiime_config["denoise"]["denoise_algorithm"]),
     ]
     if qiime_config.get("hard_rerun", False):
         command.append("--hard_rerun")
-    if qiime_config.get("Trim Sequences", {}).get("run", False):
+    if qiime_config.get("trim", {}).get("run", False):
         command.append("--trim_sequences")
 
     try:
@@ -155,7 +164,7 @@ def execute_per_dataset_qiime_workflow(
         manifest_path,
         qiime_dir / "table" / "feature-table.biom",
         qiime_dir / "rep-seqs" / "dna-sequences.fasta",
-        qiime_dir / qiime_config["Taxonomic Classification"]["classifier"] / "taxonomy" / "taxonomy.tsv",
+        qiime_dir / qiime_config["taxonomy"]["classifier"] / "taxonomy" / "taxonomy.tsv",
         qiime_dir / "table_6" / "feature-table.biom",
     ]
     missing_outputs = file_utils.missing_output_files(expected_outputs)
@@ -184,15 +193,21 @@ def process_sequences(
     raw_seqs_paths = fetcher.download_run_fastq_concurrent(
         subset["metadata"].set_index("run_accession", drop=False)
     )
-    process_seqs = False
+
+    process_seqs = cfg.get("run_cutadapt", False)
     if process_seqs:
         seq_analyzer = BasicStats()
         raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
-        raw_df = pd.DataFrame([{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()])
+        raw_df = pd.DataFrame(
+            [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
+        )
 
-    if cfg["FastQC"]["run"]:
-        FastQC(fastq_paths=raw_seqs_paths, output_dir=subset_dirs["raw_seqs"]).run_pipeline()
-    if cfg["SeqKit"]["run"]:
+    if cfg["run_fastqc"]:
+        FastQC(
+            fastq_paths=raw_seqs_paths, output_dir=subset_dirs["raw_seqs"]
+        ).run_pipeline()
+
+    if cfg["run_seqkit"]:
         raw_stats_seqkit = SeqKit(max_workers=8).analyze_samples(raw_seqs_paths)
         stats = raw_stats_seqkit["overall"]
         output = (
@@ -204,63 +219,79 @@ def process_sequences(
             f"{'Average Length'.ljust(DEFAULT_N)}: {stats['avg_length']:.2f}\n"
             f"{'Minimum Length'.ljust(DEFAULT_N)}: {stats['min_length']}\n"
             f"{'Maximum Length'.ljust(DEFAULT_N)}: {stats['max_length']}\n\n"
-            "=== Most Common Lengths ===\n" + ''.join(
+            "=== Most Common Lengths ===\n"
+            + "".join(
                 f"{rank:>2}. {length:3} bp - {count:>9,} sequences\n"
-                for rank, (length, count) in enumerate(stats['most_common_lengths'], start=1)
+                for rank, (length, count) in enumerate(
+                    stats["most_common_lengths"], start=1
+                )
             )
         )
         logger.info(output)
 
-    if cfg["Cutadapt"]["run"] and process_seqs:
+    processed_paths = raw_seqs_paths
+    stats_df = pd.DataFrame()
+    if cfg["run_cutadapt"]:
         trimmed_seqs_paths, cutadapt_results, cutadapt_proc_time = CutAdapt(
             fastq_dir=subset_dirs["raw_seqs"],
             trimmed_fastq_dir=subset_dirs["trimmed_seqs"],
             primer_fwd=subset["pcr_primer_fwd_seq"],
             primer_rev=subset["pcr_primer_rev_seq"],
-            start_trim=cfg["Cutadapt"]["start_trim"],
-            end_trim=cfg["Cutadapt"]["end_trim"],
-            start_q_cutoff=cfg["Cutadapt"]["start_q_cutoff"],
-            end_q_cutoff=cfg["Cutadapt"]["end_q_cutoff"],
-            min_seq_length=cfg["Cutadapt"]["min_seq_length"],
-            cores=cfg["Cutadapt"]["cores"],
+            start_trim=cfg["cutadapt"]["start_trim"],
+            end_trim=cfg["cutadapt"]["end_trim"],
+            start_q_cutoff=cfg["cutadapt"]["start_q_cutoff"],
+            end_q_cutoff=cfg["cutadapt"]["end_q_cutoff"],
+            min_seq_length=cfg["cutadapt"]["min_seq_length"],
+            cores=cfg["cutadapt"]["n_cores"],
             rerun=True,
             region=subset["target_subfragment"],
         ).run(fastq_paths=raw_seqs_paths)
         processed_paths = trimmed_seqs_paths
-        trimmed_stats = seq_analyzer.calculate_statistics(trimmed_seqs_paths)
-        trimmed_df = pd.DataFrame([{"Metric": k, "Trimmed": v} for k, v in trimmed_stats["overall"].items()])
-        stats_df = pd.merge(raw_df, trimmed_df, on="Metric")
-        stats_df["Percent Change"] = ((stats_df["Trimmed"] - stats_df["Raw"]) / stats_df["Raw"]) * 100
-    elif process_seqs:
-        processed_paths = raw_seqs_paths
-        stats_df = raw_df
-        stats_df["Trimmed"] = None
-        stats_df["Percent Change"] = None
-    if process_seqs:
-        numeric_cols = ["Raw", "Trimmed", "Percent Change"]
-        stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
-            lambda x: f"{x:.2f}%" if isinstance(x, float) and x != x else f"{x:.2f}" if x else ""
-        )
-        stats_df = stats_df.dropna(axis=1, how='all')
+        if process_seqs:
+            trimmed_stats = seq_analyzer.calculate_statistics(trimmed_seqs_paths)
+            trimmed_df = pd.DataFrame(
+                [
+                    {"Metric": k, "Trimmed": v}
+                    for k, v in trimmed_stats["overall"].items()
+                ]
+            )
+            stats_df = pd.merge(raw_df, trimmed_df, on="Metric")
+            stats_df["Percent Change"] = (
+                (stats_df["Trimmed"] - stats_df["Raw"]) / stats_df["Raw"]
+            ) * 100
+            numeric_cols = ["Raw", "Trimmed", "Percent Change"]
+            stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
+                lambda x: (
+                    f"{x:.2f}%"
+                    if isinstance(x, float) and x != x
+                    else f"{x:.2f}" if x else ""
+                )
+            )
+            stats_df = stats_df.dropna(axis=1, how="all")
 
-    if cfg["FastQC"]["run"] and cfg["Cutadapt"]["run"] and process_seqs:
-        FastQC(fastq_paths=processed_paths, output_dir=subset_dirs["trimmed_seqs"]).run_pipeline()
-    if cfg["SeqKit"]["run"] and cfg["Cutadapt"]["run"] and process_seqs:
+    if cfg["run_fastqc"] and cfg["run_cutadapt"]:
+        FastQC(
+            fastq_paths=processed_paths, output_dir=subset_dirs["trimmed_seqs"]
+        ).run_pipeline()
+
+    if cfg["run_seqkit"] and cfg["run_cutadapt"]:
         SeqKit(max_workers=8).analyze_samples(processed_paths)
+
     if process_seqs:
         return processed_paths, stats_df
     else:
         return raw_seqs_paths, pd.DataFrame()
+
 
 # =================================== MAIN WORKFLOW ================================== #
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""
     try:
         cfg = get_config(config_path)
-        project_dir = dir_utils.SubDirs(cfg["Project Directory"])
+        project_dir = dir_utils.SubDirs(cfg["project_dir"])
         logger = setup_logging(project_dir.logs)
-        datasets = file_utils.load_datasets_list(cfg["Dataset List"])
-        datasets_info = file_utils.load_datasets_info(cfg["Dataset Information"])
+        datasets = file_utils.load_datasets_list(cfg["dataset_list"])
+        datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
         try:
             success_subsets = []
             success_qiime_outputs = {}
@@ -274,8 +305,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                         try:
                             subset_dirs = project_dir.subset_dirs(subset=subset)
                             
-                            if not cfg["QIIME 2"].get("hard_rerun", False):
-                                classifier = cfg["QIIME 2"]["Per-Dataset"]["Taxonomic Classification"]["classifier"]
+                            if not cfg["qiime2"].get("hard_rerun", False):
+                                classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
                                 required_paths = {
                                     "metadata": subset_dirs["metadata"] / "sample-metadata.tsv",
                                     "manifest": subset_dirs["qiime"] / "manifest.tsv",
@@ -305,7 +336,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                             success_qiime_outputs[subset["dataset"]] = qiime_outputs
                             success_subsets.append(subset["dataset"])
 
-                            if cfg.get("Clean Up FASTQ", True):
+                            if cfg.get("clean_fastq", True):
                                 for dir_type in ["raw_seqs", "trimmed_seqs"]:
                                     dir_path = subset_dirs[dir_type]
                                     if dir_path.exists():
