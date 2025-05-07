@@ -239,7 +239,7 @@ class SubsetDataset:
     def _infer_library_layout(
         self,
         metadata: pd.DataFrame,
-        info: Dict[str, Any],  # Unused but preserved for interface consistency
+        info: Dict[str, Any],  # Unused 
     ) -> pd.DataFrame:
         """Infer library layout from FASTQ FTP URLs in metadata.
 
@@ -643,7 +643,7 @@ class SubsetDataset:
         Returns:
             DataFrame containing manual metadata. Empty DataFrame if none exists
         """
-        manual_metadata_tsv = Path(self.config["manual_meta_dir"]) / f"{dataset}.tsv"
+        manual_metadata_tsv = Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
         if manual_metadata_tsv.is_file():
             return pd.read_csv(
                 manual_metadata_tsv,
