@@ -130,7 +130,7 @@ def fetch_manual_meta(config, dataset: str):
         Dictionary containing metadata, run characteristics, and filtered run lists.
         Returns None if invalid dataset format or metadata retrieval fails.
     """
-    manual_metadata_tsv = Path(config["Manual Metadata Directory"]) / f"{dataset}.tsv"
+    manual_metadata_tsv = Path(config["manual_meta_dir"]) / f"{dataset}.tsv"
     if manual_metadata_tsv.is_file():
         return pd.read_csv(
             manual_metadata_tsv, sep="\t", encoding="utf8", low_memory=False
@@ -187,7 +187,7 @@ class SubsetDataset:
     def __init__(self, config: Dict[str, Any]):
         """Initialize processor with configuration and directory setup."""
         self.config = config
-        self.dirs = dir_utils.SubDirs(self.config["Project Directory"])
+        self.dirs = dir_utils.SubDirs(self.config["project_dir"])
         self.success: List[Dict] = []
         self.failed: List[Dict] = []
 
@@ -335,7 +335,7 @@ class SubsetDataset:
 
         # Target genes (Default: '16S', 'unknown')
 
-        target_genes = self.config["Sequence Validation"]["run_targets"]
+        target_genes = self.config["validate_sequences"]["run_targets"]
 
         for gene in target_genes:
             runs = ena_runs.get(gene, [])
@@ -347,7 +347,7 @@ class SubsetDataset:
                 metadata=ena_data["metadata"],
                 runs=runs,
                 run_label=gene,
-                n_runs=self.config["Sequence Validation"]["n_runs"],
+                n_runs=self.config["validate_sequences"]["n_runs"],
                 output_dir=self.dirs.metadata_per_dataset / dataset,
                 fastq_dir=self.dirs.seq_data_per_dataset
                 / dataset
@@ -451,7 +451,7 @@ class SubsetDataset:
             # Metadata retrieval
 
             if self.ENA_PATTERN.match(dataset):
-                ena_data = ENAMetadata(email=self.config["ENA"]["email"])
+                ena_data = ENAMetadata(email=self.config["ena_email"])
                 ena_data.process_dataset(dataset, info)
                 ena_meta = ena_data.df
                 ena_runs = ena_data.runs
@@ -467,7 +467,7 @@ class SubsetDataset:
 
             # Primer processing mode
 
-            if self.config["PCR Primers"] == "estimate":
+            if self.config["pcr_primers_mode"] == "estimate":
                 self.auto(dataset, meta, ena_runs)
             else:
                 self.manual(dataset, info, meta)
