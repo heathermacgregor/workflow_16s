@@ -1,54 +1,53 @@
-# ======================== IMPORT REQUIRED LIBRARIES ======================== #
+# ===================================== IMPORTS ====================================== #
 
-
-from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 from collections import Counter
-import pandas as pd
 import re
+import pandas as pd
+import logging
 
-from workflow_16s.utils import misc_utils, dir_utils, file_utils
+# ================================== LOCAL IMPORTS =================================== #
+
+from workflow_16s.utils import dir_utils, file_utils, misc_utils
 import workflow_16s.sequences.analyze as seq_analyze
 from workflow_16s.ena.metadata import ENAMetadata
 
-import logging
-
-# ========================== GLOBAL CONFIGURATION ========================== #
-
+# ================================= DEFAULT VALUES =================================== #
 
 logger = logging.getLogger("workflow_16s")
 
 DEFAULT_16S_PRIMERS = {
     "V1-V2": {
         "fwd": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "AGAGTTTGATCMTGGCTCAG",
-            "ref": "",
+            "ref": None,
         },
         "rev": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "TGCTGCCTCCCGTAGGAGT",
-            "ref": "",
+            "ref": None,
         },
     },
     "V2-V3": {
         "fwd": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "ACTCCTACGGGAGGCAGCAG",
-            "ref": "",
+            "ref": None,
         },
         "rev": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "TTACCGCGGCTGCTGGCAC",
-            "ref": "",
+            "ref": None,
         },
     },
     "V3-V4": {
@@ -86,7 +85,7 @@ DEFAULT_16S_PRIMERS = {
     "V4-V5": {
         "fwd": {
             "name": "515F-Y",
-            "full_name": "",
+            "full_name": None,
             "position": (515, 533),
             "seq": "GTGYCAGCMGCCGCGGTAA",
             "ref": "https://pubmed.ncbi.nlm.nih.gov/26271760/",
@@ -101,43 +100,23 @@ DEFAULT_16S_PRIMERS = {
     },
     "V6-V8": {
         "fwd": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "AAACTYAAAKGAATTGACGG",
-            "ref": "",
+            "ref": None,
         },
         "rev": {
-            "name": "",
-            "full_name": "",
+            "name": None,
+            "full_name": None,
             "position": (0, 0),
             "seq": "ACGGGCGGTGTGTACAAG",
-            "ref": "",
+            "ref": None,
         },
     },
 }
 
 # ========================== CORE PROCESSING CLASS ========================== #
-
-
-def fetch_manual_meta(config, dataset: str):
-    """Retrieves and processes manually-collected dataset metadata.
-
-    Args:
-        dataset: ENA Project Accession number (e.g., PRJEB1234)
-
-    Returns:
-        Dictionary containing metadata, run characteristics, and filtered run lists.
-        Returns None if invalid dataset format or metadata retrieval fails.
-    """
-    manual_metadata_tsv = Path(config["manual_meta_dir"]) / f"{dataset}.tsv"
-    if manual_metadata_tsv.is_file():
-        return pd.read_csv(
-            manual_metadata_tsv, sep="\t", encoding="utf8", low_memory=False
-        )
-    else:
-        return pd.DataFrame({})
-
 
 class SubsetDataset:
     """Central processing unit for dataset analysis with automated and manual modes.
@@ -148,13 +127,11 @@ class SubsetDataset:
         - Error tracking and success/failure reporting
 
     Attributes:
-        config: Configuration dictionary for processing parameters.
-        dirs: Subdirectories structure handler.
-        success: List of successfully processed datasets with parameters.
-        failed: List of failed datasets with error information.
+        config: Configuration dictionary for processing parameters
+        dirs: Subdirectories structure handler
+        success: List of successfully processed datasets with parameters
+        failed: List of failed datasets with error information
     """
-
-    # ENA-related configurations
 
     ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
     ENA_METADATA_UNNECESSARY_COLUMNS = [
@@ -184,31 +161,45 @@ class SubsetDataset:
     ]
     ENA_METADATA_COLUMNS_TO_RENAME = {"lat": "latitude_deg", "lon": "longitude_deg"}
 
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize processor with configuration and directory setup."""
+    def __init__(self, config: Dict[str, Any]) -> None:
+        """Initialize processor with configuration and directory setup.
+
+        Args:
+            config: Configuration dictionary containing processing parameters
+                such as project directory, primer mode, and validation settings
+        """
         self.config = config
         self.dirs = dir_utils.SubDirs(self.config["project_dir"])
-        self.success: List[Dict] = []
-        self.failed: List[Dict] = []
+        self.success: List[Dict[str, Any]] = []
+        self.failed: List[Dict[str, str]] = []
 
-    def _determine_target_fragment(self, estimates: Dict[str, Any]) -> str:
+    def _determine_target_fragment(self, estimates: Dict[str, str]) -> str:
         """Determine target fragment from primer estimation results.
 
         Args:
-            estimates: Dictionary mapping targets to estimated subfragments.
+            estimates: Dictionary mapping target genes to estimated subfragments
 
         Returns:
-            Selected target subfragment (e.g., 'V4').
+            Selected target subfragment (e.g., 'V4')
 
         Raises:
-            ValueError: If no valid subfragment can be determined.
+            ValueError: If no valid subfragment can be determined or if
+                the determined subfragment is not in DEFAULT_16S_PRIMERS
         """
-        unique = {v[0] for v in estimates.values()}
+        unique = {v for v in estimates.values()}
         if len(unique) == 1:
-            return unique.pop()
-        if "16S" in estimates:
-            return estimates["16S"][0]
-        raise ValueError("No valid target subfragment identified")
+            target_subfragment = unique.pop()
+        elif "16S" in estimates:
+            target_subfragment = estimates["16S"]
+        else:
+            raise ValueError("No valid target subfragment identified")
+
+        if target_subfragment not in DEFAULT_16S_PRIMERS:
+            raise ValueError(
+                f"Target subfragment '{target_subfragment}' not found in "
+                "DEFAULT_16S_PRIMERS. Update configuration or primers database."
+            )
+        return target_subfragment
 
     def _process_group(
         self,
@@ -217,10 +208,23 @@ class SubsetDataset:
         layout: str,
         platform: str,
         target_subfragment: str,
-        fwd_primer: str,
-        rev_primer: str,
+        fwd_primer: Optional[str],
+        rev_primer: Optional[str],
     ) -> Dict[str, Any]:
-        """Construct parameters dictionary for a metadata group."""
+        """Construct parameters dictionary for a metadata group.
+
+        Args:
+            group: Metadata subset for the current group
+            dataset: Dataset identifier
+            layout: Library layout (single/paired)
+            platform: Instrument platform
+            target_subfragment: Target 16S subfragment
+            fwd_primer: Forward primer sequence
+            rev_primer: Reverse primer sequence
+
+        Returns:
+            Dictionary containing processing parameters for the group
+        """
         return {
             "dataset": dataset,
             "metadata": group,
@@ -235,17 +239,16 @@ class SubsetDataset:
     def _infer_library_layout(
         self,
         metadata: pd.DataFrame,
-        info: Dict,  # Unused but preserved for interface consistency
+        info: Dict[str, Any],  # Unused but preserved for interface consistency
     ) -> pd.DataFrame:
-        """
-        Infer library layout from FASTQ FTP URLs in metadata.
+        """Infer library layout from FASTQ FTP URLs in metadata.
 
         Args:
-            metadata: DataFrame containing sequencing metadata.
-            info: Dataset info dictionary (unused, preserved for compatibility).
+            metadata: DataFrame containing sequencing metadata
+            info: Dataset info dictionary (unused)
 
         Returns:
-            Updated metadata with corrected library_layout column.
+            Updated metadata with corrected library_layout column
         """
         metadata = metadata.copy()
         metadata["fastq_ftp"] = metadata["fastq_ftp"].fillna("")
@@ -275,31 +278,42 @@ class SubsetDataset:
             metadata["library_layout"] = new_layout
         return metadata
 
-    def _process_citations(self, info: Dict) -> List[str]:
-        """Extract citations from publication URLs in dataset info."""
+    def _process_citations(self, info: Dict[str, Any]) -> List[str]:
+        """Extract citations from publication URLs in dataset info
+
+        Args:
+            info: Dataset info dictionary containing publication URLs
+
+        Returns:
+            List of formatted citations or original URLs if citation lookup fails
+        """
         citations = []
         urls = str(info.get("publication_url", "")).strip(";").split(";")
         for url in urls:
             if not url:
                 continue
-            citation = misc_utils.get_citation(url, style="apa")
-            citations.append(citation if citation else url)
+            try:
+                citation = misc_utils.get_citation(url, style="apa")
+                citations.append(citation if citation else url)
+            except Exception as e:
+                logger.warning(f"Failed to process citation URL {url}: {e}")
+                citations.append(url)
         return citations
 
     def _extract_primers_from_metadata(
-        self, meta: pd.DataFrame, info: Dict
+        self, meta: pd.DataFrame, info: Dict[str, Any]
     ) -> Tuple[Optional[str], Optional[str]]:
         """Extract and validate primers from metadata columns.
 
         Args:
             meta: Metadata DataFrame.
-            info: Dataset info with potential primer sequences.
+            info: Dataset info with potential primer sequences
 
         Returns:
-            Tuple of forward and reverse primer sequences.
+            Tuple of validated forward and reverse primer sequences
 
         Raises:
-            ValueError: If metadata primers conflict with info primers.
+            ValueError: If metadata primers conflict with info primers
         """
         fwd_primer, rev_primer = None, None
 
@@ -324,17 +338,34 @@ class SubsetDataset:
                         f"Metadata reverse primer {rev_primer} "
                         f"doesn't match info {info_rev}"
                     )
+
+        # Validate primer sequences
+        def validate_primer(primer: Optional[str]) -> Optional[str]:
+            if not primer:
+                return None
+            if not re.match(r"^[ACGTURYKMSWBDHVN]+$", primer, re.IGNORECASE):
+                raise ValueError(f"Invalid primer sequence: {primer}")
+            return primer.upper()
+
         return (
-            fwd_primer or info.get("pcr_primer_fwd_seq"),
-            rev_primer or info.get("pcr_primer_rev_seq"),
+            validate_primer(fwd_primer or info.get("pcr_primer_fwd_seq")),
+            validate_primer(rev_primer or info.get("pcr_primer_rev_seq")),
         )
 
-    def auto(self, dataset: str, meta: pd.DataFrame, ena_runs: Dict):
-        """Automatically estimate primers and process metadata groups."""
+    def auto(
+        self, dataset: str, meta: pd.DataFrame, ena_runs: Dict[str, List[str]]
+    ) -> None:
+        """Automatically estimate primers and process metadata groups.
+
+        Args:
+            dataset: Dataset identifier
+            meta: Combined metadata DataFrame
+            ena_runs: Dictionary of target genes to ENA run accessions
+
+        Raises:
+            ValueError: If unable to determine valid primers for the target subfragment
+        """
         estimates = {}
-
-        # Target genes (Default: '16S', 'unknown')
-
         target_genes = self.config["validate_sequences"]["run_targets"]
 
         for gene in target_genes:
@@ -343,8 +374,9 @@ class SubsetDataset:
 
             if not runs:
                 continue
+
             results = seq_analyze.estimate_16s_subfragment(
-                metadata=ena_data["metadata"],
+                metadata=meta,
                 runs=runs,
                 run_label=gene,
                 n_runs=self.config["validate_sequences"]["n_runs"],
@@ -358,11 +390,22 @@ class SubsetDataset:
                 results = {k: v for k, v in results.items() if v[1] >= 10}
             if results:
                 ((subfragment, _),) = Counter(results.values()).most_common(1)
-                estimates[target] = subfragment
-        target_subfragment = self._determine_target_fragment(estimates)
+                estimates[gene] = subfragment
 
-        fwd_primer = DEFAULT_16S_PRIMERS[target_subfragment]["fwd"]["seq"]
-        rev_primer = DEFAULT_16S_PRIMERS[target_subfragment]["rev"]["seq"]
+        try:
+            target_subfragment = self._determine_target_fragment(estimates)
+        except ValueError as e:
+            logger.error(f"Primer estimation failed for {dataset}: {e}")
+            raise
+
+        try:
+            primers = DEFAULT_16S_PRIMERS[target_subfragment]
+            fwd_primer = primers["fwd"]["seq"]
+            rev_primer = primers["rev"]["seq"]
+        except KeyError:
+            raise ValueError(
+                f"No primer sequences available for target subfragment {target_subfragment}"
+            )
 
         group_columns = ["library_layout", "instrument_platform"]
         for (layout, platform), group in meta.groupby(group_columns, dropna=False):
@@ -379,16 +422,20 @@ class SubsetDataset:
             )
             self.success.append(params)
 
-    def manual(self, dataset: str, info: Dict, meta: pd.DataFrame):
-        """Process dataset with manually provided primers and metadata."""
+    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame) -> None:
+        """Process dataset with manually provided primers and metadata.
+
+        Args:
+            dataset: Dataset identifier
+            info: Dataset info containing manual configurations
+            meta: Combined metadata DataFrame
+        """
         group_columns = ["library_layout", "instrument_platform"]
 
         # Primer extraction and validation
-
         fwd_primer, rev_primer = self._extract_primers_from_metadata(meta, info)
 
         # Target subfragment handling
-
         target_subfragment = info.get("target_subfragment")
         if (
             "target_subfragment" in meta.columns
@@ -396,60 +443,86 @@ class SubsetDataset:
         ):
             target_subfragment = meta["target_subfragment"].iloc[0]
             group_columns.append("target_subfragment")
-        # Handle potential primer columns in metadata
 
+        # Handle varying primer sequences in metadata
         if {"pcr_primer_fwd_seq", "pcr_primer_rev_seq"}.issubset(meta.columns):
             if (
                 meta["pcr_primer_fwd_seq"].nunique() > 1
                 or meta["pcr_primer_rev_seq"].nunique() > 1
             ):
                 group_columns.extend(["pcr_primer_fwd_seq", "pcr_primer_rev_seq"])
-        # Process each metadata group
 
+        # Process each metadata group
         for cols, group in meta.groupby(group_columns, dropna=False):
             if group.empty:
                 continue
+
+            # Extract primers from group columns if present
+            group_fwd = (
+                cols[group_columns.index("pcr_primer_fwd_seq")]
+                if "pcr_primer_fwd_seq" in group_columns
+                else fwd_primer
+            )
+            group_rev = (
+                cols[group_columns.index("pcr_primer_rev_seq")]
+                if "pcr_primer_rev_seq" in group_columns
+                else rev_primer
+            )
+
             sample_subset = {
                 "dataset": dataset,
                 "metadata": group,
                 "n_runs": len(group),
-                "target_subfragment": target_subfragment,
-                "pcr_primer_fwd_seq": fwd_primer,
-                "pcr_primer_rev_seq": rev_primer,
+                "target_subfragment": (
+                    cols[group_columns.index("target_subfragment")]
+                    if "target_subfragment" in group_columns
+                    else target_subfragment
+                ),
+                "pcr_primer_fwd_seq": group_fwd,
+                "pcr_primer_rev_seq": group_rev,
             }
+
+            # Add remaining grouping columns
             for i, col in enumerate(group_columns):
-                sample_subset[col] = cols[i]
+                if col not in sample_subset:
+                    sample_subset[col] = cols[i]
+
             self.success.append(sample_subset)
 
-    def process(self, dataset: str, info: Dict):
+    def process(self, dataset: str, info: Dict[str, Any]) -> None:
         """Process a dataset with automated or manual primer configuration.
-        Handles metadata retrieval, validation, and error tracking."""
-        try:
-            # Publication info processing
 
+        Args:
+            dataset: Dataset identifier (ENA project accession or custom name)
+            info: Dataset configuration parameters
+
+        Handles:
+            - Metadata retrieval and validation
+            - Primer determination
+            - Error tracking
+        """
+        try:
             citations = self._process_citations(info)
 
-            # Log dataset information
-
-            dataset_info_text = (
-                  f"\n[Dataset]             {dataset.upper()}".ljust(50)
-                + f"\n[Type]                {info.get('dataset_type', '').upper()}".ljust(50)
-                + f"\n[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})".ljust(50)
-                + f"\n[Library Layout]      {info.get('library_layout', '').upper()}".ljust(50)
-                + f"\n[Primers]             {info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})".ljust(50)
-                + f"\n                      {info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})".ljust(50)
-                + f"\n[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}".ljust(50)
-                + f"\n[Publications]        {citations[0]}".ljust(50)
-            )
-            
+            # Format dataset information logging
+            dataset_info = [
+                f"[Dataset]             {dataset.upper()}",
+                f"[Type]                {info.get('dataset_type', '').upper()}",
+                f"[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})",
+                f"[Library Layout]      {info.get('library_layout', '').upper()}",
+                f"[Primers]             {info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})",
+                f"                      {info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})",
+                f"[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}",
+                f"[Publications]        {citations[0] if citations else 'None'}",
+            ]
             if len(citations) > 1:
-                for citation in citations[1:]:
-                    dataset_info_text += f"\n                      {citation}".ljust(50)
+                dataset_info.extend(
+                    f"                      {cite}" for cite in citations[1:]
+                )
 
-            logger.info(dataset_info_text)
+            logger.info("\n".join(dataset_info))
 
             # Metadata retrieval
-
             if self.ENA_PATTERN.match(dataset):
                 ena_data = ENAMetadata(email=self.config["ena_email"])
                 ena_data.process_dataset(dataset, info)
@@ -458,36 +531,46 @@ class SubsetDataset:
             else:
                 ena_meta = pd.DataFrame()
                 ena_runs = {}
-            manual_meta = fetch_manual_meta(self.config, dataset)
+            manual_meta = self.fetch_manual_meta(dataset)
 
             # Metadata validation and combination
-
             meta = self._combine_metadata(dataset, ena_meta, manual_meta, info)
             meta = self._infer_library_layout(meta, info)
 
             # Primer processing mode
-
             if self.config["pcr_primers_mode"] == "estimate":
                 self.auto(dataset, meta, ena_runs)
             else:
                 self.manual(dataset, info, meta)
+
         except Exception as e:
             logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
             self.failed.append({"dataset": dataset, "error": str(e)})
-            raise
 
     def _combine_metadata(
         self,
         dataset: str,
         ena_meta: pd.DataFrame,
         manual_meta: pd.DataFrame,
-        info: Dict,
+        info: Dict[str, Any],
     ) -> pd.DataFrame:
-        """Combine and validate ENA/manual metadata."""
+        """Combine and validate ENA/manual metadata.
+
+        Args:
+            dataset: Dataset identifier for error reporting
+            ena_meta: ENA metadata DataFrame
+            manual_meta: Manually provided metadata DataFrame
+            info: Dataset info for validation
+
+        Returns:
+            Combined and validated metadata DataFrame
+
+        Raises:
+            ValueError: For metadata consistency issues
+        """
         if not ena_meta.empty and info.get("dataset_type") != "ENA":
             raise ValueError(
-                f"ENA metadata present for non-ENA dataset type: "
-                f"{info.get('dataset_type')}"
+                f"ENA metadata present for non-ENA dataset type: {info.get('dataset_type')}"
             )
         if ena_meta.empty and not manual_meta.empty:
             return manual_meta
@@ -504,49 +587,86 @@ class SubsetDataset:
     def combine_ena_and_manual_metadata(
         self, dataset: str, ena_meta: pd.DataFrame, manual_meta: pd.DataFrame
     ) -> pd.DataFrame:
-        """Merge ENA and manual metadata with conflict resolution."""
-        # Column standardization
+        """Merge ENA and manual metadata with conflict resolution.
 
+        Args:
+            dataset: Dataset identifier for error reporting
+            ena_meta: ENA metadata DataFrame
+            manual_meta: Manual metadata DataFrame
+
+        Returns:
+            Merged metadata DataFrame
+
+        Raises:
+            ValueError: For critical column mismatches
+        """
+        # Standardize column names
         ena_meta.columns = ena_meta.columns.str.lower().str.strip()
         manual_meta.columns = manual_meta.columns.str.lower().str.strip()
 
-        # Column presence validation
-
+        # Validate required columns
         for df, df_type in [(ena_meta, "ENA"), (manual_meta, "manual")]:
             if "run_accession" not in df.columns:
                 raise ValueError(
                     f"{df_type} metadata for {dataset} missing 'run_accession' column"
                 )
-        # Column conflict resolution
 
+        # Resolve column conflicts
         manual_meta, ena_meta = self._resolve_column_conflicts(manual_meta, ena_meta)
 
-        # ENA metadata cleanup
-
+        # Clean ENA metadata
         ena_meta = ena_meta.drop(
             columns=ena_meta.columns.intersection(self.ENA_METADATA_UNNECESSARY_COLUMNS)
         )
-        ena_meta = ena_meta.rename(
-            columns={
-                col: self.ENA_METADATA_COLUMNS_TO_RENAME[col]
-                for col in ena_meta.columns.intersection(
-                    self.ENA_METADATA_COLUMNS_TO_RENAME
-                )
-            }
+        ena_meta = ena_meta.rename(columns=self.ENA_METADATA_COLUMNS_TO_RENAME)
+
+        # Merge datasets
+        meta = manual_meta.merge(
+            ena_meta,
+            on="run_accession",
+            how="left",
+            suffixes=("", "_ena"),
+            validate="one_to_one",
         )
-
-        # Merge metadata
-
-        meta = manual_meta.merge(ena_meta, on="run_accession", how="left")
         if "dataset_id" not in meta.columns:
-            meta["dataset_id"] = f"ENA_{dataset}"
+            meta["dataset_id"] = (
+                f"ENA_{dataset}" if self.ENA_PATTERN.match(dataset) else dataset
+            )
         return meta
+
+    def fetch_manual_meta(self, dataset: str) -> pd.DataFrame:
+        """Retrieve manually-collected metadata for a dataset.
+
+        Args:
+            dataset: Dataset identifier
+
+        Returns:
+            DataFrame containing manual metadata. Empty DataFrame if none exists
+        """
+        manual_metadata_tsv = Path(self.config["manual_meta_dir"]) / f"{dataset}.tsv"
+        if manual_metadata_tsv.is_file():
+            return pd.read_csv(
+                manual_metadata_tsv,
+                sep="\t",
+                encoding="utf8",
+                low_memory=False,
+                dtype={"run_accession": str},
+            )
+        return pd.DataFrame()
 
     @staticmethod
     def _resolve_column_conflicts(
         manual_meta: pd.DataFrame, ena_meta: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Resolve column name conflicts between manual and ENA metadata."""
+        """Resolve column name conflicts between manual and ENA metadata.
+
+        Args:
+            manual_meta: Manual metadata DataFrame
+            ena_meta: ENA metadata DataFrame
+
+        Returns:
+            Tuple of (modified manual_meta, modified ena_meta) with resolved conflicts
+        """
         common_cols = set(ena_meta.columns) & set(manual_meta.columns) - {
             "run_accession"
         }
