@@ -33,28 +33,15 @@ qiime2:
   per_dataset:
     script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     hard_rerun: False
-    #n_threads: 32
     trim:
       run: True
     denoise:
       chimera_method: "consensus"
       denoise_algorithm: "DADA2"
-      #n_threads: 16
-      #trim_left_f: 0
-      #trim_left_r: 0
-      #trunc_q: 2
-      #max_ee: 2
-      #max_ee_f: 2
-      #max_ee_r: 2
     taxonomy:
-      #run: True
-      #hard_rerun: True
       classifier_dir: "./classifier/silva-138-99-515-806"
       classifier: "silva-138-99-515-806"
       classify_method: "sklearn"
-      #maxaccepts: 50
-      #perc_identity: 0.99
-      #query_cov: 0.9
     filter:
       retain_threshold: 80
     
