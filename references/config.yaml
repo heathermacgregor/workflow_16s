@@ -1,72 +1,61 @@
 # Default configuration file
+ena_email: "macgregor@berkeley.edu"
 
-ENA:
-  email: "macgregor@berkeley.edu"
+dataset_list: "./datasets.txt"
+dataset_info: "./datasets.tsv"
 
-Dataset List: "./datasets.txt"
-Dataset Information: "./datasets.tsv"
+manual_metadata_dir: "../../manual_metadata"
+project_dir: "../../test"
 
-Manual Metadata Directory: "../../manual_metadata"
+pcr_primers_mode: "manual"
+target_subfragment_mode: "any"
 
-Project Directory: "../../test"
-
-PCR Primers: "manual"
-Target Subfragment: "any"
-
-Sequence Validation:
+blast_db_dir: "./blast/silva_16s/SILVA_16S_db"
+validate_sequences:
   n_runs: 10
   run_targets:
     - '16S'
     - 'unknown'
-    
-BLAST:
-  path: "./blast/silva_16s/SILVA_16S_db"
-    
-FastQC:
-  run: False
+
+run_fastqc: False
+run_seqkit: False
+run_cutadapt: False
   
-SeqKit:
-  run: False
-  
-Cutadapt:
-  run: False
+cutadapt:
   start_trim: 0
   end_trim: 0
   start_q_cutoff: 30
   end_q_cutoff: 15
   min_seq_length: 150
-  cores: 16
+  n_cores: 16
   
-QIIME 2:
-  Per-Dataset:
-    path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
+qiime2:
+  per_dataset:
+    script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     hard_rerun: False
-    n_threads: 32
-    Trim Sequences:
+    #n_threads: 32
+    trim:
       run: True
-      trim_length: 250
-      n_cores: 32
-      save_intermediates: True
-    Denoise Sequences:
+    denoise:
       chimera_method: "consensus"
       denoise_algorithm: "DADA2"
-      n_threads: 16
-      trim_left_f: 0
-      trim_left_r: 0
-      trunc_q: 2
-      max_ee: 2
-      max_ee_f: 2
-      max_ee_r: 2
-    Taxonomic Classification:
-      run: True
-      hard_rerun: True
+      #n_threads: 16
+      #trim_left_f: 0
+      #trim_left_r: 0
+      #trunc_q: 2
+      #max_ee: 2
+      #max_ee_f: 2
+      #max_ee_r: 2
+    taxonomy:
+      #run: True
+      #hard_rerun: True
       classifier_dir: "./classifier/silva-138-99-515-806"
       classifier: "silva-138-99-515-806"
       classify_method: "sklearn"
-      maxaccepts: 50
-      perc_identity: 0.99
-      query_cov: 0.9
-    Filter:
+      #maxaccepts: 50
+      #perc_identity: 0.99
+      #query_cov: 0.9
+    filter:
       retain_threshold: 80
     
-Clean Up FASTQ: True
+clean_fastq: True
