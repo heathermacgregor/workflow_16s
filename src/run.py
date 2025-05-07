@@ -22,16 +22,6 @@ from pprint import pprint
 # Third-party imports
 import pandas as pd
 
-# Custom module imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(parent_dir)
-from workflow_16s.config import get_config
-from workflow_16s.logger import setup_logging
-from workflow_16s import ena
-from workflow_16s.utils import file_utils, misc_utils, dir_utils
-from workflow_16s.metadata.per_dataset import SubsetDataset
-from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
-
 # Rich progress bar imports
 from rich.progress import (
     Progress,
@@ -43,7 +33,18 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-# ================================= GLOBAL VARIABLES ================================= #
+# Custom module imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+from workflow_16s.config import get_config
+from workflow_16s.logger import setup_logging
+from workflow_16s import ena
+from workflow_16s.utils import file_utils, misc_utils, dir_utils
+from workflow_16s.metadata.per_dataset import SubsetDataset
+from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
+
+# ================================= DEFAULT VALUES =================================== #
+
 DEFAULT_CONFIG = (
     Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
     / "references"
@@ -96,6 +97,7 @@ def find_required_files(test):
     return found if all(k in found for k in required_keys) else None
 
 # ================================= QIIME EXECUTION ================================== #
+
 def execute_per_dataset_qiime_workflow(
     qiime_dir: Union[str, Path],
     metadata_path: Union[str, Path],
@@ -180,6 +182,7 @@ def execute_per_dataset_qiime_workflow(
     }
 
 # ================================ SEQUENCE PROCESSING =============================== #
+
 def process_sequences(
     cfg: Dict[str, Any],
     subset_dirs: Dict[str, Path],
@@ -284,6 +287,7 @@ def process_sequences(
 
 
 # =================================== MAIN WORKFLOW ================================== #
+
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""
     try:
