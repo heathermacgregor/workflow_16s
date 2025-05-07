@@ -123,7 +123,7 @@ class Dataset:
     def _handle_processing_error(self, error: Exception) -> None:
         """Handle and clean up after processing errors."""
         print(f"  ❌ Workflow failed: {str(error)}")
-        clean_qiime_dir(self.qiime_dir)
+        self.clean_qiime_dir()
         raise RuntimeError("Workflow execution aborted") from error
 
     def _process_sequences(self) -> None:
@@ -193,7 +193,7 @@ class Dataset:
 
     def _calculate_truncation_params(self, layout: str) -> Tuple[int, int]:
         """Determine truncation parameters based on library layout."""
-        stats = self._calculate_sequence_stats()
+        stats = self._calculate_sequence_stats(seqs)
         return (
             (stats["trunc_len_f"], stats["trunc_len_r"])
             if layout == "paired"
