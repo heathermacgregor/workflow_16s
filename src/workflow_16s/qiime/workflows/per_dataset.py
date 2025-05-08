@@ -139,7 +139,7 @@ class Dataset:
         seqs = filter_samples_for_denoising(seqs=seqs, counts_file=counts_file)
         print("  ✅ Filtered low-count samples")
 
-        trunc_params = self._calculate_truncation_params(layout)
+        trunc_params = self._calculate_truncation_params(seqs, layout)
         rep_seqs, table, stats = self._denoise_sequences(seqs, *trunc_params)
         print("  ✅ Completed denoising pipeline")
 
@@ -191,7 +191,7 @@ class Dataset:
 
         return seqs, self.qiime_dir / "demux-stats" / "per-sample-fastq-counts.tsv"
 
-    def _calculate_truncation_params(self, layout: str) -> Tuple[int, int]:
+    def _calculate_truncation_params(self, seqs: Artifact, layout: str) -> Tuple[int, int]:
         """Determine truncation parameters based on library layout."""
         stats = self._calculate_sequence_stats(seqs)
         return (
