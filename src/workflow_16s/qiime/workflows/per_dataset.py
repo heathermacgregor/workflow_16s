@@ -392,6 +392,41 @@ class Dataset:
         """Check existence of specified output files."""
         return all(self.file_registry[key].exists() for key in keys)
 
+    def clean_qiime_dir(self) -> None:
+        """Clean up intermediate files from QIIME2 output directories.
+
+        Args:
+            qiime_dir: Root directory containing QIIME2 artifacts
+        """
+        qiime_path = Path(self.args["qiime_dir"])
+        subdirs_to_clean = ["demux-stats", "trimmed-seqs_demux-stats"]
+        files_to_remove = ["data.jsonp"]
+        extensions_to_remove = ["*.html", "*.pdf"]
+        dirs_to_remove = ["dist", "q2templateassets"]
+
+        for subdir in subdirs_to_clean:
+            subdir_path = qiime_path / subdir
+            if not subdir_path.exists():
+                continue
+
+            # Remove specified files
+            for file_name in files_to_remove:
+                file_path = subdir_path / file_name
+                if file_path.exists():
+                    file_path.unlink()
+
+            # Remove files by extension
+            for ext in extensions_to_remove:
+                for file_path in subdir_path.glob(ext):
+                    file_path.unlink()
+
+            # Remove entire directories
+            for dir_name in dirs_to_remove:
+                dir_path = subdir_path / dir_name
+                if dir_path.exists() and dir_path.is_dir():
+                    shutil.rmtree(dir_path)
+
+
 
 class WorkflowRunner:
     """Orchestrate workflow execution with cleanup handling.
