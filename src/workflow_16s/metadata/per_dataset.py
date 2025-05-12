@@ -583,8 +583,11 @@ class SubsetDataset:
             # Metadata validation and combination
             # If the samples are pooled, restructure the metadata
             if info.get('sample_pooling', ''):
+                print("Pooled Samples")
                 ena_runs = ena_meta.set_index("run_accession", drop=False)
+                print(ena_runs)
                 parsed_ena_meta = parse_sample_pooling(ena_meta)
+                print(parsed_ena_meta)
                 if not manual_meta.empty:
                     similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
                     meta = pd.concat(
