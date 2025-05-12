@@ -6,6 +6,7 @@ from collections import Counter
 import re
 import pandas as pd
 import logging
+from scipy.spatial.distance import cdist
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -115,6 +116,45 @@ DEFAULT_16S_PRIMERS = {
         },
     },
 }
+
+def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
+    """Parses pooled samples in the 'sample_description' column into separate columns.
+    Args:
+        df (pd.DataFrame)
+        
+    Returns:
+        combined_df (pd.DataFrame)
+    """
+    def _parse_sample_pooling(row) -> pd.DataFrame:
+        sample_description = row.get('sample_description', '')
+        data_str = sample_description.strip("''").replace("Samples were pooled in this way (MID LONGITUDE LATITUDE SAMPLING_DATE ELEVATION) : ", "")
+        data_list = data_str.split()
+        num_columns = 5
+        data_reshaped = [data_list[i:i + num_columns] for i in range(0, len(data_list), num_columns)]
+        columns = ['MID', 'LONGITUDE', 'LATITUDE', 'SAMPLING_DATE', 'ELEVATION']
+        parsed_df = pd.DataFrame(data_reshaped, columns=columns)
+        for col in row.index:
+            parsed_df[col] = row[col]
+        return parsed_df
+
+    parsed_dfs = df.apply(_parse_sample_pooling, axis=1)
+    combined_df = pd.concat(parsed_dfs.values, ignore_index=True).rename(columns={
+        'MID': 'barcode_sequence',
+        'LONGITUDE': 'longitude_deg',
+        'LATITUDE': 'latitude_deg',
+        'SAMPLING_DATE': 'sampling_date',
+        'ELEVATION': 'elevation_m'
+    }).reset_index(drop=True)
+    return combined_df
+
+
+def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    """Calculate Euclidean distances between two DataFrames based on longitude and latitude."""
+    df1[['longitude_deg', 'latitude_deg']] = df1[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
+    df2[['longitude_deg', 'latitude_deg']] = df2[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
+    distances = cdist(df1[['longitude_deg', 'latitude_deg']], df2[['longitude_deg', 'latitude_deg']], metric='euclidean')
+    min_dist_indices = distances.argmin(axis=1)
+    return df2.iloc[min_dist_indices].reset_index(drop=True)
 
 # ========================== CORE PROCESSING CLASS ========================== #
 
@@ -522,8 +562,8 @@ class SubsetDataset:
 
             logger.info("\n".join(dataset_info))
 
-            # Metadata retrieval
-            if self.ENA_PATTERN.match(dataset):
+            # ENA metadata retrieval
+            if self.ENA_PATTERN.match(dataset) and info.get('dataset_type', '').upper() == 'ENA':
                 ena_data = ENAMetadata(email=self.config["ena_email"])
                 ena_data.process_dataset(dataset, info)
                 ena_meta = ena_data.df
@@ -531,17 +571,31 @@ class SubsetDataset:
             else:
                 ena_meta = pd.DataFrame()
                 ena_runs = {}
+
+            # Manual metadata retrieval
             manual_meta = self.fetch_manual_meta(dataset)
 
             # Metadata validation and combination
-            meta = self._combine_metadata(dataset, ena_meta, manual_meta, info)
+            if info.get('sample_pooling', ''):
+                parsed_ena_meta = parse_sample_pooling(ena_meta)
+                if not manual_meta.empty:
+                    similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
+                    meta = pd.concat([parsed_ena_meta.reset_index(drop=True), similar_rows], axis=1) 
+                else:
+                    meta = parsed_ena_meta
+            else: 
+                meta = self._combine_metadata(dataset, ena_meta, manual_meta, info)
+            
             meta = self._infer_library_layout(meta, info)
 
             # Primer processing mode
             if self.config["pcr_primers_mode"] == "estimate":
                 self.auto(dataset, meta, ena_runs)
             else:
-                self.manual(dataset, info, meta)
+                if self.config["validate_16s"]:
+                    self.manual(dataset, info, meta)
+                else:
+                    self.manual(dataset, info, meta)
 
         except Exception as e:
             logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
