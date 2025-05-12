@@ -381,6 +381,16 @@ class PooledSamplesProcessor:
         self.sample_file_map: Dict[str, Path] = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         self._create_lookup_dict()
+        self.progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40, complete_style="red", finished_style="green"),
+            MofNCompleteColumn(),
+            TextColumn("[white]•"),
+            TimeElapsedColumn(),
+            TextColumn("[white]•"),
+            TimeRemainingColumn(),
+        )
         self.site_lock = threading.Lock()
         self.progress_lock = threading.Lock()
 
@@ -532,16 +542,9 @@ class PooledSamplesProcessor:
         organized_dir = self.organize_input_files(raw_data_dir)
         file_paths = list(organized_dir.glob('*.fastq.gz'))
 
-        with Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=None),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-        ) as progress:
-            main_task = progress.add_task(
-                "🧬 Processing all files...", 
-                total=len(file_paths)
+        with self.progress:
+            main_task = self.progress.add_task(
+                "[white]Processing pooled sequences...".ljust(50), total=len(file_paths)
             )
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
@@ -556,9 +559,10 @@ class PooledSamplesProcessor:
                 for future in as_completed(futures):
                     try:
                         future.result()
-                        progress.advance(main_task)
                     except Exception as e:
                         self.logger.error(f"Error processing file: {e}")
+                    finally:
+                        progress.advance(main_task)
 
             self.write_site_files()
             shutil.rmtree(organized_dir)
