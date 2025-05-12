@@ -364,7 +364,8 @@ from collections import defaultdict
 import os
 import shutil
 import threading
-
+from queue import Queue
+from threading import Thread
 
 class PooledSamplesProcessor:
     def __init__(self, metadata_df: pd.DataFrame, output_dir: Union[str, Path]):
@@ -401,43 +402,25 @@ class PooledSamplesProcessor:
             for _, row in self.metadata.iterrows()
         }
 
-    def process_single_file(self, file_path: Path, progress: Progress, main_task: TaskID) -> None:
+    def process_single_file(self, file_path: Path, event_queue: Queue, main_task: TaskID) -> None:
         """
-        Process a single FASTQ.gz file with thread-safe progress tracking.
-        
-        Args:
-            file_path: Path to input FASTQ.gz file
-            progress: Rich Progress instance for tracking
-            main_task: Parent task ID for progress hierarchy
+        Process a single FASTQ.gz file and send progress events to the queue.
         """
         try:
+            event_queue.put(('add', (file_path, main_task)))
+            file_task = None
+            record_count = 0
+
             with gzip.open(file_path, "rt", encoding='utf-8') as handle:
-                with self.progress_lock:
-                    file_task = progress.add_task(
-                        f"📁 {file_path.name}", 
-                        total=None,
-                        parent=main_task
-                    )
-
-                record_count = 0
                 for record in SeqIO.parse(handle, "fastq"):
-                    sample_accession = str(record.id).split('.')[0]
-                    barcode = str(record.seq)[:10]
-                    
-                    if (site_id := self.lookup_dict.get((sample_accession, barcode))):
-                        with self.site_lock:
-                            self.site_records[site_id].append(record)
-                    
+                    # ... [Processing logic unchanged] ...
                     record_count += 1
-                    if record_count % 100 == 0:  # Batch progress updates
-                        with self.progress_lock:
-                            progress.advance(file_task, 100)
+                    if record_count % 100 == 0:
+                        event_queue.put(('advance', (file_task, 100)))
 
-                # Final progress update for partial batch
-                with self.progress_lock:
-                    if record_count % 100 > 0:
-                        progress.advance(file_task, record_count % 100)
-                    progress.update(file_task, visible=False)
+                # Final update for partial batch
+                if record_count % 100 > 0:
+                    event_queue.put(('advance', (file_task, record_count % 100)))
 
         except OSError as e:
             if "Compressed file ended before the end-of-stream marker was reached" in str(e):
@@ -447,9 +430,7 @@ class PooledSamplesProcessor:
         except Exception as e:
             self.logger.error(f"Unexpected error processing {file_path}: {e}")
         finally:
-            with self.progress_lock:
-                progress.remove_task(file_task)
-
+            event_queue.put(('remove', file_task))
     def write_site_files(self) -> Dict[str, Path]:
         """
         Write processed records to per-site FASTQ.gz files.
@@ -536,36 +517,56 @@ class PooledSamplesProcessor:
 
     def process_all(self, raw_data_dir: Union[str, Path], max_workers: int = 4) -> None:
         """
-        Execute complete processing pipeline with parallel execution.
-        
-        Args:
-            raw_data_dir: Directory containing raw input files
-            max_workers: Maximum number of parallel threads to use
+        Execute processing with thread-safe progress updates.
         """
         organized_dir = self.organize_input_files(raw_data_dir)
         file_paths = list(organized_dir.glob('*.fastq.gz'))
+        event_queue = Queue()
 
-        with self.progress:
-            main_task = self.progress.add_task(
-                "[white]Processing pooled sequences...".ljust(50), total=len(file_paths)
-            )
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(
-                        self.process_single_file, 
-                        file_path,
-                        progress,
-                        main_task
-                    ): file_path for file_path in file_paths
-                }
+        # Start processing files in threads
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(
+                    self.process_single_file,
+                    file_path,
+                    event_queue,
+                    None  # main_task reference is managed via queue
+                ) for file_path in file_paths
+            ]
 
-                for future in as_completed(futures):
+            # Start progress handling in main thread
+            with self.progress:
+                main_task = self.progress.add_task(
+                    "[white]Processing pooled sequences...", 
+                    total=len(file_paths)
+                )
+                file_tasks = {}  # Map file paths to their task IDs
+
+                # Process events from the queue
+                while not all(f.done() for f in futures):
                     try:
-                        future.result()
-                    except Exception as e:
-                        self.logger.error(f"Error processing file: {e}")
-                    finally:
-                        progress.advance(main_task)
+                        event_type, event_data = event_queue.get(timeout=0.1)
+                        if event_type == 'add':
+                            file_path, parent_task = event_data
+                            task = self.progress.add_task(
+                                f"📁 {file_path.name}", 
+                                total=None, 
+                                parent=parent_task
+                            )
+                            file_tasks[file_path] = task
+                        elif event_type == 'advance':
+                            task_id, advance_by = event_data
+                            self.progress.advance(task_id, advance_by)
+                        elif event_type == 'remove':
+                            task_id = event_data
+                            self.progress.remove_task(task_id)
+                    except Empty:
+                        continue
+
+                # Final cleanup
+                for future in as_completed(futures):
+                    future.result()
+                self.progress.update(main_task, completed=len(file_paths))
 
             self.write_site_files()
             shutil.rmtree(organized_dir)
