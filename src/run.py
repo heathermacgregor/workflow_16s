@@ -202,7 +202,16 @@ def process_sequences(
         raw_seqs_paths = fetcher.download_run_fastq_concurrent(
             subset["ena_runs"]
         )
-    
+        processor = ena.api.PooledSamplesProcessor(
+            metadata_df=subset["metadata"],
+            output_dir=Path(subset_dirs["raw_seqs"]) / 'sorted'
+        )
+        
+        # Run full processing pipeline
+        processor.process_all(subset_dirs["raw_seqs"])
+        
+        # Access the mapping dictionary directly
+        raw_seqs_paths = processor.sample_file_map    
 
     process_seqs = cfg.get("run_cutadapt", False)
     if process_seqs:
