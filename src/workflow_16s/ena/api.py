@@ -352,69 +352,140 @@ class SequenceFetcher:
         return self.get_run_fastq(run_accession, urls)
     
 
+from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, TaskID
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import pandas as pd
+from pathlib import Path
+from typing import Union, List, Dict, DefaultDict
+import gzip
+from Bio import SeqIO
+import logging
+from collections import defaultdict
+import os
+import shutil
+import threading
+
+
 class PooledSamplesProcessor:
     def __init__(self, metadata_df: pd.DataFrame, output_dir: Union[str, Path]):
+        """
+        Initialize the processor with metadata and output directory.
+        
+        Args:
+            metadata_df: DataFrame containing sample metadata
+            output_dir: Directory to write processed files
+        """
         self.metadata = metadata_df
         self.output_dir = Path(output_dir)
-        self.site_records = defaultdict(list)
-        self.sample_file_map = {}  # New: Stores #SampleID to file mappings
+        self.site_records: DefaultDict[str, List[SeqIO.SeqRecord]] = defaultdict(list)
+        self.sample_file_map: Dict[str, Path] = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         self._create_lookup_dict()
-    def _create_lookup_dict(self):
-        """Create internal lookup dictionary from metadata"""
+        self.site_lock = threading.Lock()
+        self.progress_lock = threading.Lock()
+
+    def _create_lookup_dict(self) -> None:
+        """Create internal lookup dictionary from metadata for fast sample identification."""
         self.lookup_dict = {
             (row['run_accession'], row['barcode_sequence']): row['#SampleID']
             for _, row in self.metadata.iterrows()
         }
 
-    def process_single_file(self, file_path: Union[str, Path]):
-        """Process a single FASTQ.gz file and accumulate site records"""
+    def process_single_file(self, file_path: Path, progress: Progress, main_task: TaskID) -> None:
+        """
+        Process a single FASTQ.gz file with thread-safe progress tracking.
+        
+        Args:
+            file_path: Path to input FASTQ.gz file
+            progress: Rich Progress instance for tracking
+            main_task: Parent task ID for progress hierarchy
+        """
         try:
             with gzip.open(file_path, "rt", encoding='utf-8') as handle:
-                for record in tqdm(SeqIO.parse(handle, "fastq"), 
-                                 desc=f"Processing {Path(file_path).name}"):
+                with self.progress_lock:
+                    file_task = progress.add_task(
+                        f"📁 {file_path.name}", 
+                        total=None,
+                        parent=main_task
+                    )
+
+                record_count = 0
+                for record in SeqIO.parse(handle, "fastq"):
                     sample_accession = str(record.id).split('.')[0]
                     barcode = str(record.seq)[:10]
                     
                     if (site_id := self.lookup_dict.get((sample_accession, barcode))):
-                        self.site_records[site_id].append(record)
+                        with self.site_lock:
+                            self.site_records[site_id].append(record)
+                    
+                    record_count += 1
+                    if record_count % 100 == 0:  # Batch progress updates
+                        with self.progress_lock:
+                            progress.advance(file_task, 100)
+
+                # Final progress update for partial batch
+                with self.progress_lock:
+                    if record_count % 100 > 0:
+                        progress.advance(file_task, record_count % 100)
+                    progress.update(file_task, visible=False)
 
         except EOFError as e:
             self.logger.error(f"Corrupted file {file_path}: {e}")
         except Exception as e:
             self.logger.error(f"Error processing {file_path}: {e}")
+        finally:
+            with self.progress_lock:
+                progress.remove_task(file_task)
 
-    def write_site_files(self):
-        """Write records and build sample->file mapping"""
+    def write_site_files(self) -> Dict[str, Path]:
+        """
+        Write processed records to per-site FASTQ.gz files.
+        
+        Returns:
+            Mapping of sample IDs to output file paths
+        """
         site_dir = self.output_dir / "site_files"
         site_dir.mkdir(parents=True, exist_ok=True)
+        self.sample_file_map.clear()
 
-        self.sample_file_map.clear()  # Reset mapping on each write
-        
-        for site_id, records in self.site_records.items():
+        for site_id in self.site_records:
             output_file = site_dir / f"{site_id}.fastq.gz"
             with gzip.open(output_file, "wt") as handle:
-                SeqIO.write(records, handle, "fastq")
-            self.sample_file_map[site_id] = output_file  # Store mapping
-            self.logger.info(f"Wrote {len(records)} records to {output_file}")
+                with self.site_lock:  # Thread-safe access to records
+                    SeqIO.write(self.site_records[site_id], handle, "fastq")
+            self.sample_file_map[site_id] = output_file
+            self.logger.info(f"Wrote {len(self.site_records[site_id])} records to {output_file}")
 
-        return self.sample_file_map  # Return the mapping dictionary
+        return self.sample_file_map
 
     @staticmethod
-    def merge_files(input_files: List[Union[str, Path]], 
-                   output_file: Union[str, Path]):
-        """Merge multiple FASTQ.gz files"""
+    def merge_files(input_files: List[Union[str, Path]], output_file: Union[str, Path]) -> None:
+        """
+        Merge multiple FASTQ.gz files into a single output.
+        
+        Args:
+            input_files: List of input file paths
+            output_file: Path to merged output file
+        """
         with gzip.open(output_file, 'wb') as wfd:
             for f in input_files:
                 with gzip.open(f, 'rb') as fd:
                     shutil.copyfileobj(fd, wfd)
 
-    def organize_input_files(self, raw_dir: Union[str, Path]):
-        """Organize raw input files into structured directory"""
+    def organize_input_files(self, raw_dir: Union[str, Path]) -> Path:
+        """
+        Organize raw input files into structured directory, merging duplicates.
+        
+        Args:
+            raw_dir: Directory containing raw input files
+            
+        Returns:
+            Path to organized directory
+        """
         organized_dir = self.output_dir / "organized_inputs"
         organized_dir.mkdir(parents=True, exist_ok=True)
 
-        file_dict = defaultdict(list)
+        file_dict: DefaultDict[str, List[Path]] = defaultdict(list)
         for root, _, files in os.walk(raw_dir):
             for file in files:
                 if file.endswith('.fastq.gz'):
@@ -430,30 +501,65 @@ class PooledSamplesProcessor:
 
         return organized_dir
 
-    def find_matching_files(self, search_dir: Union[str, Path]):
-        """Find FASTQ files matching metadata run_accession entries"""
+    def find_matching_files(self, search_dir: Union[str, Path]) -> Dict[str, List[Path]]:
+        """
+        Find FASTQ files matching metadata run_accession entries.
+        
+        Args:
+            search_dir: Directory to search for FASTQ files
+            
+        Returns:
+            Mapping of run IDs to matching file paths
+        """
         search_path = Path(search_dir)
         paths = [p for p in search_path.glob('*.fastq.gz') if 'trimmed' not in str(p)]
         
-        file_map = {}
+        file_map: Dict[str, List[Path]] = {}
         for run_id in self.metadata['run_accession'].unique():
             matches = [p for p in paths if str(run_id) in str(p)]
             file_map[run_id] = matches if matches else []
             
         return file_map
 
-    def process_all(self, raw_data_dir: Union[str, Path]):
-        """Complete processing pipeline"""
-        # Step 1: Organize input files
+    def process_all(self, raw_data_dir: Union[str, Path], max_workers: int = 4) -> None:
+        """
+        Execute complete processing pipeline with parallel execution.
+        
+        Args:
+            raw_data_dir: Directory containing raw input files
+            max_workers: Maximum number of parallel threads to use
+        """
         organized_dir = self.organize_input_files(raw_data_dir)
-        
-        # Step 2: Process all organized files
-        for fastq_file in organized_dir.glob('*.fastq.gz'):
-            self.process_single_file(fastq_file)
-        
-        # Step 3: Write output files
-        self.write_site_files()
-        
-        # Step 4: Cleanup temporary files
-        shutil.rmtree(organized_dir)
-        self.logger.info("Processing complete")
+        file_paths = list(organized_dir.glob('*.fastq.gz'))
+
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=None),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            main_task = progress.add_task(
+                "🧬 Processing all files...", 
+                total=len(file_paths)
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        self.process_single_file, 
+                        file_path,
+                        progress,
+                        main_task
+                    ): file_path for file_path in file_paths
+                }
+
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                        progress.advance(main_task)
+                    except Exception as e:
+                        self.logger.error(f"Error processing file: {e}")
+
+            self.write_site_files()
+            shutil.rmtree(organized_dir)
+            self.logger.info("✅ Processing complete")
