@@ -438,7 +438,7 @@ class PooledSamplesProcessor:
         for file, paths in file_dict.items():
             output_path = organized_dir / file
             if len(paths) > 1:
-                self.logger.info(f"Merging {len(paths)} copies of {file}")
+                logger.info(f"Merging {len(paths)} copies of {file}")
                 self.merge_files(paths, output_path)
             else:
                 shutil.copy2(paths[0], output_path)
@@ -474,4 +474,4 @@ class PooledSamplesProcessor:
         
         # Step 4: Cleanup temporary files
         shutil.rmtree(organized_dir)
-        self.logger.info("Processing complete")
+        logger.info("Processing complete")
