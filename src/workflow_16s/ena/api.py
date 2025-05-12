@@ -357,8 +357,7 @@ class PooledSamplesProcessor:
         self.metadata = metadata_df
         self.output_dir = Path(output_dir)
         self.site_records = defaultdict(list)
-        self.sample_file_map = {}  # New: Stores #SampleID to file mappings
-        #self.logger = logging.getLogger(self.__class__.__name__)
+        self.sample_file_map = {}  # Stores #SampleID to file mappings
         self._create_lookup_dict()
         
     def _create_lookup_dict(self):
@@ -371,13 +370,16 @@ class PooledSamplesProcessor:
     def process_single_file(self, file_path: Union[str, Path]):
         """Process a single FASTQ.gz file and accumulate site records"""
         try:
+            # Extract run_accession from the filename
+            file_name = Path(file_path).name
+            run_accession = file_name.split('.')[0]
+            
             with gzip.open(file_path, "rt", encoding='utf-8') as handle:
                 for record in tqdm(SeqIO.parse(handle, "fastq"), 
-                                 desc=f"Processing {Path(file_path).name}"):
-                    sample_accession = str(record.id).split('.')[0]
+                                 desc=f"Processing {file_name}"):
                     barcode = str(record.seq)[:10]
                     
-                    if (site_id := self.lookup_dict.get((sample_accession, barcode))):
+                    if (site_id := self.lookup_dict.get((run_accession, barcode))):
                         self.site_records[site_id].append(record)
 
         except EOFError as e:
@@ -449,10 +451,8 @@ class PooledSamplesProcessor:
         organized_dir = self.organize_input_files(raw_data_dir)
         
         # Step 2: Process all organized files
-        #for fastq_file in organized_dir.glob('*.fastq.gz'):
         for fastq_file in tqdm(organized_dir.glob('*.fastq.gz'), 
-                               total=len(organized_dir.glob('*.fastq.gz')),
-                               desc=f"Processing pooled files..."):
+                               desc="Processing pooled files..."):
             self.process_single_file(fastq_file)
         
         # Step 3: Write output files
