@@ -360,6 +360,7 @@ class PooledSamplesProcessor:
         self.sample_file_map = {}  # New: Stores #SampleID to file mappings
         #self.logger = logging.getLogger(self.__class__.__name__)
         self._create_lookup_dict()
+        
     def _create_lookup_dict(self):
         """Create internal lookup dictionary from metadata"""
         self.lookup_dict = {
