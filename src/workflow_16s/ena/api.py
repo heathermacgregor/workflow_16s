@@ -439,10 +439,13 @@ class PooledSamplesProcessor:
                         progress.advance(file_task, record_count % 100)
                     progress.update(file_task, visible=False)
 
-        except EOFError as e:
-            self.logger.error(f"Corrupted file {file_path}: {e}")
+        except OSError as e:
+            if "Compressed file ended before the end-of-stream marker was reached" in str(e):
+                self.logger.error(f"Truncated file detected {file_path}: {e}")
+            else:
+                self.logger.error(f"OS error processing {file_path}: {e}")
         except Exception as e:
-            self.logger.error(f"Error processing {file_path}: {e}")
+            self.logger.error(f"Unexpected error processing {file_path}: {e}")
         finally:
             with self.progress_lock:
                 progress.remove_task(file_task)
