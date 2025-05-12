@@ -462,7 +462,7 @@ class SubsetDataset:
             )
             self.success.append(params)
 
-    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame, ena_runs: Dict) -> None:
+    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame, ena_runs: pd.DataFrame) -> None:
         """Process dataset with manually provided primers and metadata.
 
         Args:
@@ -583,6 +583,7 @@ class SubsetDataset:
             # Metadata validation and combination
             # If the samples are pooled, restructure the metadata
             if info.get('sample_pooling', ''):
+                ena_runs = ena_meta.set_index("run_accession", drop=False)
                 parsed_ena_meta = parse_sample_pooling(ena_meta)
                 if not manual_meta.empty:
                     similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
