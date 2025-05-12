@@ -350,22 +350,7 @@ class SequenceFetcher:
     def process_run(self, run_accession: str, urls: List[str]) -> Dict[str, List[str]]:
         """Wrapper method for processing a single run."""
         return self.get_run_fastq(run_accession, urls)
-    
-
-from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, TaskID
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import pandas as pd
-from pathlib import Path
-from typing import Union, List, Dict, DefaultDict
-import gzip
-from Bio import SeqIO
-import logging
-from collections import defaultdict
-import os
-import shutil
-import threading
-from queue import Queue
-from threading import Thread
+        
 
 class PooledSamplesProcessor:
     def __init__(self, metadata_df: pd.DataFrame, output_dir: Union[str, Path]):
