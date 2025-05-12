@@ -325,6 +325,10 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                         try:
                             subset_dirs = project_dir.subset_dirs(subset=subset)
 
+                            # Write the sample metadata file
+                            metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
+                            file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
+
                             # If QIIME 2 is not in hard rerun mode, check whether the necessary outputs
                             # for downstream processing already exist
                             if not cfg["qiime2"].get("hard_rerun", False):
@@ -343,10 +347,6 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     logger.info(f"Skipping processing for {subset['dataset']} - existing outputs found")
                                     continue
                                     
-                            # Write the sample metadata file
-                            metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
-                            file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
-
                             seq_paths, stats = process_sequences(cfg, subset_dirs, subset, logger)
 
                             manifest_path = subset_dirs["qiime"] / "manifest.tsv"
