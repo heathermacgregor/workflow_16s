@@ -193,9 +193,16 @@ def process_sequences(
     fetcher = ena.api.SequenceFetcher(
         fastq_dir=subset_dirs["raw_seqs"], max_workers=cfg.get("max_workers", 16)
     )
-    raw_seqs_paths = fetcher.download_run_fastq_concurrent(
-        subset["metadata"].set_index("run_accession", drop=False)
-    )
+    if not subset["sample_pooling"]:
+        raw_seqs_paths = fetcher.download_run_fastq_concurrent(
+            subset["metadata"].set_index("run_accession", drop=False)
+        )
+    else:
+        print(subset["ena_runs"])
+        raw_seqs_paths = fetcher.download_run_fastq_concurrent(
+            subset["ena_runs"]
+        )
+    
 
     process_seqs = cfg.get("run_cutadapt", False)
     if process_seqs:
@@ -305,10 +312,13 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 try:
                     subsets = SubsetDataset(cfg)
                     subsets.process(dataset, file_utils.fetch_first_match(datasets_info, dataset))
+                    
                     for subset in subsets.success:
                         try:
                             subset_dirs = project_dir.subset_dirs(subset=subset)
-                            
+
+                            # If QIIME 2 is not in hard rerun mode, check whether the necessary outputs
+                            # for downstream processing already exist
                             if not cfg["qiime2"].get("hard_rerun", False):
                                 classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
                                 required_paths = {
@@ -324,7 +334,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     success_subsets.append(subset["dataset"])
                                     logger.info(f"Skipping processing for {subset['dataset']} - existing outputs found")
                                     continue
-
+                                    
+                            # Write the sample metadata file
                             metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
                             file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
 
