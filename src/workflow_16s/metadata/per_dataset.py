@@ -579,15 +579,12 @@ class SubsetDataset:
 
             # Manual metadata retrieval
             manual_meta = self.fetch_manual_meta(dataset)
-            print(manual_meta)
+            
             # Metadata validation and combination
             # If the samples are pooled, restructure the metadata
             if info.get('sample_pooling', ''):
-                print("Pooled Samples")
                 ena_runs = ena_meta.set_index("run_accession", drop=False)
-                print(ena_runs)
                 parsed_ena_meta = parse_sample_pooling(ena_meta)
-                print(parsed_ena_meta)
                 if not manual_meta.empty:
                     similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
                     meta = pd.concat(
@@ -714,9 +711,8 @@ class SubsetDataset:
             DataFrame containing manual metadata. Empty DataFrame if none exists
         """
         manual_metadata_tsv = Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
-        print(manual_metadata_tsv)
         if manual_metadata_tsv.is_file():
-            print(manual_metadata_tsv)
+            logger.info(f"Loading manual metadata from '{manual_metadata_tsv}'...")
             return pd.read_csv(
                 manual_metadata_tsv,
                 sep="\t",
