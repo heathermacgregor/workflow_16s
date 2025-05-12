@@ -352,7 +352,7 @@ class SequenceFetcher:
         return self.get_run_fastq(run_accession, urls)
     
 
-class PooledSampleProcessor:
+class PooledSamplesProcessor:
     def __init__(self, metadata_df: pd.DataFrame, output_dir: Union[str, Path]):
         self.metadata = metadata_df
         self.output_dir = Path(output_dir)
