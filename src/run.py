@@ -198,7 +198,6 @@ def process_sequences(
             subset["metadata"].set_index("run_accession", drop=False)
         )
     else:
-        print(subset["ena_runs"])
         raw_seqs_paths = fetcher.download_run_fastq_concurrent(
             subset["ena_runs"]
         )
