@@ -542,7 +542,7 @@ class PooledSamplesProcessor:
             main_task = progress.add_task(
                 "🧬 Processing all files...", 
                 total=len(file_paths)
-            
+            )
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(
