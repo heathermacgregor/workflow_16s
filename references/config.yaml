@@ -4,7 +4,7 @@ ena_email: "macgregor@berkeley.edu"
 dataset_list: "./datasets.txt"
 dataset_info: "./datasets.tsv"
 
-manual_metadata_dir: "../../manual_metadata"
+manual_metadata_dir: "../../../manual_metadata"
 project_dir: "../../test"
 
 pcr_primers_mode: "manual"
