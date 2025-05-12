@@ -715,6 +715,7 @@ class SubsetDataset:
         """
         manual_metadata_tsv = Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
         if manual_metadata_tsv.is_file():
+            print(manual_metadata_tsv)
             return pd.read_csv(
                 manual_metadata_tsv,
                 sep="\t",
