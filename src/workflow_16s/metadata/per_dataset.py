@@ -346,7 +346,7 @@ class SubsetDataset:
         """Extract and validate primers from metadata columns.
 
         Args:
-            meta: Metadata DataFrame.
+            meta: Metadata DataFrame
             info: Dataset info with potential primer sequences
 
         Returns:
@@ -462,13 +462,14 @@ class SubsetDataset:
             )
             self.success.append(params)
 
-    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame) -> None:
+    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame, ena_runs: Dict) -> None:
         """Process dataset with manually provided primers and metadata.
 
         Args:
             dataset: Dataset identifier
             info: Dataset info containing manual configurations
             meta: Combined metadata DataFrame
+            ena_runs:
         """
         group_columns = ["library_layout", "instrument_platform"]
 
@@ -512,6 +513,8 @@ class SubsetDataset:
             sample_subset = {
                 "dataset": dataset,
                 "metadata": group,
+                "ena_runs": ena_runs,
+                "sample_pooling": info.get('sample_pooling', ''),
                 "n_runs": len(group),
                 "target_subfragment": (
                     cols[group_columns.index("target_subfragment")]
@@ -542,17 +545,18 @@ class SubsetDataset:
             - Error tracking
         """
         try:
+            # Attempt to get properly formatted citations for associated publications
             citations = self._process_citations(info)
 
-            # Format dataset information logging
+            # Format dataset information and log it
             dataset_info = [
                 f"[Dataset]             {dataset.upper()}",
                 f"[Type]                {info.get('dataset_type', '').upper()}",
                 f"[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})",
                 f"[Library Layout]      {info.get('library_layout', '').upper()}",
+                f"[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}",
                 f"[Primers]             {info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})",
                 f"                      {info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})",
-                f"[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}",
                 f"[Publications]        {citations[0] if citations else 'None'}",
             ]
             if len(citations) > 1:
@@ -563,6 +567,7 @@ class SubsetDataset:
             logger.info("\n".join(dataset_info))
 
             # ENA metadata retrieval
+            # If 'dataset_type' is 'ENA' or the dataset ID matches the ENA pattern
             if self.ENA_PATTERN.match(dataset) and info.get('dataset_type', '').upper() == 'ENA':
                 ena_data = ENAMetadata(email=self.config["ena_email"])
                 ena_data.process_dataset(dataset, info)
@@ -576,11 +581,15 @@ class SubsetDataset:
             manual_meta = self.fetch_manual_meta(dataset)
 
             # Metadata validation and combination
+            # If the samples are pooled, restructure the metadata
             if info.get('sample_pooling', ''):
                 parsed_ena_meta = parse_sample_pooling(ena_meta)
                 if not manual_meta.empty:
                     similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
-                    meta = pd.concat([parsed_ena_meta.reset_index(drop=True), similar_rows], axis=1) 
+                    meta = pd.concat(
+                        [parsed_ena_meta.reset_index(drop=True), similar_rows], 
+                        axis=1
+                    ) 
                 else:
                     meta = parsed_ena_meta
             else: 
@@ -589,14 +598,16 @@ class SubsetDataset:
             meta = self._infer_library_layout(meta, info)
 
             # Primer processing mode
-            if self.config["pcr_primers_mode"] == "estimate":
-                self.auto(dataset, meta, ena_runs)
-            else:
-                if self.config["validate_16s"]:
-                    self.manual(dataset, info, meta)
-                else:
-                    self.manual(dataset, info, meta)
-
+            #if self.config["pcr_primers_mode"] == "estimate":
+            #    self.auto(dataset, meta, ena_runs)
+            #else:
+            #    if self.config["validate_16s"]:
+            #        self.manual(dataset, info, meta)
+            #    else:
+            #        self.manual(dataset, info, meta)
+            if self.config["pcr_primers_mode"] == "manual":
+                self.manual(dataset, info, meta, ena_runs)
+                
         except Exception as e:
             logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
             self.failed.append({"dataset": dataset, "error": str(e)})
