@@ -591,6 +591,7 @@ class SubsetDataset:
                         [parsed_ena_meta.reset_index(drop=True), similar_rows], 
                         axis=1
                     ) 
+                    print(meta)
                 else:
                     meta = parsed_ena_meta
             else: 
