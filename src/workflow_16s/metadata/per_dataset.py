@@ -579,7 +579,7 @@ class SubsetDataset:
 
             # Manual metadata retrieval
             manual_meta = self.fetch_manual_meta(dataset)
-
+            print(manual_meta)
             # Metadata validation and combination
             # If the samples are pooled, restructure the metadata
             if info.get('sample_pooling', ''):
