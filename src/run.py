@@ -202,7 +202,7 @@ def process_sequences(
         raw_seqs_paths = fetcher.download_run_fastq_concurrent(
             subset["metadata"].set_index("run_accession", drop=False)
         )
-    else:
+    elif subset["sample_pooling"]:
         raw_seqs_paths = fetcher.download_run_fastq_concurrent(
             subset["ena_runs"]
         )
