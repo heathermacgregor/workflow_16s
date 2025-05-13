@@ -22,6 +22,13 @@ from umap import UMAP
 
 # ================================= GLOBAL VARIABLES ================================= #
 
+DEFAULT_METRIC = 'braycurtis'
+DEFAULT_N_PCA = 20
+DEFAULT_N_PCOA = None
+DEFAULT_N_TSNE = 3
+DEFAULT_N_UMAP = 3
+DEFAULT_RANDOM_STATE = 0
+
 # ==================================== FUNCTIONS ===================================== #
 
 def table_to_dataframe(
@@ -49,7 +56,7 @@ def table_to_dataframe(
 
 def distance_matrix(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = 'braycurtis'
+    metric: str = DEFAULT_METRIC
 ) -> np.ndarray:
     """
     Compute a pairwise distance matrix from a feature table.
@@ -71,8 +78,8 @@ def distance_matrix(
 
 def pcoa(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = 'braycurtis',
-    n_dimensions: Optional[int] = None
+    metric: str = DEFAULT_METRIC
+    n_dimensions: Optional[int] = DEFAULT_N_PCOA
 ) -> PCoAResults:
     """
     Perform Principal Coordinates Analysis (PCoA) on a feature table.
@@ -100,7 +107,7 @@ def pcoa(
 
 def pca(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = 20
+    n_components: int = DEFAULT_N_PCA
 ) -> Dict[str, Any]:
     """
     Perform Principal Component Analysis (PCA) on a feature table.
@@ -148,8 +155,8 @@ def pca(
 
 def tsne(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = 3,
-    random_state: int = 0
+    n_components: int = DEFAULT_N_TSNE,
+    random_state: int = DEFAULT_RANDOM_STATE
 ) -> pd.DataFrame:
     """
     Compute t-distributed Stochastic Neighbor Embedding (t-SNE) reduction.
@@ -183,8 +190,8 @@ def tsne(
 
 def umap(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = 3,
-    random_state: int = 0
+    n_components: int = DEFAULT_N_UMAP,
+    random_state: int = DEFAULT_RANDOM_STATE
 ) -> pd.DataFrame:
     """
     Compute Uniform Manifold Approximation and Projection (UMAP) reduction.
