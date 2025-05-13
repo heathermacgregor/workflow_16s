@@ -15,8 +15,10 @@ from qiime2 import Artifact, Metadata
 
 # ================================== LOCAL IMPORTS =================================== #
 
-# Set tmp directory and suppress warnings
+# Set tmp directory 
 os.environ["TMPDIR"] = "/opt/tmp"
+
+# Suppress warnings
 warnings.filterwarnings("ignore")
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
