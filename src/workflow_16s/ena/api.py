@@ -46,13 +46,14 @@ from rich.progress import (
 # ================================ FUNCTIONS ================================ #
 
 class MetadataFetcher:
-    """Fetches metadata from the ENA database for a given ENA project accession.
+    """
+    Fetches metadata from the ENA database for a given ENA project accession.
 
     Args:
-        base_url (str): Base URL for the ENA API. Defaults to 'https://www.ebi.ac.uk/ena/portal/api'.
-        retries (int): Number of retries for HTTP requests. Defaults to 5.
-        backoff_factor (int): Backoff factor for retry delays. Defaults to 1.
-        auto_start_progress (bool): Whether to automatically start the progress bar. Defaults to False.
+        base_url:             Base URL for the ENA API. Defaults to 'https://www.ebi.ac.uk/ena/portal/api'.
+        retries:              Number of retries for HTTP requests. Defaults to 5.
+        backoff_factor:       Backoff factor for retry delays. Defaults to 1.
+        auto_start_progress: Whether to automatically start the progress bar. Defaults to False.
     """
 
     def __init__(
@@ -150,12 +151,13 @@ class MetadataFetcher:
     def get_sample_metadata_concurrent(
         self, sample_task: int, ena_sample_accessions: List[str], max_workers: int = 5
     ) -> pd.DataFrame:
-        """Fetch metadata for multiple samples concurrently.
+        """
+        Fetch metadata for multiple samples concurrently.
 
         Args:
-            sample_task: Progress task ID for tracking sample downloads
-            ena_sample_accessions: List of sample accessions to fetch
-            max_workers: Maximum number of concurrent workers
+            sample_task:           Progress task ID for tracking sample downloads.
+            ena_sample_accessions: List of sample accessions to fetch.
+            max_workers:           Maximum number of concurrent workers.
 
         Returns:
             Combined DataFrame of sample metadata
@@ -242,13 +244,14 @@ class MetadataFetcher:
 
 
 class SequenceFetcher:
-    """Fetches sequencing data from the ENA database for given accessions.
+    """
+    Fetches sequencing data from the ENA database for given accessions.
 
     Args:
-        fastq_dir (str): Directory to save downloaded FASTQ files
-        retries (int): Number of retry attempts for downloading. Defaults to 10.
-        initial_delay (int): Initial delay between retries in seconds. Defaults to 5.
-        max_workers (int): Maximum number of concurrent download threads. Defaults to 8.
+        fastq_dir:     Directory to save downloaded FASTQ files.
+        retries:       Number of retry attempts for downloading. Defaults to 10.
+        initial_delay: Initial delay between retries in seconds. Defaults to 5.
+        max_workers:   Maximum number of concurrent download threads. Defaults to 8.
     """
 
     def __init__(
@@ -313,10 +316,11 @@ class SequenceFetcher:
         return {run_accession: file_paths}
 
     def download_run_fastq_concurrent(self, metadata: pd.DataFrame) -> Dict[str, List[str]]:
-        """Download sequencing data concurrently.
+        """
+        Download sequencing data concurrently.
 
         Args:
-            metadata: DataFrame containing run accessions and FTP URLs
+            metadata: DataFrame containing run accessions and FTP URLs.
 
         Returns:
             Mapping of run accessions to downloaded file paths
@@ -361,7 +365,7 @@ class PooledSamplesProcessor:
         self._create_lookup_dict()
         
     def _create_lookup_dict(self):
-        """Create internal lookup dictionary from metadata"""
+        """Create internal lookup dictionary from metadata."""
         self.lookup_dict = {
             (row['run_accession'], row['barcode_sequence']): row['#SampleID']
             for _, row in self.metadata.iterrows()
@@ -388,7 +392,7 @@ class PooledSamplesProcessor:
             logger.error(f"Error processing {file_path}: {e}")
 
     def write_site_files(self):
-        """Write records and build sample->file mapping"""
+        """Write records and build sample->file mapping."""
         site_dir = self.output_dir / "site_files"
         site_dir.mkdir(parents=True, exist_ok=True)
 
@@ -413,7 +417,7 @@ class PooledSamplesProcessor:
                     shutil.copyfileobj(fd, wfd)
 
     def organize_input_files(self, raw_dir: Union[str, Path]):
-        """Organize raw input files into structured directory"""
+        """Organize raw input files into structured directory."""
         organized_dir = self.output_dir / "organized_inputs"
         organized_dir.mkdir(parents=True, exist_ok=True)
 
@@ -434,7 +438,7 @@ class PooledSamplesProcessor:
         return organized_dir
 
     def find_matching_files(self, search_dir: Union[str, Path]):
-        """Find FASTQ files matching metadata run_accession entries"""
+        """Find FASTQ files matching metadata run_accession entries."""
         search_path = Path(search_dir)
         paths = [p for p in search_path.glob('*.fastq.gz') if 'trimmed' not in str(p)]
         
@@ -446,7 +450,7 @@ class PooledSamplesProcessor:
         return file_map
 
     def process_all(self, raw_data_dir: Union[str, Path]):
-        """Complete processing pipeline"""
+        """Complete processing pipeline."""
         # Step 1: Organize input files
         organized_dir = self.organize_input_files(raw_data_dir)
         
