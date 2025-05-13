@@ -9,23 +9,23 @@ from biom import load_table
 from biom.table import Table
 
 import logging
-logger = logging.getLogger('workflow_16s')
 
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.utils.dir_utils import SubDirs
 
+logger = logging.getLogger('workflow_16s')
+
 # ==================================== FUNCTIONS ===================================== #
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
-    """
-    Load dataset IDs from configuration file
-    """
+    """Load dataset IDs from configuration file."""
     with open(path, "r") as f:
         return [line.strip() for line in f if line.strip()]
     
     
 def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
+    """"""
     df = pd.read_csv(tsv_path, sep="\t", dtype={'ena_project_accession': str})
     # Remove 'Unnamed' columns
     df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
@@ -39,13 +39,19 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str):
 
     # Check ENA: either ena_project_accession OR dataset_id contains the dataset
     mask_ena = ((
-        dataset_info['ena_project_accession'].str.contains(dataset, case=False, regex=False)
-        | dataset_info['dataset_id'].str.contains(dataset, case=False, regex=False)
+        dataset_info['ena_project_accession'].str.contains(
+            dataset, case=False, regex=False
+        )
+        | dataset_info['dataset_id'].str.contains(
+            dataset, case=False, regex=False
+        )
     ) & mask_ena_type)
 
     # Check Manual: dataset_id contains the dataset
     mask_manual = (
-        dataset_info['dataset_id'].str.contains(dataset, case=False, regex=False) 
+        dataset_info['dataset_id'].str.contains(
+            dataset, case=False, regex=False
+        ) 
         & mask_manual_type
     )
 
@@ -62,16 +68,22 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str):
          by='dataset_type', 
          key=lambda x: x.str.lower().map({'ena': 0, 'manual': 1})  # ENA first
     )
-
     return matching_rows.iloc[0]
-    
-def processed_dataset_files(dirs: SubDirs, dataset: str, params: Any, cfg: Any) -> Dict[str, Path]:
-    """Generate expected file paths for processed dataset outputs.
+
+
+def processed_dataset_files(
+    dirs: SubDirs, 
+    dataset: str, 
+    params: Any, 
+    cfg: Any
+) -> Dict[str, Path]:
+    """
+    Generate expected file paths for processed dataset outputs.
     
     Args:
-        dirs: Project directory structure
-        dataset: Dataset identifier
-        classifier: Taxonomic classifier name
+        dirs:       Project directory structure.
+        dataset:    Dataset identifier.
+        classifier: Taxonomic classifier name.
     
     Returns:
         Dictionary mapping file types to their expected paths
@@ -86,29 +98,44 @@ def processed_dataset_files(dirs: SubDirs, dataset: str, params: Any, cfg: Any) 
     return {
         'metadata_tsv': dirs.metadata / dataset / 'metadata.tsv',
         'manifest_tsv': base_dir / 'manifest.tsv',
-        'table_biom': base_dir / 'table' / 'feature-table.biom',  # BIOM format feature table
-        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  # Representative sequences
-        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  # Taxonomic assignments
+        # BIOM format feature table
+        'table_biom': base_dir / 'table' / 'feature-table.biom',  
+        # Representative sequences
+        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  
+        # Taxonomic assignments
+        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  
     }
 
+
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
-    """Identify missing output files from a list of expected paths.
+    """
+    Identify missing output files from a list of expected paths.
     
     Args:
-        file_list: List of file paths to check
+        file_list: List of file paths to check.
     
     Returns:
         List of paths that don't exist on the filesystem
     """
     return [Path(file) for file in file_list if not Path(file).exists()]
 
-def import_metadata_tsv(tsv_path: Union[str, Path], index_col: str = '#SampleID') -> pd.DataFrame:
-    """"""
-    return pd.read_csv(tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col).sort_index()
+
+def import_metadata_tsv(
+    tsv_path: Union[str, Path], 
+    index_col: str = '#SampleID'
+) -> pd.DataFrame:
+    """
+    
+    """
+    return pd.read_csv(
+        tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col
+    ).sort_index()
 
 
 def import_features_biom(biom_path: Union[str, Path]) -> pd.DataFrame:
-    """"""
+    """
+    
+    """
     table = load_table(biom_path)
     
     feature_ids = table.ids(axis='observation')
@@ -139,23 +166,33 @@ def load_and_merge_biom_tables(biom_paths) -> Table:
     
 
 def import_seqs_fasta(fasta_path: Union[str, Path]) -> pd.DataFrame:
-    """"""
-    seqs = dict(zip((record.id for record in SeqIO.parse(fasta_path, "fasta")), (str(record.seq) for record in SeqIO.parse(fasta_path, "fasta"))))
+    """
+    
+    """
+    seqs = dict(zip(
+        (record.id for record in SeqIO.parse(fasta_path, "fasta")), 
+        (str(record.seq) for record in SeqIO.parse(fasta_path, "fasta"))
+    ))
     return seqs
 
 
-
 def import_faprotax_tsv(tsv_path: Union[str, Path]) -> pd.DataFrame:
-    """"""
-    df = pd.read_csv(tsv_path, sep="\t", encoding="utf8", low_memory=False).sort_index().T
+    """
+    
+    """
+    df = pd.read_csv(
+        tsv_path, sep="\t", encoding="utf8", low_memory=False
+    ).sort_index().T
     df.columns = df.iloc[0]
     df = df.iloc[1:]
     return df
 
-
+# ==================================== CLASSES ====================================== #
 
 class Taxonomy:
-    """"""
+    """
+    
+    """
     def __init__(self, tsv_path: Union[str, Path]):
        self.taxonomy = self.import_taxonomy_tsv(tsv_path)
         
@@ -181,10 +218,13 @@ class Taxonomy:
         })
         # Index by Feature ID
         taxonomy = taxonomy.set_index('id')                                                                                       
-        taxonomy['taxstring'] = [re.sub(' *[dpcofgs]__', '', s) for s in taxonomy['taxonomy'].values]
+        taxonomy['taxstring'] = [re.sub(' *[dpcofgs]__', '', s) 
+                                 for s in taxonomy['taxonomy'].values]
         # Create new columns for each taxonomic level
         for level in ['d', 'p', 'c', 'o', 'f', 'g', 's']:
-            taxonomy[level.capitalize()] = taxonomy['taxonomy'].apply(lambda x: extract_taxonomic_level(x, level))                
+            taxonomy[level.capitalize()] = taxonomy['taxonomy'].apply(
+                lambda x: extract_taxonomic_level(x, level)
+            )                
     
         column_mapping = {
             'D': 'Domain', 
@@ -199,7 +239,8 @@ class Taxonomy:
         taxonomy.rename(columns=column_mapping, inplace=True)                                                                        
     
         taxonomy.reset_index(inplace=True)
-        # Reset the index to assign unique numbers to the 'id' column and store them in a new column 'n'
+        # Reset the index to assign unique numbers to the 'id' column and store 
+        # them in a new column 'n'
         taxonomy.rename(columns={'index': 'n'}, inplace=True)                                                                        
         taxonomy.set_index('id', inplace=True)
         return taxonomy
@@ -222,7 +263,9 @@ class Taxonomy:
 
 
 def write_metadata_tsv(df: pd.DataFrame, tsv_path: str) -> None:
-    """"""
+    """
+    
+    """
     df = df.copy()
     # Create #SampleID column from 'run_accession' if it doesn't exist
     if '#SampleID' not in df.columns:
@@ -230,11 +273,12 @@ def write_metadata_tsv(df: pd.DataFrame, tsv_path: str) -> None:
     
     df.set_index('#SampleID', inplace=True, drop=True)
     df.to_csv(tsv_path, sep='\t', index=True)
-    #logger.info(f"Saved sample metadata to: {tsv_path}")
 
 
 def write_manifest_tsv(results: Dict, tsv_path: str) -> None:
-    """"""
+    """
+    
+    """
     rows = []
     
     for run_accession, file_paths in results.items():
@@ -247,23 +291,23 @@ def write_manifest_tsv(results: Dict, tsv_path: str) -> None:
                     'sample-id'        : run_accession,
                     'absolute-filepath': file_paths[0]
                 })
-            
         elif num_files == 2:
             rows.append({
                     'sample-id'                : run_accession,
                     'forward-absolute-filepath': file_paths[0],
                     'reverse-absolute-filepath': file_paths[1]
                 })
-            
         else:
-            logger.debug(f"Warning: Run accession {run_accession} has an invalid number of file paths ({num_files}).")
+            logger.debug(
+                f"Warning: Run accession {run_accession} has an "
+                f"invalid number of file paths ({num_files})."
+            )
             break
 
     # Create DataFrame
     df = pd.DataFrame(rows)
     df.set_index('sample-id', inplace=True, drop=True)
     df.to_csv(tsv_path, sep='\t', index=True)
-    #logger.info(f"Saved manifest file to: {tsv_path}")
     
 
 def manual_meta(dataset: str, metadata_dir: Union[str, Path]):
@@ -271,15 +315,18 @@ def manual_meta(dataset: str, metadata_dir: Union[str, Path]):
     Retrieves and processes manually-collected dataset metadata.
     
     Args:
-        dataset: ENA Project Accession number (e.g., PRJEB1234)
+        dataset: ENA Project Accession number (e.g., PRJEB1234).
     
     Returns:
-        Dictionary containing metadata, run characteristics, and filtered run lists.
-        Returns None if invalid dataset format or metadata retrieval fails.
+        Dictionary containing metadata, run characteristics, and filtered 
+        run lists. Returns None if invalid dataset format or metadata 
+        retrieval fails.
     """
     manual_metadata_tsv = Path(metadata_dir) / dataset / 'manual-metadata.tsv'
     if manual_metadata_tsv.is_file():
-        return pd.read_csv(manual_metadata_tsv, sep="\t", encoding="utf8", low_memory=False)
+        return pd.read_csv(
+            manual_metadata_tsv, sep="\t", encoding="utf8", low_memory=False
+        )
     else:
         return pd.DataFrame({})
     
