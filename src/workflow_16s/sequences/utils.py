@@ -87,12 +87,12 @@ def import_seqs_fasta(fasta_path: Union[str, Path]):
 def fastq_gz_to_fasta(fastq_file: Union[str, Path], n_sequences: int = 0) -> Path:
     """Converts a FASTQ.GZ file to a FASTA file.
 
-    Parameters:
-        - fastq_file (Union[str, Path]): Path to the input FASTQ.GZ file.
-        - n_sequences (int): Maximum number of sequences to convert.
+    Args:
+        fastq_file:  Path to the input FASTQ.GZ file.
+        n_sequences: Maximum number of sequences to convert.
 
     Returns:
-        - fasta_file (Path): Path to the created FASTA file.
+        fasta_file:  Path to the created FASTA file.
     """
     fastq_file = Path(fastq_file)
     fasta_file = fastq_file.with_suffix("").with_suffix(".fasta")
@@ -127,12 +127,12 @@ class SeqKit:
         self._seqkit_version = self._get_seqkit_version()
 
     def _get_seqkit_version(self) -> str:
-        """Get seqkit version for compatibility checks."""
+        """Get SeqKit version for compatibility checks."""
         result = subprocess.run(["seqkit", "version"], capture_output=True, text=True)
         return result.stdout.strip().split()[-1]
 
     def _run_seqkit(self, cmd: List[str]) -> str:
-        """Execute seqkit command with error handling."""
+        """Execute SeqKit command with error handling."""
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"SeqKit error: {result.stderr.strip()}")
@@ -165,7 +165,7 @@ class SeqKit:
         return self._finalize_results(agg_stats, overall, elapsed)
 
     def _process_file(self, sample: str, fpath: Path) -> tuple:
-        """Process single file with seqkit stats and length distribution."""
+        """Process single file with SeqKit stats and length distribution."""
         fpath = Path(fpath)
         
         # Get basic statistics
@@ -192,7 +192,7 @@ class SeqKit:
         })
 
     def _parse_stats(self, output: str) -> Dict[str, int]:
-        """Parse seqkit stats table output."""
+        """Parse SeqKit stats table output."""
         lines = output.strip().split('\n')
         headers = [h.lower().replace(' ', '_') for h in lines[0].split('\t')]
         values = [int(v) if v.isdigit() else v for v in lines[1].split('\t')]
@@ -294,9 +294,10 @@ class SeqKit:
 # ===================================== CUTADAPT ===================================== #
 
 class CutAdapt:
-    """A class to handle parallel processing of FASTQ.GZ files using CutAdapt (DOI:10.14806/ej.17.1.200).
+    """A class to handle parallel processing of FASTQ.GZ files using CutAdapt 
+    (DOI:10.14806/ej.17.1.200).
     
-    Args:
+    Attributes:
         fastq_dir:
         trimmed_fastq_dir:
         primer_fwd:
@@ -352,31 +353,28 @@ class CutAdapt:
     def run_cutadapt(parameters: Dict) -> Union[str, None]:
         """Runs CutAdapt with specified parameters."""
         try:
-            command = ["conda", "run", "-n", "workflow_16s", "cutadapt", "--report=minimal"]
+            command = ["conda", "run", "-n", "workflow_16s", 
+                       "cutadapt", "--report=minimal"]
             if parameters["cores"] is not None:
                 command.extend(["--cores", str(parameters["cores"])])
             if (
                 parameters["start_q_cutoff"] is not None
                 and parameters["end_q_cutoff"] is not None
             ):
-                command.extend(
-                    [
-                        "-q",
-                        f"{parameters['start_q_cutoff']},{parameters['end_q_cutoff']}",
-                    ]
-                )
+                command.extend([
+                    "-q",
+                    f"{parameters['start_q_cutoff']},{parameters['end_q_cutoff']}",
+                ])
             if parameters["min_seq_length"] != 0:
                 command.extend(["-m", str(parameters["min_seq_length"])])
             if parameters["primer_fwd"] is not None:
                 command.extend(["-b", parameters["primer_fwd"]])
-                command.extend(
-                    ["-a", str(Seq(parameters["primer_fwd"]).reverse_complement())]
-                )
+                command.extend(["-a", 
+                                str(Seq(parameters["primer_fwd"]).reverse_complement())])
             if parameters["primer_rev"] is not None:
                 command.extend(["-B", parameters["primer_rev"]])
-                command.extend(
-                    ["-A", str(Seq(parameters["primer_rev"]).reverse_complement())]
-                )
+                command.extend(["-A", 
+                                str(Seq(parameters["primer_rev"]).reverse_complement())])
             if parameters["start_trim"] is not None:
                 command.extend(["-u", str(parameters["start_trim"])])
             if parameters["end_trim"] is not None:
@@ -486,7 +484,10 @@ class CutAdapt:
                 'sample': sample,
                 'sample_fastq_paths': [str(p) for p in sample_paths],
                 'trimmed_sample_fastq_paths': [str(p) for p in trimmed_paths],
-                'sample_json_file_path': str(self.trimmed_fastq_dir / f"{Path(sample_paths[0]).stem.split('_')[0]}.cutadapt.json"),
+                'sample_json_file_path': str(
+                    self.trimmed_fastq_dir / 
+                    f"{Path(sample_paths[0]).stem.split('_')[0]}.cutadapt.json"
+                ),
                 'primer_fwd': self.primer_fwd,
                 'primer_rev': self.primer_rev,
                 'start_trim': self.start_trim,
@@ -494,7 +495,7 @@ class CutAdapt:
                 'start_q_cutoff': self.start_q_cutoff,
                 'end_q_cutoff': self.end_q_cutoff,
                 'min_seq_length': self.min_seq_length,
-                'cores': 4,  # As per original code, though possibly should be 1
+                'cores': 4,  
                 'rerun': self.rerun,
             })
         results = []
@@ -504,7 +505,8 @@ class CutAdapt:
                 total=len(samples)
             )
             with ThreadPoolExecutor(max_workers=self.cores) as executor:
-                futures = {executor.submit(self.process_sample, params): params['sample'] for params in all_params}
+                futures = {executor.submit(self.process_sample, params): params['sample'] 
+                           for params in all_params}
                 for future in as_completed(futures):
                     sample, result = future.result()
                     results.append((sample, result))
@@ -518,7 +520,9 @@ class CutAdapt:
                 "files_per_second": len(samples) / elapsed if elapsed > 0 else 0
             }
 
-        df = self.parse_metrics_to_dataframe([(s, r) for s, r in results if isinstance(r, str)])
+        df = self.parse_metrics_to_dataframe(
+            [(s, r) for s, r in results if isinstance(r, str)]
+        )
         return trimmed_fastq_paths, df, proc_time
 
 
@@ -529,7 +533,9 @@ class BasicStats:
     def __init__(self, max_workers: int = None):
         self.max_workers = max_workers or max(1, DEFAULT_N_CORES // 2)
 
-    def calculate_statistics(self, samples: Dict[str, List[Union[str, Path]]]) -> Dict[str, Any]:
+    def calculate_statistics(
+        self, samples: Dict[str, List[Union[str, Path]]]
+    ) -> Dict[str, Any]:
         """Main method to calculate sequencing statistics for provided samples."""
         file_list = self._flatten_samples(samples)
         sample_agg, overall_stats = self._initialize_structures(samples)
@@ -618,7 +624,9 @@ class BasicStats:
                 "avg_length": agg["total_bases"] / total_seq if total_seq else None,
                 "min_length": agg["min_length"] if total_seq else None,
                 "max_length": agg["max_length"] if total_seq else None,
-                "gc_percent": (agg["total_gc"] / agg["total_bases"] * 100) if agg["total_bases"] else None,
+                "gc_percent": (
+                    agg["total_gc"] / agg["total_bases"] * 100
+                ) if agg["total_bases"] else None,
             }
             sample_stats[sample] = stats
             overall_stats["total_sequences"] += total_seq
@@ -942,8 +950,7 @@ class FastQC:
                 try:
                     f.unlink()
                 except FileNotFoundError:
-                    pass
-                
+                    pass 
         try:
             self.results_dir.rmdir()
         except OSError:
