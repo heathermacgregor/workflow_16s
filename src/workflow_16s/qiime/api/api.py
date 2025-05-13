@@ -40,13 +40,19 @@ from api.api_io import (
     save_and_export_with_print,
 )
 
-# Set environment variable and suppress warnings
-os.environ["TMPDIR"] = "/opt/tmp"
-warnings.filterwarnings("ignore")
-
 # ================================= DEFAULT VALUES =================================== #
 
+RESET_TMPDIR = True
+
+# Reset tmp directory
+if RESET_TMPDIR:
+    os.environ["TMPDIR"] = "/opt/tmp"
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
 DEFAULT_N_THREADS = 32
+DEFAULT_SAVE_INTERMEDIATES = True
 DEFAULT_LIBRARY_LAYOUT = "paired"
 DEFAULT_MINIMUM_LENGTH = 100
 DEFAULT_MIN_READS = 1000
@@ -103,7 +109,7 @@ def get_cli_output(function: callable, *args, **kwargs) -> Tuple[Any, str]:
         output = buffer.getvalue()
     return result, output
 
-# ================================= QIIME 2 FUNCTIONS ================================ #
+# ================================= QIIME2 FUNCTIONS ================================ #
 
 def import_seqs_from_manifest(
     output_dir: Union[str, Path],
@@ -130,13 +136,15 @@ def import_seqs_from_manifest(
     """
     if not isinstance(library_layout, str):
         raise TypeError(
-            f"library_layout must be a string, got {type(library_layout).__name__}"
+            f"❓ Library layout type '{type(library_layout).__name__}' not recognized. "
+            f"Expected 'str'."
         )
 
     library_layout = library_layout.lower()
     if library_layout not in {"paired", "single"}:
         raise ValueError(
-            f"library_layout must be 'paired' or 'single', got '{library_layout}'"
+            f"❓ Library layout '{layout}' not recognized. "
+            f"Expected 'single' or 'paired'."
         )
 
     layout_config = {
@@ -168,7 +176,7 @@ def trim_sequences(
     rev_primer_seq: str,
     minimum_length: int = DEFAULT_MINIMUM_LENGTH,
     n_cores: int = DEFAULT_N_THREADS,
-    save_intermediates: bool = True,
+    save_intermediates: bool = DEFAULT_SAVE_INTERMEDIATES,
 ) -> Artifact:
     """
     Trim sequences with automatic workflow fallback on failure.
@@ -217,7 +225,10 @@ def trim_sequences(
             {"front": [fwd_primer_seq]},
         )
     else:
-        raise ValueError(f"Invalid library layout: {library_layout}")
+        raise ValueError(
+            f"❓ Library layout '{library_layout}' not recognized. "
+            f"Expected 'single' or 'paired'."
+        )
 
     workflows.append(fallback)
     errors: List[str] = []
@@ -238,7 +249,7 @@ def trim_sequences(
             trimmed_seqs = None
 
     if not trimmed_seqs:
-        raise RuntimeError("All trimming workflows failed:\n" + "\n".join(errors))
+        raise RuntimeError("⚠️ All trimming workflows failed:\n" + "\n".join(errors))
 
     if save_intermediates:
         save_with_print(trimmed_seqs, output_dir, "trimmed-seqs", "qza")
@@ -284,7 +295,8 @@ def filter_samples_for_denoising(
         valid = df[df["forward sequence count"] >= min_reads].index.tolist()
     else:
         raise ValueError(
-            "Counts file must contain either 'forward sequence count' and 'reverse sequence count' columns (paired-end) "
+            "⚠️ Counts file must contain either 'forward sequence count' and "
+            "'reverse sequence count' columns (paired-end) "
             "or 'forward sequence count' column (single-end)."
         )
     
@@ -361,12 +373,11 @@ def denoise_sequences(
 
     algorithm = denoise_algorithm.lower()
     platform = instrument_platform.lower()
-
+    
     if "illumina" in platform:
         if algorithm == "dada2":
             if "single" in library_layout.lower():
                 # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-single/
-                print('denoise_single')
                 func = denoise_single
                 args = {
                     "demultiplexed_seqs": seqs,
@@ -381,7 +392,6 @@ def denoise_sequences(
                 }
             else:
                 # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-paired/
-                print('denoise_paired')
                 func = denoise_paired
                 args = {
                     "demultiplexed_seqs": seqs,
@@ -398,7 +408,6 @@ def denoise_sequences(
                     "n_threads": n_threads,
                 }
         elif algorithm == "deblur":
-            print('denoise_16s')
             func = denoise_16S
             # https://docs.qiime2.org/2024.10/plugins/available/deblur/denoise-16S/
             args = {
@@ -409,33 +418,21 @@ def denoise_sequences(
                 "jobs_to_start": n_threads,
             }
         else:
-            raise ValueError(f"Denoise algorithm '{algorithm}' not recognized.")
+            raise ValueError(f"❓ Denoise algorithm '{algorithm}' not recognized.")
+            
     elif "454" in platform:
-        """
-        print('denoise_16s')
-        func = denoise_16S
-        # https://docs.qiime2.org/2024.10/plugins/available/deblur/denoise-16S/
-        args = {
-            "demultiplexed_seqs": seqs,
-            "trim_length": trim_length,
-            "hashed_feature_ids": True,
-            "sample_stats": True,
-            "jobs_to_start": n_threads,
-        }
-        """
-        print('denoise_pyro')
         func = denoise_pyro
         # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-pyro/
         args = {
             "demultiplexed_seqs": seqs,
             "trim_left": 0,
-            #"trunc_len": trim_length,
+            "trunc_len": trunc_len_f,
             "hashed_feature_ids": True,
             "n_threads": n_threads,
         }
         
     else:
-        raise ValueError(f"Platform '{platform}' not recognized.")
+        raise ValueError(f"❓ Platform '{platform}' not recognized.")
 
     results = func(**args)
     rep_seqs = results.representative_sequences
@@ -495,55 +492,52 @@ def classify_taxonomy(
     out_dir = Path(output_dir) / classifier
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if output_files_exist(out_dir, prefixes=["taxonomy", "search-results"]):
-        taxonomy = load_with_print(out_dir, "taxonomy")
-        search_results = load_with_print(out_dir, "search-results")
+    print(f"Method: '{classify_method}'...")
+    if classify_method == "sklearn":
+        clf = load_with_print(
+            Path(classifier_dir), f"{classifier}-classifier", "qza"
+        )
+        result = classify_sklearn(
+            reads=rep_seqs,
+            classifier=clf,
+            confidence=confidence,
+            n_jobs=n_threads,
+        )
     else:
-        print(f"Performing taxonomy classification with '{classifier}'...")
-        if classify_method == "sklearn":
-            clf = load_with_print(
-                Path(classifier_dir), f"{classifier}-classifier", "qza"
-            )
-            result = classify_sklearn(
-                reads=rep_seqs,
-                classifier=clf,
-                confidence=confidence,
-                n_jobs=n_threads,
-            )
-        else:
-            try:
-                ref_tax = load_with_print(
-                    Path(classifier_dir), f"{classifier}-tax", "qza"
-                )
-            except FileNotFoundError:
-                ref_tax = load_with_print(
-                    Path(classifier_dir), "silva-138-99-tax-515-806", "qza"
-                )
-            args = {"query": rep_seqs, "reference_taxonomy": ref_tax,
-                    "perc_identity": perc_identity, "query_cov": query_cov}
-            if classify_method == "reads":
-                ref_reads = load_with_print(
-                    Path(classifier_dir), "silva-138-99-seqs-515-806", "qza"
-                )
-                args["reference_reads"] = ref_reads
-            elif classify_method == "db":
-                blastdb = Artifact.import_data(
-                    "BLASTDB", Path(classifier_dir) / "blastdb"
-                )
-                args["blastdb"] = blastdb
-            else:
-                raise ValueError(
-                    f"Classification method '{classify_method}' not recognized."
-                )
-            result = classify_consensus_blast(**args)
-
-        taxonomy = result.classification
-        save_and_export_with_print(taxonomy, out_dir, "taxonomy")
         try:
-            search_results = result.search_results
-            save_and_export_with_print(search_results, out_dir, "search-results")
-        except AttributeError:
-            search_results = None
+            ref_tax = load_with_print(
+                Path(classifier_dir), f"{classifier}-tax", "qza"
+            )
+        except FileNotFoundError:
+            ref_tax = load_with_print(
+                Path(classifier_dir), "silva-138-99-tax-515-806", "qza"
+            )
+        args = {"query": rep_seqs, "reference_taxonomy": ref_tax,
+                "perc_identity": perc_identity, "query_cov": query_cov}
+        if classify_method == "reads":
+            ref_reads = load_with_print(
+                Path(classifier_dir), "silva-138-99-seqs-515-806", "qza"
+            )
+            args["reference_reads"] = ref_reads
+        elif classify_method == "db":
+            blastdb = Artifact.import_data(
+                "BLASTDB", Path(classifier_dir) / "blastdb"
+            )
+            args["blastdb"] = blastdb
+        else:
+            raise ValueError(
+                f"Classification method '{classify_method}' not recognized."
+            )
+        result = classify_consensus_blast(**args)
+
+    taxonomy = result.classification
+    save_and_export_with_print(taxonomy, out_dir, "taxonomy")
+    
+    try:
+        search_results = result.search_results
+        save_and_export_with_print(search_results, out_dir, "search-results")
+    except AttributeError:
+        search_results = None
 
     return taxonomy, search_results
 
@@ -577,28 +571,20 @@ def multiple_sequence_alignment(
 
     out_dir = Path(output_dir) / "mafft_fasttree"
     out_dir.mkdir(parents=True, exist_ok=True)
+    
+    print("Aligning sequences with MAFFT and FastTree...")
+    args = {"sequences": seqs, "n_threads": n_threads}
+    if n_sequences > 1000000:
+        args["parttree"] = True
 
-    if output_files_exist(
-        out_dir,
-        prefixes=["aligned_rep_seqs", "unrooted_tree", "rooted_tree"],
-    ):
-        alignment = load_with_print(out_dir, "aligned_rep_seqs")
-        tree = load_with_print(out_dir, "unrooted_tree")
-        rooted_tree = load_with_print(out_dir, "rooted_tree")
-    else:
-        print("Aligning sequences with MAFFT and FastTree...")
-        args = {"sequences": seqs, "n_threads": n_threads}
-        if n_sequences > 1000000:
-            args["parttree"] = True
+    results = align_to_tree_mafft_fasttree(**args)
+    alignment = results.alignment
+    tree = results.tree
+    rooted_tree = results.rooted_tree
 
-        results = align_to_tree_mafft_fasttree(**args)
-        alignment = results.alignment
-        tree = results.tree
-        rooted_tree = results.rooted_tree
-
-        save_and_export_with_print(alignment, out_dir, "aligned_rep_seqs")
-        save_and_export_with_print(tree, out_dir, "unrooted_tree")
-        save_and_export_with_print(rooted_tree, out_dir, "rooted_tree")
+    save_and_export_with_print(alignment, out_dir, "aligned_rep_seqs")
+    save_and_export_with_print(tree, out_dir, "unrooted_tree")
+    save_and_export_with_print(rooted_tree, out_dir, "rooted_tree")
 
     return alignment, tree, rooted_tree
 
@@ -609,13 +595,13 @@ def collapse_to_genus(
     taxonomy: Artifact,
 ) -> Artifact:
     """
-    Collapse a QIIME 2 feature table to the genus level (taxonomic level 6).
+    Collapse a QIIME2 feature table to the genus level (taxonomic level 6).
 
     Args:
         output_dir:      Directory where the collapsed table will be saved and exported.
-        table:           A QIIME 2 FeatureTable[Frequency] artifact containing the 
+        table:           A QIIME2 FeatureTable[Frequency] artifact containing the 
                          feature table.
-        taxonomy:        A QIIME 2 FeatureData[Taxonomy] artifact used to map features 
+        taxonomy:        A QIIME2 FeatureData[Taxonomy] artifact used to map features 
                          to taxonomy.
 
     Returns:
