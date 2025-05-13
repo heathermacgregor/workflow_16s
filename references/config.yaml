@@ -10,7 +10,7 @@ project_dir: "../../test"
 pcr_primers_mode: "manual"
 target_subfragment_mode: "any"
 
-validate_16s: True
+validate_16s: False
 blast_db_dir: "./blast/silva_16s/SILVA_16S_db"
 validate_sequences:
   n_runs: 10
