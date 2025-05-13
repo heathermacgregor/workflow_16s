@@ -322,6 +322,8 @@ class ENAMetadata:
                 logger.warning(f"Empty metadata returned for {dataset}")
                 return None
             df = df.dropna(axis=1, how="all")
+            for key, value in info.items():
+                df[key] = value
             df = df.loc[:, ~df.columns.duplicated()]
             df = df.convert_dtypes()
 
@@ -340,6 +342,7 @@ class ENAMetadata:
             }
 
             df = self._library_layout_from_fastq_ftp(df, info)
+            
 
             self.df = df
             self.parsed_df = parsed_df
