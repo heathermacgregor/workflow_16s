@@ -58,7 +58,8 @@ def filter_table(
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS
 ) -> pd.DataFrame:
-    """Filters features and samples from an abundance table based on abundance 
+    """
+    Filters features and samples from an abundance table based on abundance 
     thresholds.
     
     Args:
@@ -84,8 +85,10 @@ def filter_features(
     min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
     min_samples: int = DEFAULT_MIN_SAMPLES
 ) -> pd.DataFrame:
-    """Filter for columns (samples) where at least one row (OTU) has a relative abundance 
-    of at least X% and for rows (OTUs) that are present in at least Y columns (samples).
+    """
+    Filter for columns (samples) where at least one row (OTU) has a relative 
+    abundance of at least X% and for rows (OTUs) that are present in at least 
+    Y columns (samples).
     
     Args:
         table:             Input abundance table (samples x features)
@@ -104,7 +107,8 @@ def filter_samples(
     table: pd.DataFrame, 
     min_counts: int = DEFAULT_MIN_COUNTS
 ) -> pd.DataFrame:                  
-    """Filter for columns (samples) that have at least X counts total.
+    """
+    Filter for columns (samples) that have at least X counts total.
 
     Args:
         table:      Input abundance table (samples x features)
@@ -121,7 +125,8 @@ def preprocess_table(
     normalize: bool = True,
     clr_transform: bool = True
 ) -> pd.DataFrame:
-    """Preprocesses abundance table with normalization and CLR transformation.
+    """
+    Preprocesses abundance table with normalization and CLR transformation.
     
     Args:
         table:         Input abundance table (samples x features)
@@ -147,7 +152,9 @@ def normalize_table(
     table: pd.DataFrame, 
     axis: int = 0
 ) -> pd.DataFrame:
-    """Normalize by column (sample) to get relative abundances for each sample.
+    """
+    Normalize by column (sample) to get relative abundances for each sample.
+    
     Args:
         table:
         axis:
@@ -162,7 +169,8 @@ def normalize_table(
 def clr_transform_table(
     table: pd.DataFrame
 ) -> pd.DataFrame:
-    """Applies centered log-ratio (CLR) transformation with pseudocount addition.
+    """
+    Applies centered log-ratio (CLR) transformation with pseudocount addition.
     
     Args:
         table:  Input abundance table (samples x features)
@@ -179,7 +187,8 @@ def presence_absence(
     table: Union[Dict, Table, pd.DataFrame],
     threshold: float = DEFAULT_PA_THRESHOLD
 ) -> pd.DataFrame:
-    """Converts to presence/absence table while retaining top abundant features.
+    """
+    Converts to presence/absence table while retaining top abundant features.
     
     Args:
         table:          Input abundance table (features x samples)
@@ -215,7 +224,8 @@ def k_means(
     n_clusters: int = DEFAULT_N_CLUSTERS, 
     random_state: int = DEFAULT_RANDOM_STATE
 ):
-    """Applies K-means clustering and adds cluster labels to metadata.
+    """
+    Applies K-means clustering and adds cluster labels to metadata.
     
     Args:
         table:          Input abundance table (samples x features)
@@ -246,7 +256,8 @@ def t_test(
     col: str = DEFAULT_GROUP_COLUMN,
     col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
-    """Performs independent t-tests between groups for all features.
+    """
+    Performs independent t-tests between groups for all features.
     
     Args:
         table:      Input abundance table (samples x features)
@@ -284,7 +295,8 @@ def mwu_bonferroni(
     col: str = DEFAULT_GROUP_COLUMN,
     col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
-    """Performs Mann-Whitney U tests with Bonferroni correction.
+    """
+    Performs Mann-Whitney U tests with Bonferroni correction.
     
     Args:
         table:      Input abundance table (samples x features)
@@ -356,7 +368,8 @@ def variability_explained(
     metadata: pd.DataFrame,
     col: str = DEFAULT_GROUP_COLUMN   
 ) -> pd.DataFrame:
-    """Calculate the variability explained by a metadata column for each feature 
+    """
+    Calculate the variability explained by a metadata column for each feature 
     in the data.
 
     Args:
