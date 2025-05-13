@@ -119,68 +119,87 @@ DEFAULT_16S_PRIMERS = {
 
 # ==================================== FUNCTIONS ===================================== #
 
+
 def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
     """
     Parses pooled samples in the 'sample_description' column into separate columns.
+    
     Args:
         df:
-        
+
     Returns:
         combined_df:
     """
+
     def _parse_sample_pooling(row) -> pd.DataFrame:
-        sample_description = row.get('sample_description', '')
+        sample_description = row.get("sample_description", "")
         data_str = sample_description.strip("''").replace(
-            "Samples were pooled in this way (MID LONGITUDE LATITUDE SAMPLING_DATE ELEVATION) : ", 
-            ""
+            "Samples were pooled in this way (MID LONGITUDE LATITUDE SAMPLING_DATE ELEVATION) : ",
+            "",
         )
         data_list = data_str.split()
         num_columns = 5
-        data_reshaped = [data_list[i:i + num_columns] 
-                         for i in range(0, len(data_list), num_columns)]
-        columns = ['MID', 'LONGITUDE', 'LATITUDE', 'SAMPLING_DATE', 'ELEVATION']
+        data_reshaped = [
+            data_list[i : i + num_columns]
+            for i in range(0, len(data_list), num_columns)
+        ]
+        columns = [
+            "MID",
+            "LONGITUDE",
+            "LATITUDE",
+            "SAMPLING_DATE",
+            "ELEVATION",
+        ]
         parsed_df = pd.DataFrame(data_reshaped, columns=columns)
         for col in row.index:
             parsed_df[col] = row[col]
         return parsed_df
 
     parsed_dfs = df.apply(_parse_sample_pooling, axis=1)
-    combined_df = pd.concat(parsed_dfs.values, ignore_index=True).rename(columns={
-        'MID': 'barcode_sequence',
-        'LONGITUDE': 'longitude_deg',
-        'LATITUDE': 'latitude_deg',
-        'SAMPLING_DATE': 'sampling_date',
-        'ELEVATION': 'elevation_m'
-    }).reset_index(drop=True)
+    combined_df = (
+        pd.concat(parsed_dfs.values, ignore_index=True)
+        .rename(
+            columns={
+                "MID": "barcode_sequence",
+                "LONGITUDE": "longitude_deg",
+                "LATITUDE": "latitude_deg",
+                "SAMPLING_DATE": "sampling_date",
+                "ELEVATION": "elevation_m",
+            }
+        )
+        .reset_index(drop=True)
+    )
     return combined_df
 
 
 def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate Euclidean distances between two DataFrames based on longitude 
+    Calculate Euclidean distances between two DataFrames based on longitude
     and latitude.
     """
     df1[["longitude_deg", "latitude_deg"]] = df1[
         ["longitude_deg", "latitude_deg"]
     ].apply(pd.to_numeric)
-    
+
     df2[["longitude_deg", "latitude_deg"]] = df2[
         ["longitude_deg", "latitude_deg"]
     ].apply(pd.to_numeric)
 
     distances = cdist(
-        df1[['longitude_deg', 'latitude_deg']], 
-        df2[['longitude_deg', 'latitude_deg']], 
-        metric='euclidean'
+        df1[["longitude_deg", "latitude_deg"]],
+        df2[["longitude_deg", "latitude_deg"]],
+        metric="euclidean",
     )
     min_dist_indices = distances.argmin(axis=1)
     return df2.iloc[min_dist_indices].reset_index(drop=True)
 
+
 # ========================== CORE PROCESSING CLASS ========================== #
+
 
 class SubsetDataset:
     """
-    Central processing unit for dataset analysis with automated and manual 
+    Central processing unit for dataset analysis with automated and manual
     modes.
 
     Features:
@@ -197,23 +216,42 @@ class SubsetDataset:
 
     ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
     ENA_METADATA_UNNECESSARY_COLUMNS = [
-        "sra_bytes", "sra_aspera", "sra_galaxy", "sra_md5", "sra_ftp",
-        "fastq_bytes", "fastq_aspera", "fastq_galaxy", "fastq_md5",
-        "collection_date_start", "collection_date_end", "location_start",
-        "location_end", "ncbi_reporting_standard", "datahub",
-        "tax_lineage", "tax_id", "scientific_name", "isolation_source",
-        "first_created", "first_public", "last_updated", "status",
+        "sra_bytes",
+        "sra_aspera",
+        "sra_galaxy",
+        "sra_md5",
+        "sra_ftp",
+        "fastq_bytes",
+        "fastq_aspera",
+        "fastq_galaxy",
+        "fastq_md5",
+        "collection_date_start",
+        "collection_date_end",
+        "location_start",
+        "location_end",
+        "ncbi_reporting_standard",
+        "datahub",
+        "tax_lineage",
+        "tax_id",
+        "scientific_name",
+        "isolation_source",
+        "first_created",
+        "first_public",
+        "last_updated",
+        "status",
     ]
     ENA_METADATA_COLUMNS_TO_RENAME = {
-        "lat": "latitude_deg", "lon": "longitude_deg"}
+        "lat": "latitude_deg",
+        "lon": "longitude_deg",
+    }
 
     def __init__(self, config: Dict[str, Any]) -> None:
         """
         Initialize processor with configuration and directory setup.
 
         Args:
-            config: Configuration dictionary containing processing parameters 
-                    such as project directory, primer mode, and validation 
+            config: Configuration dictionary containing processing parameters
+                    such as project directory, primer mode, and validation
                     settings.
         """
         self.config = config
@@ -225,15 +263,15 @@ class SubsetDataset:
         """Determine target fragment from primer estimation results.
 
         Args:
-            estimates:          Dictionary mapping target genes to estimated 
+            estimates:          Dictionary mapping target genes to estimated
                                 subfragments.
 
         Returns:
             target_subfragment: Selected target subfragment (e.g., 'V4').
 
         Raises:
-            ValueError:         If no valid subfragment can be determined or 
-                                if the determined subfragment is not in 
+            ValueError:         If no valid subfragment can be determined or
+                                if the determined subfragment is not in
                                 DEFAULT_16S_PRIMERS.
         """
         unique = {v for v in estimates.values()}
@@ -290,7 +328,7 @@ class SubsetDataset:
     def _infer_library_layout(
         self,
         metadata: pd.DataFrame,
-        info: Dict[str, Any],  # Unused 
+        info: Dict[str, Any],  # Unused
     ) -> pd.DataFrame:
         """
         Infer library layout from FASTQ FTP URLs in metadata.
@@ -325,9 +363,7 @@ class SubsetDataset:
             if not mismatches.empty:
                 logger.debug(
                     f"Library layout mismatch in {len(mismatches)} rows.\n"
-                    f"Differences:\n{mismatches[['library_layout']].join(
-                        new_layout.rename('new_layout')
-                    )}"
+                    f"Differences:\n{mismatches[['library_layout']].join(new_layout.rename('new_layout'))}"
                 )
             metadata["library_layout"] = new_layout
         return metadata
@@ -340,7 +376,7 @@ class SubsetDataset:
             info: Dataset info dictionary containing publication URLs.
 
         Returns:
-            List of formatted citations or original URLs if citation 
+            List of formatted citations or original URLs if citation
             lookup fails.
         """
         citations = []
@@ -374,8 +410,7 @@ class SubsetDataset:
         """
         fwd_primer, rev_primer = None, None
 
-        if {"pcr_primer_fwd_seq", 
-            "pcr_primer_rev_seq"}.issubset(meta.columns):
+        if {"pcr_primer_fwd_seq", "pcr_primer_rev_seq"}.issubset(meta.columns):
             fwd_unique = meta["pcr_primer_fwd_seq"].nunique() == 1
             rev_unique = meta["pcr_primer_rev_seq"].nunique() == 1
 
@@ -413,7 +448,8 @@ class SubsetDataset:
     def auto(
         self, dataset: str, meta: pd.DataFrame, ena_runs: Dict[str, List[str]]
     ) -> None:
-        """Automatically estimate primers and process metadata groups.
+        """
+        Automatically estimate primers and process metadata groups.
 
         Args:
             dataset:    Dataset identifier.
@@ -421,7 +457,7 @@ class SubsetDataset:
             ena_runs:   Dictionary of target genes to ENA run accessions.
 
         Raises:
-            ValueError: If unable to determine valid primers for the target 
+            ValueError: If unable to determine valid primers for the target
                         subfragment.
         """
         estimates = {}
@@ -467,7 +503,9 @@ class SubsetDataset:
             )
 
         group_columns = ["library_layout", "instrument_platform"]
-        for (layout, platform), group in meta.groupby(group_columns, dropna=False):
+        for (layout, platform), group in meta.groupby(
+            group_columns, dropna=False
+        ):
             if group.empty:
                 continue
             params = self._process_group(
@@ -482,11 +520,11 @@ class SubsetDataset:
             self.success.append(params)
 
     def manual(
-        self, 
+        self,
         dataset: str,
-        info: Dict[str, Any], 
-        meta: pd.DataFrame, 
-        ena_runs: pd.DataFrame
+        info: Dict[str, Any],
+        meta: pd.DataFrame,
+        ena_runs: pd.DataFrame,
     ) -> None:
         """
         Process dataset with manually provided primers and metadata.
@@ -500,7 +538,9 @@ class SubsetDataset:
         group_columns = ["library_layout", "instrument_platform"]
 
         # Primer extraction and validation
-        fwd_primer, rev_primer = self._extract_primers_from_metadata(meta, info)
+        fwd_primer, rev_primer = self._extract_primers_from_metadata(
+            meta, info
+        )
 
         # Target subfragment handling
         target_subfragment = info.get("target_subfragment")
@@ -517,7 +557,9 @@ class SubsetDataset:
                 meta["pcr_primer_fwd_seq"].nunique() > 1
                 or meta["pcr_primer_rev_seq"].nunique() > 1
             ):
-                group_columns.extend(["pcr_primer_fwd_seq", "pcr_primer_rev_seq"])
+                group_columns.extend(
+                    ["pcr_primer_fwd_seq", "pcr_primer_rev_seq"]
+                )
 
         # Process each metadata group
         for cols, group in meta.groupby(group_columns, dropna=False):
@@ -540,7 +582,7 @@ class SubsetDataset:
                 "dataset": dataset,
                 "metadata": group,
                 "ena_runs": ena_runs,
-                "sample_pooling": info.get('sample_pooling', ''),
+                "sample_pooling": info.get("sample_pooling", ""),
                 "n_runs": len(group),
                 "target_subfragment": (
                     cols[group_columns.index("target_subfragment")]
@@ -594,7 +636,10 @@ class SubsetDataset:
 
             # ENA metadata retrieval
             # If 'dataset_type' is 'ENA' or the dataset ID matches the ENA pattern
-            if self.ENA_PATTERN.match(dataset) and info.get('dataset_type', '').upper() == 'ENA':
+            if (
+                self.ENA_PATTERN.match(dataset)
+                and info.get("dataset_type", "").upper() == "ENA"
+            ):
                 ena_data = ENAMetadata(email=self.config["ena_email"])
                 ena_data.process_dataset(dataset, info)
                 ena_meta = ena_data.df
@@ -605,36 +650,40 @@ class SubsetDataset:
 
             # Manual metadata retrieval
             manual_meta = self.fetch_manual_meta(dataset)
-            
+
             # Metadata validation and combination
             # If the samples are pooled, restructure the metadata
-            if info.get('sample_pooling', ''):
+            if info.get("sample_pooling", ""):
                 ena_runs = ena_meta.set_index("run_accession", drop=False)
                 parsed_ena_meta = parse_sample_pooling(ena_meta)
                 if not manual_meta.empty:
-                    similar_rows = calculate_distances(parsed_ena_meta, manual_meta)
+                    similar_rows = calculate_distances(
+                        parsed_ena_meta, manual_meta
+                    )
                     meta = pd.concat(
-                        [parsed_ena_meta.reset_index(drop=True), similar_rows], 
-                        axis=1
-                    ) 
+                        [parsed_ena_meta.reset_index(drop=True), similar_rows],
+                        axis=1,
+                    )
                 else:
                     meta = parsed_ena_meta
-            else: 
-                meta = self._combine_metadata(dataset, ena_meta, manual_meta, info)
-            
+            else:
+                meta = self._combine_metadata(
+                    dataset, ena_meta, manual_meta, info
+                )
+
             meta = self._infer_library_layout(meta, info)
 
             # Primer processing mode
-            #if self.config["pcr_primers_mode"] == "estimate":
+            # if self.config["pcr_primers_mode"] == "estimate":
             #    self.auto(dataset, meta, ena_runs)
-            #else:
+            # else:
             #    if self.config["validate_16s"]:
             #        self.manual(dataset, info, meta)
             #    else:
             #        self.manual(dataset, info, meta)
             if self.config["pcr_primers_mode"] == "manual":
                 self.manual(dataset, info, meta, ena_runs)
-                
+
         except Exception as e:
             logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
             self.failed.append({"dataset": dataset, "error": str(e)})
@@ -674,7 +723,9 @@ class SubsetDataset:
                 dataset, ena_meta, manual_meta
             )
             if combined.empty:
-                raise ValueError(f"No valid samples after metadata merge for {dataset}")
+                raise ValueError(
+                    f"No valid samples after metadata merge for {dataset}"
+                )
             return combined
 
     def combine_ena_and_manual_metadata(
@@ -706,11 +757,15 @@ class SubsetDataset:
                 )
 
         # Resolve column conflicts
-        manual_meta, ena_meta = self._resolve_column_conflicts(manual_meta, ena_meta)
+        manual_meta, ena_meta = self._resolve_column_conflicts(
+            manual_meta, ena_meta
+        )
 
         # Clean ENA metadata
         ena_meta = ena_meta.drop(
-            columns=ena_meta.columns.intersection(self.ENA_METADATA_UNNECESSARY_COLUMNS)
+            columns=ena_meta.columns.intersection(
+                self.ENA_METADATA_UNNECESSARY_COLUMNS
+            )
         )
         ena_meta = ena_meta.rename(columns=self.ENA_METADATA_COLUMNS_TO_RENAME)
 
@@ -724,7 +779,9 @@ class SubsetDataset:
         )
         if "dataset_id" not in meta.columns:
             meta["dataset_id"] = (
-                f"ENA_{dataset}" if self.ENA_PATTERN.match(dataset) else dataset
+                f"ENA_{dataset}"
+                if self.ENA_PATTERN.match(dataset)
+                else dataset
             )
         return meta
 
@@ -737,9 +794,13 @@ class SubsetDataset:
         Returns:
             DataFrame containing manual metadata. Empty DataFrame if none exists
         """
-        manual_metadata_tsv = Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
+        manual_metadata_tsv = (
+            Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
+        )
         if manual_metadata_tsv.is_file():
-            logger.info(f"Loading manual metadata from '{manual_metadata_tsv}'...")
+            logger.info(
+                f"Loading manual metadata from '{manual_metadata_tsv}'..."
+            )
             return pd.read_csv(
                 manual_metadata_tsv,
                 sep="\t",
@@ -761,7 +822,7 @@ class SubsetDataset:
             ena_meta:    ENA metadata DataFrame.
 
         Returns:
-            Tuple of (modified manual_meta, modified ena_meta) with resolved 
+            Tuple of (modified manual_meta, modified ena_meta) with resolved
             conflicts.
         """
         common_cols = set(ena_meta.columns) & set(manual_meta.columns) - {
@@ -773,5 +834,7 @@ class SubsetDataset:
             if manual_meta[col].equals(ena_processed[col]):
                 ena_processed = ena_processed.drop(columns=col)
             else:
-                ena_processed = ena_processed.rename(columns={col: f"{col}_ena"})
+                ena_processed = ena_processed.rename(
+                    columns={col: f"{col}_ena"}
+                )
         return manual_meta, ena_processed
