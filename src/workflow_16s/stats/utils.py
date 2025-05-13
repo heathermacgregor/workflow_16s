@@ -23,25 +23,56 @@ from umap import UMAP
 
 from tqdm import tqdm
 
-# ================================= GLOBAL VARIABLES ================================= #
+# ================================= DEFAULT VALUES =================================== #
 
+DEFAULT_MIN_REL_ABUNDANCE = 1
+DEFAULT_MIN_SAMPLES = 10
+DEFAULT_MIN_COUNTS = 1000
+
+DEFAULT_PA_THRESHOLD = 0.99
+
+DEFAULT_N_CLUSTERS = 10
+DEFAULT_RANDOM_STATE = 0
+
+DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ==================================== FUNCTIONS ===================================== #
 
+def table_to_dataframe(
+    table: Union[Dict, Table]
+) -> pd.DataFrame:
+    """Convert a feature table to a pandas DataFrame."""
+    # Convert table to DataFrame 
+    if isinstance(table, Table):
+        table = table.to_dataframe(dense=True) # features x samples
+        table = table.T # samples x features
+    if isinstance(table, Dict):
+        table = pd.DataFrame(table) # samples x features
+
+    return table
+
 def filter_table(
     table: Union[Dict, Table, pd.DataFrame], 
-    min_rel_abundance: float = 1,
-    min_samples: int = 10,
-    min_counts: int = 1000
+    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = DEFAULT_MIN_SAMPLES,
+    min_counts: int = DEFAULT_MIN_COUNTS
 ) -> pd.DataFrame:
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-        # Transpose it (samples x features)
-        table = table.T
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
+    """Filters features and samples from an abundance table based on abundance 
+    thresholds.
+    
+    Args:
+        table:             Input abundance table 
+        min_rel_abundance: Minimum relative abundance percentage (0-100) for 
+                           feature retention
+        min_samples:       Minimum number of samples a feature must appear in
+        min_counts:        Minimum total counts required per sample
+        
+    Returns:
+        table:             Filtered table in samples x features format
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
     
     table = filter_features(table, min_rel_abundance, min_samples)
     table = feature_samples(table, min_counts)
@@ -50,11 +81,20 @@ def filter_table(
 
 def filter_features(
     table: pd.DataFrame,
-    min_rel_abundance: float = 1,
-    min_samples: int = 10
+    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = DEFAULT_MIN_SAMPLES
 ) -> pd.DataFrame:
     """Filter for columns (samples) where at least one row (OTU) has a relative abundance 
-    of at least X% and for rows (OTUs) that are present in at least Y columns (samples)"""
+    of at least X% and for rows (OTUs) that are present in at least Y columns (samples).
+    
+    Args:
+        table:             Input abundance table (samples x features)
+        min_rel_abundance: Minimum relative abundance
+        min_samples:       Minimum samples
+        
+    Returns:
+        table:             Filtered table ready for downstream analysis
+    """
     table = table.loc[:, table.max(axis=0) >= min_rel_abundance / 100]           
     table = table.loc[(table > 0).sum(axis=1) > min_samples, :]   
     return table
@@ -62,9 +102,17 @@ def filter_features(
 
 def filter_samples(
     table: pd.DataFrame, 
-    min_counts: int = 1000
+    min_counts: int = DEFAULT_MIN_COUNTS
 ) -> pd.DataFrame:                  
-    """Filter for columns (samples) that have at least X counts total""" 
+    """Filter for columns (samples) that have at least X counts total.
+
+    Args:
+        table:      Input abundance table (samples x features)
+        min_counts: Minimum counts
+        
+    Returns:
+        table:      Filtered table ready for downstream analysis
+    """ 
     return table.loc[:, (table.sum(axis=0) > min_counts)] 
 
 
@@ -73,19 +121,25 @@ def preprocess_table(
     normalize: bool = True,
     clr_transform: bool = True
 ) -> pd.DataFrame:
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-        # Transpose it (samples x features)
-        table = table.T
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
+    """Preprocesses abundance table with normalization and CLR transformation.
+    
+    Args:
+        table:         Input abundance table (samples x features)
+        normalize:     Whether to normalize samples to relative abundances
+        clr_transform: Whether to apply centered log-ratio (CLR) transformation
+        
+    Returns:
+        table:         Processed table ready for downstream analysis
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
     
     if normalize:
         table = normalize_table(table, axis=0)
+        
     if clr_transform:
         table = clr_transform_table(table)
+        
     return table
     
     
@@ -93,32 +147,51 @@ def normalize_table(
     table: pd.DataFrame, 
     axis: int = 0
 ) -> pd.DataFrame:
-    """Normalize by column (sample) to get relative abundances for each sample"""
-    return table.apply(lambda x: x / x.sum(), axis=axis)
+    """Normalize by column (sample) to get relative abundances for each sample.
+    Args:
+        table:
+        axis:
+
+    Returns:
+        table:
+    """
+    table_n = table.apply(lambda x: x / x.sum(), axis=axis)
+    return table_n
 
 
 def clr_transform_table(
     table: pd.DataFrame
 ) -> pd.DataFrame:
-    """"""
-    np_clr = CLR(table + 0.00001)  
-    return pd.DataFrame(np_clr, index=table.index, columns=table.columns)
+    """Applies centered log-ratio (CLR) transformation with pseudocount addition.
+    
+    Args:
+        table:  Input abundance table (samples x features)
+        
+    Returns:
+        clr_df: CLR-transformed table preserving feature/sample labels
+    """
+    np_clr = CLR(table + 0.00001) 
+    table_clr = pd.DataFrame(np_clr, index=table.index, columns=table.columns)
+    return table_clr
 
 
 def presence_absence(
     table: Union[Dict, Table, pd.DataFrame],
-    threshold: float = 0.99
+    threshold: float = DEFAULT_PA_THRESHOLD
 ) -> pd.DataFrame:
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-        # Transpose it (samples x features)
-        table = table.T
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
-    # Transpose back
-    table = table.T
+    """Converts to presence/absence table while retaining top abundant features.
+    
+    Args:
+        table:          Input abundance table (features x samples)
+        threshold:      Cumulative abundance threshold (0-1) for feature retention
+        
+    Returns:
+        filtered_table: Binary presence/absence table of retained features
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+    table = table.T # features x samples
+    
     # Get total counts per feature
     feature_sums = np.array(table.sum(axis='observation')).flatten() 
     # Sort features from most to least abundant 
@@ -138,18 +211,24 @@ def presence_absence(
 def k_means(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame, 
-    col: str = 'nuclear_contamination_status',
-    n_clusters: int = 10, 
-    random_state: int = 0
+    col: str = DEFAULT_GROUP_COLUMN,
+    n_clusters: int = DEFAULT_N_CLUSTERS, 
+    random_state: int = DEFAULT_RANDOM_STATE
 ):
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
-    # Transpose it (samples x features)
-    table = table.T
+    """Applies K-means clustering and adds cluster labels to metadata.
+    
+    Args:
+        table:          Input abundance table (samples x features)
+        metadata:       Sample metadata DataFrame
+        col:            Metadata column name to preserve in output
+        n_clusters:     Number of clusters for K-means
+        random_state:   Random seed for reproducibility
+        
+    Returns:
+        table_with_col: Table with added 'kmeans_cluster' column
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
 
     table_with_col = table.join(metadata[[col]])
 
@@ -159,21 +238,27 @@ def k_means(
     table_with_col['kmeans_cluster'] = kmeans.labels_
     return table_with_col
 
+
 # Statistical tests
 def t_test(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str = 'nuclear_contamination_status',
-    col_values: List[Union[Bool, int, str]] = [True, False]
+    col: str = DEFAULT_GROUP_COLUMN,
+    col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
-    # Transpose it (samples x features)
-    table = table.T
+    """Performs independent t-tests between groups for all features.
+    
+    Args:
+        table:      Input abundance table (samples x features)
+        metadata:   Sample metadata DataFrame
+        col:        Metadata column containing group labels
+        col_values: Two group identifiers to compare
+        
+    Returns:
+        results:    Results sorted by p-value with test statistics
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
 
     table_with_col = table.join(metadata[[col]])
   
@@ -196,17 +281,22 @@ def t_test(
 def mwu_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str = 'nuclear_contamination_status',
-    col_values: List[Union[Bool, int, str]] = [True, False]
+    col: str = DEFAULT_GROUP_COLUMN,
+    col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
-    """"""
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
-    # Transpose it (samples x features)
-    table = table.T
+    """Performs Mann-Whitney U tests with Bonferroni correction.
+    
+    Args:
+        table:      Input abundance table (samples x features)
+        metadata:   Sample metadata DataFrame
+        col:        Metadata column containing group labels
+        col_values: Two group identifiers to compare
+        
+    Returns:
+        results:    Filtered results meeting Bonferroni-corrected threshold
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
 
     table_with_col = table.join(metadata[[col]])
   
@@ -255,32 +345,31 @@ def mwu_bonferroni(
 
     # Apply Bonferroni correction
     threshold = 0.01 / len(results)
-    results = results[(results['p_value'] <= threshold) & (results['kruskal_p_value'] <= threshold)]
+    results = results[
+    (results['p_value'] <= threshold) & (results['kruskal_p_value'] <= threshold)
+    ]
     return results
 
 
 def variability_explained(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str = 'nuclear_contamination_status'    
+    col: str = DEFAULT_GROUP_COLUMN   
 ) -> pd.DataFrame:
-    """Calculate the variability explained by a metadata column for each feature in the data
+    """Calculate the variability explained by a metadata column for each feature 
+    in the data.
 
     Args:
-        table: DataFrame of OTU abundances
+        table:    DataFrame of OTU abundances
         metadata: DataFrame with sample metadata
-        col: Column in metadata used as the explanatory variable
+        col:      Column in metadata used as the explanatory variable
     
     Returns:
-        DataFrame with variability explained (R^2) for each feature
+        results:  DataFrame with variability explained (R^2) for each 
+                  feature
     """
-    # Convert table to DataFrame if necessary
-    if isinstance(table, Table):
-        table = table.to_dataframe(dense=True)
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)
-    # Transpose it (samples x features)
-    table = table.T
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
 
     table_with_col = table.join(metadata[[col]])
     
@@ -309,8 +398,7 @@ def variability_explained(
               'r^2': r2
             })
         except Exception as e:
-            # Handle any errors during processing
-            print(f"Skipping feature {feature} due to error: {e}")
+            print(f"Skipping feature '{feature}' due to error: {e}")
             continue
     
     results = pd.DataFrame(results).sort_values(by='r^2', ascending=False)
