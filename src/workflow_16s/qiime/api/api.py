@@ -87,15 +87,16 @@ def capture_command_output() -> Generator[io.StringIO, None, None]:
 
 
 def get_cli_output(function: callable, *args, **kwargs) -> Tuple[Any, str]:
-    """Execute a function while capturing its CLI output
+    """
+    Execute a function while capturing its CLI output.
 
     Args:
         function: The function to execute
-        args: Positional arguments for the function
-        kwargs: Keyword arguments for the function
+        args:     Positional arguments for the function
+        kwargs:   Keyword arguments for the function
 
     Returns:
-        tuple: (function_result, cli_output_string)
+        tuple:    (function_result, cli_output_string)
     """
     with capture_command_output() as buffer:
         result = function(*args, **kwargs)
@@ -108,8 +109,9 @@ def import_seqs_from_manifest(
     output_dir: Union[str, Path],
     manifest_tsv: Union[str, Path],
     library_layout: str = DEFAULT_LIBRARY_LAYOUT,
-) -> Any:
-    """Import sequence data from a manifest file and generate quality control 
+) -> Artifact:
+    """
+    Import sequence data from a manifest file and generate quality control 
     visualizations.
 
     Processes sequencing data from either single-end or paired-end experiments, 
@@ -167,8 +169,9 @@ def trim_sequences(
     minimum_length: int = DEFAULT_MINIMUM_LENGTH,
     n_cores: int = DEFAULT_N_THREADS,
     save_intermediates: bool = True,
-) -> Any:
-    """Trim sequences with automatic workflow fallback on failure.
+) -> Artifact:
+    """
+    Trim sequences with automatic workflow fallback on failure.
 
     Args:
         output_dir:         Directory path where output files (QZA/QZV artifacts) will 
@@ -251,8 +254,9 @@ def filter_samples_for_denoising(
     seqs: Artifact,
     counts_file: Union[str, Path],
     min_reads: int = DEFAULT_MIN_READS,
-) -> Any:
-    """Filter a QIIME2 demux artifact to retain samples with sufficient read counts.
+) -> Artifact:
+    """
+    Filter a QIIME2 demux artifact to retain samples with sufficient read counts.
 
     Args:
         seqs:        Demultiplexed sequence artifact
@@ -311,8 +315,9 @@ def denoise_sequences(
     max_ee: Union[float, int] = DEFAULT_MAX_EE,
     max_ee_f: Union[float, int] = DEFAULT_MAX_EE_F,
     max_ee_r: Union[float, int] = DEFAULT_MAX_EE_R,
-) -> Tuple[Any, Any, Any]:
-    """Denoise sequences using DADA2 or Deblur depending on platform and layout.
+) -> Tuple[Artifact, Artifact, Artifact]:
+    """
+    Denoise sequences using DADA2 or Deblur depending on platform and layout.
     
     Args:
         output_dir:          Directory path where output files (QZA/QZV artifacts) will 
@@ -459,8 +464,9 @@ def classify_taxonomy(
     query_cov: float = DEFAULT_QUERY_COV,
     confidence: float = DEFAULT_CONFIDENCE,
     n_threads: int = DEFAULT_N_THREADS,
-) -> Tuple[Any, Any]:
-    """Classify sequences taxonomically using sklearn or BLAST-based methods.
+) -> Tuple[Artifact, Any]:
+    """
+    Classify sequences taxonomically using sklearn or BLAST-based methods.
     
     Args:
         output_dir:        Directory path where output files (QZA/QZV artifacts) will 
@@ -547,8 +553,9 @@ def multiple_sequence_alignment(
     seqs: Artifact,
     n_sequences: int = DEFAULT_MSA_N_SEQUENCES,
     n_threads: int = DEFAULT_N_THREADS,
-) -> Tuple[Any, Any, Any]:
-    """Align sequences and construct phylogenetic tree with MAFFT and FastTree.
+) -> Tuple[Artifact, Artifact, Artifact]:
+    """
+    Align sequences and construct phylogenetic tree with MAFFT and FastTree.
     
     Args:
         output_dir:     Directory path where output files (QZA/QZV artifacts) will 
@@ -600,8 +607,20 @@ def collapse_to_genus(
     output_dir: Union[str, Path],
     table: Artifact,
     taxonomy: Artifact,
-):
-    """"""
+) -> Artifact:
+    """
+    Collapse a QIIME 2 feature table to the genus level (taxonomic level 6).
+
+    Args:
+        output_dir:      Directory where the collapsed table will be saved and exported.
+        table:           A QIIME 2 FeatureTable[Frequency] artifact containing the 
+                         feature table.
+        taxonomy:        A QIIME 2 FeatureData[Taxonomy] artifact used to map features 
+                         to taxonomy.
+
+    Returns:
+        collapsed_table: The collapsed FeatureTable[Frequency] artifact at genus level.
+    """
     collapsed_table = taxa.actions.collapse(
         table=table,
         taxonomy=taxonomy,
