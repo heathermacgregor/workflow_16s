@@ -120,7 +120,8 @@ DEFAULT_16S_PRIMERS = {
 # ==================================== FUNCTIONS ===================================== #
 
 def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
-    """Parses pooled samples in the 'sample_description' column into separate columns.
+    """
+    Parses pooled samples in the 'sample_description' column into separate columns.
     Args:
         df:
         
@@ -155,9 +156,18 @@ def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
-    """Calculate Euclidean distances between two DataFrames based on longitude and latitude."""
-    df1[['longitude_deg', 'latitude_deg']] = df1[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
-    df2[['longitude_deg', 'latitude_deg']] = df2[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
+    """
+    Calculate Euclidean distances between two DataFrames based on longitude 
+    and latitude.
+    """
+    df1[["longitude_deg", "latitude_deg"]] = df1[
+        ["longitude_deg", "latitude_deg"]
+    ].apply(pd.to_numeric)
+    
+    df2[["longitude_deg", "latitude_deg"]] = df2[
+        ["longitude_deg", "latitude_deg"]
+    ].apply(pd.to_numeric)
+
     distances = cdist(
         df1[['longitude_deg', 'latitude_deg']], 
         df2[['longitude_deg', 'latitude_deg']], 
@@ -169,7 +179,9 @@ def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
 # ========================== CORE PROCESSING CLASS ========================== #
 
 class SubsetDataset:
-    """Central processing unit for dataset analysis with automated and manual modes.
+    """
+    Central processing unit for dataset analysis with automated and manual 
+    modes.
 
     Features:
         - Automated primer estimation and metadata validation
@@ -185,38 +197,24 @@ class SubsetDataset:
 
     ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
     ENA_METADATA_UNNECESSARY_COLUMNS = [
-        "sra_bytes",
-        "sra_aspera",
-        "sra_galaxy",
-        "sra_md5",
-        "sra_ftp",
-        "fastq_bytes",
-        "fastq_aspera",
-        "fastq_galaxy",
-        "fastq_md5",
-        "collection_date_start",
-        "collection_date_end",
-        "location_start",
-        "location_end",
-        "ncbi_reporting_standard",
-        "datahub",
-        "tax_lineage",
-        "tax_id",
-        "scientific_name",
-        "isolation_source",
-        "first_created",
-        "first_public",
-        "last_updated",
-        "status",
+        "sra_bytes", "sra_aspera", "sra_galaxy", "sra_md5", "sra_ftp",
+        "fastq_bytes", "fastq_aspera", "fastq_galaxy", "fastq_md5",
+        "collection_date_start", "collection_date_end", "location_start",
+        "location_end", "ncbi_reporting_standard", "datahub",
+        "tax_lineage", "tax_id", "scientific_name", "isolation_source",
+        "first_created", "first_public", "last_updated", "status",
     ]
-    ENA_METADATA_COLUMNS_TO_RENAME = {"lat": "latitude_deg", "lon": "longitude_deg"}
+    ENA_METADATA_COLUMNS_TO_RENAME = {
+        "lat": "latitude_deg", "lon": "longitude_deg"}
 
     def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize processor with configuration and directory setup.
+        """
+        Initialize processor with configuration and directory setup.
 
         Args:
-            config: Configuration dictionary containing processing parameters such as 
-                    project directory, primer mode, and validation settings
+            config: Configuration dictionary containing processing parameters 
+                    such as project directory, primer mode, and validation 
+                    settings.
         """
         self.config = config
         self.dirs = dir_utils.SubDirs(self.config["project_dir"])
@@ -227,14 +225,16 @@ class SubsetDataset:
         """Determine target fragment from primer estimation results.
 
         Args:
-            estimates:  Dictionary mapping target genes to estimated subfragments
+            estimates:          Dictionary mapping target genes to estimated 
+                                subfragments.
 
         Returns:
-            Selected target subfragment (e.g., 'V4')
+            target_subfragment: Selected target subfragment (e.g., 'V4').
 
         Raises:
-            ValueError: If no valid subfragment can be determined or if the determined 
-                        subfragment is not in DEFAULT_16S_PRIMERS
+            ValueError:         If no valid subfragment can be determined or 
+                                if the determined subfragment is not in 
+                                DEFAULT_16S_PRIMERS.
         """
         unique = {v for v in estimates.values()}
         if len(unique) == 1:
@@ -261,19 +261,20 @@ class SubsetDataset:
         fwd_primer: Optional[str],
         rev_primer: Optional[str],
     ) -> Dict[str, Any]:
-        """Construct parameters dictionary for a metadata group.
+        """
+        Construct parameters dictionary for a metadata group.
 
         Args:
-            group:              Metadata subset for the current group
-            dataset:            Dataset identifier
-            layout:             Library layout (single/paired)
-            platform:           Instrument platform
-            target_subfragment: Target 16S subfragment
-            fwd_primer:         Forward primer sequence
-            rev_primer:         Reverse primer sequence
+            group:              Metadata subset for the current group.
+            dataset:            Dataset identifier.
+            layout:             Library layout (single/paired).
+            platform:           Instrument platform.
+            target_subfragment: Target 16S subfragment.
+            fwd_primer:         Forward primer sequence.
+            rev_primer:         Reverse primer sequence.
 
         Returns:
-            Dictionary containing processing parameters for the group
+            Dictionary containing processing parameters for the group.
         """
         return {
             "dataset": dataset,
@@ -291,14 +292,15 @@ class SubsetDataset:
         metadata: pd.DataFrame,
         info: Dict[str, Any],  # Unused 
     ) -> pd.DataFrame:
-        """Infer library layout from FASTQ FTP URLs in metadata.
+        """
+        Infer library layout from FASTQ FTP URLs in metadata.
 
         Args:
-            metadata: DataFrame containing sequencing metadata
-            info: Dataset info dictionary (unused)
+            metadata: DataFrame containing sequencing metadata.
+            info: Dataset info dictionary (unused).
 
         Returns:
-            Updated metadata with corrected library_layout column
+            Updated metadata with corrected library_layout column.
         """
         metadata = metadata.copy()
         metadata["fastq_ftp"] = metadata["fastq_ftp"].fillna("")
@@ -323,19 +325,23 @@ class SubsetDataset:
             if not mismatches.empty:
                 logger.debug(
                     f"Library layout mismatch in {len(mismatches)} rows.\n"
-                    f"Differences:\n{mismatches[['library_layout']].join(new_layout.rename('new_layout'))}"
+                    f"Differences:\n{mismatches[['library_layout']].join(
+                        new_layout.rename('new_layout')
+                    )}"
                 )
             metadata["library_layout"] = new_layout
         return metadata
 
     def _process_citations(self, info: Dict[str, Any]) -> List[str]:
-        """Extract citations from publication URLs in dataset info.
+        """
+        Extract citations from publication URLs in dataset info.
 
         Args:
-            info: Dataset info dictionary containing publication URLs
+            info: Dataset info dictionary containing publication URLs.
 
         Returns:
-            List of formatted citations or original URLs if citation lookup fails
+            List of formatted citations or original URLs if citation 
+            lookup fails.
         """
         citations = []
         urls = str(info.get("publication_url", "")).strip(";").split(";")
@@ -353,21 +359,23 @@ class SubsetDataset:
     def _extract_primers_from_metadata(
         self, meta: pd.DataFrame, info: Dict[str, Any]
     ) -> Tuple[Optional[str], Optional[str]]:
-        """Extract and validate primers from metadata columns.
+        """
+        Extract and validate primers from metadata columns.
 
         Args:
-            meta:       Metadata DataFrame
-            info:       Dataset info with potential primer sequences
+            meta:       Metadata DataFrame.
+            info:       Dataset info with potential primer sequences.
 
         Returns:
-            Tuple of validated forward and reverse primer sequences
+            Tuple of validated forward and reverse primer sequences.
 
         Raises:
-            ValueError: If metadata primers conflict with info primers
+            ValueError: If metadata primers conflict with info primers.
         """
         fwd_primer, rev_primer = None, None
 
-        if {"pcr_primer_fwd_seq", "pcr_primer_rev_seq"}.issubset(meta.columns):
+        if {"pcr_primer_fwd_seq", 
+            "pcr_primer_rev_seq"}.issubset(meta.columns):
             fwd_unique = meta["pcr_primer_fwd_seq"].nunique() == 1
             rev_unique = meta["pcr_primer_rev_seq"].nunique() == 1
 
@@ -408,12 +416,13 @@ class SubsetDataset:
         """Automatically estimate primers and process metadata groups.
 
         Args:
-            dataset:    Dataset identifier
-            meta:       Combined metadata DataFrame
-            ena_runs:   Dictionary of target genes to ENA run accessions
+            dataset:    Dataset identifier.
+            meta:       Combined metadata DataFrame.
+            ena_runs:   Dictionary of target genes to ENA run accessions.
 
         Raises:
-            ValueError: If unable to determine valid primers for the target subfragment
+            ValueError: If unable to determine valid primers for the target 
+                        subfragment.
         """
         estimates = {}
         target_genes = self.config["validate_sequences"]["run_targets"]
@@ -454,7 +463,7 @@ class SubsetDataset:
             rev_primer = primers["rev"]["seq"]
         except KeyError:
             raise ValueError(
-                f"No primer sequences available for target subfragment {target_subfragment}"
+                f"No primer sequences available for target subfragment '{target_subfragment}'"
             )
 
         group_columns = ["library_layout", "instrument_platform"]
@@ -472,13 +481,20 @@ class SubsetDataset:
             )
             self.success.append(params)
 
-    def manual(self, dataset: str, info: Dict[str, Any], meta: pd.DataFrame, ena_runs: pd.DataFrame) -> None:
-        """Process dataset with manually provided primers and metadata.
+    def manual(
+        self, 
+        dataset: str,
+        info: Dict[str, Any], 
+        meta: pd.DataFrame, 
+        ena_runs: pd.DataFrame
+    ) -> None:
+        """
+        Process dataset with manually provided primers and metadata.
 
         Args:
-            dataset: Dataset identifier
-            info:    Dataset info containing manual configurations
-            meta:    Combined metadata DataFrame
+            dataset:  Dataset identifier.
+            info:     Dataset info containing manual configurations.
+            meta:     Combined metadata DataFrame.
             ena_runs:
         """
         group_columns = ["library_layout", "instrument_platform"]
@@ -543,11 +559,12 @@ class SubsetDataset:
             self.success.append(sample_subset)
 
     def process(self, dataset: str, info: Dict[str, Any]) -> None:
-        """Process a dataset with automated or manual primer configuration.
+        """
+        Process a dataset with automated or manual primer configuration.
 
         Args:
-            dataset: Dataset identifier (ENA project accession or custom name)
-            info:    Dataset configuration parameters
+            dataset: Dataset identifier (ENA project accession or custom name).
+            info:    Dataset configuration parameters.
 
         Handles:
             - Metadata retrieval and validation
@@ -629,19 +646,20 @@ class SubsetDataset:
         manual_meta: pd.DataFrame,
         info: Dict[str, Any],
     ) -> pd.DataFrame:
-        """Combine and validate ENA/manual metadata.
+        """
+        Combine and validate ENA/manual metadata.
 
         Args:
-            dataset:     Dataset identifier for error reporting
-            ena_meta:    ENA metadata DataFrame
-            manual_meta: Manually provided metadata DataFrame
-            info:        Dataset info for validation
+            dataset:     Dataset identifier for error reporting.
+            ena_meta:    ENA metadata DataFrame.
+            manual_meta: Manually provided metadata DataFrame.
+            info:        Dataset info for validation.
 
         Returns:
-            combined:    Combined and validated metadata DataFrame
+            combined:    Combined and validated metadata DataFrame.
 
         Raises:
-            ValueError:  For metadata consistency issues
+            ValueError:  For metadata consistency issues.
         """
         if not ena_meta.empty and info.get("dataset_type") != "ENA":
             raise ValueError(
@@ -662,18 +680,19 @@ class SubsetDataset:
     def combine_ena_and_manual_metadata(
         self, dataset: str, ena_meta: pd.DataFrame, manual_meta: pd.DataFrame
     ) -> pd.DataFrame:
-        """Merge ENA and manual metadata with conflict resolution.
+        """
+        Merge ENA and manual metadata with conflict resolution.
 
         Args:
-            dataset:     Dataset identifier for error reporting
-            ena_meta:    ENA metadata DataFrame
-            manual_meta: Manual metadata DataFrame
+            dataset:     Dataset identifier for error reporting.
+            ena_meta:    ENA metadata DataFrame.
+            manual_meta: Manual metadata DataFrame.
 
         Returns:
-            meta:        Merged metadata DataFrame
+            meta:        Merged metadata DataFrame.
 
         Raises:
-            ValueError:  For critical column mismatches
+            ValueError:  For critical column mismatches.
         """
         # Standardize column names
         ena_meta.columns = ena_meta.columns.str.lower().str.strip()
@@ -734,14 +753,16 @@ class SubsetDataset:
     def _resolve_column_conflicts(
         manual_meta: pd.DataFrame, ena_meta: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Resolve column name conflicts between manual and ENA metadata.
+        """
+        Resolve column name conflicts between manual and ENA metadata.
 
         Args:
-            manual_meta: Manual metadata DataFrame
-            ena_meta:    ENA metadata DataFrame
+            manual_meta: Manual metadata DataFrame.
+            ena_meta:    ENA metadata DataFrame.
 
         Returns:
-            Tuple of (modified manual_meta, modified ena_meta) with resolved conflicts
+            Tuple of (modified manual_meta, modified ena_meta) with resolved 
+            conflicts.
         """
         common_cols = set(ena_meta.columns) & set(manual_meta.columns) - {
             "run_accession"
