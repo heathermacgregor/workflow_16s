@@ -424,7 +424,7 @@ def denoise_sequences(
         args = {
             "demultiplexed_seqs": seqs,
             "trim_left": 0,
-            "trunc_len": trim_length,
+            #"trunc_len": trim_length,
             "hashed_feature_ids": True,
             "n_threads": n_threads,
         }
