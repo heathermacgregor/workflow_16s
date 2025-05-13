@@ -6,15 +6,20 @@ Key optimizations include precompiled regex patterns, efficient FASTQ parsing,
 reduced subprocess calls, and improved resource management.
 """
 
+# ===================================== IMPORTS ====================================== #
+
 import os
 import re
 import gzip
 import random
+
 from pathlib import Path
 from typing import Dict, List, Tuple, Union, Optional
 from collections import defaultdict
+
 import numpy as np
 import pandas as pd
+import logging
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -23,10 +28,13 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
+# ================================== LOCAL IMPORTS =================================== #
+
 from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
 
-import logging
-logger = logging.getLogger('workflow_16s')
+import logginglogger = logging.getLogger('workflow_16s')
+
+# ==================================== CLASSES ====================================== #
 
 class PrimerChecker:
     """Checks primer presence with precompiled regex patterns and efficient FASTQ parsing."""
@@ -154,6 +162,7 @@ class PrimerChecker:
             'K': 'GT', 'M': 'AC', 'B': 'CGT', 'D': 'AGT',
             'H': 'ACT', 'V': 'ACG', 'N': 'ACGT'
         }
+
 
 class BLASTAnalyzer:
     """Performs BLAST analysis with in-memory processing and optimized parsing."""
@@ -293,6 +302,7 @@ class BLASTAnalyzer:
             
         return df
 
+
 class Analyzer:
     """Coordinates analysis components with optimized parallel execution."""
     
@@ -396,6 +406,7 @@ class Analyzer:
             for run_id, region in results.items():
                 f.write(f"{run_id}\t{region or 'N/A'}\n")
 
+
 class Validate16S:
     """Validates 16S sequences with optimized metrics calculation."""
     
@@ -450,6 +461,8 @@ class Validate16S:
     def _is_valid(self, metrics: dict) -> bool:
         """Determine validation status based on metrics."""
         return metrics.get('valid_rate', 0) >= self.min_valid_rate
+
+# ==================================== FUNCTIONS ===================================== #
 
 def estimate_16s_subfragment(
     metadata: pd.DataFrame,
