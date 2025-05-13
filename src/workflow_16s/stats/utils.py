@@ -63,14 +63,14 @@ def filter_table(
     thresholds.
     
     Args:
-        table:             Input abundance table 
+        table:             Input abundance table. 
         min_rel_abundance: Minimum relative abundance percentage (0-100) for 
-                           feature retention
-        min_samples:       Minimum number of samples a feature must appear in
-        min_counts:        Minimum total counts required per sample
+                           feature retention.
+        min_samples:       Minimum number of samples a feature must appear in.
+        min_counts:        Minimum total counts required per sample.
         
     Returns:
-        table:             Filtered table in samples x features format
+        table:             Filtered table in samples x features format.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -91,12 +91,12 @@ def filter_features(
     Y columns (samples).
     
     Args:
-        table:             Input abundance table (samples x features)
-        min_rel_abundance: Minimum relative abundance
-        min_samples:       Minimum samples
+        table:             Input abundance table (samples x features).
+        min_rel_abundance: Minimum relative abundance.
+        min_samples:       Minimum samples.
         
     Returns:
-        table:             Filtered table ready for downstream analysis
+        table:             Filtered table ready for downstream analysis.
     """
     table = table.loc[:, table.max(axis=0) >= min_rel_abundance / 100]           
     table = table.loc[(table > 0).sum(axis=1) > min_samples, :]   
@@ -111,11 +111,11 @@ def filter_samples(
     Filter for columns (samples) that have at least X counts total.
 
     Args:
-        table:      Input abundance table (samples x features)
-        min_counts: Minimum counts
+        table:      Input abundance table (samples x features).
+        min_counts: Minimum counts.
         
     Returns:
-        table:      Filtered table ready for downstream analysis
+        table:      Filtered table ready for downstream analysis.
     """ 
     return table.loc[:, (table.sum(axis=0) > min_counts)] 
 
@@ -129,12 +129,12 @@ def preprocess_table(
     Preprocesses abundance table with normalization and CLR transformation.
     
     Args:
-        table:         Input abundance table (samples x features)
-        normalize:     Whether to normalize samples to relative abundances
-        clr_transform: Whether to apply centered log-ratio (CLR) transformation
+        table:         Input abundance table (samples x features).
+        normalize:     Whether to normalize samples to relative abundances.
+        clr_transform: Whether to apply centered log-ratio (CLR) transformation.
         
     Returns:
-        table:         Processed table ready for downstream analysis
+        table:         Processed table ready for downstream analysis.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -173,10 +173,10 @@ def clr_transform_table(
     Applies centered log-ratio (CLR) transformation with pseudocount addition.
     
     Args:
-        table:  Input abundance table (samples x features)
+        table:  Input abundance table (samples x features).
         
     Returns:
-        clr_df: CLR-transformed table preserving feature/sample labels
+        clr_df: CLR-transformed table preserving feature/sample labels.
     """
     np_clr = CLR(table + 0.00001) 
     table_clr = pd.DataFrame(np_clr, index=table.index, columns=table.columns)
@@ -191,11 +191,11 @@ def presence_absence(
     Converts to presence/absence table while retaining top abundant features.
     
     Args:
-        table:          Input abundance table (features x samples)
-        threshold:      Cumulative abundance threshold (0-1) for feature retention
+        table:          Input abundance table (features x samples).
+        threshold:      Cumulative abundance threshold (0-1) for feature retention.
         
     Returns:
-        filtered_table: Binary presence/absence table of retained features
+        filtered_table: Binary presence/absence table of retained features.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -228,14 +228,14 @@ def k_means(
     Applies K-means clustering and adds cluster labels to metadata.
     
     Args:
-        table:          Input abundance table (samples x features)
-        metadata:       Sample metadata DataFrame
-        col:            Metadata column name to preserve in output
-        n_clusters:     Number of clusters for K-means
-        random_state:   Random seed for reproducibility
+        table:          Input abundance table (samples x features).
+        metadata:       Sample metadata DataFrame.
+        col:            Metadata column name to preserve in output.
+        n_clusters:     Number of clusters for K-means.
+        random_state:   Random seed for reproducibility.
         
     Returns:
-        table_with_col: Table with added 'kmeans_cluster' column
+        table_with_col: Table with added 'kmeans_cluster' column.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -260,13 +260,13 @@ def t_test(
     Performs independent t-tests between groups for all features.
     
     Args:
-        table:      Input abundance table (samples x features)
-        metadata:   Sample metadata DataFrame
-        col:        Metadata column containing group labels
-        col_values: Two group identifiers to compare
+        table:      Input abundance table (samples x features).
+        metadata:   Sample metadata DataFrame.
+        col:        Metadata column containing group labels.
+        col_values: Two group identifiers to compare.
         
     Returns:
-        results:    Results sorted by p-value with test statistics
+        results:    Results sorted by p-value with test statistics.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -299,13 +299,13 @@ def mwu_bonferroni(
     Performs Mann-Whitney U tests with Bonferroni correction.
     
     Args:
-        table:      Input abundance table (samples x features)
-        metadata:   Sample metadata DataFrame
-        col:        Metadata column containing group labels
-        col_values: Two group identifiers to compare
+        table:      Input abundance table (samples x features).
+        metadata:   Sample metadata DataFrame.
+        col:        Metadata column containing group labels.
+        col_values: Two group identifiers to compare.
         
     Returns:
-        results:    Filtered results meeting Bonferroni-corrected threshold
+        results:    Filtered results meeting Bonferroni-corrected threshold.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -373,13 +373,13 @@ def variability_explained(
     in the data.
 
     Args:
-        table:    DataFrame of OTU abundances
-        metadata: DataFrame with sample metadata
-        col:      Column in metadata used as the explanatory variable
+        table:    DataFrame of OTU abundances.
+        metadata: DataFrame with sample metadata.
+        col:      Column in metadata used as the explanatory variable.
     
     Returns:
         results:  DataFrame with variability explained (R^2) for each 
-                  feature
+                  feature.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
