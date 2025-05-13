@@ -13,7 +13,7 @@ from qiime2 import Artifact
 DEFAULT_N = 15
 RESET_TMPDIR = True
 
-# Set environment variable
+# Reset tmp directory
 if RESET_TMPDIR:
     os.environ["TMPDIR"] = "/opt/tmp"
 
