@@ -495,6 +495,41 @@ def estimate_16s_subfragment(
     return region_results
 
 
+def validate_16s(
+    metadata: pd.DataFrame,
+    runs: List[str],
+    output_dir: Union[str, Path] = Path("results"),
+    num_workers: int = 4
+) -> Dict[str, str]:
+    """Main analysis workflow with optimized resource management."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    fetcher = SeqFetcher()
+    run_files = fetcher.fetch_runs(runs)
+    
+    validator = Validate16S(num_threads=num_workers)
+    
+    # Validation phase
+    valid_results = {}
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(validator.validate, files[0]): run_id
+            for run_id, files in run_files.items()
+        }
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            run_id = futures[future]
+            try:
+                is_valid, metrics = future.result()
+                valid_results[run_id] = is_valid
+            except Exception as e:
+                logger.error(f"Validation failed for {run_id}: {e}")
+                valid_results[run_id] = False
+    
+    # Filter invalid runs
+    valid_runs = {run: files for run, files in run_files.items() if valid_results.get(run, False)}
+    return valid_runs
+    
 
 def clean_temp_files(temp_files: Dict[str, List[Path]]):
     """Cleanup temporary files with error handling."""
