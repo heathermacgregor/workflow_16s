@@ -32,7 +32,7 @@ from tqdm import tqdm
 
 from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
 
-import logginglogger = logging.getLogger('workflow_16s')
+logger = logging.getLogger('workflow_16s')
 
 # ==================================== CLASSES ====================================== #
 
