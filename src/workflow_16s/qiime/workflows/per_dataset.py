@@ -36,21 +36,23 @@ from api.api import (
 # ================================= GLOBAL VARIABLES ================================= #
 
 DEFAULT_N = 20
+DEFAULT_MIN_READS = 1000
 DEFAULT_MIN_LENGTH = 100
 DEFAULT_RETRY_TRUNC_LENGTHS = [(250, 220), (150, 150), (250, 0)]
+DEFAULT_N_THREADS = 12
 
 # ==================================== CLASSES ====================================== #
 
-
-class Dataset:
-    """16S rRNA sequencing data processing workflow for per-dataset microbiome 
+class PerDataset:
+    """
+    16S rRNA sequencing data processing workflow for per-dataset microbiome 
     analysis.
 
     Attributes:
-        params: Dictionary of configuration parameters
-        qiime_dir: Path to QIIME2 output directory
-        file_registry: Dictionary mapping file types to paths
-        metadata: QIIME2 Metadata object containing sample information
+        params:        Dictionary of configuration parameters.
+        qiime_dir:     Path to QIIME2 output directory.
+        file_registry: Dictionary mapping file types to paths.
+        metadata:      QIIME2 Metadata object containing sample information.
     """
 
     def __init__(self, params: Dict[str, Any]) -> None:
@@ -74,10 +76,13 @@ class Dataset:
             "metadata": self.params["metadata_tsv"],
         }
         missing = [
-            name for name, path in required_files.items() if not Path(path).exists()
+            name 
+            for name, path in required_files.items() if not Path(path).exists()
         ]
         if missing:
-            raise FileNotFoundError(f"Missing required files: {', '.join(missing)}")
+            raise FileNotFoundError(
+                f"Missing required files: {', '.join(missing)}"
+            )
 
     def _create_directories(self) -> None:
         """Create directory structure for QIIME2 outputs."""
@@ -136,7 +141,7 @@ class Dataset:
         else:
             seqs, counts_file = self._process_without_trimming()
 
-        seqs = filter_samples_for_denoising(seqs=seqs, counts_file=counts_file)
+        seqs = filter_samples_for_denoising(seqs, counts_file, DEFAULT_MIN_READS)
         print("  ✅ Filtered low-count samples")
 
         trunc_params = self._calculate_truncation_params(seqs, layout)
@@ -153,7 +158,8 @@ class Dataset:
         """Validate library layout parameter."""
         if layout not in {"paired", "single"}:
             raise ValueError(
-                f"Invalid library layout '{layout}'. Expected 'single' or 'paired'."
+                f"❓ Library layout '{layout}' not recognized. "
+                f"Expected 'single' or 'paired'."
             )
 
     def _process_with_trimming(self) -> Tuple[Artifact, Path]:
@@ -197,12 +203,13 @@ class Dataset:
         return (
             (stats["trunc_len_f"], stats["trunc_len_r"])
             if layout == "paired"
-            else (stats["trunc_len"], 0)
+            else (stats["trunc_len_f"], 0)
         )
 
     def _import_sequences(self) -> Artifact:
         """Import or load sequence artifact."""
-        if self._output_files_exist(["seqs"]):
+        # Load existing output files if the 'hard_rerun' flag is absent
+        if not self.params["hard_rerun"] and self._output_files_exist(["seqs"]):
             return self._load_existing_artifact("seqs")
         return self._import_seqs_from_manifest()
 
@@ -227,7 +234,7 @@ class Dataset:
                 library_layout=self.params["library_layout"],
             )
         except Exception as e:
-            raise RuntimeError(f"Sequence import failed: {str(e)}") from e
+            raise RuntimeError(f"  ❌ Sequence import failed: {str(e)}") from e
 
     def _calculate_sequence_stats(self, seqs: Artifact) -> Dict[str, float]:
         """Calculate sequence statistics from demux results."""
@@ -244,9 +251,9 @@ class Dataset:
             quality_threshold=self.params.get("quality_threshold", 25),
         )
 
-        print(f"      {'Average Length'.ljust(DEFAULT_N)}: {avg_len_f} / {avg_len_r}")
         print(
-            f"      {'Truncation Length'.ljust(DEFAULT_N)}: {trunc_len_f} / {trunc_len_r}"
+            f"    • {'Average Length'.ljust(DEFAULT_N)}: {avg_len_f} / {avg_len_r}"
+            f"    • {'Truncation Length'.ljust(DEFAULT_N)}: {trunc_len_f} / {trunc_len_r}"
         )
 
         return {
@@ -265,7 +272,8 @@ class Dataset:
         save_intermediates: bool,
     ) -> Artifact:
         """Trim sequences with restart capability."""
-        if self._output_files_exist(["trimmed-seqs"]):
+        # Load existing output files if the 'hard_rerun' flag is absent
+        if not self.params["hard_rerun"] and self._output_files_exist(["trimmed-seqs"]):
             return self._load_existing_artifact("trimmed-seqs")
         return self._perform_trimming(
             seqs, trim_length, minimum_length, n_cores, save_intermediates
@@ -281,8 +289,9 @@ class Dataset:
     ) -> Artifact:
         """Execute primer removal and quality trimming."""
         print(
-            "  🔄 Trimming sequences with parameters:\n"
-            f"    • Primers:        {self.params['fwd_primer']} / {self.params['rev_primer']}\n"
+            "  🔄 Trimming sequences with [CutAdapt]\n"
+            f"    • Primers:        {self.params['fwd_primer']}\n"
+            f"                      {self.params['rev_primer']}\n"
             f"    • Trim Length:    {trim_length}\n"
             f"    • Minimum Length: {minimum_length}"
         )
@@ -304,7 +313,8 @@ class Dataset:
         trunc_len_r: int,
     ) -> Tuple[Artifact, Artifact, Artifact]:
         """Perform denoising with fallback strategies."""
-        if self._output_files_exist(["rep-seqs", "table", "stats"]):
+        # Load existing output files if the 'hard_rerun' flag is absent
+        if not self.params["hard_rerun"] and self._output_files_exist(["rep-seqs", "table", "stats"]):
             return self._load_denoising_artifacts()
 
         for fallback_trunc in DEFAULT_RETRY_TRUNC_LENGTHS:
@@ -335,10 +345,11 @@ class Dataset:
         """Execute denoising algorithm."""
         self._validate_denoise_params()
         print(
-            f"  🔄 Denoising with {self.params['denoise_algorithm']} parameters:\n"
+            f"  🔄 Denoising sequences with: {self.params['denoise_algorithm']}\n"
             f"    • Library Layout:      {self.params['library_layout']}\n"
             f"    • Instrument Platform: {self.params['instrument_platform']}\n"
-            f"    • Trunc Length:        {trunc_len_f} / {trunc_len_r}\n"
+            f"    • Trunc Length:        {trunc_len_f}"
+            f"{'' if (trunc_len_r == 0 or trunc_len_r != trunc_len_r) else f' / {trunc_len_r}'}\n"
             f"    • Chimera Method:      {self.params['chimera_method']}"
         )
         return denoise_sequences(
@@ -350,7 +361,7 @@ class Dataset:
             trunc_len_r=trunc_len_r,
             chimera_method=self.params["chimera_method"],
             denoise_algorithm=self.params["denoise_algorithm"],
-            n_threads=self.params.get("denoise_threads", 12),
+            n_threads=self.params.get("denoise_threads", DEFAULT_N_THREADS),
         )
 
     def _validate_denoise_params(self) -> None:
@@ -358,19 +369,20 @@ class Dataset:
         valid_algorithms = {"dada2", "deblur"}
         if self.params["denoise_algorithm"].lower() not in valid_algorithms:
             raise ValueError(
-                f"Invalid denoising algorithm: {self.params['denoise_algorithm']}. "
-                f"Must be one of {valid_algorithms}"
+                f"❓ Denoising algorithm '{self.params['denoise_algorithm']}' not recognized. "
+                f"Expected one of {valid_algorithms}"
             )
 
     def _taxonomic_classification(self, rep_seqs: Artifact) -> Artifact:
         """Assign taxonomy using classifier."""
-        if self._output_files_exist(["taxonomy"]):
+        # Load existing output files if the 'hard_rerun' flag is absent
+        if not self.params["hard_rerun"] and self._output_files_exist(["taxonomy"]):
             return self._load_existing_artifact("taxonomy")
         return self._assign_taxonomy(rep_seqs)
 
     def _assign_taxonomy(self, rep_seqs: Artifact) -> Artifact:
         """Execute taxonomic classification."""
-        print(f"  🔄 Using classifier: {self.params['classifier']}")
+        print(f"  🔄 Classifying taxonomy with [{self.params['classifier']}]")
         return classify_taxonomy(
             output_dir=self.qiime_dir,
             rep_seqs=rep_seqs,
@@ -380,7 +392,8 @@ class Dataset:
 
     def _collapse_to_genus(self, table: Artifact, taxonomy: Artifact) -> Artifact:
         """Collapse features to genus level."""
-        if self._output_files_exist(["collapsed_table"]):
+        # Load existing output files if the 'hard_rerun' flag is absent
+        if not self.params["hard_rerun"] and self._output_files_exist(["collapsed_table"]):
             return self._load_existing_artifact("collapsed_table")
         return collapse_to_genus(
             output_dir=self.qiime_dir,
@@ -393,11 +406,13 @@ class Dataset:
         return all(self.file_registry[key].exists() for key in keys)
 
     def clean_qiime_dir(self) -> None:
-        """Clean up intermediate files from QIIME2 output directories.
+        """
+        Clean up intermediate files from QIIME2 output directories.
 
         Args:
             qiime_dir: Root directory containing QIIME2 artifacts
         """
+        print(f"  ♻️ Cleaning up...")
         qiime_path = Path(self.args["qiime_dir"])
         subdirs_to_clean = ["demux-stats", "trimmed-seqs_demux-stats"]
         files_to_remove = ["data.jsonp"]
@@ -429,7 +444,8 @@ class Dataset:
 
 
 class WorkflowRunner:
-    """Orchestrate workflow execution with cleanup handling.
+    """
+    Orchestrate workflow execution with cleanup handling.
 
     Attributes:
         args: Dictionary of workflow parameters
@@ -454,11 +470,13 @@ class WorkflowRunner:
             return False
 
     def clean_qiime_dir(self) -> None:
-        """Clean up intermediate files from QIIME2 output directories.
+        """
+        Clean up intermediate files from QIIME2 output directories.
 
         Args:
             qiime_dir: Root directory containing QIIME2 artifacts
         """
+        print(f"  ♻️ Cleaning up...")
         qiime_path = Path(self.args["qiime_dir"])
         subdirs_to_clean = ["demux-stats", "trimmed-seqs_demux-stats"]
         files_to_remove = ["data.jsonp"]
