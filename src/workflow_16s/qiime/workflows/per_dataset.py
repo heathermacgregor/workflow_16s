@@ -199,7 +199,9 @@ class Dataset:
 
         return seqs, self.qiime_dir / "demux-stats" / "per-sample-fastq-counts.tsv"
 
-    def _calculate_truncation_params(self, seqs: Artifact, layout: str) -> Tuple[int, int]:
+    def _calculate_truncation_params(
+        self, seqs: Artifact, layout: str
+    ) -> Tuple[int, int]:
         """Determine truncation parameters based on library layout."""
         stats = self._calculate_sequence_stats(seqs)
         return (
@@ -316,7 +318,9 @@ class Dataset:
     ) -> Tuple[Artifact, Artifact, Artifact]:
         """Perform denoising with fallback strategies."""
         # Load existing output files if the 'hard_rerun' flag is absent
-        if not self.params["hard_rerun"] and self._output_files_exist(["rep-seqs", "table", "stats"]):
+        if not self.params["hard_rerun"] and self._output_files_exist(
+            ["rep-seqs", "table", "stats"]
+        ):
             return self._load_denoising_artifacts()
 
         for fallback_trunc in DEFAULT_RETRY_TRUNC_LENGTHS:
@@ -371,8 +375,8 @@ class Dataset:
         valid_algorithms = {"dada2", "deblur"}
         if self.params["denoise_algorithm"].lower() not in valid_algorithms:
             raise ValueError(
-                f"❓ Denoising algorithm '{self.params['denoise_algorithm']}' not recognized. "
-                f"Expected one of {valid_algorithms}"
+                f"❓ Denoising algorithm '{self.params['denoise_algorithm']}' "
+                f"not recognized. Expected one of {valid_algorithms}"
             )
 
     def _taxonomic_classification(self, rep_seqs: Artifact) -> Artifact:
@@ -412,7 +416,7 @@ class Dataset:
         Clean up intermediate files from QIIME2 output directories.
 
         Args:
-            qiime_dir: Root directory containing QIIME2 artifacts
+            qiime_dir: Root directory containing QIIME2 artifacts.
         """
         print(f"  ♻️ Cleaning up...")
         qiime_path = Path(self.args["qiime_dir"])
@@ -450,8 +454,8 @@ class WorkflowRunner:
     Orchestrate workflow execution with cleanup handling.
 
     Attributes:
-        args: Dictionary of workflow parameters
-        workflow: Initialized Dataset processing instance
+        args:     Dictionary of workflow parameters.
+        workflow: Initialized Dataset processing instance.
     """
 
     def __init__(self, args: Dict[str, Any]) -> None:
@@ -476,7 +480,7 @@ class WorkflowRunner:
         Clean up intermediate files from QIIME2 output directories.
 
         Args:
-            qiime_dir: Root directory containing QIIME2 artifacts
+            qiime_dir: Root directory containing QIIME2 artifacts.
         """
         print(f"  ♻️ Cleaning up...")
         qiime_path = Path(self.args["qiime_dir"])
