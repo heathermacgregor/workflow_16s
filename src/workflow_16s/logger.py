@@ -18,17 +18,18 @@ def setup_logging(
     max_file_size: int = 5 * 1024 * 1024,  # 5 MB
     backup_count : int = 3
 ) -> logging.Logger:
-    """Sets up logging for the entire package.
+    """
+    Sets up logging for the entire package.
     
     Args:
-        project_dir:   Root directory of the project
-        log_dir:       Subdirectory for storing logs
-        log_filename:  Log file name. Defaults to current datetime
-        max_file_size: Maximum size of log files before rotating. Defaults to 5 MB
-        backup_count:  Number of backup log files to keep
+        project_dir:   Root directory of the project.
+        log_dir:       Subdirectory for storing logs.
+        log_filename:  Log file name. Defaults to current datetime.
+        max_file_size: Maximum size of log files before rotating. Defaults to 5 MB.
+        backup_count:  Number of backup log files to keep.
         
     Returns:
-        logger:        Configured logger for the package
+        logger:        Configured logger for the package.
     """
     # Set log filename
     if log_filename is None:
