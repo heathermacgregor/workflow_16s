@@ -117,20 +117,26 @@ DEFAULT_16S_PRIMERS = {
     },
 }
 
+# ==================================== FUNCTIONS ===================================== #
+
 def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
     """Parses pooled samples in the 'sample_description' column into separate columns.
     Args:
-        df (pd.DataFrame)
+        df:
         
     Returns:
-        combined_df (pd.DataFrame)
+        combined_df:
     """
     def _parse_sample_pooling(row) -> pd.DataFrame:
         sample_description = row.get('sample_description', '')
-        data_str = sample_description.strip("''").replace("Samples were pooled in this way (MID LONGITUDE LATITUDE SAMPLING_DATE ELEVATION) : ", "")
+        data_str = sample_description.strip("''").replace(
+            "Samples were pooled in this way (MID LONGITUDE LATITUDE SAMPLING_DATE ELEVATION) : ", 
+            ""
+        )
         data_list = data_str.split()
         num_columns = 5
-        data_reshaped = [data_list[i:i + num_columns] for i in range(0, len(data_list), num_columns)]
+        data_reshaped = [data_list[i:i + num_columns] 
+                         for i in range(0, len(data_list), num_columns)]
         columns = ['MID', 'LONGITUDE', 'LATITUDE', 'SAMPLING_DATE', 'ELEVATION']
         parsed_df = pd.DataFrame(data_reshaped, columns=columns)
         for col in row.index:
@@ -152,7 +158,11 @@ def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
     """Calculate Euclidean distances between two DataFrames based on longitude and latitude."""
     df1[['longitude_deg', 'latitude_deg']] = df1[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
     df2[['longitude_deg', 'latitude_deg']] = df2[['longitude_deg', 'latitude_deg']].apply(pd.to_numeric)
-    distances = cdist(df1[['longitude_deg', 'latitude_deg']], df2[['longitude_deg', 'latitude_deg']], metric='euclidean')
+    distances = cdist(
+        df1[['longitude_deg', 'latitude_deg']], 
+        df2[['longitude_deg', 'latitude_deg']], 
+        metric='euclidean'
+    )
     min_dist_indices = distances.argmin(axis=1)
     return df2.iloc[min_dist_indices].reset_index(drop=True)
 
@@ -167,10 +177,10 @@ class SubsetDataset:
         - Error tracking and success/failure reporting
 
     Attributes:
-        config: Configuration dictionary for processing parameters
-        dirs: Subdirectories structure handler
+        config:  Configuration dictionary for processing parameters
+        dirs:    Subdirectories structure handler
         success: List of successfully processed datasets with parameters
-        failed: List of failed datasets with error information
+        failed:  List of failed datasets with error information
     """
 
     ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
@@ -205,8 +215,8 @@ class SubsetDataset:
         """Initialize processor with configuration and directory setup.
 
         Args:
-            config: Configuration dictionary containing processing parameters
-                such as project directory, primer mode, and validation settings
+            config: Configuration dictionary containing processing parameters such as 
+                    project directory, primer mode, and validation settings
         """
         self.config = config
         self.dirs = dir_utils.SubDirs(self.config["project_dir"])
@@ -217,14 +227,14 @@ class SubsetDataset:
         """Determine target fragment from primer estimation results.
 
         Args:
-            estimates: Dictionary mapping target genes to estimated subfragments
+            estimates:  Dictionary mapping target genes to estimated subfragments
 
         Returns:
             Selected target subfragment (e.g., 'V4')
 
         Raises:
-            ValueError: If no valid subfragment can be determined or if
-                the determined subfragment is not in DEFAULT_16S_PRIMERS
+            ValueError: If no valid subfragment can be determined or if the determined 
+                        subfragment is not in DEFAULT_16S_PRIMERS
         """
         unique = {v for v in estimates.values()}
         if len(unique) == 1:
@@ -254,13 +264,13 @@ class SubsetDataset:
         """Construct parameters dictionary for a metadata group.
 
         Args:
-            group: Metadata subset for the current group
-            dataset: Dataset identifier
-            layout: Library layout (single/paired)
-            platform: Instrument platform
+            group:              Metadata subset for the current group
+            dataset:            Dataset identifier
+            layout:             Library layout (single/paired)
+            platform:           Instrument platform
             target_subfragment: Target 16S subfragment
-            fwd_primer: Forward primer sequence
-            rev_primer: Reverse primer sequence
+            fwd_primer:         Forward primer sequence
+            rev_primer:         Reverse primer sequence
 
         Returns:
             Dictionary containing processing parameters for the group
@@ -319,7 +329,7 @@ class SubsetDataset:
         return metadata
 
     def _process_citations(self, info: Dict[str, Any]) -> List[str]:
-        """Extract citations from publication URLs in dataset info
+        """Extract citations from publication URLs in dataset info.
 
         Args:
             info: Dataset info dictionary containing publication URLs
@@ -346,8 +356,8 @@ class SubsetDataset:
         """Extract and validate primers from metadata columns.
 
         Args:
-            meta: Metadata DataFrame
-            info: Dataset info with potential primer sequences
+            meta:       Metadata DataFrame
+            info:       Dataset info with potential primer sequences
 
         Returns:
             Tuple of validated forward and reverse primer sequences
@@ -398,9 +408,9 @@ class SubsetDataset:
         """Automatically estimate primers and process metadata groups.
 
         Args:
-            dataset: Dataset identifier
-            meta: Combined metadata DataFrame
-            ena_runs: Dictionary of target genes to ENA run accessions
+            dataset:    Dataset identifier
+            meta:       Combined metadata DataFrame
+            ena_runs:   Dictionary of target genes to ENA run accessions
 
         Raises:
             ValueError: If unable to determine valid primers for the target subfragment
@@ -467,8 +477,8 @@ class SubsetDataset:
 
         Args:
             dataset: Dataset identifier
-            info: Dataset info containing manual configurations
-            meta: Combined metadata DataFrame
+            info:    Dataset info containing manual configurations
+            meta:    Combined metadata DataFrame
             ena_runs:
         """
         group_columns = ["library_layout", "instrument_platform"]
@@ -537,7 +547,7 @@ class SubsetDataset:
 
         Args:
             dataset: Dataset identifier (ENA project accession or custom name)
-            info: Dataset configuration parameters
+            info:    Dataset configuration parameters
 
         Handles:
             - Metadata retrieval and validation
@@ -563,7 +573,6 @@ class SubsetDataset:
                 dataset_info.extend(
                     f"                      {cite}" for cite in citations[1:]
                 )
-
             logger.info("\n".join(dataset_info))
 
             # ENA metadata retrieval
@@ -623,16 +632,16 @@ class SubsetDataset:
         """Combine and validate ENA/manual metadata.
 
         Args:
-            dataset: Dataset identifier for error reporting
-            ena_meta: ENA metadata DataFrame
+            dataset:     Dataset identifier for error reporting
+            ena_meta:    ENA metadata DataFrame
             manual_meta: Manually provided metadata DataFrame
-            info: Dataset info for validation
+            info:        Dataset info for validation
 
         Returns:
-            Combined and validated metadata DataFrame
+            combined:    Combined and validated metadata DataFrame
 
         Raises:
-            ValueError: For metadata consistency issues
+            ValueError:  For metadata consistency issues
         """
         if not ena_meta.empty and info.get("dataset_type") != "ENA":
             raise ValueError(
@@ -656,15 +665,15 @@ class SubsetDataset:
         """Merge ENA and manual metadata with conflict resolution.
 
         Args:
-            dataset: Dataset identifier for error reporting
-            ena_meta: ENA metadata DataFrame
+            dataset:     Dataset identifier for error reporting
+            ena_meta:    ENA metadata DataFrame
             manual_meta: Manual metadata DataFrame
 
         Returns:
-            Merged metadata DataFrame
+            meta:        Merged metadata DataFrame
 
         Raises:
-            ValueError: For critical column mismatches
+            ValueError:  For critical column mismatches
         """
         # Standardize column names
         ena_meta.columns = ena_meta.columns.str.lower().str.strip()
@@ -729,7 +738,7 @@ class SubsetDataset:
 
         Args:
             manual_meta: Manual metadata DataFrame
-            ena_meta: ENA metadata DataFrame
+            ena_meta:    ENA metadata DataFrame
 
         Returns:
             Tuple of (modified manual_meta, modified ena_meta) with resolved conflicts
