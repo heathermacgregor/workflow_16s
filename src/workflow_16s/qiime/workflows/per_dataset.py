@@ -45,7 +45,7 @@ DEFAULT_N_THREADS = 12
 
 # ==================================== CLASSES ====================================== #
 
-class PerDataset:
+class Dataset:
     """
     16S rRNA sequencing data processing workflow for per-dataset microbiome 
     analysis.
