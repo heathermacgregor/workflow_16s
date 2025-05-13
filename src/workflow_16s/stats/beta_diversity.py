@@ -33,10 +33,10 @@ def table_to_dataframe(
     Args:
         table: Input feature table, either a BIOM Table or a dict-like
                object where keys are sample identifiers and values are feature
-               counts or abundances
+               counts or abundances.
 
     Returns:
-        A pandas DataFrame of shape (n_samples, n_features)
+        df:    A pandas DataFrame of shape (n_samples, n_features).
     """
     if isinstance(table, Table):
         # Convert BIOM Table to DataFrame (features x samples), then transpose
@@ -56,11 +56,11 @@ def distance_matrix(
 
     Args:
         table:  Input feature table as a dict-like, BIOM Table, or DataFrame
-                (samples x features or features x samples)
-        metric: Distance metric name accepted by scipy.spatial.distance.pdist
+                (samples x features or features x samples).
+        metric: Distance metric name accepted by scipy.spatial.distance.pdist.
 
     Returns:
-        A 2D numpy array representing the pairwise distance matrix
+        dm:     A 2D numpy array representing the pairwise distance matrix.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -79,13 +79,13 @@ def pcoa(
 
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples)
-        metric:       Distance metric name for computing the distance matrix
-        n_dimensions: Number of dimensions to return; if None, returns all
+                      (samples x features or features x samples).
+        metric:       Distance metric name for computing the distance matrix.
+        n_dimensions: Number of dimensions to return; if None, returns all.
 
     Returns:
         A PCoAResults object containing eigenvalues, coordinates, and
-        proportion of variance explained
+        proportion of variance explained.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -107,8 +107,8 @@ def pca(
 
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples)
-        n_components: Number of principal components to compute
+                      (samples x features or features x samples).
+        n_components: Number of principal components to compute.
 
     Returns:
         A dictionary with the following keys:
@@ -156,13 +156,13 @@ def tsne(
 
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples)
-        n_components: Dimension of the embedded space
-        random_state: Random seed for reproducibility
+                      (samples x features or features x samples).
+        n_components: Dimension of the embedded space.
+        random_state: Random seed for reproducibility.
 
     Returns:
         tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
-                      coordinates
+                      coordinates.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -191,13 +191,13 @@ def umap(
 
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples)
-        n_components: Dimension of the embedded space
-        random_state: Random seed for reproducibility
+                      (samples x features or features x samples).
+        n_components: Dimension of the embedded space.
+        random_state: Random seed for reproducibility.
 
     Returns:
         umap_df:       DataFrame of shape (n_samples, n_components) with UMAP 
-                       coordinates
+                       coordinates.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
