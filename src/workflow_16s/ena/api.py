@@ -50,10 +50,12 @@ class MetadataFetcher:
     Fetches metadata from the ENA database for a given ENA project accession.
 
     Args:
-        base_url:             Base URL for the ENA API. Defaults to 'https://www.ebi.ac.uk/ena/portal/api'.
+        base_url:             Base URL for the ENA API. Defaults to 
+                              'https://www.ebi.ac.uk/ena/portal/api'.
         retries:              Number of retries for HTTP requests. Defaults to 5.
         backoff_factor:       Backoff factor for retry delays. Defaults to 1.
-        auto_start_progress: Whether to automatically start the progress bar. Defaults to False.
+        auto_start_progress:  Whether to automatically start the progress bar. 
+                              Defaults to False.
     """
 
     def __init__(
