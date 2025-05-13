@@ -421,9 +421,10 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             #    logger.info(f"{col}: {metadata_df[col].value_counts()}")
 
             table_dfs = [file_utils.import_features_biom(i['table_6']) for i in success_qiime_outputs.values()]
-            table_df = 
-            for df in table_dfs: 
-                logger.info(f"Feature table shape: {df.shape}")
+            table_df = pd.concat(table_dfs)
+            logger.info(f"Feature table shape: {table_df.shape}")
+            #for df in table_dfs: 
+            #    logger.info(f"Feature table shape: {df.shape}")
 
         except Exception as global_error:
             logger.critical(f"❌ Fatal pipeline error: {str(global_error)}", exc_info=True)
