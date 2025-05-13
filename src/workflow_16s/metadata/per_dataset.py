@@ -119,7 +119,6 @@ DEFAULT_16S_PRIMERS = {
 
 # ==================================== FUNCTIONS ===================================== #
 
-
 def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
     """
     Parses pooled samples in the 'sample_description' column into separate columns.
@@ -335,7 +334,7 @@ class SubsetDataset:
 
         Args:
             metadata: DataFrame containing sequencing metadata.
-            info: Dataset info dictionary (unused).
+            info:     Dataset info dictionary (unused).
 
         Returns:
             Updated metadata with corrected library_layout column.
@@ -454,7 +453,7 @@ class SubsetDataset:
         Args:
             dataset:    Dataset identifier.
             meta:       Combined metadata DataFrame.
-            ena_runs:   Dictionary of target genes to ENA run accessions.
+            ena_runs:   
 
         Raises:
             ValueError: If unable to determine valid primers for the target
@@ -674,16 +673,32 @@ class SubsetDataset:
             meta = self._infer_library_layout(meta, info)
 
             # Primer processing mode
-            # if self.config["pcr_primers_mode"] == "estimate":
-            #    self.auto(dataset, meta, ena_runs)
-            # else:
-            #    if self.config["validate_16s"]:
-            #        self.manual(dataset, info, meta)
-            #    else:
-            #        self.manual(dataset, info, meta)
             if self.config["pcr_primers_mode"] == "manual":
-                self.manual(dataset, info, meta, ena_runs)
+                if self.config["validate_16s"]:
+                    target_genes = self.config["validate_sequences"]["run_targets"]
 
+                    for gene in target_genes:
+                        runs = ena_runs.get(gene, [])
+                        runs = [run for run in runs if run in meta["run_accession"].values]
+            
+                        if not runs:
+                            continue
+            
+                        ena_runs = seq_analyze.validate_16s(
+                            metadata=meta,
+                            runs=runs,
+                            run_label=gene,
+                            n_runs=self.config["validate_sequences"]["n_runs"],
+                            output_dir=self.dirs.metadata_per_dataset / dataset,
+                            fastq_dir=self.dirs.seq_data_per_dataset
+                            / dataset
+                            / "sequence_validation",
+                        )
+                        logger.info(ena_runs)
+                        
+                self.manual(dataset, info, meta, ena_runs)
+            else:
+                self.auto(dataset, meta, ena_runs)
         except Exception as e:
             logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
             self.failed.append({"dataset": dataset, "error": str(e)})
@@ -786,13 +801,14 @@ class SubsetDataset:
         return meta
 
     def fetch_manual_meta(self, dataset: str) -> pd.DataFrame:
-        """Retrieve manually-collected metadata for a dataset.
+        """
+        Retrieve manually-collected metadata for a dataset.
 
         Args:
-            dataset: Dataset identifier
+            dataset: Dataset identifier.
 
         Returns:
-            DataFrame containing manual metadata. Empty DataFrame if none exists
+            DataFrame containing manual metadata. Empty DataFrame if none exists.
         """
         manual_metadata_tsv = (
             Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
