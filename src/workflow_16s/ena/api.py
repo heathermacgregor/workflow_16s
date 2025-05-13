@@ -398,7 +398,11 @@ class PooledSamplesProcessor:
 
         self.sample_file_map.clear()  # Reset mapping on each write
         
-        for site_id, records in self.site_records.items():
+        # Get all unique sample IDs from metadata
+        all_sample_ids = self.metadata['#SampleID'].unique()
+        
+        for site_id in all_sample_ids:
+            records = self.site_records.get(site_id, [])
             output_file = site_dir / f"{site_id}.fastq.gz"
             with gzip.open(output_file, "wt") as handle:
                 SeqIO.write(records, handle, "fastq")
@@ -451,17 +455,23 @@ class PooledSamplesProcessor:
 
     def process_all(self, raw_data_dir: Union[str, Path]):
         """Complete processing pipeline."""
-        # Step 1: Organize input files
+        # Check if all output files already exist
+        site_dir = self.output_dir / "site_files"
+        all_sample_ids = self.metadata['#SampleID'].unique()
+        all_files_exist = all((site_dir / f"{sample_id}.fastq.gz").exists() for sample_id in all_sample_ids)
+        
+        if all_files_exist:
+            logger.info("All output files already exist. Skipping processing.")
+            return
+
+        # Proceed with processing steps
         organized_dir = self.organize_input_files(raw_data_dir)
         
-        # Step 2: Process all organized files
         for fastq_file in tqdm(organized_dir.glob('*.fastq.gz'), 
                                desc="Processing pooled files..."):
             self.process_single_file(fastq_file)
         
-        # Step 3: Write output files
         self.write_site_files()
         
-        # Step 4: Cleanup temporary files
         shutil.rmtree(organized_dir)
         logger.info("Processing complete")
