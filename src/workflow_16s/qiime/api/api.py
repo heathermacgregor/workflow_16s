@@ -361,6 +361,7 @@ def denoise_sequences(
         if algorithm == "dada2":
             if "single" in library_layout.lower():
                 # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-single/
+                print('denoise_single')
                 func = denoise_single
                 args = {
                     "demultiplexed_seqs": seqs,
@@ -375,6 +376,7 @@ def denoise_sequences(
                 }
             else:
                 # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-paired/
+                print('denoise_paired')
                 func = denoise_paired
                 args = {
                     "demultiplexed_seqs": seqs,
@@ -391,6 +393,7 @@ def denoise_sequences(
                     "n_threads": n_threads,
                 }
         elif algorithm == "deblur":
+            print('denoise_16s')
             func = denoise_16S
             # https://docs.qiime2.org/2024.10/plugins/available/deblur/denoise-16S/
             args = {
@@ -403,6 +406,8 @@ def denoise_sequences(
         else:
             raise ValueError(f"Denoise algorithm '{algorithm}' not recognized.")
     elif "454" in platform:
+        """
+        print('denoise_16s')
         func = denoise_16S
         # https://docs.qiime2.org/2024.10/plugins/available/deblur/denoise-16S/
         args = {
@@ -413,6 +418,7 @@ def denoise_sequences(
             "jobs_to_start": n_threads,
         }
         """
+        print('denoise_pyro')
         func = denoise_pyro
         # https://docs.qiime2.org/2024.10/plugins/available/dada2/denoise-pyro/
         args = {
@@ -422,7 +428,7 @@ def denoise_sequences(
             "hashed_feature_ids": True,
             "n_threads": n_threads,
         }
-        """
+        
     else:
         raise ValueError(f"Platform '{platform}' not recognized.")
 
