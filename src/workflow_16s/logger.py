@@ -1,3 +1,5 @@
+# ===================================== IMPORTS ====================================== #
+
 from pathlib import Path
 from typing import Union
 
@@ -8,24 +10,25 @@ from logging.handlers import RotatingFileHandler
 
 from workflow_16s.utils.dir_utils import SubDirs
 
+# ==================================== FUNCTIONS ===================================== #
+
 def setup_logging(
     log_dir_path : Union[str, Path],
     log_filename : Union[str, None] = None,
-    max_file_size: int              = 5 * 1024 * 1024,  # 5 MB
-    backup_count : int              = 3
-):
-    """
-    Sets up logging for the entire package.
+    max_file_size: int = 5 * 1024 * 1024,  # 5 MB
+    backup_count : int = 3
+) -> logging.Logger:
+    """Sets up logging for the entire package.
     
     Args:
-        project_dir (Union[str, Path]): Root directory of the project.
-        log_dir (str): Subdirectory for storing logs.
-        log_filename (Union[str, None]): Log file name. Defaults to current datetime.
-        max_file_size (int): Maximum size of log files before rotating. Defaults to 5 MB.
-        backup_count (int): Number of backup log files to keep.
+        project_dir:   Root directory of the project
+        log_dir:       Subdirectory for storing logs
+        log_filename:  Log file name. Defaults to current datetime
+        max_file_size: Maximum size of log files before rotating. Defaults to 5 MB
+        backup_count:  Number of backup log files to keep
         
     Returns:
-        logging.Logger: Configured logger for the package.
+        logger:        Configured logger for the package
     """
     # Set log filename
     if log_filename is None:
@@ -43,13 +46,17 @@ def setup_logging(
         backupCount = backup_count
     )
     file_handler.setLevel(logging.DEBUG)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     file_handler.setFormatter(file_formatter)
 
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    console_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+    console_formatter = logging.Formatter(
+        '%(name)s - %(levelname)s - %(message)s'
+    )
     console_handler.setFormatter(console_formatter)
 
     # Attach handlers to the logger
