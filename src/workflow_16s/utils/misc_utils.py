@@ -2,9 +2,11 @@
 
 import requests
 
+DEFAULT_EMAIL = "macgregor@berkeley.edu"
+
 # ==================================== FUNCTIONS ===================================== #
 
-def get_citation(doi_url, style='apa'):
+def get_citation(doi_url, style: str = 'apa', email: str = DEFAULT_EMAIL):
     # Extract the DOI from the URL
     doi = doi_url.split('doi.org/')[-1].strip('/')
     
@@ -12,7 +14,7 @@ def get_citation(doi_url, style='apa'):
     url = f'https://doi.org/{doi}'
     headers = {
         'Accept': f'text/x-bibliography; style={style}',
-        'User-Agent': 'AcademicScript/1.0 (mailto:your@email.com)'  # Replace with your contact info
+        'User-Agent': f'AcademicScript/1.0 (mailto:{email})'  
     }
     
     try:
