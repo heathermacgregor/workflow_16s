@@ -1,5 +1,4 @@
-# =============================== IMPORTS =================================== #
-
+# ==================================== IMPORTS ======================================= #
 
 from typing import Dict, List, Optional, Set, Tuple, Any
 import re
@@ -13,20 +12,16 @@ logger = logging.getLogger("workflow_16s")
 
 from workflow_16s.ena.api import MetadataFetcher
 
-# ============================ GLOBAL VARIABLES ============================= #
-
+# ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_EMAIL = "macgregor@berkeley.edu"
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
-# ================================ FUNCTIONS ================================ #
-
+# ==================================== FUNCTIONS ===================================== #
 
 class ENAMetadata:
     """Process ENA datasets with metadata parsing and taxonomic analysis."""
-
     # Class constants
-
     COLUMNS_TO_DISPLAY = [
         "sequencing_tech",
         "library_type",
@@ -283,35 +278,29 @@ class ENAMetadata:
         self, metadata: pd.DataFrame, info: Dict
     ) -> pd.DataFrame:
         # Handle NaN/empty values in 'fastq_ftp'
-
         metadata["fastq_ftp"] = metadata["fastq_ftp"].fillna("")
 
         # Calculate URL counts safely
-
         url_counts = [
             len([url for url in ftp_urls.strip().split(";") if url.strip() != ""])
             for ftp_urls in metadata["fastq_ftp"]
         ]
 
         # Determine library layout
-
         library_layout = [
             "paired" if count == 2 else "single" if count == 1 else "unknown"
             for count in url_counts
         ]
 
         # Convert to a pandas Series for alignment
-
         new_layout = pd.Series(
             library_layout, index=metadata.index, name="library_layout"
         )
 
         # Check for mismatches using case-insensitive comparison
-
         original_lower = metadata["library_layout"].str.lower()
         if not original_lower.equals(new_layout):
             # Log differences
-
             mismatches = metadata[original_lower != new_layout]
             if len(mismatches) > 0:
                 logger.debug(
@@ -319,7 +308,6 @@ class ENAMetadata:
                     f"Differences:\n{mismatches[['library_layout']].join(new_layout.rename('new_layout'))}"
                 )
             # Update the DataFrame
-
             metadata["library_layout"] = new_layout
         return metadata
 
