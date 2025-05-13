@@ -85,7 +85,8 @@ def import_seqs_fasta(fasta_path: Union[str, Path]):
 # ============================== FILE FORMAT CONVERSION ============================== #
 
 def fastq_gz_to_fasta(fastq_file: Union[str, Path], n_sequences: int = 0) -> Path:
-    """Converts a FASTQ.GZ file to a FASTA file.
+    """
+    Converts a FASTQ.GZ file to a FASTA file.
 
     Args:
         fastq_file:  Path to the input FASTQ.GZ file.
@@ -119,8 +120,10 @@ def fastq_gz_to_fasta(fastq_file: Union[str, Path], n_sequences: int = 0) -> Pat
 # ===================================== SEQKIT ======================================= #
 
 class SeqKit:
-    """A class to handle parallel processing of FASTQ.GZ files using SeqKit 
-    (https://bioinf.shenwei.me/seqkit/)."""
+    """
+    A class to handle parallel processing of FASTQ.GZ files using SeqKit 
+    (https://bioinf.shenwei.me/seqkit/).
+    """
     
     def __init__(self, max_workers: int = None):
         self.max_workers = max_workers or max(1, self.DEFAULT_N_CORES // 2)
@@ -294,8 +297,9 @@ class SeqKit:
 # ===================================== CUTADAPT ===================================== #
 
 class CutAdapt:
-    """A class to handle parallel processing of FASTQ.GZ files using CutAdapt 
-    (DOI:10.14806/ej.17.1.200).
+    """
+    A class to handle parallel processing of FASTQ.GZ files using CutAdapt 
+    (https://doi.org/10.14806/ej.17.1.200).
     
     Attributes:
         fastq_dir:
@@ -465,14 +469,16 @@ class CutAdapt:
             TimeRemainingColumn(),
         ]
         samples = list(fastq_paths.keys())
-        logger.info(f"CutAdapt Parameters:\n"
-                    f"  [Forward Primer]          {self.primer_fwd}\n"
-                    f"  [Reverse Primer]          {self.primer_rev}\n"
-                    f"  [Trim Range]              {self.start_trim} - {self.end_trim}\n"
-                    f"  [Quality Cutoffs]         {self.start_q_cutoff} - {self.end_q_cutoff}\n"
-                    f"  [Min Sequence Length]     {self.min_seq_length}\n"
-                    f"  [Target Region]           {self.region}\n"
-                    f"  [Workers]                 {self.cores}")
+        logger.info(
+            f"CutAdapt Parameters:\n"
+            f"  [Forward Primer]          {self.primer_fwd}\n"
+            f"  [Reverse Primer]          {self.primer_rev}\n"
+            f"  [Trim Range]              {self.start_trim} - {self.end_trim}\n"
+            f"  [Quality Cutoffs]         {self.start_q_cutoff} - {self.end_q_cutoff}\n"
+            f"  [Min Sequence Length]     {self.min_seq_length}\n"
+            f"  [Target Region]           {self.region}\n"
+            f"  [Workers]                 {self.cores}"
+        )
 
         all_params = []
         trimmed_fastq_paths = {}
@@ -526,10 +532,10 @@ class CutAdapt:
         return trimmed_fastq_paths, df, proc_time
 
 
-# ====================================== FASTQC ====================================== #
+# ===================================== BASIC ====================================== #
 
 class BasicStats:
-
+    """"""
     def __init__(self, max_workers: int = None):
         self.max_workers = max_workers or max(1, DEFAULT_N_CORES // 2)
 
