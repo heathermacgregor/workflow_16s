@@ -9,13 +9,18 @@ import argparse
 
 # ================================== LOCAL IMPORTS =================================== #
 
-# Set environment variable and suppress warnings
-os.environ["TMPDIR"] = "/opt/tmp"
-warnings.filterwarnings("ignore")
-
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
-from per_dataset import Dataset, WorkflowRunner
+from per_dataset import PerDataset, WorkflowRunner
+
+RESET_TMPDIR = True
+
+# Reset tmp directory
+if RESET_TMPDIR:
+    os.environ["TMPDIR"] = "/opt/tmp"
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -26,11 +31,13 @@ def validate_file(path: str) -> Path:
         raise argparse.ArgumentTypeError(f"File {path} does not exist")
     return path
 
+
 def validate_dir(path: str) -> Path:
     """Validate/create a directory and return Path object."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
 
 def create_or_validate_dir(path):
     if not os.path.exists(path):
@@ -38,6 +45,7 @@ def create_or_validate_dir(path):
     elif not os.path.isdir(path):
         raise argparse.ArgumentTypeError(f"{path} exists but is not a directory.")
     return path
+
 
 def parse_library_layout(value):
     value = value.strip().lower()
@@ -50,6 +58,7 @@ def parse_library_layout(value):
             "Library layout must be one of: single, paired, s, p (case-insensitive)."
         )
 
+
 def parse_instrument_platform(value):
     value = value.strip().lower()
     valid_platforms = ['illumina', '454', 'iontorrent', 'oxfordnanopore']
@@ -58,7 +67,6 @@ def parse_instrument_platform(value):
             "Instrument platform must be one of: ILLUMINA, 454, IONTORRENT, OXFORDNANOPORE (case-insensitive)."
         )
     return valid_platforms[value]
-
 
 
 def main(args):
@@ -71,6 +79,7 @@ def main(args):
     except Exception as e:
         print(f"Workflow failed: {str(e)}")
         return 1
+
 
 if __name__ == "__main__":
     # Organize arguments into logical groups
