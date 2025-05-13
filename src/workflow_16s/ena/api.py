@@ -455,23 +455,32 @@ class PooledSamplesProcessor:
 
     def process_all(self, raw_data_dir: Union[str, Path]):
         """Complete processing pipeline."""
-        # Check if all output files already exist
         site_dir = self.output_dir / "site_files"
         all_sample_ids = self.metadata['#SampleID'].unique()
-        all_files_exist = all((site_dir / f"{sample_id}.fastq.gz").exists() for sample_id in all_sample_ids)
         
+        # Check existing files AND populate sample_file_map
+        self.sample_file_map.clear()
+        all_files_exist = True
+        for sample_id in all_sample_ids:
+            output_file = site_dir / f"{sample_id}.fastq.gz"
+            if output_file.exists():
+                self.sample_file_map[sample_id] = output_file
+            else:
+                all_files_exist = False
+    
         if all_files_exist:
             logger.info("All output files already exist. Skipping processing.")
-            return
-
-        # Proceed with processing steps
+            return self.sample_file_map  # Return pre-populated map
+    
+        # If we get here, proceed with full processing
         organized_dir = self.organize_input_files(raw_data_dir)
         
         for fastq_file in tqdm(organized_dir.glob('*.fastq.gz'), 
-                               desc="Processing pooled files..."):
+                              desc="Processing pooled files..."):
             self.process_single_file(fastq_file)
         
-        self.write_site_files()
-        
+        self.write_site_files()  # This will update sample_file_map
         shutil.rmtree(organized_dir)
+        
         logger.info("Processing complete")
+        return self.sample_file_map  # Return map from write_site_files()
