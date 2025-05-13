@@ -11,9 +11,13 @@ from qiime2 import Artifact
 # ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_N = 15
+RESET_TMPDIR = True
 
-# Set environment variable and suppress warnings
-os.environ["TMPDIR"] = "/opt/tmp"
+# Set environment variable
+if RESET_TMPDIR:
+    os.environ["TMPDIR"] = "/opt/tmp"
+
+# Suppress warnings
 warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
@@ -23,12 +27,13 @@ def output_files_exist(
     prefixes: List[str], 
     extension: str = "qza"
 ) -> bool:
-    """Check if all expected output files exist in a directory.
+    """
+    Check if all expected output files exist in a directory.
     
     Args:
-        file_dir: Directory containing the files.
-        prefixes: List of file prefixes to check.
-        extension: File extension to check for. Defaults to "qza".
+        file_dir:  Directory containing the files.
+        prefixes:  List of file prefixes to check.
+        extension: File extension to check for. Defaults to 'qza'.
 
     Returns:
         True if all files exist, False otherwise.
@@ -39,8 +44,8 @@ def output_files_exist(
         for prefix in prefixes
         if not (file_dir / f"{prefix}.{extension}").exists()
     ]
-
     return not missing_files
+
 
 # Print context when importing and exporting QIIME artifacts
 def construct_file_path(
@@ -58,7 +63,7 @@ def load_with_print(
     suffix: str = "qza", 
     n: int = DEFAULT_N
 ) -> Artifact:
-    """Constructs a file path and loads a QIIME 2 artifact from it."""
+    """Constructs a file path and loads a QIIME2 artifact from it."""
     file_path = str(construct_file_path(file_dir, prefix, suffix))
     artifact = Artifact.load(file_path)
     print(f"{'  📥 Loaded from':{n}.{n}}: {file_path}")
@@ -72,7 +77,16 @@ def save_with_print(
     suffix: str = "qza",
     n: int = DEFAULT_N,
 ) -> None:
-    """"""
+    """
+    Saves a QIIME2 Artifact to a file and prints a confirmation message.
+
+    Args:
+        artifact:  QIIME2 artifact to save.
+        file_dir:  Directory to save the artifact in.
+        prefix:    Filename prefix for the artifact.
+        suffix:    File extension to use. Defaults to 'qza'.
+        n:         Padding width for console output alignment. Defaults to DEFAULT_N.
+    """
     file_path = str(construct_file_path(file_dir, prefix, suffix))
     artifact.save(file_path)
     print(f"{'  📤 Saved to':{n}.{n}}: {file_path}")
@@ -85,7 +99,17 @@ def export_with_print(
     suffix: str = "qza",
     n: int = DEFAULT_N,
 ) -> None:
-    """"""
+    """
+    Exports a QIIME2 Artifact's data to a directory and prints confirmation.
+    Creates target directory if needed. Exported data format depends on artifact type.
+    
+    Args:
+        artifact:  QIIME2 artifact to export.
+        file_dir:  Base directory for exported data.
+        prefix:    Directory name prefix for exported data.
+        suffix:    Unused in path but required for filename parsing. Defaults to 'qza'.
+        n:         Padding width for console output alignment. Defaults to DEFAULT_N.
+    """
     file_path = construct_file_path(file_dir, prefix, suffix)
     dir_path = str(file_path).strip(suffix).strip(".")
     Path(dir_path).mkdir(parents=True, exist_ok=True)
@@ -100,6 +124,16 @@ def save_and_export_with_print(
     suffix: str = "qza",
     n: int = DEFAULT_N,
 ) -> None:
-    """"""
+    """
+    Convenience function that both saves artifact and exports its data with confirmation.
+    Combines save_with_print() and export_with_print() functionality.
+    
+    Args:
+        artifact:  QIIME2 artifact to process.
+        file_dir:  Directory for saved artifact and exported data.
+        prefix:    Prefix for artifact filename and export directory.
+        suffix:    File extension for saved artifact. Defaults to 'qza'.
+        n:         Padding width for console output alignment. Defaults to DEFAULT_N.
+    """
     save_with_print(artifact, file_dir, prefix, suffix, n)
     export_with_print(artifact, file_dir, prefix, suffix, n)
