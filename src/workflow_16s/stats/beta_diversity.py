@@ -1,24 +1,28 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import warnings
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+
+# Third-Party Imports
 import numpy as np
 import pandas as pd
-
 from biom import Table
-
-from scipy.stats import mannwhitneyu, kruskal, spearmanr, ttest_ind
 from scipy.spatial.distance import pdist, squareform
-
+from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import PCoAResults, pcoa as PCoA
-
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 from sklearn.manifold import TSNE
-
+from sklearn.preprocessing import StandardScaler
 from umap import UMAP
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ================================= GLOBAL VARIABLES ================================= #
 
