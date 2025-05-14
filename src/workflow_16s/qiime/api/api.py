@@ -1,31 +1,27 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import io
+import logging
 import os
 import sys
-from pathlib import Path
-import logging
 import warnings
-import io
-
 from contextlib import contextmanager, redirect_stdout
+from pathlib import Path
 from typing import Any, Generator, List, Tuple, Union
 
-import pandas as pd
+# Third-Party Imports
 from Bio.Seq import Seq
-
+import pandas as pd
 import qiime2
 from qiime2 import Artifact
 from qiime2.plugins import demux, taxa
-from qiime2.plugins.cutadapt.methods import trim_single, trim_paired
-from qiime2.plugins.demux.visualizers import summarize as summarize_demux
-from qiime2.plugins.dada2.methods import (
-    denoise_pyro, denoise_single, denoise_paired
-)
+from qiime2.plugins.cutadapt.methods import trim_paired, trim_single
+from qiime2.plugins.dada2.methods import denoise_paired, denoise_pyro, denoise_single
 from qiime2.plugins.deblur.methods import denoise_16S
+from qiime2.plugins.demux.visualizers import summarize as summarize_demux
 from qiime2.plugins.feature_classifier.methods import classify_sklearn
-from qiime2.plugins.feature_classifier.pipelines import (
-    classify_consensus_blast
-)
+from qiime2.plugins.feature_classifier.pipelines import classify_consensus_blast
 from qiime2.plugins.phylogeny.pipelines import align_to_tree_mafft_fasttree
 
 # ================================== LOCAL IMPORTS =================================== #
