@@ -42,11 +42,13 @@ from api.api_io import (
 
 # ================================= DEFAULT VALUES =================================== #
 
-RESET_TMPDIR = True
+os.environ["TMPDIR"] = "/opt/tmp"
+
+#RESET_TMPDIR = True
 
 # Reset tmp directory
-if RESET_TMPDIR:
-    os.environ["TMPDIR"] = "/opt/tmp"
+#if RESET_TMPDIR:
+#    os.environ["TMPDIR"] = "/opt/tmp"
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
