@@ -34,7 +34,7 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
-    RemainingTimeColumn,
+    TimeRemainingColumn,
     SpinnerColumn,
     TextColumn,
     TimeElapsedColumn,
