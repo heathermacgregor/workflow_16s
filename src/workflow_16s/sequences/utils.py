@@ -1,50 +1,64 @@
 # ===================================== IMPORTS ====================================== #
 
-import time
-import re
-import os, subprocess
+# Standard Library Imports
+import gzip
 import io
-from io import StringIO, TextIOWrapper
-from Bio import SeqIO
-from Bio.Seq import Seq
-import gzip, tarfile, zipfile
-import shutil
-import logging
-
 import itertools
-from collections import defaultdict, Counter
-
+import logging
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import time
+import warnings
+import zipfile
+from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import StringIO, TextIOWrapper
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# Third-Party Imports
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import LogNorm
-import seaborn as sns
 import plotly.graph_objects as go
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from tqdm import tqdm
+import seaborn as sns
+from Bio import SeqIO
+from Bio.Seq import Seq
+from matplotlib.colors import LogNorm
 from rich.progress import (
-    track,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
     BarColumn,
     MofNCompleteColumn,
+    Progress,
+    RemainingTimeColumn,
+    SpinnerColumn,
+    TextColumn,
     TimeElapsedColumn,
-    TimeRemainingColumn,
+    track,
 )
+from tqdm import tqdm
 
 # ================================== LOCAL IMPORTS =================================== #
 
-import workflow_16s.custom_tmp_config
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
 from workflow_16s.figures.fastqc.fastqc import FastQCPlots
-logger = logging.getLogger('workflow_16s')
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config  
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Initialize logger
+logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
