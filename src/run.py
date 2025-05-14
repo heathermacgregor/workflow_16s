@@ -352,14 +352,15 @@ def process_sequences(
 # =================================== MAIN WORKFLOW ================================== #
 
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
-    """Orchestrate entire analysis workflow."""
-    per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
-    
+    """Orchestrate entire analysis workflow."""    
     try:
         cfg = get_config(config_path)
+        per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
+        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+        
         project_dir = dir_utils.SubDirs(cfg["project_dir"])
         logger = setup_logging(project_dir.logs)
+        
         datasets = file_utils.load_datasets_list(cfg["dataset_list"])
         datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
         try:
