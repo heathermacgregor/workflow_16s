@@ -13,6 +13,8 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from per_dataset import Dataset, WorkflowRunner
 
+os.environ["TMPDIR"] = "/opt/tmp"
+
 RESET_TMPDIR = True
 
 # Reset tmp directory
