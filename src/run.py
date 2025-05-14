@@ -2,6 +2,9 @@
 16S rRNA Analysis Pipeline - Full Implementation
 Comprehensive workflow for microbial community analysis from raw data to processed results
 """
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
 
 # ===================================== IMPORTS ====================================== #
 
@@ -45,20 +48,11 @@ from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
 
 # ================================= DEFAULT VALUES =================================== #
 
-import os
+# Initialize logging
+logger = logging.getLogger("workflow_16s")
 
-# Set the environment variable BEFORE importing tempfile
-os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
-# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
-
-# Create the directory if it doesn't exist
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
-
-# Now import tempfile (order matters!)
-import tempfile
-
-# Test if it worked
-print(tempfile.gettempdir())  # Should output "/opt/tmp"
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 DEFAULT_CONFIG = (
     Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
@@ -73,12 +67,6 @@ DEFAULT_CLASSIFIER = "silva-138-99-515-806"
 DEFAULT_N = 20
 DEFAULT_MAX_WORKERS_SEQKIT = 8
 ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
-
-# Initialize logging
-logger = logging.getLogger("workflow_16s")
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -172,12 +160,23 @@ def execute_per_dataset_qiime_workflow(
         command.append("--trim_sequences")
 
     try:
-        logger.info(f"\nExecuting QIIME command: {str(' '.join(command)).replace(" --", " \\\n--")}")
-        result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        command_str = str(' '.join(command)).replace(" --", " \\\n--")
+        logger.info(
+            f"\nExecuting QIIME command: {command_str}"
+        )
+        result = subprocess.run(
+            command, 
+            check=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True
+        )
         logger.debug("QIIME STDOUT:\n%s", result.stdout)
         logger.debug("QIIME STDERR:\n%s", result.stderr)
     except subprocess.CalledProcessError as e:
-        error_msg = (f"QIIME execution failed with code {e.returncode}:\nCommand: {e.cmd}\nError output:\n{e.stderr}")
+        error_msg = (
+            f"QIIME execution failed with code {e.returncode}:\n"
+            f"Command: {e.cmd}\nError output:\n{e.stderr}")
         logger.error(error_msg)
         raise RuntimeError("QIIME workflow failure") from e
 
@@ -191,7 +190,9 @@ def execute_per_dataset_qiime_workflow(
     ]
     missing_outputs = file_utils.missing_output_files(expected_outputs)
     if missing_outputs:
-        raise RuntimeError(f"Missing required QIIME outputs: {', '.join(map(str, missing_outputs))}")
+        raise RuntimeError(
+            f"Missing required QIIME outputs: {', '.join(map(str, missing_outputs))}"
+        )
     return {
         "metadata": metadata_path,
         "manifest": manifest_path,
@@ -246,10 +247,13 @@ def process_sequences(
         ).run_pipeline()
 
     if cfg["run_seqkit"]:
-        raw_stats_seqkit = SeqKit(max_workers=DEFAULT_MAX_WORKERS_SEQKIT).analyze_samples(raw_seqs_paths)
+        raw_stats_seqkit = SeqKit(
+            max_workers=DEFAULT_MAX_WORKERS_SEQKIT
+        ).analyze_samples(raw_seqs_paths)
         stats = raw_stats_seqkit["overall"]
         output = (
-            f"\n=== Summary ===\n{'Total Samples'.ljust(DEFAULT_N)}: {stats['total_samples']}\n"
+            f"\n=== Summary ===\n"
+            f"{'Total Samples'.ljust(DEFAULT_N)}: {stats['total_samples']}\n"
             f"{'Total Files'.ljust(DEFAULT_N)}: {stats['total_files']}\n"
             f"{'Total Sequences'.ljust(DEFAULT_N)}: {stats['total_sequences']:,}\n"
             f"{'Total Bases'.ljust(DEFAULT_N)}: {stats['total_bases']:,}\n\n"
@@ -309,7 +313,8 @@ def process_sequences(
 
     if cfg["run_fastqc"] and cfg["run_cutadapt"]:
         FastQC(
-            fastq_paths=processed_paths, output_dir=subset_dirs["trimmed_seqs"]
+            fastq_paths=processed_paths, 
+            output_dir=subset_dirs["trimmed_seqs"]
         ).run_pipeline()
 
     if cfg["run_seqkit"] and cfg["run_cutadapt"]:
@@ -375,14 +380,21 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     "metadata": metadata_path,
                                     "manifest": manifest_path,
                                     "table": subset_dirs["qiime"] / "table" / "feature-table.biom",
-                                    "rep_seqs": subset_dirs["qiime"] / "rep-seqs" / "dna-sequences.fasta",
-                                    "taxonomy": subset_dirs["qiime"] / classifier / "taxonomy" / "taxonomy.tsv",
-                                    "table_6": subset_dirs["qiime"] / "table_6" / "feature-table.biom",
+                                    "rep_seqs": subset_dirs["qiime"] / "rep-seqs" 
+                                    / "dna-sequences.fasta",
+                                    "taxonomy": subset_dirs["qiime"] / classifier / "taxonomy" 
+                                    / "taxonomy.tsv",
+                                    "table_6": subset_dirs["qiime"] / "table_6" 
+                                    / "feature-table.biom",
                                 }
                                 if all(p.exists() for p in required_paths.values()):
                                     success_qiime_outputs[subset_name] = required_paths
                                     success_subsets.append(subset_name)
-                                    logger.info(f"⏭️ Skipping processing for {subset_name.replace('.', '/')} - existing outputs found")
+                                    logger.info(
+                                        f" ⏭️ Skipping processing for "
+                                        f"{subset_name.replace('.', '/')}"
+                                        f"- existing outputs found"
+                                    )
                                     continue
                                     
                             seq_paths, stats = process_sequences(cfg, subset_dirs, subset, logger)
@@ -391,7 +403,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                             file_utils.write_manifest_tsv(seq_paths, manifest_path)
 
                             qiime_outputs = execute_per_dataset_qiime_workflow(
-                                subset_dirs["qiime"], metadata_path, manifest_path, subset, cfg, seq_paths, logger
+                                subset_dirs["qiime"], metadata_path, manifest_path, 
+                                subset, cfg, seq_paths, logger
                             )
 
                             success_qiime_outputs[subset["dataset"]] = qiime_outputs
@@ -402,16 +415,27 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     dir_path = subset_dirs[dir_type]
                                     if dir_path.exists():
                                         for fq in dir_path.glob("*.fastq.gz"):
-                                            try: fq.unlink(missing_ok=True)
-                                            except Exception as e: logger.warning(f"Error deleting {fq}: {str(e)}")
-                                logger.info(f"Cleaned up intermediate files for {subset['dataset']}")
+                                            try: 
+                                                fq.unlink(missing_ok=True)
+                                            except Exception as e: 
+                                                logger.warning(
+                                                    f"Error deleting {fq}: {str(e)}"
+                                                )
+                                logger.info(
+                                    f"Cleaned up intermediate files for {subset['dataset']}"
+                                )
 
                         except Exception as subset_error:
-                            logger.error(f"❌ Failed processing subset {subset['dataset']}: {str(subset_error)}")
+                            logger.error(
+                                f"❌ Failed processing subset {subset['dataset']}: "
+                                f"{str(subset_error)}"
+                            )
                             failed_subsets.append((subset["dataset"], str(subset_error)))
 
                 except Exception as dataset_error:
-                    logger.error(f"❌ Failed processing dataset {dataset}: {str(dataset_error)}")
+                    logger.error(
+                        f"❌ Failed processing dataset {dataset}: {str(dataset_error)}"
+                    )
                     failed_subsets.append((dataset, str(dataset_error)))
 
             logger.info(
@@ -423,7 +447,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 logger.info("ℹ️ Failure details:")
                 for dataset, error in failed_subsets: logger.info(f"- {dataset}: {error}")
 
-            metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) for i in success_qiime_outputs.values()]
+            metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
+                            for i in success_qiime_outputs.values()]
             metadata_df = pd.concat(metadata_dfs)
             # Sort the DataFrame columns alphabetically
             metadata_df = metadata_df.sort_index(axis=1)
@@ -435,14 +460,17 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             #for col in metadata_df.columns:
             #    logger.info(f"{col}: {metadata_df[col].value_counts()}")
 
-            table_dfs = [file_utils.import_features_biom(i['table_6']) for i in success_qiime_outputs.values()]
+            table_dfs = [file_utils.import_features_biom(i['table_6']) 
+                         for i in success_qiime_outputs.values()]
             table_df = pd.concat(table_dfs)
             logger.info(f"Feature table shape: {table_df.shape}")
             #for df in table_dfs: 
             #    logger.info(f"Feature table shape: {df.shape}")
 
         except Exception as global_error:
-            logger.critical(f"❌ Fatal pipeline error: {str(global_error)}", exc_info=True)
+            logger.critical(
+                f"❌ Fatal pipeline error: {str(global_error)}", exc_info=True
+            )
             raise
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
