@@ -31,6 +31,7 @@ from tqdm import tqdm
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
+import workflow_16s.custom_tmp_config
 
 logger = logging.getLogger('workflow_16s')
 
