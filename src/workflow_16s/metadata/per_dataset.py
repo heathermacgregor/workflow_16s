@@ -218,15 +218,15 @@ class SubsetDataset:
     modes.
 
     Features:
-        - Automated primer estimation and metadata validation
-        - Manual metadata and primer configuration
-        - Error tracking and success/failure reporting
+        - Automated primer estimation and metadata validation.
+        - Manual metadata and primer configuration.
+        - Error tracking and success/failure reporting.
 
     Attributes:
-        config:  Configuration dictionary for processing parameters
-        dirs:    Subdirectories structure handler
-        success: List of successfully processed datasets with parameters
-        failed:  List of failed datasets with error information
+        config:  Configuration dictionary for processing parameters.
+        dirs:    Subdirectories structure handler.
+        success: List of successfully processed datasets with parameters.
+        failed:  List of failed datasets with error information.
     """
 
     ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
@@ -378,9 +378,13 @@ class SubsetDataset:
         if not original_lower.equals(new_layout.str.lower()):
             mismatches = metadata[original_lower != new_layout.str.lower()]
             if not mismatches.empty:
+                mismatches_report = mismatches[['library_layout']].join(
+                    new_layout.rename('new_layout')
+                )
                 logger.debug(
                     f"Library layout mismatch in {len(mismatches)} rows.\n"
-                    f"Differences:\n{mismatches[['library_layout']].join(new_layout.rename('new_layout'))}"
+                    f"Differences:\n"
+                    f"{mismatches_report}"
                 )
             metadata["library_layout"] = new_layout
         return metadata
@@ -405,7 +409,9 @@ class SubsetDataset:
                 citation = misc_utils.get_citation(url, style="apa")
                 citations.append(citation if citation else url)
             except Exception as e:
-                logger.warning(f"Failed to process citation URL {url}: {e}")
+                logger.warning(
+                    f"Failed to process citation URL {url}: {e}"
+                )
                 citations.append(url)
         return citations
 
@@ -538,11 +544,8 @@ class SubsetDataset:
             self.success.append(params)
 
     def manual(
-        self,
-        dataset: str,
-        info: Dict[str, Any],
-        meta: pd.DataFrame,
-        ena_runs: pd.DataFrame,
+        self, dataset: str, info: Dict[str, Any], 
+        meta: pd.DataFrame, ena_runs: pd.DataFrame,
     ) -> None:
         """
         Process dataset with manually provided primers and metadata.
@@ -570,7 +573,9 @@ class SubsetDataset:
             group_columns.append("target_subfragment")
 
         # Handle varying primer sequences in metadata
-        if {"pcr_primer_fwd_seq", "pcr_primer_rev_seq"}.issubset(meta.columns):
+        if {"pcr_primer_fwd_seq", "pcr_primer_rev_seq"}.issubset(
+            meta.columns
+        ):
             if (
                 meta["pcr_primer_fwd_seq"].nunique() > 1
                 or meta["pcr_primer_rev_seq"].nunique() > 1
@@ -635,23 +640,35 @@ class SubsetDataset:
             # Attempt to get properly formatted citations for associated publications
             citations = self._process_citations(info)
 
-            # Format dataset information and log it
+            # Format and log dataset information
+            dataset = dataset.upper()
+            dataset_type = info.get('dataset_type', '').upper()
+            platform = info.get('instrument_platform', '').upper()
+            model = info.get('instrument_model', '')
+            layout = info.get('library_layout', '').upper()
+            target = f"{info.get('target_gene', '')} {info.get('target_subfragment', '')}".strip()
+            fwd_primer = f"{info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})"
+            rev_primer = f"{info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})"
+            publications = citations or ['None']
+            
+            # Build formatted lines
+            WIDTH = 20
             dataset_info = [
-                f"\n",
-                f"[Dataset]             {dataset.upper()}",
-                f"[Type]                {info.get('dataset_type', '').upper()}",
-                f"[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})",
-                f"[Library Layout]      {info.get('library_layout', '').upper()}",
-                f"[Target]              {info.get('target_gene', '')} {info.get('target_subfragment', '')}",
-                f"[Primers]             {info.get('pcr_primer_fwd', '')} ({info.get('pcr_primer_fwd_seq', '')})",
-                f"                      {info.get('pcr_primer_rev', '')} ({info.get('pcr_primer_rev_seq', '')})",
-                f"[Publications]        {citations[0] if citations else 'None'}",
+                f"\n{'[Dataset]':<{WIDTH}}{dataset}",
+                f"{'[Type]':<{WIDTH}}{dataset_type}",
+                f"{'[Sequencing Platform]':<{WIDTH}}{platform} ({model})" if platform or model else '',
+                f"{'[Library Layout]':<{WIDTH}}{layout}",
+                f"{'[Target]':<{WIDTH}}{target}",
+                f"{'[Primers]':<{WIDTH}}{fwd_primer}",
+                f"{'':<{WIDTH}}{rev_primer}",
+                f"{'[Publications]':<{WIDTH}}{publications[0]}"
             ]
-            if len(citations) > 1:
-                dataset_info.extend(
-                    f"                      {cite}" for cite in citations[1:]
-                )
-            logger.info("\n".join(dataset_info))
+            
+            # Add additional citations
+            dataset_info.extend(f"{'':<{WIDTH}}{cite}" for cite in publications[1:])
+            
+            # Remove any empty lines and log
+            logger.info('\n'.join(line for line in dataset_info if line))
 
             # ENA metadata retrieval
             # If 'dataset_type' is 'ENA' or the dataset ID matches the ENA pattern
@@ -699,7 +716,8 @@ class SubsetDataset:
 
                     for gene in target_genes:
                         runs = ena_runs.get(gene, [])
-                        runs = [run for run in runs if run in meta["run_accession"].values]
+                        runs = [run 
+                                for run in runs if run in meta["run_accession"].values]
             
                         if not runs:
                             continue
@@ -709,7 +727,8 @@ class SubsetDataset:
                             runs=runs,
                             run_label=gene,
                             n_runs=self.config["validate_sequences"]["n_runs"],
-                            output_dir=self.dirs.metadata_per_dataset / dataset,
+                            output_dir=self.dirs.metadata_per_dataset 
+                            / dataset,
                             fastq_dir=self.dirs.seq_data_per_dataset
                             / dataset
                             / "sequence_validation",
@@ -720,7 +739,9 @@ class SubsetDataset:
             else:
                 self.auto(dataset, meta, ena_runs)
         except Exception as e:
-            logger.error(f"Dataset {dataset} failed: {str(e)}", exc_info=True)
+            logger.error(
+                f"Dataset {dataset} failed: {str(e)}", exc_info=True
+            )
             self.failed.append({"dataset": dataset, "error": str(e)})
 
     def _combine_metadata(
@@ -747,7 +768,8 @@ class SubsetDataset:
         """
         if not ena_meta.empty and info.get("dataset_type") != "ENA":
             raise ValueError(
-                f"ENA metadata present for non-ENA dataset type: {info.get('dataset_type')}"
+                f"ENA metadata present for non-ENA dataset type: "
+                f"{info.get('dataset_type')}"
             )
         if ena_meta.empty and not manual_meta.empty:
             return manual_meta
@@ -788,7 +810,8 @@ class SubsetDataset:
         for df, df_type in [(ena_meta, "ENA"), (manual_meta, "manual")]:
             if "run_accession" not in df.columns:
                 raise ValueError(
-                    f"{df_type} metadata for {dataset} missing 'run_accession' column"
+                    f"{df_type} metadata for {dataset} missing "
+                    f"'run_accession' column"
                 )
 
         # Resolve column conflicts
@@ -828,7 +851,8 @@ class SubsetDataset:
             dataset: Dataset identifier.
 
         Returns:
-            DataFrame containing manual metadata. Empty DataFrame if none exists.
+            DataFrame containing manual metadata. Empty DataFrame 
+            if none exists.
         """
         manual_metadata_tsv = (
             Path(self.config["manual_metadata_dir"]) / f"{dataset}.tsv"
