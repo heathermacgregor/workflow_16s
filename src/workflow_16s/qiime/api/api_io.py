@@ -15,6 +15,8 @@ from qiime2 import Artifact
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir) 
+project_root = str(Path(__file__).resolve().parent.parent.parent) # Adjust .parent count
+sys.path.append(project_root)
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
