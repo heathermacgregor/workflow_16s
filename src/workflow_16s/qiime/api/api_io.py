@@ -1,28 +1,33 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
 import os
+import sys
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
-import warnings
 
+# Third-Party Imports
 import qiime2
 from qiime2 import Artifact
 
 # ================================== LOCAL IMPORTS =================================== #
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(parent_dir)
+sys.path.append(parent_dir) 
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
 import workflow_16s.custom_tmp_config
 
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_N = 15
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
+
+# ================================= DEFAULT VALUES =================================== #
+
+DEFAULT_N = 15
 
 # ==================================== FUNCTIONS ===================================== #
 
