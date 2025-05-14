@@ -38,7 +38,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s import ena
 from workflow_16s.config import get_config
-from workflow_16s.logger import setup_logging
+from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
 from workflow_16s.utils import dir_utils, file_utils, misc_utils
@@ -47,13 +47,12 @@ from workflow_16s.utils import dir_utils, file_utils, misc_utils
 
 import workflow_16s.custom_tmp_config
 
-# ================================= DEFAULT VALUES =================================== #
-
-# Initialize logging
-logger = logging.getLogger("workflow_16s")
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
+
+# ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_CONFIG = (
     Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
