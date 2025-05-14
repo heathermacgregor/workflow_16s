@@ -499,7 +499,8 @@ class SubsetDataset:
             rev_primer = primers["rev"]["seq"]
         except KeyError:
             raise ValueError(
-                f"No primer sequences available for target subfragment '{target_subfragment}'"
+                f"No primer sequences available for target subfragment "
+                f"'{target_subfragment}'"
             )
 
         group_columns = ["library_layout", "instrument_platform"]
@@ -619,6 +620,7 @@ class SubsetDataset:
 
             # Format dataset information and log it
             dataset_info = [
+                f"\n",
                 f"[Dataset]             {dataset.upper()}",
                 f"[Type]                {info.get('dataset_type', '').upper()}",
                 f"[Sequencing Platform] {info.get('instrument_platform', '').upper()} ({info.get('instrument_model', '')})",
