@@ -8,27 +8,21 @@ import warnings
 import qiime2
 from qiime2 import Artifact
 
+# ================================== LOCAL IMPORTS =================================== #
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
+
 # ================================= DEFAULT VALUES =================================== #
 
-import os
-
-# Set the environment variable BEFORE importing tempfile
-os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
-# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
-
-# Create the directory if it doesn't exist
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
-
-# Now import tempfile (order matters!)
-import tempfile
-
-# Test if it worked
-print(tempfile.gettempdir())  # Should output "/opt/tmp"
+DEFAULT_N = 15
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
-
-DEFAULT_N = 15
 
 # ==================================== FUNCTIONS ===================================== #
 
