@@ -36,6 +36,9 @@ from api.api_io import (
     save_with_print,
 )
 
+project_root = str(Path(__file__).resolve().parent.parent.parent) # Adjust .parent count
+sys.path.append(project_root)
+
 # ================================ CUSTOM TMP CONFIG ================================= #
 
 import workflow_16s.custom_tmp_config
