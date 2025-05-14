@@ -1,15 +1,15 @@
 # ===================================== IMPORTS ====================================== #
 
-# Standard library imports
+# Standard Library Imports
 from pathlib import Path
 from typing import Any, Bool, Dict, List, Tuple, Union
 
-# Third-party imports
+# Third-Party Imports
+from biom import Table
 import numpy as np
 import pandas as pd
-from biom import Table
-from scipy import stats
 from scipy.spatial.distance import braycurtis, pdist, squareform
+from scipy import stats
 from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
@@ -44,9 +44,9 @@ def table_to_dataframe(
     # Convert table to DataFrame 
     if isinstance(table, Table):
         table = table.to_dataframe(dense=True) # features x samples
-        table = table.T # samples x features
+        table = table.T                        # samples  x features
     if isinstance(table, Dict):
-        table = pd.DataFrame(table) # samples x features
+        table = pd.DataFrame(table)            # samples  x features
 
     return table
 
