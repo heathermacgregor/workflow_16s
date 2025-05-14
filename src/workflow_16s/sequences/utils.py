@@ -42,8 +42,7 @@ from rich.progress import (
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.dir_utils import create_dir
-
+import workflow_16s.custom_tmp_config
 from workflow_16s.figures.fastqc.fastqc import FastQCPlots
 logger = logging.getLogger('workflow_16s')
 
