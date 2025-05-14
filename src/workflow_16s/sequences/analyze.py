@@ -1,44 +1,49 @@
-"""
-16S rRNA Analysis Workflow (Optimized)
-
-This module provides optimized tools for analyzing 16S rRNA sequencing data.
-Key optimizations include precompiled regex patterns, efficient FASTQ parsing,
-reduced subprocess calls, and improved resource management.
-"""
-
 # ===================================== IMPORTS ====================================== #
 
-import os
-import re
+# Standard Library Imports
 import gzip
+import logging
+import os
 import random
-
-from pathlib import Path
-from typing import Dict, List, Tuple, Union, Optional
+import re
+import subprocess
+import sys
+import warnings
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
+# Third-Party Imports
 import numpy as np
 import pandas as pd
-import logging
-
 from Bio import SeqIO
 from Bio.Seq import Seq
-
-import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 # ================================== LOCAL IMPORTS =================================== #
 
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
 from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
 import workflow_16s.custom_tmp_config
 
-logger = logging.getLogger('workflow_16s')
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Initialize logger
+logger = logging.getLogger("workflow_16s")
 
 # ==================================== CLASSES ====================================== #
 
 class PrimerChecker:
-    """Checks primer presence with precompiled regex patterns and efficient FASTQ parsing."""
+    """Checks primer presence with precompiled regex patterns and efficient FASTQ 
+    parsing."""
     
     def __init__(
         self,
@@ -66,9 +71,14 @@ class PrimerChecker:
             reverse[region] = self._create_primer_pattern(rev_comp)
         return forward, reverse
 
-    def _analyze_multiple_runs(self, dataset: Dict[str, List[Union[str, Path]]]) -> pd.DataFrame:
+    def _analyze_multiple_runs(
+        self, dataset: Dict[str, List[Union[str, Path]]]
+    ) -> pd.DataFrame:
         """Concurrent analysis of multiple sequencing runs."""
-        logger.info(f"Starting primer analysis for {len(dataset)} runs with {self.num_workers} workers...")
+        logger.info(
+            f"Starting primer analysis for {len(dataset)} runs "
+            f"with {self.num_workers} workers..."
+        )
         results = []
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             futures = {
@@ -92,7 +102,9 @@ class PrimerChecker:
         
         return pd.DataFrame.from_dict(dict(results), orient='index')
 
-    def _analyze_single_run(self, run_id: str, files: List[Union[str, Path]]) -> Dict[str, float]:
+    def _analyze_single_run(
+        self, run_id: str, files: List[Union[str, Path]]
+    ) -> Dict[str, float]:
         """Analyze a single sequencing run with precompiled patterns."""
         logger.info(f"Processing run {run_id}")
         primer_results = {}
@@ -121,7 +133,9 @@ class PrimerChecker:
                 rev_rate = rev_futures[region].result()
                 avg_rate = (fwd_rate + rev_rate) / 2
                 primer_results[f"{region}_primer_rate"] = avg_rate
-                logger.debug(f"{region} - Fwd: {fwd_rate*100:.1f}%, Rev: {rev_rate*100:.1f}%")
+                logger.debug(
+                    f"{region} - Fwd: {fwd_rate*100:.1f}%, Rev: {rev_rate*100:.1f}%"
+                )
                 
         return primer_results
 
