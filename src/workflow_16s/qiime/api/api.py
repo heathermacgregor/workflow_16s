@@ -30,15 +30,20 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from api.api_io import (
     construct_file_path,
-    output_files_exist,
     load_with_print,
-    save_with_print,
+    output_files_exist,
     save_and_export_with_print,
+    save_with_print,
 )
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
 import workflow_16s.custom_tmp_config
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ================================= DEFAULT VALUES =================================== #
 
