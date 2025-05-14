@@ -15,24 +15,6 @@ from qiime2 import Artifact, Metadata
 
 # ================================== LOCAL IMPORTS =================================== #
 
-import os
-
-# Set the environment variable BEFORE importing tempfile
-os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
-# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
-
-# Create the directory if it doesn't exist
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
-
-# Now import tempfile (order matters!)
-import tempfile
-
-# Test if it worked
-print(tempfile.gettempdir())  # Should output "/opt/tmp"
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
-
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
@@ -47,13 +29,20 @@ from api.api import (
     collapse_to_genus,
 )
 
-# ================================= GLOBAL VARIABLES ================================= #
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
+
+# ================================== DEFAULT VALUES ================================== #
 
 DEFAULT_N = 20
 DEFAULT_MIN_READS = 1000
 DEFAULT_MIN_LENGTH = 100
 DEFAULT_RETRY_TRUNC_LENGTHS = [(250, 220), (150, 150), (250, 0)]
 DEFAULT_N_THREADS = 12
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ==================================== CLASSES ====================================== #
 
