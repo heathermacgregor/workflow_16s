@@ -10,6 +10,7 @@ from qiime2 import Artifact
 
 # ================================= DEFAULT VALUES =================================== #
 
+os.environ["TMPDIR"] = "/opt/tmp"
 RESET_TMPDIR = True
 
 # Reset tmp directory
@@ -20,7 +21,6 @@ if RESET_TMPDIR:
 warnings.filterwarnings("ignore")
 
 DEFAULT_N = 15
-RESET_TMPDIR = True
 
 # ==================================== FUNCTIONS ===================================== #
 
