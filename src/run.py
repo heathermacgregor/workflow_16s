@@ -419,8 +419,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     success_subsets_qiime_outputs[subset_name] = required_paths
                                     success_subsets.append(subset_name)
                                     logger.info(
-                                        f" ⏭️ Skipping processing for "
-                                        f"{subset_name.replace('.', '/')}"
+                                        f"⏭️  Skipping processing for "
+                                        f"{subset_name.replace('.', '/')} "
                                         f"- existing outputs found"
                                     )
                                     continue
