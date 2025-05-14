@@ -48,6 +48,9 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s.figures.fastqc.fastqc import FastQCPlots
 
+project_root = str(Path(__file__).resolve().parent.parent.parent) # Adjust .parent count
+sys.path.append(project_root)
+
 # ================================ CUSTOM TMP CONFIG ================================= #
 
 import workflow_16s.custom_tmp_config  
