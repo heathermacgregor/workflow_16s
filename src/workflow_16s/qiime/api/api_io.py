@@ -23,7 +23,7 @@ print(sys.path)  # Ensure the path appears in the list
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
-import workflow_16s.custom_tmp_config
+#import workflow_16s.custom_tmp_config
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
