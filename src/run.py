@@ -45,6 +45,21 @@ from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
 
 # ================================= DEFAULT VALUES =================================== #
 
+import os
+
+# Set the environment variable BEFORE importing tempfile
+os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
+# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
+
+# Create the directory if it doesn't exist
+os.makedirs(os.environ["TMPDIR"], exist_ok=True)
+
+# Now import tempfile (order matters!)
+import tempfile
+
+# Test if it worked
+print(tempfile.gettempdir())  # Should output "/opt/tmp"
+
 DEFAULT_CONFIG = (
     Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
     / "references"
@@ -64,8 +79,6 @@ logger = logging.getLogger("workflow_16s")
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
-
-os.environ["TMPDIR"] = "/opt/tmp"
 
 # ==================================== FUNCTIONS ===================================== #
 
