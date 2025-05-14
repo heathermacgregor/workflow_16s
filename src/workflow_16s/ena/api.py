@@ -25,9 +25,10 @@ import urllib3
 from contextlib import contextmanager
 
 import logging
-logger = logging.getLogger('workflow_16s')
 
-from workflow_16s.utils.dir_utils import create_dir
+import workflow_16s.custom_tmp_config
+
+logger = logging.getLogger('workflow_16s')
 
 # ============================= PROGRESS BARS ============================== #
 
