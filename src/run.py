@@ -1,50 +1,51 @@
 """
-16S rRNA Analysis Pipeline - Full Implementation
-Comprehensive workflow for microbial community analysis from raw data to processed results
+16S rRNA Analysis Pipeline 
+Full Implementation
+Comprehensive workflow for microbial community analysis from raw data to processed 
+results.
 """
-# ================================ CUSTOM TMP CONFIG ================================= #
-
-import workflow_16s.custom_tmp_config
-
 # ===================================== IMPORTS ====================================== #
 
-# Standard library imports
+# Standard Library Imports
+import itertools
+import logging
 import os
-import sys
 import re
 import shutil
 import subprocess
-import logging
+import sys
 import warnings
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Tuple
 from collections import Counter
-import itertools
+from pathlib import Path
 from pprint import pprint
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-# Third-party imports
+# Third-Party Imports
 import pandas as pd
-
-# Rich progress bar imports
 from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
-    MofNCompleteColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
 
-# Custom module imports
+# ================================== LOCAL IMPORTS =================================== #
+
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
+from workflow_16s import ena
 from workflow_16s.config import get_config
 from workflow_16s.logger import setup_logging
-from workflow_16s import ena
-from workflow_16s.utils import file_utils, misc_utils, dir_utils
 from workflow_16s.metadata.per_dataset import SubsetDataset
-from workflow_16s.sequences.utils import CutAdapt, BasicStats, FastQC, SeqKit
+from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
+from workflow_16s.utils import dir_utils, file_utils, misc_utils
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
 
 # ================================= DEFAULT VALUES =================================== #
 
