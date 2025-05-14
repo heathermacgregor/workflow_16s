@@ -1,23 +1,36 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import logging
+import re
+import warnings
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from collections import Counter
-import re
+
+# Third-Party Imports
 import pandas as pd
-import logging
 from scipy.spatial.distance import cdist
 
 # ================================== LOCAL IMPORTS =================================== #
 
+from workflow_16s.ena.metadata import ENAMetadata
 from workflow_16s.utils import dir_utils, file_utils, misc_utils
 import workflow_16s.sequences.analyze as seq_analyze
-from workflow_16s.ena.metadata import ENAMetadata
-import workflow_16s.custom_tmp_config
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config  
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Initialize logger
+logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
-
-logger = logging.getLogger("workflow_16s")
 
 DEFAULT_16S_PRIMERS = {
     "V1-V2": {
@@ -172,7 +185,9 @@ def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
     return combined_df
 
 
-def calculate_distances(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+def calculate_distances(
+    df1: pd.DataFrame, df2: pd.DataFrame
+) -> pd.DataFrame:
     """
     Calculate Euclidean distances between two DataFrames based on longitude
     and latitude.
@@ -250,9 +265,9 @@ class SubsetDataset:
         Initialize processor with configuration and directory setup.
 
         Args:
-            config: Configuration dictionary containing processing parameters
-                    such as project directory, primer mode, and validation
-                    settings.
+            config: Configuration dictionary containing processing 
+                    parameters such as project directory, primer mode, 
+                    and validation settings.
         """
         self.config = config
         self.dirs = dir_utils.SubDirs(self.config["project_dir"])
@@ -263,16 +278,17 @@ class SubsetDataset:
         """Determine target fragment from primer estimation results.
 
         Args:
-            estimates:          Dictionary mapping target genes to estimated
-                                subfragments.
+            estimates:          Dictionary mapping target genes 
+                                to estimated subfragments.
 
         Returns:
-            target_subfragment: Selected target subfragment (e.g., 'V4').
+            target_subfragment: Selected target subfragment 
+                                (e.g., 'V4').
 
         Raises:
-            ValueError:         If no valid subfragment can be determined or
-                                if the determined subfragment is not in
-                                DEFAULT_16S_PRIMERS.
+            ValueError:         If no valid subfragment can be determined 
+                                or if the determined subfragment is not 
+                                in DEFAULT_16S_PRIMERS.
         """
         unique = {v for v in estimates.values()}
         if len(unique) == 1:
@@ -285,7 +301,8 @@ class SubsetDataset:
         if target_subfragment not in DEFAULT_16S_PRIMERS:
             raise ValueError(
                 f"Target subfragment '{target_subfragment}' not found in "
-                "DEFAULT_16S_PRIMERS. Update configuration or primers database."
+                "DEFAULT_16S_PRIMERS. Update configuration or primers "
+                "database."
             )
         return target_subfragment
 
