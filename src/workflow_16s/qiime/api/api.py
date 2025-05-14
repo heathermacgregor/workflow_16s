@@ -42,13 +42,20 @@ from api.api_io import (
 
 # ================================= DEFAULT VALUES =================================== #
 
-os.environ["TMPDIR"] = "/opt/tmp"
+import os
 
-#RESET_TMPDIR = True
+# Set the environment variable BEFORE importing tempfile
+os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
+# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
 
-# Reset tmp directory
-#if RESET_TMPDIR:
-#    os.environ["TMPDIR"] = "/opt/tmp"
+# Create the directory if it doesn't exist
+os.makedirs(os.environ["TMPDIR"], exist_ok=True)
+
+# Now import tempfile (order matters!)
+import tempfile
+
+# Test if it worked
+print(tempfile.gettempdir())  # Should output "/opt/tmp"
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
