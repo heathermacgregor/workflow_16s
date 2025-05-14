@@ -1,11 +1,11 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import argparse
 import os
 import sys
-from pathlib import Path
 import warnings
-
-import argparse
+from pathlib import Path
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -17,7 +17,7 @@ from per_dataset import Dataset, WorkflowRunner
 
 import workflow_16s.custom_tmp_config
 
-# ================================= DEFAULT VALUES =================================== #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
