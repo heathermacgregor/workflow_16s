@@ -1,13 +1,13 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+from datetime import datetime
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Union
 
-from datetime import datetime
-
-import logging
-from logging.handlers import RotatingFileHandler
-
+# Local Imports
 from workflow_16s.utils.dir_utils import SubDirs
 
 # ==================================== FUNCTIONS ===================================== #
