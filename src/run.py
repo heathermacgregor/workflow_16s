@@ -169,7 +169,7 @@ def execute_per_dataset_qiime_workflow(
 
     try:
         command_str = str(' '.join(command)).replace(" --", " \\\n--")
-        command_str = command_str.replace(" python ", " \\\npython")
+        command_str = command_str.replace(" python ", " \\\npython ")
         logger.info(
             f"\nExecuting QIIME2 command:\n"
             f"{command_str}"
