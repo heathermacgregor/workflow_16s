@@ -13,6 +13,7 @@ from scipy.spatial.distance import cdist
 from workflow_16s.utils import dir_utils, file_utils, misc_utils
 import workflow_16s.sequences.analyze as seq_analyze
 from workflow_16s.ena.metadata import ENAMetadata
+import workflow_16s.custom_tmp_config
 
 # ================================= DEFAULT VALUES =================================== #
 
