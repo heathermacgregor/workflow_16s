@@ -53,9 +53,6 @@ warnings.filterwarnings("ignore")
 
 # ================================= DEFAULT VALUES =================================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
-
 DEFAULT_N_THREADS = 32
 DEFAULT_SAVE_INTERMEDIATES = True
 DEFAULT_LIBRARY_LAYOUT = "paired"
