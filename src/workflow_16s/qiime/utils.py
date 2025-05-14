@@ -1,8 +1,28 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import os
+import sys
+import warnings
 from pathlib import Path
-from typing import Tuple, Union, Optional
+from typing import Optional, Tuple, Union
+
+# Third-Party Imports
 import pandas as pd
+
+# ================================== LOCAL IMPORTS =================================== #
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
 
