@@ -260,11 +260,12 @@ def process_sequences(
             f"Expected 'ENA'."
         )
         
-    seq_analyzer = BasicStats()
-    raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
-    raw_df = pd.DataFrame(
-        [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
-    )
+    if run_cutadapt:    
+        seq_analyzer = BasicStats()
+        raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
+        raw_df = pd.DataFrame(
+            [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
+        )
 
     if run_fastqc:
         FastQC(
