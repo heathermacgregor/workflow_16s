@@ -13,20 +13,12 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from per_dataset import Dataset, WorkflowRunner
 
-import os
+# ================================ CUSTOM TMP CONFIG ================================= #
 
-# Set the environment variable BEFORE importing tempfile
-os.environ["TMPDIR"] = "/opt/tmp"  # Unix/Linux
-# os.environ["TEMP"] = "C:\\my_temp"  # Windows (use TEMP or TMP instead)
+import workflow_16s.custom_tmp_config
 
-# Create the directory if it doesn't exist
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
+# ================================= DEFAULT VALUES =================================== #
 
-# Now import tempfile (order matters!)
-import tempfile
-
-# Test if it worked
-print(tempfile.gettempdir())  # Should output "/opt/tmp"
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
