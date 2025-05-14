@@ -34,10 +34,10 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
-    TimeRemainingColumn,
     SpinnerColumn,
     TextColumn,
     TimeElapsedColumn,
+    TimeRemainingColumn,
     track,
 )
 from tqdm import tqdm
@@ -62,7 +62,14 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
-DEFAULT_N_CORES = 4 #os.cpu_count() or 1
+DEFAULT_RERUN_CUTADAPT = True
+
+DEFAULT_FASTQC_PATH = 'fastqc'
+
+DEFAULT_N_CORES_SEQKIT = 4 #os.cpu_count() or 1
+DEFAULT_N_CORES_CUTADAPT = 16
+DEFAULT_MAX_WORKERS = 1
+
 DEFAULT_PROGRESS_TEXT_N = 50
 
 DEFAULT_START_TRIM = 0
@@ -70,12 +77,8 @@ DEFAULT_END_TRIM = 0
 DEFAULT_START_Q_CUTOFF = 30
 DEFAULT_END_Q_CUTOFF = 15
 DEFAULT_MIN_SEQ_LENGTH = 150
-DEFAULT_N_CORES = 16
+
 DEFAULT_TARGET_REGION = 'V4'
-DEFAULT_MAX_WORKERS = 1
-#DEFAULT_FASTQC_PATH = '/usr2/people/macgregor/fastqc/FastQC/fastqc'
-DEFAULT_FASTQC_PATH = 'fastqc'
-DEFAULT_RERUN_CUTADAPT = True
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -118,7 +121,8 @@ def fastq_gz_to_fasta(fastq_file: Union[str, Path], n_sequences: int = 0) -> Pat
                 if i % 4 == 0:  # Sequence identifier
                     if not line.startswith("@"):
                         raise ValueError(
-                            f"Invalid FASTQ format in file {fastq_file} at line {i + 1}"
+                            f"Invalid FASTQ format in file {fastq_file} "
+                            f"at line {i + 1}"
                         )
                     fasta.write(">" + line[1:])  # Convert to FASTA header
                 elif i % 4 == 1:  # Sequence
@@ -139,12 +143,14 @@ class SeqKit:
     """
     
     def __init__(self, max_workers: int = None):
-        self.max_workers = max_workers or max(1, self.DEFAULT_N_CORES // 2)
+        self.max_workers = max_workers or max(1, self.DEFAULT_N_CORES_SEQKIT // 2)
         self._seqkit_version = self._get_seqkit_version()
 
     def _get_seqkit_version(self) -> str:
         """Get SeqKit version for compatibility checks."""
-        result = subprocess.run(["seqkit", "version"], capture_output=True, text=True)
+        result = subprocess.run(
+            ["seqkit", "version"], capture_output=True, text=True
+        )
         return result.stdout.strip().split()[-1]
 
     def _run_seqkit(self, cmd: List[str]) -> str:
@@ -154,7 +160,9 @@ class SeqKit:
             raise RuntimeError(f"SeqKit error: {result.stderr.strip()}")
         return result.stdout
 
-    def analyze_samples(self, samples: Dict[str, List[Union[str, Path]]]) -> Dict[str, Any]:
+    def analyze_samples(
+        self, samples: Dict[str, List[Union[str, Path]]]
+    ) -> Dict[str, Any]:
         """Analyze multiple FASTQ.GZ files with parallel processing."""
         file_list = self._flatten_samples(samples)
         agg_stats, overall = self._init_aggregators(samples)
@@ -167,7 +175,9 @@ class SeqKit:
             
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {
-                    executor.submit(self._process_file, sample, fpath): (sample, fpath)
+                    executor.submit(
+                        self._process_file, sample, fpath
+                    ): (sample, fpath)
                     for sample, fpath in file_list
                 }
                 
@@ -195,7 +205,8 @@ class SeqKit:
             "seqkit", "fx2tab", "-n", "-l", str(fpath)
         ])
         length_counts = Counter(
-            int(line.split("\t")[1]) for line in lengths_output.strip().split("\n")
+            int(line.split("\t")[1]) 
+            for line in lengths_output.strip().split("\n")
         )
         
         return (sample, {
@@ -239,60 +250,94 @@ class SeqKit:
         
         return agg_stats, overall
 
-    def _aggregate_stats(self, sample: str, stats: Dict, agg: Dict, overall: Dict) -> None:
+    def _aggregate_stats(
+        self, sample: str, stats: Dict, agg: Dict, overall: Dict
+    ) -> None:
         """Update aggregators with new file statistics."""
         # Sample-level aggregation
         agg[sample]["total_seqs"] += stats["total_seqs"]
         agg[sample]["total_bases"] += stats["total_bases"]
-        agg[sample]["min_length"] = min(agg[sample]["min_length"], stats["min_length"])
-        agg[sample]["max_length"] = max(agg[sample]["max_length"], stats["max_length"])
+        agg[sample]["min_length"] = min(
+            agg[sample]["min_length"], stats["min_length"]
+        )
+        agg[sample]["max_length"] = max(
+            agg[sample]["max_length"], stats["max_length"]
+        )
         agg[sample]["length_counts"].update(stats["length_counts"])
         agg[sample]["files"].append(stats["file"])
         
         # Overall aggregation
         overall["total_seqs"] += stats["total_seqs"]
         overall["total_bases"] += stats["total_bases"]
-        overall["global_min"] = min(overall["global_min"], stats["min_length"])
-        overall["global_max"] = max(overall["global_max"], stats["max_length"])
+        overall["global_min"] = min(
+            overall["global_min"], stats["min_length"]
+        )
+        overall["global_max"] = max(
+            overall["global_max"], stats["max_length"]
+        )
         overall["length_distribution"].update(stats["length_counts"])
 
-    def _finalize_results(self, agg_stats: Dict, overall: Dict, elapsed: float) -> Dict:
-        """Calculate final metrics and structure results."""
-        results = {"samples": {}, "overall": {}, "proc_time": {}}
-        
-        # Sample-level metrics
-        for sample, data in agg_stats.items():
-            results["samples"][sample] = {
-                "total_sequences": data["total_seqs"],
-                "total_bases": data["total_bases"],
-                "avg_length": data["total_bases"] / data["total_seqs"] if data["total_seqs"] else 0,
-                "min_length": data["min_length"],
-                "max_length": data["max_length"],
-                "file_count": len(data["files"]),
-                "files": data["files"],
-                "top_lengths": data["length_counts"].most_common(5)
-            }
-        
-        # Overall metrics
-        results["overall"] = {
-            "total_samples": overall["total_samples"],
-            "total_files": overall["total_files"],
-            "total_sequences": overall["total_seqs"],
-            "total_bases": overall["total_bases"],
-            "avg_length": overall["total_bases"] / overall["total_seqs"] if overall["total_seqs"] else 0,
-            "min_length": overall["global_min"],
-            "max_length": overall["global_max"],
-            "most_common_lengths": overall["length_distribution"].most_common(10)
+    def _calculate_avg(self, bases: int, sequences: int) -> float:
+        """Helper to safely calculate average length."""
+        return bases / sequences if sequences else 0.0
+
+    def _build_sample_metrics(self, data: dict) -> dict:
+        """Construct metrics dictionary for a single sample."""
+        return {
+            "total_sequences": data["total_seqs"],
+            "total_bases": data["total_bases"],
+            "avg_length": self._calculate_avg(
+                data["total_bases"], data["total_seqs"]
+            ),
+            "min_length": data["min_length"],
+            "max_length": data["max_length"],
+            "file_count": len(data["files"]),
+            "files": data["files"],
+            "top_lengths": data["length_counts"].most_common(5)
         }
-        
-        # Add timing metrics using progress bar data
-        results["proc_time"] = {
+
+    def _build_overall_metrics(self, data: dict) -> dict:
+        """Construct metrics dictionary for overall results."""
+        return {
+            "total_samples": data["total_samples"],
+            "total_files": data["total_files"],
+            "total_sequences": data["total_seqs"],
+            "total_bases": data["total_bases"],
+            "avg_length": self._calculate_avg(
+                data["total_bases"], data["total_seqs"]
+            ),
+            "min_length": data["global_min"],
+            "max_length": data["global_max"],
+            "most_common_lengths": data["length_distribution"].most_common(10)
+        }
+
+    def _build_timing_metrics(
+        self, elapsed: float, files: int, sequences: int
+    ) -> dict:
+        """Construct processing time metrics dictionary."""
+        return {
             "execution_seconds": elapsed,
-            "files_per_second": overall['total_files'] / elapsed if elapsed > 0 else 0,
-            "sequences_per_second": overall['total_seqs'] / elapsed if elapsed > 0 else 0
+            "files_per_second": files / elapsed if elapsed > 0 else 0,
+            "sequences_per_second": sequences / elapsed if elapsed > 0 else 0
         }
         
-        return results
+    def _finalize_results(
+        self, agg_stats: Dict, overall: Dict, elapsed: float
+    ) -> Dict:
+        """Calculate final metrics and structure results."""
+        # Main construction logic
+        return {
+            "samples": {
+                sample: self._build_sample_metrics(data) 
+                for sample, data in agg_stats.items()
+            },
+            "overall": self._build_overall_metrics(overall),
+            "proc_time": self._build_timing_metrics(
+                elapsed, 
+                overall["total_files"], 
+                overall["total_seqs"]
+            )
+        }
 
     @staticmethod
     def _create_progress_columns():
@@ -340,7 +385,7 @@ class CutAdapt:
         start_q_cutoff: int = DEFAULT_START_Q_CUTOFF,
         end_q_cutoff: int = DEFAULT_END_Q_CUTOFF,
         min_seq_length: int = DEFAULT_MIN_SEQ_LENGTH,
-        cores: int = DEFAULT_N_CORES,
+        cores: int = DEFAULT_N_CORES_CUTADAPT,
         rerun: bool = DEFAULT_RERUN_CUTADAPT,
         region: str = DEFAULT_TARGET_REGION,
     ):
@@ -386,12 +431,16 @@ class CutAdapt:
                 command.extend(["-m", str(parameters["min_seq_length"])])
             if parameters["primer_fwd"] is not None:
                 command.extend(["-b", parameters["primer_fwd"]])
-                command.extend(["-a", 
-                                str(Seq(parameters["primer_fwd"]).reverse_complement())])
+                command.extend(
+                    ["-a", 
+                     str(Seq(parameters["primer_fwd"]).reverse_complement())]
+                )
             if parameters["primer_rev"] is not None:
                 command.extend(["-B", parameters["primer_rev"]])
-                command.extend(["-A", 
-                                str(Seq(parameters["primer_rev"]).reverse_complement())])
+                command.extend(
+                    ["-A", 
+                     str(Seq(parameters["primer_rev"]).reverse_complement())]
+                )
             if parameters["start_trim"] is not None:
                 command.extend(["-u", str(parameters["start_trim"])])
             if parameters["end_trim"] is not None:
@@ -405,7 +454,7 @@ class CutAdapt:
                 out1, out2 = trimmed_paths
                 out1_path = Path(out1)
                 out2_path = Path(out2)
-                if (not out1_path.exists() or not out2_path.exists()) or parameters["rerun"]:
+                if any(not p.exists() for p in (out1_path, out2_path)) or parameters["rerun"]:
                     command.extend(["-o", str(out1), "-p", str(out2)])
                     command.extend(map(str, sample_paths))
                     command.append(f"--json={json_path}")
@@ -469,7 +518,9 @@ class CutAdapt:
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
         return df
 
-    def run(self, fastq_paths: Dict[str, List[str]]) -> Tuple[Dict[str, List[str]], pd.DataFrame]:
+    def run(
+        self, fastq_paths: Dict[str, List[str]]
+    ) -> Tuple[Dict[str, List[str]], pd.DataFrame]:
         """Executes the CutAdapt pipeline on provided FASTQ paths."""
         progress_columns = [
             SpinnerColumn(),
@@ -524,8 +575,10 @@ class CutAdapt:
                 total=len(samples)
             )
             with ThreadPoolExecutor(max_workers=self.cores) as executor:
-                futures = {executor.submit(self.process_sample, params): params['sample'] 
-                           for params in all_params}
+                futures = {
+                    executor.submit(self.process_sample, params): params['sample'] 
+                    for params in all_params
+                }
                 for future in as_completed(futures):
                     sample, result = future.result()
                     results.append((sample, result))
@@ -550,7 +603,7 @@ class CutAdapt:
 class BasicStats:
     """"""
     def __init__(self, max_workers: int = None):
-        self.max_workers = max_workers or max(1, DEFAULT_N_CORES // 2)
+        self.max_workers = max_workers or max(1, DEFAULT_N_CORES_SEQKIT // 2)
 
     def calculate_statistics(
         self, samples: Dict[str, List[Union[str, Path]]]
@@ -567,7 +620,9 @@ class BasicStats:
             
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {
-                    executor.submit(self.process_file, sample, fpath): (sample, fpath)
+                    executor.submit(
+                        self.process_file, sample, fpath
+                    ): (sample, fpath)
                     for sample, fpath in file_list
                 }
                 
@@ -577,8 +632,12 @@ class BasicStats:
         
         return self._finalize_stats(sample_agg, overall_stats, elapsed)
 
-    def _flatten_samples(self, samples: Dict[str, List[Union[str, Path]]]) -> list:
-        """Convert nested sample structure to flat list of (sample, path) tuples."""
+    def _flatten_samples(
+        self, samples: Dict[str, List[Union[str, Path]]]
+    ) -> list:
+        """
+        Convert nested sample structure to flat list of (sample, path) tuples.
+        """
         return [
             (sample, fpath)
             for sample, paths in samples.items()
@@ -590,7 +649,9 @@ class BasicStats:
         return [
             SpinnerColumn(),
             TextColumn("[white][progress.description]{task.description}"),
-            BarColumn(bar_width=40, complete_style="red", finished_style="green"),
+            BarColumn(
+                bar_width=40, complete_style="red", finished_style="green"
+            ),
             MofNCompleteColumn(),
             TextColumn("[white]•"),
             TimeElapsedColumn(),
@@ -629,8 +690,12 @@ class BasicStats:
             agg["total_sequences"] += result["total_sequences"]
             agg["total_bases"] += result["total_bases"]
             agg["total_gc"] += result["gc_count"]
-            agg["min_length"] = min(agg["min_length"], result["min_length"])
-            agg["max_length"] = max(agg["max_length"], result["max_length"])
+            agg["min_length"] = min(
+                agg["min_length"], result["min_length"]
+            )
+            agg["max_length"] = max(
+                agg["max_length"], result["max_length"]
+            )
 
     def _finalize_stats(self, sample_agg, overall_stats, elapsed):
         """Calculate final statistics and structure results."""
@@ -733,7 +798,9 @@ class FastQC:
         
         fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
         if not fastqc_bin.exists():
-            raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
+            raise FileNotFoundError(
+                f"FastQC not found in Conda env: {fastqc_bin}"
+            )
         try:
             subprocess.run(
                 [str(fastqc_bin), '-v'],
@@ -742,7 +809,9 @@ class FastQC:
                 text=True
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"FastQC validation failed: {e.stderr.decode().strip()}")
+            raise RuntimeError(
+                f"FastQC validation failed: {e.stderr.decode().strip()}"
+            )
 
     def run_pipeline(self) -> 'FastQCPipeline':
         """Execute complete analysis pipeline."""
@@ -763,7 +832,9 @@ class FastQC:
         
         fastqc_bin = Path(conda_prefix) / "bin" / "fastqc"
         if not fastqc_bin.exists():
-            raise FileNotFoundError(f"fastqc not found in Conda env: {fastqc_bin}")
+            raise FileNotFoundError(
+                f"FastQC not found in Conda env: {fastqc_bin}"
+            )
         def process_file(sample: str, fastq_path: Path):
             
             cmd = [
@@ -799,14 +870,18 @@ class FastQC:
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {
-                executor.submit(process_file, sample, path): (sample, path.name)
+                executor.submit(
+                    process_file, sample, path
+                ): (sample, path.name)
                 for sample, path in tasks
             }
 
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[white][progress.description]{task.description}"),
-                BarColumn(bar_width=40, complete_style="red", finished_style="green"),
+                BarColumn(
+                    bar_width=40, complete_style="red", finished_style="green"
+                ),
                 MofNCompleteColumn(),
                 TextColumn("[white]•"),
                 TimeElapsedColumn(),
@@ -823,7 +898,9 @@ class FastQC:
                     try:
                         future.result()
                     except Exception as e:
-                        logger.error(f"Critical error processing {sample}/{fname}: {str(e)}")
+                        logger.error(
+                            f"Critical error processing {sample}/{fname}: {str(e)}"
+                        )
                     progress.update(task, advance=1)
 
     def _parse_sample_name(self, zip_path: Path) -> Tuple[str, str]:
@@ -832,7 +909,9 @@ class FastQC:
         match = re.search(pattern, zip_path.stem)
         return (match.groups() if match else (zip_path.stem, 'unknown'))
 
-    def _parse_fastqc_data(self, fastqc_data_path: Union[str, Path, zipfile.ZipExtFile]) -> Dict:
+    def _parse_fastqc_data(
+        self, fastqc_data_path: Union[str, Path, zipfile.ZipExtFile]
+    ) -> Dict:
         """Parse FastQC data file with comprehensive section handling."""
         sections = {
             "basic_stats": {
@@ -918,7 +997,8 @@ class FastQC:
                     current_section = None
                 else:
                     current_section = next(
-                        (k for k, v in sections.items() if line.startswith(v["start"])),
+                        (k 
+                         for k, v in sections.items() if line.startswith(v["start"])),
                         None
                     )
                 continue
@@ -934,10 +1014,14 @@ class FastQC:
                             "value": parts[1]
                         })
                 elif len(parts) >= len(section["columns"]):
-                    parsed = {col: parts[i] for i, col in enumerate(section["columns"])}
+                    parsed = {
+                        col: parts[i] for i, col in enumerate(section["columns"])
+                    }
                     section["data"].append(parsed)
 
-        return {k: pd.DataFrame(v["data"]) for k, v in sections.items() if v["data"]}
+        return {
+            k: pd.DataFrame(v["data"]) for k, v in sections.items() if v["data"]
+        }
 
     def _parse_results(self):
         """Parse and consolidate all FastQC results."""
@@ -947,7 +1031,9 @@ class FastQC:
             try:
                 sample, direction = self._parse_sample_name(zip_path)
                 with zipfile.ZipFile(zip_path) as zf:
-                    data_file = next(f for f in zf.namelist() if f.endswith('fastqc_data.txt'))
+                    data_file = next(
+                        f for f in zf.namelist() if f.endswith('fastqc_data.txt')
+                    )
                     with zf.open(data_file) as binary_file:
                         result = self._parse_fastqc_data(binary_file)
                         for section, df in result.items():
