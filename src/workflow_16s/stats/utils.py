@@ -1,27 +1,25 @@
 # ===================================== IMPORTS ====================================== #
+
+# Standard library imports
 from pathlib import Path
 from typing import Any, Bool, Dict, List, Tuple, Union
+
+# Third-party imports
 import numpy as np
 import pandas as pd
-
 from biom import Table
-
 from scipy import stats
-from scipy.stats import mannwhitneyu, kruskal, spearmanr, ttest_ind
-from scipy.spatial.distance import pdist, squareform, braycurtis
-
+from scipy.spatial.distance import braycurtis, pdist, squareform
+from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
-
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 from sklearn.manifold import TSNE
-
-from umap import UMAP
-
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from umap import UMAP
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -188,11 +186,13 @@ def presence_absence(
     threshold: float = DEFAULT_PA_THRESHOLD
 ) -> pd.DataFrame:
     """
-    Converts to presence/absence table while retaining top abundant features.
+    Converts to presence/absence table while retaining top abundant 
+    features.
     
     Args:
         table:          Input abundance table (features x samples).
-        threshold:      Cumulative abundance threshold (0-1) for feature retention.
+        threshold:      Cumulative abundance threshold (0-1) for 
+                        feature retention.
         
     Returns:
         filtered_table: Binary presence/absence table of retained features.
