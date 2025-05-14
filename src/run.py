@@ -416,7 +416,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                                     / "feature-table.biom",
                                 }
                                 if all(p.exists() for p in required_paths.values()):
-                                    success_qiime_outputs[subset_name] = required_paths
+                                    success_subsets_qiime_outputs[subset_name] = required_paths
                                     success_subsets.append(subset_name)
                                     logger.info(
                                         f" ⏭️ Skipping processing for "
@@ -487,7 +487,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
                 logger.info(failed_subsets_report)
 
             metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
-                            for i in success_qiime_outputs.values()]
+                            for i in success_subsets_qiime_outputs.values()]
             metadata_df = pd.concat(metadata_dfs)
             
             # Sort the DataFrame columns alphabetically
@@ -497,7 +497,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             logger.info(f"\n{completeness}")
 
             table_dfs = [file_utils.import_features_biom(i['table_6']) 
-                         for i in success_qiime_outputs.values()]
+                         for i in success_subsets_qiime_outputs.values()]
             table_df = pd.concat(table_dfs)
             logger.info(f"Feature table shape: {table_df.shape}")
             #for df in table_dfs: 
