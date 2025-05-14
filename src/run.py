@@ -65,6 +65,8 @@ logger = logging.getLogger("workflow_16s")
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
+os.environ["TMPDIR"] = "/opt/tmp"
+
 # ==================================== FUNCTIONS ===================================== #
 
 def find_required_files(test):
