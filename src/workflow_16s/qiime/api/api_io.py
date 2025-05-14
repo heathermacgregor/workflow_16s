@@ -11,11 +11,11 @@ from qiime2 import Artifact
 # ================================= DEFAULT VALUES =================================== #
 
 os.environ["TMPDIR"] = "/opt/tmp"
-RESET_TMPDIR = True
+#RESET_TMPDIR = True
 
 # Reset tmp directory
-if RESET_TMPDIR:
-    os.environ["TMPDIR"] = "/opt/tmp"
+#if RESET_TMPDIR:
+#    os.environ["TMPDIR"] = "/opt/tmp"
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
