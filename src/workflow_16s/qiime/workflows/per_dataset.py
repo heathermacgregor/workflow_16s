@@ -1,15 +1,15 @@
 # ===================================== IMPORTS ====================================== #
 
-# Standard library imports
-import os
-import sys
+# Standard Library Imports
 import glob
+import os
 import shutil
+import sys
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-# Third-party library imports
+# Third-Party Imports
 import qiime2
 from qiime2 import Artifact, Metadata
 
@@ -18,20 +18,25 @@ from qiime2 import Artifact, Metadata
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
-from utils import create_dir, get_average_lengths, get_truncation_lengths
-from api.api_io import construct_file_path, output_files_exist, load_with_print
 from api.api import (
-    import_seqs_from_manifest,
-    trim_sequences,
-    filter_samples_for_denoising,
-    denoise_sequences,
     classify_taxonomy,
     collapse_to_genus,
+    denoise_sequences,
+    filter_samples_for_denoising,
+    import_seqs_from_manifest,
+    trim_sequences,
 )
+from api.api_io import construct_file_path, load_with_print, output_files_exist
+from utils import get_average_lengths, get_truncation_lengths
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
 import workflow_16s.custom_tmp_config
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
 
 # ================================== DEFAULT VALUES ================================== #
 
@@ -40,9 +45,6 @@ DEFAULT_MIN_READS = 1000
 DEFAULT_MIN_LENGTH = 100
 DEFAULT_RETRY_TRUNC_LENGTHS = [(250, 220), (150, 150), (250, 0)]
 DEFAULT_N_THREADS = 12
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
 
 # ==================================== CLASSES ====================================== #
 
