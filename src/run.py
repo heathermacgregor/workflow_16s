@@ -135,10 +135,17 @@ def execute_per_dataset_qiime_workflow(
     """
     qiime_env_path = get_conda_env_path("qiime2-amplicon-2024.10")
     qiime_config = cfg["qiime2"]["per_dataset"]
+    
+    # Get configured script path and check existence
+    script_path = Path(qiime_config["script_path"])
+    if not script_path.exists():
+        logger.warning(f"Script not found at '{script_path}', using default")
+        script_path = DEFAULT_PER_DATASET
+    
     command = [
-        "conda", "run", 
-        "--prefix", qiime_env_path, 
-        "python", str(qiime_config["script_path"]),
+        "conda", "run",
+        "--prefix", qiime_env_path,
+        "python", str(script_path),  
         "--qiime_dir", str(qiime_dir),
         "--metadata_tsv", str(metadata_path),
         "--manifest_tsv", str(manifest_path),
@@ -150,13 +157,11 @@ def execute_per_dataset_qiime_workflow(
         "--classifier", str(qiime_config["taxonomy"]["classifier"]),
         "--classify_method", 
         str(qiime_config["taxonomy"]["classify_method"]).lower(),
-        "--retain_threshold", 
-        str(qiime_config["filter"]["retain_threshold"]),
-        "--chimera_method", 
-        str(qiime_config["denoise"]["chimera_method"]),
-        "--denoise_algorithm", 
-        str(qiime_config["denoise"]["denoise_algorithm"]),
+        "--retain_threshold", str(qiime_config["filter"]["retain_threshold"]),
+        "--chimera_method", str(qiime_config["denoise"]["chimera_method"]),
+        "--denoise_algorithm", str(qiime_config["denoise"]["denoise_algorithm"]),
     ]
+    
     if qiime_config.get("hard_rerun", False):
         command.append("--hard_rerun")
     if qiime_config.get("trim", {}).get("run", False):
@@ -254,20 +259,18 @@ def process_sequences(
             f"Dataset type '{dataset_type}' not recognized. "
             f"Expected 'ENA'."
         )
-    # Basic Stats
+        
     seq_analyzer = BasicStats()
     raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
     raw_df = pd.DataFrame(
         [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
     )
 
-    # FastQC
     if run_fastqc:
         FastQC(
             fastq_paths=raw_seqs_paths, output_dir=subset_dirs["raw_seqs"]
         ).run_pipeline()
 
-    # SeqKit
     if run_seqkit:
         raw_stats_seqkit = SeqKit(
             max_workers=DEFAULT_MAX_WORKERS_SEQKIT
@@ -477,7 +480,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             if failed_subsets:
                 failed_subsets_report = '\n'.join(
                     ["ℹ️ Failure details:"] 
-                    + [f"    • {dataset}: {error}" for dataset, error in failed_subsets]
+                    + [f"    • {dataset}: {error}" 
+                       for dataset, error in failed_subsets]
                 )
                 logger.info(failed_subsets_report)
 
@@ -500,7 +504,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
         except Exception as global_error:
             logger.critical(
-                f"❌ Fatal pipeline error: {str(global_error)}", exc_info=True
+                f"❌ Fatal pipeline error: {str(global_error)}", 
+                exc_info=True
             )
             raise
     except Exception as e:
