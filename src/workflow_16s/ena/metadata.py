@@ -8,9 +8,10 @@ from Bio import Entrez
 
 import logging
 
-logger = logging.getLogger("workflow_16s")
-
 from workflow_16s.ena.api import MetadataFetcher
+import workflow_16s.custom_tmp_config
+
+logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
