@@ -132,38 +132,255 @@ def import_metadata_tsv(
     ).sort_index()
 
 
-def import_features_biom(biom_path: Union[str, Path]) -> pd.DataFrame:
-    """
-    
-    """
-    table = load_table(biom_path)
-    
-    feature_ids = table.ids(axis='observation')
-    sample_ids = table.ids(axis='sample')
-    
-    data = table.matrix_data.toarray()
-    return pd.DataFrame(data, index=feature_ids, columns=sample_ids)
-    
+def get_first_existing_column(df, columns):
+    # Loop through the list of columns
+    for col in columns:
+        if col in df.columns:
+            return df[col]  # Return the first existing column's data
+    return None  # Return None if none are found
 
-def load_and_merge_biom_tables(biom_paths) -> Table:
-    """Load and merge multiple BIOM tables with validation."""
+class AmpliconData:
+    def __init__(
+        self, 
+        project_dir: Union[str, Path] = "/usr2/people/macgregor/amplicon/test",
+        mode: str = 'genus',
+        verbose: bool = True
+    ):
+        self.project_dir = project_dir
+        self.mode = mode
+        self.verbose = verbose
+        
+
+        self.table = None
+        self.meta = None
+        self.taxa = None
+        
+        if mode == 'asv':
+            self.BIOM_PATTERN = "data/per_dataset/qiime/*/*/*/*/FWD_*_REV_*/table/feature-table.biom"
+            self.output_path = os.path.join(str(self.project_dir), 'data/merged/l6/feature-table.biom')
+
+        elif mode == 'genus':
+            self.BIOM_PATTERN = "data/per_dataset/qiime/*/*/*/*/FWD_*_REV_*/table_6/feature-table.biom"
+            self.output_path = os.path.join(str(self.project_dir), 'data/merged/asv/feature-table.biom')
+
+        self._get_biom_table()
+        self._get_metadata()
+
+    def _get_biom_paths(self):
+        return glob.glob(os.path.join(
+            str(self.project_dir), self.BIOM_PATTERN
+        ), recursive=True)    
+
+    def _get_meta_paths(self):
+        meta_paths = []
+        for biom_path in self._get_biome_paths():
+            # Navigate upwards using .parents
+            qiime_dir = Path(biom_path).parents[5]  # Equivalent to 6 levels up
+            base_dir = Path(biom_path).parents[9]   # Equivalent to 10 levels up
+            project_id = qiime_dir.name
+            
+            # Build metadata path using pathlib
+            try:
+                # Get relative path from base_dir to biom_path and take the first 5 components
+                subdirs = biom_path.relative_to(base_dir).parts[:5]
+            except ValueError:
+                raise ValueError(f"{biom_path} is not relative to {base_dir}")
+            
+            meta_path = (
+                base_dir / "data" / "per_dataset" / "metadata" 
+                / Path(*subdirs) / "sample-metadata.tsv"
+            )
+            meta_paths.append(meta_path)
+        return meta_paths
+        
+    def _get_biom_table(self):
+        biom_paths = self._get_biome_paths()
+        if not biom_paths:
+            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
+        if self.verbose:
+            logger.info(f"Found {len(biom_paths)} BIOM files")
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'dataframe',
+            self.output_path,
+            self.verbose
+        )
+        
+    def _get_metadata(self):
+        def process_meta_path(csv_path, column_renames):
+            if column_renames == None:
+                column_renames = []
+            if not os.path.exists(csv_path):
+                raise FileNotFoundError()
+            try:
+                df = pd.read_csv(meta_path, sep='\t')#, index_col=0)
+                
+                # Convert column names to lowercase
+                df.columns = df.columns.str.lower() 
+                
+                options = ['run_accession', '#sampleid', 'sample-id']
+                sample_id_col = get_first_existing_column(df, options)
+                if sample_id_col:
+                    df['SAMPLE ID'] = sample_id_col
+                else:
+                    df['SAMPLE ID'] = [
+                        f"{str(Path(csv_path).parents[5].name)}_x" 
+                        for x in range(1, df.shape[0]+1)
+                    ] 
+                    
+                options = ['project_accession', 'dataset_id', 'dataset_name']
+                dataset_id_col = get_first_existing_column(df, options)
+                if dataset_id_col:
+                    df['DATASET ID'] = dataset_id_col
+                else:
+                    df['DATASET ID'] = str(Path(csv_path).parents[5].name) 
+                
+                # Add nuclear_contamination_status if missing
+                if 'nuclear_contamination_status' not in df.columns:
+                    df['nuclear_contamination_status'] = False
+
+                # Rename columns 
+                df = df.rename(columns=column_renames)  
+
+                # Remove duplicate columns
+                duplicate_cols = df.columns[df.columns.duplicated()]
+                if len(duplicate_cols) > 0:
+                    df = df.loc[:, ~df.columns.duplicated()]
+                    
+                if self.verbose:
+                    logger.info(
+                        f"Loaded {str(Path(csv_path).parents[5].name)} "
+                        f"with {df.shape[0]} samples."
+                    )
+            
+            except Exception as e:
+                logger.warning(f"Error loading {meta_path}: {str(e)}") 
+                
+        meta_dfs = []
+        for meta_path in self._get_meta_paths():  
+            meta_df = process_meta_path(meta_path)
+            meta_dfs.append(meta_df)
+        merged_df = pd.concat(meta_dfs, ignore_index=True)
+        #merged_df = pd.merge(
+        #    processed_metadata_df,
+        #    manual_metadata_df,
+        #    on='unified_sample_id',
+        #    how='outer',
+        #    suffixes=('_auto', '_manual')
+        #)
+                
+                
+        
+# ======================================= BIOM ======================================= #
+
+def import_table_biom(
+    biom_path: Union[str, Path], as_type: str = 'table'
+) -> Union[Table, pd.DataFrame]:
+    """
+    Import a BIOM feature table as a Table or pandas DataFrame.
+
+    Args:
+        biom_path: Path where the .biom file is located.
+        as_type:   Type to return the table as.
+        
+    Returns:
+        Table or Pandas DataFrame
+    """
+    try:
+        with biom_open(biom_path) as f:
+            table = Table.from_hdf5(f)
+    except:
+        table = load_table(biom_path)
+        
+    if as_type == 'table':
+        return table
+    elif as_type == 'dataframe':
+        feature_ids = table.ids(axis='observation')
+        sample_ids = table.ids(axis='sample')
+        data = table.matrix_data.toarray()
+        df = pd.DataFrame(data, index=feature_ids, columns=sample_ids)
+        return df
+    else:
+        raise ValueError(
+            f"Output type '{as_type}' not recognized. "
+            f"Expected 'table' or 'dataframe'."
+        )    
+
+def import_merged_table_biom(
+    biom_paths: List[Union[str, Path]], 
+    as_type: str = 'table',
+    output_path: Union[str, Path] = '/usr2/people/macgregor/amplicon/test/data/merged/l6/feature-table.biom',
+    verbose: bool = False
+) -> Union[Table, pd.DataFrame]:
+    """
+    Import and merge a list of BIOM feature tables.
+
+    Args:
+        biom_paths:
+        as_type:
+        output_dir:
+
+    Returns:
+        merged_table:
+    """    
+    if verbose:
+        logger.info(f"Found {len(biom_paths)} BIOM files")
+    
     tables = []
-    for path in biom_paths:
+    for biom_path in biom_paths:
         try:
-            tables.append(load_table(path))
+            table = import_table_biom(biom_path, 'table')
+            tables.append(table)
+            if verbose:
+                biom_path_parts = os.path.normpath(biom_path).split(os.sep)
+                biom_path_report = os.sep.join(parts[-3:])
+                if verbose:
+                    logger.info(
+                        f"Loaded {biom_path_report} with "
+                        f"{len(table.ids(axis='sample'))} samples."
+                    )
+            
         except Exception as e:
-            logger.warning(f"Failed to load {path}: {str(e)}")
+            logger.error(f"Failed to load {biom_path}: {str(e)}")
             continue
-
+    
     if not tables:
         raise ValueError("No valid BIOM tables loaded")
     
+    # Merge tables
     merged_table = tables[0]
     for table in tables[1:]:
         merged_table = merged_table.merge(table)
-    logger.info(f"Merged table dimensions: {merged_table.shape}")
-    return merged_table
-    
+
+    if verbose:
+        logger.info(f"Merged table contains {merged_table.shape[1]} samples.")
+
+    if output_path:
+        # Create output directory if it doesn't exist
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with h5py.File(output_path, 'w') as f:
+            merged_table.to_hdf5(
+                f, 
+                generated_by="/usr2/people/macgregor/amplicon/workflow_16s/run.sh"
+            )
+        if verbose:
+            logger.info(f"Wrote merged table to '{output_path}'")
+
+    if as_type == 'table':
+        return merged_table
+    elif as_type == 'dataframe':
+        feature_ids = merged_table.ids(axis='observation')
+        sample_ids = merged_table.ids(axis='sample')
+        data = merged_table.matrix_data.toarray()
+        df = pd.DataFrame(data, index=feature_ids, columns=sample_ids)
+        return df
+    else:
+        raise ValueError(
+            f"Output type '{as_type}' not recognized. "
+            f"Expected 'table' or 'dataframe'."
+        )    
+
+# ====================================== FASTA ======================================= #
 
 def import_seqs_fasta(fasta_path: Union[str, Path]) -> pd.DataFrame:
     """
