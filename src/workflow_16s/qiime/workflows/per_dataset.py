@@ -45,6 +45,7 @@ DEFAULT_MIN_READS = 1000
 DEFAULT_MIN_LENGTH = 100
 DEFAULT_RETRY_TRUNC_LENGTHS = [(250, 220), (150, 150), (250, 0)]
 DEFAULT_N_THREADS = 12
+DEFAULT_CLASSIFY_METHOD = 'sklearn'
 
 # ==================================== CLASSES ====================================== #
 
@@ -391,12 +392,14 @@ class Dataset:
 
     def _assign_taxonomy(self, rep_seqs: Artifact) -> Artifact:
         """Execute taxonomic classification."""
-        print(f"  🔄 Classifying taxonomy with [{self.args['classifier']}]")
+        classify_method = DEFAULT_CLASSIFY_METHOD
+        print(f"  🔄 Classifying taxonomy with '{self.args['classifier']}' and '{classify_method}'...")
         return classify_taxonomy(
             output_dir=self.qiime_dir,
             rep_seqs=rep_seqs,
             classifier_dir=self.args["classifier_dir"],
             classifier=self.args["classifier"],
+            classify_method=classify_method
         )[0]
 
     def _collapse_to_genus(self, table: Artifact, taxonomy: Artifact) -> Artifact:
