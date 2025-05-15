@@ -399,6 +399,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
                             # Write the sample metadata file
                             file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
+                            logger.info(f"Wrote metadata tsv to: {metadata_path}")
 
                             # If QIIME2 is not in hard rerun mode, check whether 
                             # the necessary outputs for downstream processing already exist.
