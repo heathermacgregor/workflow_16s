@@ -31,7 +31,7 @@ from utils import get_average_lengths, get_truncation_lengths
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
-import workflow_16s.custom_tmp_config
+#import workflow_16s.custom_tmp_config
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
