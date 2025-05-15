@@ -15,7 +15,7 @@ from per_dataset import Dataset, WorkflowRunner
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
-import workflow_16s.custom_tmp_config
+#import workflow_16s.custom_tmp_config
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
