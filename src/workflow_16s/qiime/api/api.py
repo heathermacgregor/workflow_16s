@@ -494,7 +494,6 @@ def classify_taxonomy(
     out_dir = Path(output_dir) / classifier
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Method: '{classify_method}'...")
     if classify_method == "sklearn":
         clf = load_with_print(
             Path(classifier_dir), f"{classifier}-classifier", "qza"
