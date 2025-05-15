@@ -97,7 +97,7 @@ class Dataset:
             self.qiime_dir / "trimmed-seqs_demux-stats",
         ]
         for directory in dirs_to_create:
-            create_dir(directory)
+            Path(directory).mkdir(parents=True, exist_ok=True)
 
     def _setup_file_registry(self) -> None:
         """Initialize paths for all input/output files."""
