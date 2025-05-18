@@ -498,7 +498,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
             completeness = metadata_df.notna().mean() * 100
             logger.info(f"\n{completeness}")
 
-            table_dfs = [file_utils.import_features_biom(i['table_6']) 
+            table_dfs = [file_utils.import_table_biom(i['table_6']) 
                          for i in success_subsets_qiime_outputs.values()]
             table_df = pd.concat(table_dfs)
             logger.info(f"Feature table shape: {table_df.shape}")
