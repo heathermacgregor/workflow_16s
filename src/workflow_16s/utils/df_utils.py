@@ -67,6 +67,13 @@ ENA_METADATA_COLUMNS_TO_RENAME = {
 
 # ==================================== FUNCTIONS ===================================== #
 
+def get_first_existing_column(df, columns):
+    # Loop through the list of columns
+    for col in columns:
+        if col in df.columns:
+            return df[col]  # Return the first existing column's data
+    return None  # Return None if none are found
+
 def combine_ena_and_manual_metadata(
     ena_meta: pd.DataFrame,
     manual_meta: pd.DataFrame
