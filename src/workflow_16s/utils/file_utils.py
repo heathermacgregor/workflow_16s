@@ -33,6 +33,7 @@ def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
 
 
 def fetch_first_match(dataset_info: pd.DataFrame, dataset: str):
+    """"""
     # Case-insensitive masks
     mask_ena_type = dataset_info['dataset_type'].str.lower().eq('ena')
     mask_manual_type = dataset_info['dataset_type'].str.lower().eq('manual')
@@ -119,27 +120,17 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     """
     return [Path(file) for file in file_list if not Path(file).exists()]
 
-
-def import_metadata_tsv(
-    tsv_path: Union[str, Path], 
-    index_col: str = '#SampleID'
-) -> pd.DataFrame:
-    """
-    
-    """
-    return pd.read_csv(
-        tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col
-    ).sort_index()
-
-
-def get_first_existing_column(df, columns):
-    # Loop through the list of columns
-    for col in columns:
-        if col in df.columns:
-            return df[col]  # Return the first existing column's data
-    return None  # Return None if none are found
+# ==================================== FUNCTIONS ===================================== #
 
 class AmpliconData:
+    """
+
+    Attributes:
+        project_dir:
+        mode: (Options: 'asv', 'genus')
+        verbose:
+        
+    """
     def __init__(
         self, 
         project_dir: Union[str, Path] = "/usr2/people/macgregor/amplicon/test",
@@ -155,16 +146,26 @@ class AmpliconData:
         self.meta = None
         self.taxa = None
         
-        if mode == 'asv':
-            self.BIOM_PATTERN = "data/per_dataset/qiime/*/*/*/*/FWD_*_REV_*/table/feature-table.biom"
-            self.output_path = os.path.join(str(self.project_dir), 'data/merged/l6/feature-table.biom')
+        if self.mode == 'asv':
+            table_dir = 'table'
+            output_dir = 'asv'
 
-        elif mode == 'genus':
-            self.BIOM_PATTERN = "data/per_dataset/qiime/*/*/*/*/FWD_*_REV_*/table_6/feature-table.biom"
-            self.output_path = os.path.join(str(self.project_dir), 'data/merged/asv/feature-table.biom')
+        elif self.mode == 'genus':
+            table_dir = 'table_6'
+            output_dir = 'l6'
 
-        self._get_biom_table()
+
+        self.BIOM_PATTERN = '/'.join([
+            'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
+            'FWD_*_REV_*', table_dir, 'feature-table.biom'
+        ])
+        self.output_path = os.path.join(
+            str(self.project_dir), 
+            'data', 'merged', output_dir, 'feature-table.biom'
+        )
         self._get_metadata()
+        self._get_biom_table()
+        
 
     def _get_biom_paths(self):
         return glob.glob(os.path.join(
@@ -196,7 +197,9 @@ class AmpliconData:
     def _get_biom_table(self):
         biom_paths = self._get_biome_paths()
         if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
+            raise FileNotFoundError(
+                f"No BIOM files found matching {self.BIOM_PATTERN}"
+            )   
         if self.verbose:
             logger.info(f"Found {len(biom_paths)} BIOM files")
         self.table = import_merged_table_biom(
@@ -207,7 +210,7 @@ class AmpliconData:
         )
         
     def _get_metadata(self):
-        def process_meta_path(csv_path, column_renames):
+        def process_meta_path(self, csv_path, column_renames):
             if column_renames == None:
                 column_renames = []
             if not os.path.exists(csv_path):
@@ -258,18 +261,27 @@ class AmpliconData:
                 
         meta_dfs = []
         for meta_path in self._get_meta_paths():  
-            meta_df = process_meta_path(meta_path)
+            meta_df = self.process_meta_path(meta_path, column_renames=[])
             meta_dfs.append(meta_df)
+            
         merged_df = pd.concat(meta_dfs, ignore_index=True)
-        #merged_df = pd.merge(
-        #    processed_metadata_df,
-        #    manual_metadata_df,
-        #    on='unified_sample_id',
-        #    how='outer',
-        #    suffixes=('_auto', '_manual')
-        #)
                 
-                
+             
+
+
+def import_metadata_tsv(
+    tsv_path: Union[str, Path], 
+    index_col: str = '#SampleID'
+) -> pd.DataFrame:
+    """
+    Import a metadata TSV file as a pandas DataFrame.
+    """
+    return pd.read_csv(
+        tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col
+    ).sort_index()
+
+
+   
         
 # ======================================= BIOM ======================================= #
 
