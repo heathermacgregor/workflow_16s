@@ -389,38 +389,38 @@ class AmpliconData:
         return glob.glob(str(Path(self.project_dir) / self.BIOM_PATTERN), recursive=True)    
 
     def _get_meta_paths(self) -> List[Path]:
-    """Generate metadata paths corresponding to BIOM files."""
-    meta_paths = []
-    for biom_path in self._get_biom_paths():
-        biom_path = Path(biom_path)
-        
-        # Find the 'data' directory
-        current = biom_path
-        data_dir = None
-        while current != current.root:
-            if current.name == 'data':
-                data_dir = current
-                break
-            current = current.parent
-        if not data_dir:
-            raise ValueError(f"{biom_path} is not under a 'data' directory")
-        
-        biom_dir = data_dir / "per_dataset" / "qiime"
-        try:
-            rel_path = biom_path.parent.relative_to(biom_dir)
-        except ValueError:
-            raise ValueError(f"{biom_path} is not under {biom_dir}")
-        
-        # Slice to remove last 2 directory levels
-        sliced_parts = rel_path.parts[:-1]  # Removes 'FWD...' and 'table_6'
-        
-        meta_path = (
-            data_dir / "per_dataset" / "metadata"
-            / Path(*sliced_parts)  # Use sliced parts
-            / "sample-metadata.tsv"
-        )
-        meta_paths.append(meta_path)
-    return meta_paths
+        """Generate metadata paths corresponding to BIOM files."""
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            biom_path = Path(biom_path)
+            
+            # Find the 'data' directory
+            current = biom_path
+            data_dir = None
+            while current != current.root:
+                if current.name == 'data':
+                    data_dir = current
+                    break
+                current = current.parent
+            if not data_dir:
+                raise ValueError(f"{biom_path} is not under a 'data' directory")
+            
+            biom_dir = data_dir / "per_dataset" / "qiime"
+            try:
+                rel_path = biom_path.parent.relative_to(biom_dir)
+            except ValueError:
+                raise ValueError(f"{biom_path} is not under {biom_dir}")
+            
+            # Slice to remove last 2 directory levels
+            sliced_parts = rel_path.parts[:-1]  # Removes 'FWD...' and 'table_6'
+            
+            meta_path = (
+                data_dir / "per_dataset" / "metadata"
+                / Path(*sliced_parts)  # Use sliced parts
+                / "sample-metadata.tsv"
+            )
+            meta_paths.append(meta_path)
+        return meta_paths
         
     def _get_biom_table(self):
         """Load and merge BIOM tables from discovered paths."""
