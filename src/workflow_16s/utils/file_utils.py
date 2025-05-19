@@ -4,12 +4,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import re
 import os
+import glob
 import pandas as pd
 from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
-import glob
-
 import logging
 
 # ================================== LOCAL IMPORTS =================================== #
@@ -21,21 +20,46 @@ logger = logging.getLogger('workflow_16s')
 # ==================================== FUNCTIONS ===================================== #
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
-    """Load dataset IDs from configuration file."""
+    """Load dataset IDs from configuration file.
+    
+    Args:
+        path: Path to text file containing dataset IDs (one per line)
+    
+    Returns:
+        List of dataset ID strings
+    """
     with open(path, "r") as f:
         return [line.strip() for line in f if line.strip()]
     
     
 def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
-    """"""
+    """Load dataset metadata from TSV file.
+    
+    Args:
+        tsv_path: Path to TSV file containing dataset metadata
+    
+    Returns:
+        DataFrame with dataset information, cleaned of unnamed columns
+    """
     df = pd.read_csv(tsv_path, sep="\t", dtype={'ena_project_accession': str})
     # Remove 'Unnamed' columns
     df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
     return df
 
 
-def fetch_first_match(dataset_info: pd.DataFrame, dataset: str):
-    """"""
+def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
+    """Find matching dataset information from metadata DataFrame.
+    
+    Args:
+        dataset_info: DataFrame containing dataset metadata
+        dataset: Dataset identifier to search for
+    
+    Returns:
+        First matching row from dataset_info as a pandas Series
+    
+    Raises:
+        ValueError: If no matches found for the dataset
+    """
     # Case-insensitive masks
     mask_ena_type = dataset_info['dataset_type'].str.lower().eq('ena')
     mask_manual_type = dataset_info['dataset_type'].str.lower().eq('manual')
@@ -64,7 +88,6 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str):
     # Handle no matches
     if matching_rows.empty:
         raise ValueError(f"No matches found for dataset: {dataset}")
-        # Or return None, depending on your use case
 
     # Prioritize ENA matches over manual ones
     matching_rows = matching_rows.sort_values(
@@ -80,13 +103,13 @@ def processed_dataset_files(
     params: Any, 
     cfg: Any
 ) -> Dict[str, Path]:
-    """
-    Generate expected file paths for processed dataset outputs.
+    """Generate expected file paths for processed dataset outputs.
     
     Args:
-        dirs:       Project directory structure.
-        dataset:    Dataset identifier.
-        classifier: Taxonomic classifier name.
+        dirs: Project directory structure
+        dataset: Dataset identifier
+        params: Processing parameters dictionary
+        cfg: Configuration dictionary
     
     Returns:
         Dictionary mapping file types to their expected paths
@@ -101,83 +124,72 @@ def processed_dataset_files(
     return {
         'metadata_tsv': dirs.metadata / dataset / 'metadata.tsv',
         'manifest_tsv': base_dir / 'manifest.tsv',
-        # BIOM format feature table
-        'table_biom': base_dir / 'table' / 'feature-table.biom',  
-        # Representative sequences
-        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  
-        # Taxonomic assignments
-        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  
+        'table_biom': base_dir / 'table' / 'feature-table.biom',  # BIOM feature table
+        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  # Representative seqs
+        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  # Taxonomy
     }
 
 
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
-    """
-    Identify missing output files from a list of expected paths.
+    """Identify missing output files from a list of expected paths.
     
     Args:
-        file_list: List of file paths to check.
+        file_list: List of file paths to check
     
     Returns:
-        List of paths that don't exist on the filesystem
+        List of Path objects for files that don't exist
     """
     return [Path(file) for file in file_list if not Path(file).exists()]
 
 # ==================================== FUNCTIONS ===================================== #
 
-def convert_to_biom(table):
-    """
-    Converts a pandas DataFrame to a BIOM Table object if the input is a DataFrame.
-
+def convert_to_biom(table: pd.DataFrame) -> Table:
+    """Convert pandas DataFrame to BIOM Table.
+    
     Args:
-        table: Input object to be converted (checks if it's a pandas DataFrame).
-
+        table: Input DataFrame containing feature counts
+    
     Returns:
-        BIOM Table representation of the DataFrame.
+        BIOM Table representation of the DataFrame
     """
-    # Check if input is a pandas DataFrame
     if not isinstance(table, pd.DataFrame):
         return table
     
-    # Convert observation and sample IDs to strings (BIOM format requirement)
     observation_ids = table.index.astype(str).tolist()
     sample_ids = table.columns.astype(str).tolist()
-    
-    # Extract numerical data matrix
     data = table.values
     
-    # Create BIOM Table
-    biom_table = Table(
+    return Table(
         data=data,
         observation_ids=observation_ids,
         sample_ids=sample_ids,
-        type="OTU table"  # Modify this based on your data type
+        type="OTU table"
     )
-    
-    return biom_table
     
 
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
     output_dir: Union[str, Path]
-):
-    """
-    Collapse a l6 (genus) BIOM table to the specified taxonomic level and save 
-    the result.
-
+) -> Table:
+    """Collapse feature table to specified taxonomic level.
+    
     Args:
-        table: biom.Table object
-        target_level: str, one of ['phylum', 'class', 'order', 'family']
-        output_dir: str or Path, base directory to save output
+        table: Input BIOM Table or DataFrame
+        target_level: Taxonomic level to collapse to (phylum/class/order/family)
+        output_dir: Directory to save collapsed table
+    
+    Returns:
+        Collapsed BIOM Table
+    
+    Raises:
+        ValueError: For invalid target_level
     """
     if not isinstance(table, Table):
         table = convert_to_biom(table)
-    # Define the index for each taxonomic level (0-based split)
+        
     levels = {
-        'phylum': 1,  # d__Bacteria;p__Actinobacteriota
-        'class': 2,   # ...;c__Actinobacteria
-        'order': 3,   # ...;o__Frankiales
-        'family': 4   # ...;f__Acidothermaceae
+        'phylum': 1, 'class': 2, 'order': 3, 'family': 4
     }
 
     if target_level not in levels:
@@ -187,29 +199,22 @@ def collapse_taxa(
 
     level_idx = levels[target_level]
 
-    # Create mapping: feature_id (taxonomy string) -> collapsed taxonomy
+    # Create taxonomy mapping
     id_map = {}
     for taxon in table.ids(axis='observation').astype(str):
         parts = taxon.split(';')
-        if len(parts) >= level_idx + 1:
-            truncated = ';'.join(parts[:level_idx + 1])
-        else:
-            truncated = 'Unclassified'
+        truncated = ';'.join(parts[:level_idx + 1]) if len(parts) >= level_idx + 1 else 'Unclassified'
         id_map[taxon] = truncated
 
-    # Define grouping function
-    def group_function(feature_id, metadata):
-        return id_map.get(feature_id, 'Unclassified')
-
-    # Collapse the table
+    # Collapse table
     collapsed_table = table.collapse(
-        group_function,
+        lambda id, _: id_map.get(id, 'Unclassified'),
         norm=False,
         axis='observation',
         include_collapsed_metadata=False
     ).remove_empty()
 
-    # Save the collapsed table
+    # Save output
     output_biom_path = Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
@@ -222,43 +227,47 @@ def presence_absence(
     table: Union[Table, pd.DataFrame], 
     target_level: str, 
     output_dir: Union[str, Path]
-):
-    # Create output directory if it doesn't exist
+) -> Table:
+    """Convert table to presence/absence format and filter by abundance.
+    
+    Args:
+        table: Input BIOM Table or DataFrame
+        target_level: Taxonomic level for output naming
+        output_dir: Directory to save output
+    
+    Returns:
+        Presence/absence BIOM Table filtered by abundance
+    """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     if not isinstance(table, Table):
         table = convert_to_biom(table)
 
-    # Define the index for each taxonomic level (0-based split)
-    levels = {
-        'phylum': 1,  # e.g., d__Bacteria;p__Actinobacteriota
-        'class': 2,   # ...;c__Actinobacteria
-        'order': 3,   # ...;o__Frankiales
-        'family': 4,   # ...;f__Acidothermaceae
-        'genus': 5
-    }
+    levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
     
-    feature_sums = np.array(table.sum(axis='observation')).flatten() # Total counts per feature
-    sorted_idx = np.argsort(feature_sums)[::-1] # Sort features by abundance
-    cumulative = np.cumsum(feature_sums[sorted_idx]) / feature_sums.sum() # Cumulative proportion of total counts contributed by the top features
-    stop_idx = np.searchsorted(cumulative, 0.99) + 1 # Smallest number of top features needed to account for ≥99% of the total counts
+    # Filter by abundance
+    feature_sums = np.array(table.sum(axis='observation')).flatten()
+    sorted_idx = np.argsort(feature_sums)[::-1]
+    cumulative = np.cumsum(feature_sums[sorted_idx]) / feature_sums.sum()
+    stop_idx = np.searchsorted(cumulative, 0.99) + 1
     keep_ids = [table.ids(axis='observation')[i] for i in sorted_idx[:stop_idx]]
     
-    pa_table = table.pa(inplace=False) # Convert to presence/absence
+    # Convert to presence/absence
+    pa_table = table.pa(inplace=False)
     pa_table_filtered = pa_table.filter(keep_ids, axis='observation')
     pa_df_filtered = pa_table_filtered.to_dataframe(dense=True)
 
-    # Convert DataFrame to BIOM Table
+    # Save output
     pa_table = Table(
-        data=pa_df_filtered.values,  # Transpose to (samples x observations)
-        observation_ids=pa_df_filtered.index,
-        sample_ids=pa_df_filtered.columns,
+        pa_df_filtered.values,
+        pa_df_filtered.index,
+        pa_df_filtered.columns,
         table_id='Presence Absence BIOM Table'
     )
     output_biom_path = Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
         pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-    logger.info(f"Wrote presence-absence table collapsed to {target_level} to '{output_biom_path}'")
+    logger.info(f"Wrote presence-absence table to '{output_biom_path}'")
     
     return pa_table
 
@@ -270,57 +279,61 @@ def filter_presence_absence(
     prevalence_threshold: float = 0.05, 
     group_threshold: float = 0.05
 ) -> Table:
-    # Convert BIOM Table to DataFrame (samples x species)
+    """Filter presence/absence table based on prevalence and group differences.
+    
+    Args:
+        table: Input BIOM Table
+        metadata: Sample metadata DataFrame
+        col: Metadata column to group by
+        prevalence_threshold: Minimum prevalence across all samples
+        group_threshold: Minimum prevalence difference between groups
+    
+    Returns:
+        Filtered BIOM Table
+    """
     df = table.to_dataframe(dense=True).T
     metadata = metadata.set_index("run_accession.1")
-    # Merge with metadata using sample IDs (index)
-    df_with_meta = df.join(metadata[[col]], how='inner')  # samples x (species + col)
+    df_with_meta = df.join(metadata[[col]], how='inner')
 
-    # Apply prevalence threshold filter
+    # Apply prevalence filter
     if prevalence_threshold:
-        # Calculate species prevalence (mean across samples)
         species_data = df_with_meta.drop(columns=[col])
-        prev = species_data.mean(axis=0)  # axis=0: column-wise mean (species prevalence)
+        prev = species_data.mean(axis=0)
         filtered_species = prev[prev >= prevalence_threshold].index
-        # Retain filtered species and metadata column
         df_with_meta = df_with_meta[filtered_species.union(pd.Index([col]))]
-    # Apply group threshold filter
+
+    # Apply group filter
     if group_threshold:
-        # Group samples by metadata column
         groups = df_with_meta.groupby(col)
-        # Ensure both groups exist
         if True not in groups.groups or False not in groups.groups:
-            raise ValueError(f"Metadata column '{col}' must have both True and False groups.")
-        # Calculate presence percentage in each group
-        sum_per_group = groups.sum(numeric_only=True)  # species sums per group
-        n_samples = groups.size()  # sample counts per group
-        percentages = sum_per_group.div(n_samples, axis=0)  # axis=0 aligns with group index
-        # Check threshold in both groups
+            raise ValueError(f"Metadata column '{col}' must have True/False groups")
+        sum_per_group = groups.sum(numeric_only=True)
+        n_samples = groups.size()
+        percentages = sum_per_group.div(n_samples, axis=0)
         mask = (percentages.loc[True] >= group_threshold) & (percentages.loc[False] >= group_threshold)
         selected_species = mask[mask].index
-        # Retain selected species and metadata column
         df_with_meta = df_with_meta[selected_species.union(pd.Index([col]))]
 
-    # Prepare data for BIOM Table (exclude metadata column)
-    df_biom = df_with_meta.drop(columns=[col])
-    
-    # Convert back to BIOM Table (features x samples)
     return Table(
-        data=df_biom.values.T,  # Transpose to (species x samples)
-        observation_ids=df_biom.columns.tolist(),
-        sample_ids=df_biom.index.tolist(),
+        df_with_meta.drop(columns=[col]).values.T,
+        df_with_meta.columns.tolist(),
+        df_with_meta.index.tolist(),
         table_id='Filtered Presence/Absence Table'
     )
     
     
 class AmpliconData:
-    """
-
+    """Main class for handling amplicon sequencing data analysis.
+    
     Attributes:
-        project_dir:
-        mode: (Options: 'asv', 'genus')
-        verbose:
-        
+        project_dir: Root directory for project data
+        mode: Analysis mode ('asv' or 'genus')
+        verbose: Enable verbose logging
+        table: Main feature table
+        meta: Metadata DataFrame
+        taxa: Taxonomy information
+        tables: Dictionary of collapsed tables by level
+        presence_absence_tables: PA tables by taxonomic level
     """
     def __init__(
         self, 
@@ -331,8 +344,6 @@ class AmpliconData:
         self.project_dir = project_dir
         self.mode = mode
         self.verbose = verbose
-        
-
         self.table = None
         self.meta = None
         self.taxa = None
@@ -340,7 +351,6 @@ class AmpliconData:
         if self.mode == 'asv':
             table_dir = 'table'
             output_dir = 'asv'
-
         elif self.mode == 'genus':
             table_dir = 'table_6'
             output_dir = 'l6'
@@ -349,14 +359,11 @@ class AmpliconData:
             'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
             'FWD_*_REV_*', table_dir, 'feature-table.biom'
         ])
-        self.output_path = os.path.join(
-            str(self.project_dir), 
-            'data', 'merged', output_dir, 'feature-table.biom'
-        )
+        self.output_path = Path(project_dir) / 'data' / 'merged' / output_dir / 'feature-table.biom'
         self._get_metadata()
         self._get_biom_table()
         
-        # Collapse merged feature table to l2-5
+        # Collapse tables
         self.tables = {}
         self.presence_absence_tables = {}
         if self.mode == 'genus':
@@ -364,64 +371,39 @@ class AmpliconData:
                 collapsed_table = collapse_taxa(
                     self.table, 
                     level, 
-                    os.path.join(
-                        str(self.project_dir), 
-                        'data', 'merged', output_dir
-                    )
+                    Path(project_dir) / 'data' / 'merged' / output_dir
                 )
                 self.tables[level] = collapsed_table
             self.tables['genus'] = self.table   
     
-            
-            for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            for level in self.tables:
                 pa = presence_absence(
-                    tables[level], 
+                    self.tables[level], 
                     level, 
-                    output_dir=Path(
-                        os.path.join(
-                            str(self.project_dir), 
-                            'data', 'merged', output_dir
-                        )
-                    )
+                    Path(project_dir) / 'data' / 'merged' / output_dir
                 )
                 self.presence_absence_tables[level] = pa
-        
 
-    def _get_biom_paths(self):
-        return glob.glob(os.path.join(
-            str(self.project_dir), self.BIOM_PATTERN
-        ), recursive=True)    
+    def _get_biom_paths(self) -> List[str]:
+        """Get paths to BIOM files matching pattern."""
+        return glob.glob(str(Path(self.project_dir) / self.BIOM_PATTERN), recursive=True)    
 
-    def _get_meta_paths(self):
+    def _get_meta_paths(self) -> List[Path]:
+        """Generate metadata paths corresponding to BIOM files."""
         meta_paths = []
         for biom_path in self._get_biom_paths():
-            # Navigate upwards using .parents
-            qiime_dir = Path(biom_path).parents[5]  # Equivalent to 6 levels up
-            base_dir = Path(biom_path).parents[9]   # Equivalent to 10 levels up
-            project_id = qiime_dir.name
-            
-            # Build metadata path using pathlib
-            try:
-                # Get relative path from base_dir to biom_path and take the first 5 components
-                subdirs = biom_path.relative_to(base_dir).parts[:5]
-            except ValueError:
-                raise ValueError(f"{biom_path} is not relative to {base_dir}")
-            
-            meta_path = (
-                base_dir / "data" / "per_dataset" / "metadata" 
-                / Path(*subdirs) / "sample-metadata.tsv"
-            )
+            qiime_dir = Path(biom_path).parents[5]
+            base_dir = Path(biom_path).parents[9]
+            subdirs = Path(biom_path).relative_to(base_dir).parts[:5]
+            meta_path = base_dir / "data" / "per_dataset" / "metadata" / Path(*subdirs) / "sample-metadata.tsv"
             meta_paths.append(meta_path)
         return meta_paths
         
     def _get_biom_table(self):
+        """Load and merge BIOM tables from discovered paths."""
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            raise FileNotFoundError(
-                f"No BIOM files found matching {self.BIOM_PATTERN}"
-            )   
-        if self.verbose:
-            logger.info(f"Found {len(biom_paths)} BIOM files")
+            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
         self.table = import_merged_table_biom(
             biom_paths, 
             'dataframe',
@@ -430,93 +412,91 @@ class AmpliconData:
         )
         
     def _get_metadata(self):
-        def process_meta_path(self, csv_path, column_renames):
-            if column_renames == None:
-                column_renames = []
-            if not os.path.exists(csv_path):
-                raise FileNotFoundError()
-            try:
-                df = pd.read_csv(meta_path, sep='\t')#, index_col=0)
-                
-                # Convert column names to lowercase
-                df.columns = df.columns.str.lower() 
-                
-                options = ['run_accession', '#sampleid', 'sample-id']
-                sample_id_col = get_first_existing_column(df, options)
-                if sample_id_col:
-                    df['SAMPLE ID'] = sample_id_col
-                else:
-                    df['SAMPLE ID'] = [
-                        f"{str(Path(csv_path).parents[5].name)}_x" 
-                        for x in range(1, df.shape[0]+1)
-                    ] 
-                    
-                options = ['project_accession', 'dataset_id', 'dataset_name']
-                dataset_id_col = get_first_existing_column(df, options)
-                if dataset_id_col:
-                    df['DATASET ID'] = dataset_id_col
-                else:
-                    df['DATASET ID'] = str(Path(csv_path).parents[5].name) 
-                
-                # Add nuclear_contamination_status if missing
-                if 'nuclear_contamination_status' not in df.columns:
-                    df['nuclear_contamination_status'] = False
-
-                # Rename columns 
-                df = df.rename(columns=column_renames)  
-
-                # Remove duplicate columns
-                duplicate_cols = df.columns[df.columns.duplicated()]
-                if len(duplicate_cols) > 0:
-                    df = df.loc[:, ~df.columns.duplicated()]
-                    
-                if self.verbose:
-                    logger.info(
-                        f"Loaded {str(Path(csv_path).parents[5].name)} "
-                        f"with {df.shape[0]} samples."
-                    )
-            
-            except Exception as e:
-                logger.warning(f"Error loading {meta_path}: {str(e)}") 
-                
+        """Load and merge metadata from all datasets."""
         meta_dfs = []
         for meta_path in self._get_meta_paths():  
-            meta_df = self.process_meta_path(meta_path, column_renames=[])
+            meta_df = self._process_meta_path(meta_path, [])
             meta_dfs.append(meta_df)
+        self.meta = pd.concat(meta_dfs, ignore_index=True)
+
+    def _process_meta_path(
+        self, 
+        csv_path: Path, 
+        column_renames: List[Tuple[str, str]]
+    ) -> pd.DataFrame:
+        """Process individual metadata file.
+        
+        Args:
+            csv_path: Path to metadata file
+            column_renames: List of (old_name, new_name) tuples
+        
+        Returns:
+            Processed metadata DataFrame
+        """
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
             
-        merged_df = pd.concat(meta_dfs, ignore_index=True)
+        df = pd.read_csv(csv_path, sep='\t')
+        df.columns = df.columns.str.lower()
+        
+        # Handle sample IDs
+        sample_id_col = next((col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns), None)
+        if sample_id_col:
+            df['SAMPLE ID'] = df[sample_id_col]
+        else:
+            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" for i in range(1, len(df)+1)]
+            
+        # Handle dataset IDs
+        dataset_id_col = next((col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns), None)
+        if dataset_id_col:
+            df['DATASET ID'] = df[dataset_id_col]
+        else:
+            df['DATASET ID'] = Path(csv_path).parents[5].name
+            
+        # Add contamination status if missing
+        if 'nuclear_contamination_status' not in df.columns:
+            df['nuclear_contamination_status'] = False
+
+        # Apply column renames
+        for old, new in column_renames:
+            if old in df.columns:
+                df.rename(columns={old: new}, inplace=True)
                 
-             
+        return df
 
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path], 
     index_col: str = '#SampleID'
 ) -> pd.DataFrame:
-    """
-    Import a metadata TSV file as a pandas DataFrame.
+    """Import metadata from TSV file.
+    
+    Args:
+        tsv_path: Path to metadata TSV
+        index_col: Column to use as index
+    
+    Returns:
+        Metadata DataFrame
     """
     return pd.read_csv(
         tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col
     ).sort_index()
 
-
    
-        
 # ======================================= BIOM ======================================= #
 
 def import_table_biom(
-    biom_path: Union[str, Path], as_type: str = 'table'
+    biom_path: Union[str, Path], 
+    as_type: str = 'table'
 ) -> Union[Table, pd.DataFrame]:
-    """
-    Import a BIOM feature table as a Table or pandas DataFrame.
-
+    """Import BIOM table from file.
+    
     Args:
-        biom_path: Path where the .biom file is located.
-        as_type:   Type to return the table as.
-        
+        biom_path: Path to .biom file
+        as_type: Return type ('table' or 'dataframe')
+    
     Returns:
-        Table or Pandas DataFrame
+        BIOM Table or DataFrame
     """
     try:
         with biom_open(biom_path) as f:
@@ -530,252 +510,186 @@ def import_table_biom(
         feature_ids = table.ids(axis='observation')
         sample_ids = table.ids(axis='sample')
         data = table.matrix_data.toarray()
-        df = pd.DataFrame(data, index=feature_ids, columns=sample_ids)
-        return df
+        return pd.DataFrame(data, index=feature_ids, columns=sample_ids)
     else:
-        raise ValueError(
-            f"Output type '{as_type}' not recognized. "
-            f"Expected 'table' or 'dataframe'."
-        )    
+        raise ValueError(f"Invalid as_type: {as_type}. Use 'table' or 'dataframe'")
 
 def import_merged_table_biom(
     biom_paths: List[Union[str, Path]], 
     as_type: str = 'table',
-    output_path: Union[str, Path] = '/usr2/people/macgregor/amplicon/test/data/merged/l6/feature-table.biom',
+    output_path: Union[str, Path] = None,
     verbose: bool = False
 ) -> Union[Table, pd.DataFrame]:
-    """
-    Import and merge a list of BIOM feature tables.
-
-    Args:
-        biom_paths:
-        as_type:
-        output_dir:
-
-    Returns:
-        merged_table:
-    """    
-    if verbose:
-        logger.info(f"Found {len(biom_paths)} BIOM files")
+    """Merge multiple BIOM tables into one.
     
+    Args:
+        biom_paths: List of paths to BIOM files
+        as_type: Return type ('table' or 'dataframe')
+        output_path: Optional path to save merged table
+        verbose: Enable progress logging
+    
+    Returns:
+        Merged BIOM Table or DataFrame
+    """
     tables = []
-    for biom_path in biom_paths:
+    for path in biom_paths:
         try:
-            table = import_table_biom(biom_path, 'table')
+            table = import_table_biom(path, 'table')
             tables.append(table)
             if verbose:
-                biom_path_parts = os.path.normpath(biom_path).split(os.sep)
-                biom_path_report = os.sep.join(parts[-3:])
-                if verbose:
-                    logger.info(
-                        f"Loaded {biom_path_report} with "
-                        f"{len(table.ids(axis='sample'))} samples."
-                    )
-            
+                logger.info(f"Loaded {Path(path).name} with {len(table.ids('sample'))} samples")
         except Exception as e:
-            logger.error(f"Failed to load {biom_path}: {str(e)}")
-            continue
+            logger.error(f"Failed to load {path}: {str(e)}")
     
     if not tables:
         raise ValueError("No valid BIOM tables loaded")
     
-    # Merge tables
     merged_table = tables[0]
     for table in tables[1:]:
         merged_table = merged_table.merge(table)
 
-    if verbose:
-        logger.info(f"Merged table contains {merged_table.shape[1]} samples.")
-
     if output_path:
-        # Create output directory if it doesn't exist
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         with h5py.File(output_path, 'w') as f:
-            merged_table.to_hdf5(
-                f, 
-                generated_by="/usr2/people/macgregor/amplicon/workflow_16s/run.sh"
-            )
+            merged_table.to_hdf5(f, generated_by="workflow_16s")
         if verbose:
-            logger.info(f"Wrote merged table to '{output_path}'")
+            logger.info(f"Saved merged table to {output_path}")
 
-    if as_type == 'table':
-        return merged_table
-    elif as_type == 'dataframe':
-        feature_ids = merged_table.ids(axis='observation')
-        sample_ids = merged_table.ids(axis='sample')
-        data = merged_table.matrix_data.toarray()
-        df = pd.DataFrame(data, index=feature_ids, columns=sample_ids)
-        return df
-    else:
-        raise ValueError(
-            f"Output type '{as_type}' not recognized. "
-            f"Expected 'table' or 'dataframe'."
-        )    
+    return merged_table if as_type == 'table' else merged_table.to_dataframe()
 
 # ====================================== FASTA ======================================= #
 
-def import_seqs_fasta(fasta_path: Union[str, Path]) -> pd.DataFrame:
-    """
+def import_seqs_fasta(fasta_path: Union[str, Path]) -> Dict[str, str]:
+    """Import sequences from FASTA file.
     
+    Args:
+        fasta_path: Path to FASTA file
+    
+    Returns:
+        Dictionary mapping sequence IDs to sequences
     """
-    seqs = dict(zip(
-        (record.id for record in SeqIO.parse(fasta_path, "fasta")), 
-        (str(record.seq) for record in SeqIO.parse(fasta_path, "fasta"))
-    ))
-    return seqs
-
+    return {
+        record.id: str(record.seq)
+        for record in SeqIO.parse(fasta_path, "fasta")
+    }
 
 def import_faprotax_tsv(tsv_path: Union[str, Path]) -> pd.DataFrame:
-    """
+    """Import FAPROTAX results from TSV.
     
+    Args:
+        tsv_path: Path to FAPROTAX TSV output
+    
+    Returns:
+        Transposed DataFrame with samples as rows and functions as columns
     """
-    df = pd.read_csv(
-        tsv_path, sep="\t", encoding="utf8", low_memory=False
-    ).sort_index().T
-    df.columns = df.iloc[0]
-    df = df.iloc[1:]
-    return df
+    df = pd.read_csv(tsv_path, sep="\t", index_col=0)
+    return df.T
 
 # ==================================== CLASSES ====================================== #
 
 class Taxonomy:
-    """
+    """Class for handling taxonomic classification data.
     
+    Attributes:
+        taxonomy: DataFrame containing taxonomy information
     """
     def __init__(self, tsv_path: Union[str, Path]):
-       self.taxonomy = self.import_taxonomy_tsv(tsv_path)
+        self.taxonomy = self.import_taxonomy_tsv(tsv_path)
         
     def import_taxonomy_tsv(self, tsv_path: Union[str, Path]) -> pd.DataFrame:
-        def extract_taxonomic_level(taxonomy, level):
-            level_prefix = level + '__'
-            if taxonomy == 'Unassigned' or taxonomy == 'Unclassified':
-                return 'Unclassified'
-            start_index = taxonomy.find(level_prefix)
-            if start_index != -1:
-                end_index = taxonomy.find(';', start_index)
-                if end_index != -1:
-                    return taxonomy[start_index + len(level_prefix):end_index]
-                else:
-                    return taxonomy[start_index + len(level_prefix):]
-            else:
-                return None
-        taxonomy = pd.read_csv(tsv_path, sep='\t', encoding='UTF8', skiprows=0)
-        taxonomy = taxonomy.rename(columns={
-            'Feature ID': 'id', 
-            'Taxon'     : 'taxonomy', 
-            'Consensus' : 'confidence'
-        })
-        # Index by Feature ID
-        taxonomy = taxonomy.set_index('id')                                                                                       
-        taxonomy['taxstring'] = [re.sub(' *[dpcofgs]__', '', s) 
-                                 for s in taxonomy['taxonomy'].values]
-        # Create new columns for each taxonomic level
-        for level in ['d', 'p', 'c', 'o', 'f', 'g', 's']:
-            taxonomy[level.capitalize()] = taxonomy['taxonomy'].apply(
-                lambda x: extract_taxonomic_level(x, level)
-            )                
-    
-        column_mapping = {
-            'D': 'Domain', 
-            'P': 'Phylum', 
-            'C': 'Class', 
-            'O': 'Order', 
-            'F': 'Family', 
-            'G': 'Genus', 
-            'S': 'Species'
-        }
-        #  Rename the new columns
-        taxonomy.rename(columns=column_mapping, inplace=True)                                                                        
-    
-        taxonomy.reset_index(inplace=True)
-        # Reset the index to assign unique numbers to the 'id' column and store 
-        # them in a new column 'n'
-        taxonomy.rename(columns={'index': 'n'}, inplace=True)                                                                        
-        taxonomy.set_index('id', inplace=True)
-        return taxonomy
+        """Process taxonomy TSV file into structured DataFrame.
         
-    def get_taxstring_by_id(self, id):
-        """"""
-        row = self.taxonomy[self.taxonomy['id'] == id]
-        if not row.empty:
-            return row.iloc[0]['taxstring']
-        else:
-            return None
-
-    def get_taxstring_by_asv(self, asv):
-        """"""
-        row = self.taxonomy[self.taxonomy['trimmed_asv'] == id]
-        if not row.empty:
-            return row.iloc[0]['taxstring']
-        else:
-            return None
+        Args:
+            tsv_path: Path to QIIME2 taxonomy TSV
+        
+        Returns:
+            DataFrame with separate columns for each taxonomic level
+        """
+        def extract_level(taxonomy: str, level: str) -> str:
+            prefix = level + '__'
+            if not taxonomy or taxonomy in ['Unassigned', 'Unclassified']:
+                return 'Unclassified'
+            start = taxonomy.find(prefix)
+            if start == -1:
+                return None
+            end = taxonomy.find(';', start)
+            return taxonomy[start+len(prefix):end] if end != -1 else taxonomy[start+len(prefix):]
+        
+        df = pd.read_csv(tsv_path, sep='\t')
+        df = df.rename(columns={
+            'Feature ID': 'id', 
+            'Taxon': 'taxonomy', 
+            'Consensus': 'confidence'
+        }).set_index('id')
+        
+        # Clean taxonomy strings
+        df['taxstring'] = df['taxonomy'].str.replace(r' *[dpcofgs]__', '', regex=True)
+        
+        # Add taxonomic levels
+        for level in ['d', 'p', 'c', 'o', 'f', 'g', 's']:
+            df[level.upper()] = df['taxonomy'].apply(lambda x: extract_level(x, level))
+            
+        return df.rename(columns={
+            'D': 'Domain', 'P': 'Phylum', 'C': 'Class',
+            'O': 'Order', 'F': 'Family', 'G': 'Genus', 'S': 'Species'
+        })
+        
+    def get_taxstring_by_id(self, feature_id: str) -> Optional[str]:
+        """Get taxonomy string for a feature ID.
+        
+        Args:
+            feature_id: Feature ID to look up
+        
+        Returns:
+            Taxonomy string or None if not found
+        """
+        return self.taxonomy.loc[feature_id, 'taxstring'] if feature_id in self.taxonomy.index else None
 
 
 def write_metadata_tsv(df: pd.DataFrame, tsv_path: str) -> None:
-    """
+    """Write metadata DataFrame to TSV format.
     
+    Args:
+        df: Metadata DataFrame
+        tsv_path: Output path for TSV file
     """
     df = df.copy()
-    # Create #SampleID column from 'run_accession' if it doesn't exist
-    if '#SampleID' not in df.columns:
+    if '#SampleID' not in df.columns and 'run_accession' in df.columns:
         df['#SampleID'] = df['run_accession']
-    
-    df.set_index('#SampleID', inplace=True, drop=True)
+    df.set_index('#SampleID', inplace=True)
     df.to_csv(tsv_path, sep='\t', index=True)
 
 
 def write_manifest_tsv(results: Dict, tsv_path: str) -> None:
-    """
-    
-    """
-    rows = []
-    
-    for run_accession, file_paths in results.items():
-        if type(file_paths) != list:
-            file_paths = str(file_paths).split(';')
-        num_files = len(file_paths)
-        
-        if num_files == 1:
-            rows.append({
-                    'sample-id'        : run_accession,
-                    'absolute-filepath': file_paths[0]
-                })
-        elif num_files == 2:
-            rows.append({
-                    'sample-id'                : run_accession,
-                    'forward-absolute-filepath': file_paths[0],
-                    'reverse-absolute-filepath': file_paths[1]
-                })
-        else:
-            logger.debug(
-                f"Warning: Run accession {run_accession} has an "
-                f"invalid number of file paths ({num_files})."
-            )
-            break
-
-    # Create DataFrame
-    df = pd.DataFrame(rows)
-    df.set_index('sample-id', inplace=True, drop=True)
-    df.to_csv(tsv_path, sep='\t', index=True)
-    
-
-def manual_meta(dataset: str, metadata_dir: Union[str, Path]):
-    """
-    Retrieves and processes manually-collected dataset metadata.
+    """Write manifest file for QIIME2 import.
     
     Args:
-        dataset: ENA Project Accession number (e.g., PRJEB1234).
+        results: Dictionary mapping run accessions to file paths
+        tsv_path: Output path for manifest file
+    """
+    rows = []
+    for run_id, paths in results.items():
+        if len(paths) == 1:
+            rows.append({'sample-id': run_id, 'absolute-filepath': paths[0]})
+        elif len(paths) == 2:
+            rows.append({
+                'sample-id': run_id,
+                'forward-absolute-filepath': paths[0],
+                'reverse-absolute-filepath': paths[1]
+            })
+    pd.DataFrame(rows).set_index('sample-id').to_csv(tsv_path, sep='\t', index=True)
+    
+
+def manual_meta(dataset: str, metadata_dir: Union[str, Path]) -> pd.DataFrame:
+    """Load manually curated metadata for a dataset.
+    
+    Args:
+        dataset: Dataset identifier
+        metadata_dir: Base directory containing metadata files
     
     Returns:
-        Dictionary containing metadata, run characteristics, and filtered 
-        run lists. Returns None if invalid dataset format or metadata 
-        retrieval fails.
+        DataFrame with manual metadata, empty if not found
     """
-    manual_metadata_tsv = Path(metadata_dir) / dataset / 'manual-metadata.tsv'
-    if manual_metadata_tsv.is_file():
-        return pd.read_csv(
-            manual_metadata_tsv, sep="\t", encoding="utf8", low_memory=False
-        )
-    else:
-        return pd.DataFrame({})
-    
+    path = Path(metadata_dir) / dataset / 'manual-metadata.tsv'
+    return pd.read_csv(path, sep="\t") if path.exists() else pd.DataFrame()
