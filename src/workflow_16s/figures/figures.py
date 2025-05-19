@@ -230,12 +230,11 @@ def plot_legend(
     plotly_show_and_save(
         fig,
         show=show,
-        output_dir: Union[str, Path] = None,
-        output_path=   
+        output_path=output_path   
     )
     # Save the figure
     if output_path:
-        plt.savefig(doutput_path, bbox_inches='tight', pad_inches=0.1)
+        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
     if show:
         plt.show()
     plt.close()
