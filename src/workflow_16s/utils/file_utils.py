@@ -397,13 +397,13 @@ class AmpliconData:
             biom_path = Path(biom_path)
             try:
                 # Get parent directory to exclude filename
-                rel_path = biom_path.parent.relative_to(base_dir)
+                rel_path = biom_path.parent.relative_to(base_dir / "data" / "per_dataset" / "metadata")
             except ValueError:
                 # Handle paths not relative to base_dir
                 raise ValueError(f"{biom_path} is not under {base_dir}")
             
             # Take first 5 parts (adjust based on your needs)
-            subdirs = rel_path.parts[3:5]
+            subdirs = rel_path.parts[:4]
             
             meta_path = (
                 base_dir / "data" / "per_dataset" / "metadata" 
