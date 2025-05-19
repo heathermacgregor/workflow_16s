@@ -354,35 +354,35 @@ class AmpliconData:
         self._get_metadata()
         self._get_biom_table()
         
-    # Collapse merged feature table to l2-5
-    self.tables = {}
-    self.presence_absence_tables = {}
-    if self.mode == 'genus':
-        for level in ['phylum', 'class', 'order', 'family']:
-            collapsed_table = collapse_taxa(
-                self.table, 
-                level, 
-                os.path.join(
-                    str(self.project_dir), 
-                    'data', 'merged', output_dir
-                )
-            )
-            self.tables[level] = collapsed_table
-        self.tables['genus'] = self.table   
-
-        
-        for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            pa = presence_absence(
-                tables[level], 
-                level, 
-                output_dir=Path(
+        # Collapse merged feature table to l2-5
+        self.tables = {}
+        self.presence_absence_tables = {}
+        if self.mode == 'genus':
+            for level in ['phylum', 'class', 'order', 'family']:
+                collapsed_table = collapse_taxa(
+                    self.table, 
+                    level, 
                     os.path.join(
                         str(self.project_dir), 
                         'data', 'merged', output_dir
                     )
                 )
-            )
-            self.presence_absence_tables[level] = pa
+                self.tables[level] = collapsed_table
+            self.tables['genus'] = self.table   
+    
+            
+            for level in ['phylum', 'class', 'order', 'family', 'genus']:
+                pa = presence_absence(
+                    tables[level], 
+                    level, 
+                    output_dir=Path(
+                        os.path.join(
+                            str(self.project_dir), 
+                            'data', 'merged', output_dir
+                        )
+                    )
+                )
+                self.presence_absence_tables[level] = pa
         
 
     def _get_biom_paths(self):
