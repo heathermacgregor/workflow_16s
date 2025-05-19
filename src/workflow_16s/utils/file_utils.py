@@ -393,7 +393,7 @@ class AmpliconData:
 
     def _get_meta_paths(self):
         meta_paths = []
-        for biom_path in self._get_biome_paths():
+        for biom_path in self._get_biom_paths():
             # Navigate upwards using .parents
             qiime_dir = Path(biom_path).parents[5]  # Equivalent to 6 levels up
             base_dir = Path(biom_path).parents[9]   # Equivalent to 10 levels up
@@ -414,7 +414,7 @@ class AmpliconData:
         return meta_paths
         
     def _get_biom_table(self):
-        biom_paths = self._get_biome_paths()
+        biom_paths = self._get_biom_paths()
         if not biom_paths:
             raise FileNotFoundError(
                 f"No BIOM files found matching {self.BIOM_PATTERN}"
