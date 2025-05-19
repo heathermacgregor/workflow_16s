@@ -514,7 +514,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-from workflow_16s.figures.merged import sample_map_categorical, pcoa
+from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa
 from workflow_16s.stats import beta_diversity 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
