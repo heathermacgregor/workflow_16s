@@ -13,7 +13,7 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
-from skbio.stats.ordination import PCoAResults, pcoa as PCoA
+from skbio.stats.ordination import pcoa as PCoA
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
