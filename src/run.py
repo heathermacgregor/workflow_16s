@@ -514,7 +514,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-#from workflow_16s.figures.merged import sample_map_categorical
+from workflow_16s.figures.merged import sample_map_categorical, pcoa
+from workflow_16s.stats import beta_diversity 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
     per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
@@ -533,7 +534,27 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #data.tables
     #data.presence_absence_tables 
     #data.meta
-
-    #sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')=
+    logger.info("Creating sample map...")
+    sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')
+    logger.info("Calculating PCoA...")
+    pcoa_results = beta_diversity.pcoa(
+        table=data.tables['genus'],
+        metric='braycurtis',
+        n_dimensions=3
+    )
+    logger.info("Plotting PCoA...")
+    pcoa_plot = pcoa(
+        components = pcoa_results.coordinates , 
+        proportion_explained = pcoa_results.proportion_explained, 
+        metadata=data.meta,
+        metric='braycurtis',
+        color_col='dataset_name', 
+        symbol_col='nuclear_contamination_status',
+        show=False,
+        output_dir=Path(project_dir.data) / 'merged', 
+        transformation=None,
+        x=1, 
+        y=2
+    )
 if __name__ == "__main__":
     main()
