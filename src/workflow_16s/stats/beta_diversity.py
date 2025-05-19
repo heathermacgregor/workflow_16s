@@ -84,7 +84,7 @@ def pcoa(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
     metric: str = DEFAULT_METRIC,
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
-) -> PCoAResults:
+) -> PCoA:
     """
     Perform Principal Coordinates Analysis (PCoA) on a feature table.
 
