@@ -233,12 +233,12 @@ def presence_absence(
     """Convert table to presence/absence format and filter by abundance.
     
     Args:
-        table: Input BIOM Table or DataFrame
-        target_level: Taxonomic level for output naming
-        output_dir: Directory to save output
+        table: Input BIOM Table or DataFrame.
+        target_level: Taxonomic level for output naming.
+        output_dir: Directory to save output.
     
     Returns:
-        Presence/absence BIOM Table filtered by abundance
+        Presence/absence BIOM Table filtered by abundance.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     if not isinstance(table, Table):
@@ -373,7 +373,7 @@ class AmpliconData:
                 collapsed_table = collapse_taxa(
                     self.table, 
                     level, 
-                    Path(project_dir) / 'data' / 'merged' / output_dir
+                    Path(project_dir) / 'data' / 'merged' 
                 )
                 self.tables[level] = collapsed_table
             self.tables['genus'] = self.table   
@@ -382,7 +382,7 @@ class AmpliconData:
                 pa = presence_absence(
                     self.tables[level], 
                     level, 
-                    Path(project_dir) / 'data' / 'merged' / output_dir
+                    Path(project_dir) / 'data' / 'merged' 
                 )
                 self.presence_absence_tables[level] = pa
 
