@@ -403,7 +403,7 @@ class AmpliconData:
                 raise ValueError(f"{biom_path} is not under {base_dir}")
             
             # Take first 5 parts (adjust based on your needs)
-            subdirs = rel_path.parts[:5]
+            subdirs = rel_path.parts[2:5]
             
             meta_path = (
                 base_dir / "data" / "per_dataset" / "metadata" 
