@@ -395,6 +395,7 @@ class AmpliconData:
             qiime_dir = Path(biom_path).parents[5]
             base_dir = Path(biom_path).parents[9]
             subdirs = Path(biom_path).relative_to(base_dir).parts[:5]
+            print(subdirs)
             meta_path = base_dir / "data" / "per_dataset" / "metadata" / Path(*subdirs) / "sample-metadata.tsv"
             meta_paths.append(meta_path)
         return meta_paths
