@@ -394,10 +394,23 @@ class AmpliconData:
         for biom_path in self._get_biom_paths():
             qiime_dir = Path(biom_path).parents[5]
             base_dir = Path(biom_path).parents[9]
-            subdirs = Path(biom_path).relative_to(base_dir).parts[:5]
-            print(subdirs)
-            meta_path = base_dir / "data" / "per_dataset" / "metadata" / Path(*subdirs) / "sample-metadata.tsv"
+            biom_path = Path(biom_path)
+            try:
+                # Get parent directory to exclude filename
+                rel_path = biom_path.parent.relative_to(base_dir)
+            except ValueError:
+                # Handle paths not relative to base_dir
+                raise ValueError(f"{biom_path} is not under {base_dir}")
+            
+            # Take first 5 parts (adjust based on your needs)
+            subdirs = rel_path.parts[:5]
+            
+            meta_path = (
+                base_dir / "data" / "per_dataset" / "metadata" 
+                / Path(*subdirs) / "sample-metadata.tsv"
+            )
             meta_paths.append(meta_path)
+        print(meta_paths)
         return meta_paths
         
     def _get_biom_table(self):
