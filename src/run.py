@@ -536,5 +536,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         #data.meta
 
         #sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')
+    except Exception as e:
+        print(f"Critical initialization error: {str(e)}")
 if __name__ == "__main__":
     main()
