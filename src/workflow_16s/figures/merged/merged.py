@@ -119,7 +119,6 @@ def sample_map_categorical(
     lat: str = 'latitude_deg', 
     lon: str = 'longitude_deg',
     color_col: str = 'project_name',
-    show: bool = False
 ):
     """"""
     metadata[color_col] = metadata[color_col].replace('', np.nan)  # first convert empty strings to NaN
