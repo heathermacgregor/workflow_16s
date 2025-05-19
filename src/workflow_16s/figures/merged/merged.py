@@ -16,6 +16,7 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
+import logging
 
 # Local Imports
 import workflow_16s.figures.figures
@@ -30,6 +31,7 @@ from workflow_16s.figures.figures import (
 # ================================= GLOBAL VARIABLES ================================= #
 
 sns.set_style('whitegrid')  # Set seaborn style globally
+logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
