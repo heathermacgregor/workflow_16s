@@ -82,7 +82,7 @@ def distance_matrix(
 
 def pcoa(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = DEFAULT_METRIC
+    metric: str = DEFAULT_METRIC,
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
 ) -> PCoAResults:
     """
