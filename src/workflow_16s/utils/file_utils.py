@@ -7,6 +7,7 @@ import os
 import glob
 import h5py
 import pandas as pd
+import numpy as np
 from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
