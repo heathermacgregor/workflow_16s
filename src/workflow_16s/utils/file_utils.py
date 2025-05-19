@@ -96,7 +96,7 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
     )
     return matching_rows.iloc[0]
 
-
+'''
 def processed_dataset_files(
     dirs: SubDirs, 
     dataset: str, 
@@ -128,7 +128,7 @@ def processed_dataset_files(
         'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  # Representative seqs
         'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  # Taxonomy
     }
-
+'''
 
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     """Identify missing output files from a list of expected paths.
