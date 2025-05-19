@@ -8,6 +8,7 @@ import pandas as pd
 from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
+import glob
 
 import logging
 
