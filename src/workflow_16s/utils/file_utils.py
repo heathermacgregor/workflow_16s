@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import re
+import os
 import pandas as pd
 from Bio import SeqIO
 from biom import load_table
