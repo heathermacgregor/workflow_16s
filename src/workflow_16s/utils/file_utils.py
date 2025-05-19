@@ -95,8 +95,8 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
          key=lambda x: x.str.lower().map({'ena': 0, 'manual': 1})  # ENA first
     )
     return matching_rows.iloc[0]
-
-'''
+    
+'
 def processed_dataset_files(
     dirs: SubDirs, 
     dataset: str, 
@@ -116,19 +116,19 @@ def processed_dataset_files(
     """
     classifier = cfg["Classifier"]
     base_dir = (
-        dirs.qiime_data / dataset / params['instrument_platform'].lower() / 
+        Path(dirs.qiime_data) / dataset / params['instrument_platform'].lower() / 
         params['library_layout'].lower() / params['target_subfragment'].lower() / 
         f"FWD_{params['pcr_primer_fwd_seq']}_REV_{params['pcr_primer_rev_seq']}"
     )
     base_dir.mkdir(parents=True, exist_ok=True)
     return {
-        'metadata_tsv': dirs.metadata / dataset / 'metadata.tsv',
+        'metadata_tsv': Path(dirs.metadata) / dataset / 'metadata.tsv',
         'manifest_tsv': base_dir / 'manifest.tsv',
         'table_biom': base_dir / 'table' / 'feature-table.biom',  # BIOM feature table
         'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  # Representative seqs
         'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  # Taxonomy
     }
-'''
+
 
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     """Identify missing output files from a list of expected paths.
