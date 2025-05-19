@@ -392,25 +392,33 @@ class AmpliconData:
         """Generate metadata paths corresponding to BIOM files."""
         meta_paths = []
         for biom_path in self._get_biom_paths():
-            qiime_dir = Path(biom_path).parents[5]
-            base_dir = Path(biom_path).parents[9]
             biom_path = Path(biom_path)
+            
+            # Locate the 'data' directory to determine base_dir
+            current = biom_path
+            data_dir = None
+            while current != current.root:
+                if current.name == 'data':
+                    data_dir = current
+                    break
+                current = current.parent
+            if not data_dir:
+                raise ValueError(f"{biom_path} is not under a 'data' directory")
+            base_dir = data_dir.parent
+            
+            # Define expected biom directory
+            biom_dir = data_dir / "per_dataset" / "biom"
             try:
-                # Get parent directory to exclude filename
-                rel_path = biom_path.parent.relative_to(base_dir / "data" / "per_dataset" / "metadata")
+                rel_path = biom_path.parent.relative_to(biom_dir)
             except ValueError:
-                # Handle paths not relative to base_dir
-                raise ValueError(f"{biom_path} is not under {base_dir}")
+                raise ValueError(f"{biom_path} is not under {biom_dir}")
             
-            # Take first 5 parts (adjust based on your needs)
-            subdirs = rel_path.parts[:4]
-            
+            # Construct metadata path using the same relative structure under 'metadata'
             meta_path = (
-                base_dir / "data" / "per_dataset" / "metadata" 
-                / Path(*subdirs) / "sample-metadata.tsv"
+                data_dir / "per_dataset" / "metadata"
+                / rel_path / "sample-metadata.tsv"
             )
             meta_paths.append(meta_path)
-        print(meta_paths)
         return meta_paths
         
     def _get_biom_table(self):
