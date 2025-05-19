@@ -122,6 +122,195 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
 
 # ==================================== FUNCTIONS ===================================== #
 
+def convert_to_biom(table):
+    """
+    Converts a pandas DataFrame to a BIOM Table object if the input is a DataFrame.
+
+    Args:
+        table: Input object to be converted (checks if it's a pandas DataFrame).
+
+    Returns:
+        BIOM Table representation of the DataFrame.
+    """
+    # Check if input is a pandas DataFrame
+    if not isinstance(table, pd.DataFrame):
+        return table
+    
+    # Convert observation and sample IDs to strings (BIOM format requirement)
+    observation_ids = table.index.astype(str).tolist()
+    sample_ids = table.columns.astype(str).tolist()
+    
+    # Extract numerical data matrix
+    data = table.values
+    
+    # Create BIOM Table
+    biom_table = Table(
+        data=data,
+        observation_ids=observation_ids,
+        sample_ids=sample_ids,
+        type="OTU table"  # Modify this based on your data type
+    )
+    
+    return biom_table
+    
+
+def collapse_taxa(
+    table: Union[pd.DataFrame, Table], 
+    target_level: str, 
+    output_dir: Union[str, Path]
+):
+    """
+    Collapse a l6 (genus) BIOM table to the specified taxonomic level and save 
+    the result.
+
+    Args:
+        table: biom.Table object
+        target_level: str, one of ['phylum', 'class', 'order', 'family']
+        output_dir: str or Path, base directory to save output
+    """
+    if not isinstance(table, Table):
+        table = convert_to_biom(table)
+    # Define the index for each taxonomic level (0-based split)
+    levels = {
+        'phylum': 1,  # d__Bacteria;p__Actinobacteriota
+        'class': 2,   # ...;c__Actinobacteria
+        'order': 3,   # ...;o__Frankiales
+        'family': 4   # ...;f__Acidothermaceae
+    }
+
+    if target_level not in levels:
+        raise ValueError(
+            f"Invalid `target_level`: {target_level}. "
+            f"Expected one of {list(levels.keys())}")
+
+    level_idx = levels[target_level]
+
+    # Create mapping: feature_id (taxonomy string) -> collapsed taxonomy
+    id_map = {}
+    for taxon in table.ids(axis='observation').astype(str):
+        parts = taxon.split(';')
+        if len(parts) >= level_idx + 1:
+            truncated = ';'.join(parts[:level_idx + 1])
+        else:
+            truncated = 'Unclassified'
+        id_map[taxon] = truncated
+
+    # Define grouping function
+    def group_function(feature_id, metadata):
+        return id_map.get(feature_id, 'Unclassified')
+
+    # Collapse the table
+    collapsed_table = table.collapse(
+        group_function,
+        norm=False,
+        axis='observation',
+        include_collapsed_metadata=False
+    ).remove_empty()
+
+    # Save the collapsed table
+    output_biom_path = Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
+    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(output_biom_path, 'w') as f:
+        collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+    logger.info(f"Wrote table collapsed to {target_level} to '{output_biom_path}'")
+    
+    return collapsed_table
+
+def presence_absence(
+    table: Union[Table, pd.DataFrame], 
+    target_level: str, 
+    output_dir: Union[str, Path]
+):
+    # Create output directory if it doesn't exist
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if not isinstance(table, Table):
+        table = convert_to_biom(table)
+
+    # Define the index for each taxonomic level (0-based split)
+    levels = {
+        'phylum': 1,  # e.g., d__Bacteria;p__Actinobacteriota
+        'class': 2,   # ...;c__Actinobacteria
+        'order': 3,   # ...;o__Frankiales
+        'family': 4,   # ...;f__Acidothermaceae
+        'genus': 5
+    }
+    
+    feature_sums = np.array(table.sum(axis='observation')).flatten() # Total counts per feature
+    sorted_idx = np.argsort(feature_sums)[::-1] # Sort features by abundance
+    cumulative = np.cumsum(feature_sums[sorted_idx]) / feature_sums.sum() # Cumulative proportion of total counts contributed by the top features
+    stop_idx = np.searchsorted(cumulative, 0.99) + 1 # Smallest number of top features needed to account for ≥99% of the total counts
+    keep_ids = [table.ids(axis='observation')[i] for i in sorted_idx[:stop_idx]]
+    
+    pa_table = table.pa(inplace=False) # Convert to presence/absence
+    pa_table_filtered = pa_table.filter(keep_ids, axis='observation')
+    pa_df_filtered = pa_table_filtered.to_dataframe(dense=True)
+
+    # Convert DataFrame to BIOM Table
+    pa_table = Table(
+        data=pa_df_filtered.values,  # Transpose to (samples x observations)
+        observation_ids=pa_df_filtered.index,
+        sample_ids=pa_df_filtered.columns,
+        table_id='Presence Absence BIOM Table'
+    )
+    output_biom_path = Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
+    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(output_biom_path, 'w') as f:
+        pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+    logger.info(f"Wrote presence-absence table collapsed to {target_level} to '{output_biom_path}'")
+    
+    return pa_table
+
+
+def filter_presence_absence(
+    table: Table, 
+    metadata: pd.DataFrame, 
+    col: str = 'nuclear_contamination_status', 
+    prevalence_threshold: float = 0.05, 
+    group_threshold: float = 0.05
+) -> Table:
+    # Convert BIOM Table to DataFrame (samples x species)
+    df = table.to_dataframe(dense=True).T
+    metadata = metadata.set_index("run_accession.1")
+    # Merge with metadata using sample IDs (index)
+    df_with_meta = df.join(metadata[[col]], how='inner')  # samples x (species + col)
+
+    # Apply prevalence threshold filter
+    if prevalence_threshold:
+        # Calculate species prevalence (mean across samples)
+        species_data = df_with_meta.drop(columns=[col])
+        prev = species_data.mean(axis=0)  # axis=0: column-wise mean (species prevalence)
+        filtered_species = prev[prev >= prevalence_threshold].index
+        # Retain filtered species and metadata column
+        df_with_meta = df_with_meta[filtered_species.union(pd.Index([col]))]
+    # Apply group threshold filter
+    if group_threshold:
+        # Group samples by metadata column
+        groups = df_with_meta.groupby(col)
+        # Ensure both groups exist
+        if True not in groups.groups or False not in groups.groups:
+            raise ValueError(f"Metadata column '{col}' must have both True and False groups.")
+        # Calculate presence percentage in each group
+        sum_per_group = groups.sum(numeric_only=True)  # species sums per group
+        n_samples = groups.size()  # sample counts per group
+        percentages = sum_per_group.div(n_samples, axis=0)  # axis=0 aligns with group index
+        # Check threshold in both groups
+        mask = (percentages.loc[True] >= group_threshold) & (percentages.loc[False] >= group_threshold)
+        selected_species = mask[mask].index
+        # Retain selected species and metadata column
+        df_with_meta = df_with_meta[selected_species.union(pd.Index([col]))]
+
+    # Prepare data for BIOM Table (exclude metadata column)
+    df_biom = df_with_meta.drop(columns=[col])
+    
+    # Convert back to BIOM Table (features x samples)
+    return Table(
+        data=df_biom.values.T,  # Transpose to (species x samples)
+        observation_ids=df_biom.columns.tolist(),
+        sample_ids=df_biom.index.tolist(),
+        table_id='Filtered Presence/Absence Table'
+    )
+    
+    
 class AmpliconData:
     """
 
@@ -154,7 +343,6 @@ class AmpliconData:
             table_dir = 'table_6'
             output_dir = 'l6'
 
-
         self.BIOM_PATTERN = '/'.join([
             'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
             'FWD_*_REV_*', table_dir, 'feature-table.biom'
@@ -165,6 +353,36 @@ class AmpliconData:
         )
         self._get_metadata()
         self._get_biom_table()
+        
+    # Collapse merged feature table to l2-5
+    self.tables = {}
+    self.presence_absence_tables = {}
+    if self.mode == 'genus':
+        for level in ['phylum', 'class', 'order', 'family']:
+            collapsed_table = collapse_taxa(
+                self.table, 
+                level, 
+                os.path.join(
+                    str(self.project_dir), 
+                    'data', 'merged', output_dir
+                )
+            )
+            self.tables[level] = collapsed_table
+        self.tables['genus'] = self.table   
+
+        
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            pa = presence_absence(
+                tables[level], 
+                level, 
+                output_dir=Path(
+                    os.path.join(
+                        str(self.project_dir), 
+                        'data', 'merged', output_dir
+                    )
+                )
+            )
+            self.presence_absence_tables[level] = pa
         
 
     def _get_biom_paths(self):
