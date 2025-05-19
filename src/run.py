@@ -516,27 +516,24 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 
 #from workflow_16s.figures.merged import sample_map_categorical
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
-    try:
-        cfg = get_config(config_path)
-        per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+    cfg = get_config(config_path)
+    per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
+    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
         
-        project_dir = dir_utils.SubDirs(cfg["project_dir"])
-        logger = setup_logging(project_dir.logs)
+    project_dir = dir_utils.SubDirs(cfg["project_dir"])
+    logger = setup_logging(project_dir.logs)
 
         
-        data = file_utils.AmpliconData(
-            project_dir=project_dir,
-            mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
-            verbose=True
-        )
-        print(data.meta['nuclear_contamination_status'].value_counts)
-        #data.tables
-        #data.presence_absence_tables 
-        #data.meta
+    data = file_utils.AmpliconData(
+        project_dir=project_dir.main,
+        mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
+        verbose=True
+    )
+    print(data.meta['nuclear_contamination_status'].value_counts)
+    #data.tables
+    #data.presence_absence_tables 
+    #data.meta
 
-        #sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')
-    except Exception as e:
-        print(f"Critical initialization error: {str(e)}")
+    #sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')=
 if __name__ == "__main__":
     main()
