@@ -108,6 +108,82 @@ def _configure_axes(
         automargin=True
     )
 
+def sample_map_categorical(
+    metadata: pd.DataFrame, 
+    show: bool = False,
+    output_dir: Union[str, Path, None] = None, 
+    projection_type: str = 'natural earth', 
+    height: int = 800, 
+    size: int = 5, 
+    opacity: float = 0.3,
+    lat: str = 'latitude_deg', 
+    lon: str = 'longitude_deg',
+    color_col: str = 'project_name',
+    show: bool = False
+):
+    """"""
+    metadata[color_col] = metadata[color_col].replace('', np.nan)  # first convert empty strings to NaN
+    metadata[color_col] = metadata[color_col].fillna('other')          # then fill NaN with ''
+    metadata = metadata.sort_values(by=color_col, ascending=True)
+    
+    # Group by 'color_col' and count samples
+    cat_counts = metadata[color_col].value_counts().reset_index()
+    cat_counts.columns = [color_col, 'sample_count']
+    
+    # Merge the counts back into the original metadata
+    metadata = metadata.merge(cat_counts, on=color_col, how='left')
+
+    # Create a color mapping for datasets
+    color_mapping = {c: largecolorset[i % len(largecolorset)] for i, c in enumerate(cat_counts[color_col])}
+    
+    # Print the assigned colors
+    for cat, assigned_color in color_mapping.items():
+        logger.info(f"[{assigned_color}]    {cat}")
+        
+    #legend = plot_legend(color_mapping, color_col)
+    
+    # Plot the points on a map
+    fig = px.scatter_geo(
+        metadata, 
+        lat=lat, 
+        lon=lon, 
+        color=color_col, 
+        color_discrete_map=color_mapping,  
+        hover_name=color_col, 
+        hover_data={'sample_count': True}  
+    )
+
+    fig.layout.template = 'heather'  
+    
+    fig.update_geos(
+        projection_type=projection_type,  
+        resolution=50,
+        showcoastlines=True, coastlinecolor="#b5b5b5",
+        showland=True, landcolor="#e8e8e8",
+        showlakes=True, lakecolor="#fff",
+        showrivers=True, rivercolor="#fff",
+        # Set axis limits based on the range of latitude and longitude values
+        #lonaxis_range=[metadata[lon].min() - 20, metadata[lon].max() + 20], 
+        #lataxis_range=[metadata[lat].min() - 20, metadata[lat].max() + 20]
+    )
+    
+    fig.update_layout(
+        template='heather',
+        margin=dict(l=5, r=5, t=5, b=5), # Set the layout with increased width and height
+        showlegend=False, 
+        font_size=12
+    )  
+    
+    # Update marker size to make the dots smaller and semi-transparent
+    fig.update_traces(marker=dict(size=size, opacity=opacity)) 
+
+    fig.show()
+    if output_dir:
+        output_path = Path(output_dir) / f"sample_map"
+        plotly_show_and_save(fig=fig, show=show, output_path=output_path)
+    return fig#, legend
+    
+
 def heatmap_feature_abundance(
     table: pd.DataFrame, 
     show: bool = False,
