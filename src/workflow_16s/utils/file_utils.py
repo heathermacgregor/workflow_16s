@@ -394,7 +394,7 @@ class AmpliconData:
         for biom_path in self._get_biom_paths():
             biom_path = Path(biom_path)
             
-            # Locate the 'data' directory to determine base_dir
+            # Find the 'data' directory
             current = biom_path
             data_dir = None
             while current != current.root:
@@ -404,18 +404,17 @@ class AmpliconData:
                 current = current.parent
             if not data_dir:
                 raise ValueError(f"{biom_path} is not under a 'data' directory")
-            base_dir = data_dir.parent
             
-            # Define expected biom directory
-            biom_dir = data_dir / "per_dataset" / "biom"
+            # Corrected: Use 'qiime' directory instead of 'biom'
+            biom_dir = data_dir / "per_dataset" / "qiime"  # Changed from "biom"
             try:
                 rel_path = biom_path.parent.relative_to(biom_dir)
             except ValueError:
                 raise ValueError(f"{biom_path} is not under {biom_dir}")
             
-            # Construct metadata path using the same relative structure under 'metadata'
+            # Construct metadata path under 'metadata' directory
             meta_path = (
-                data_dir / "per_dataset" / "metadata"
+                data_dir / "per_dataset" / "metadata" 
                 / rel_path / "sample-metadata.tsv"
             )
             meta_paths.append(meta_path)
