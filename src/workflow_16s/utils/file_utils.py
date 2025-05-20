@@ -172,7 +172,8 @@ def convert_to_biom(table: pd.DataFrame) -> Table:
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
-    output_dir: Union[str, Path]
+    output_dir: Union[str, Path],
+    verbose: bool = True
 ) -> Table:
     """Collapse feature table to specified taxonomic level.
     
@@ -221,14 +222,18 @@ def collapse_taxa(
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-    logger.info(f"Wrote table collapsed to {target_level} to '{output_biom_path}'")
+    if verbose:
+        logger.info(
+            f"Wrote table ({str(table.shape}}) collapsed to {target_level} to '{output_biom_path}'"
+        )
     
     return collapsed_table
 
 def presence_absence(
     table: Union[Table, pd.DataFrame], 
     target_level: str, 
-    output_dir: Union[str, Path]
+    output_dir: Union[str, Path],
+    verbose: bool = True
 ) -> Table:
     """Convert table to presence/absence format and filter by abundance.
     
@@ -269,7 +274,10 @@ def presence_absence(
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
         pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-    logger.info(f"Wrote presence-absence table to '{output_biom_path}'")
+    if verbose:
+        logger.info(
+            f"Wrote presence-absence table ({str(pa_table.shape}}) to '{output_biom_path}'"
+        )
     
     return pa_table
 
@@ -373,7 +381,8 @@ class AmpliconData:
                 collapsed_table = collapse_taxa(
                     self.table, 
                     level, 
-                    Path(project_dir) / 'data' / 'merged' 
+                    Path(project_dir) / 'data' / 'merged',
+                    self.verbose
                 )
                 self.tables[level] = collapsed_table
             self.tables['genus'] = self.table   
@@ -382,9 +391,12 @@ class AmpliconData:
                 pa = presence_absence(
                     self.tables[level], 
                     level, 
-                    Path(project_dir) / 'data' / 'merged' 
+                    Path(project_dir) / 'data' / 'merged',
+                    self.verbose
                 )
                 self.presence_absence_tables[level] = pa
+        elif self.mode == 'asv':
+            print("ASV mode is not yet supported!")
 
     def _get_biom_paths(self) -> List[str]:
         """Get paths to BIOM files matching pattern."""
