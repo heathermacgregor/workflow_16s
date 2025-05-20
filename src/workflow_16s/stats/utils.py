@@ -2,7 +2,7 @@
 
 # Standard Library Imports
 from pathlib import Path
-from typing import Any, Bool, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 # Third-Party Imports
 from biom import Table
@@ -261,7 +261,7 @@ def t_test(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     col: str = DEFAULT_GROUP_COLUMN,
-    col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
+    col_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
     """
     Performs independent t-tests between groups for all features.
@@ -300,7 +300,7 @@ def mwu_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     col: str = DEFAULT_GROUP_COLUMN,
-    col_values: List[Union[Bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
+    col_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
     """
     Performs Mann-Whitney U tests with Bonferroni correction.
