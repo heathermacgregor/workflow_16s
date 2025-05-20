@@ -69,7 +69,9 @@ pio.templates.default = "heather"
 def plotly_show_and_save(
     fig,
     show: bool = False,
-    output_path: Union[str, Path] = None    
+    output_path: Union[str, Path] = None,
+    save_as: List[str] = ['png', 'html'],
+    verbose: bool = True
 ):
     if show:
         fig.update_layout(
@@ -86,15 +88,21 @@ def plotly_show_and_save(
         output_path = Path(output_path)
         output_dir = output_path.parent.resolve()
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        print(output_dir / f'{output_path}.png')
-        fig.write_image(
-          output_dir / f'{output_path}.png', 
-          format='png', 
-          scale=3
-        )
-        fig.write_html(
-          output_dir / f'{output_path}.html'
-        )
+
+        if 'png' in save_as:
+            fig.write_image(
+              f'{output_path}.png', 
+              format='png', 
+              scale=3
+            )
+            if verbose:
+                logger.info(f"Saved figure to '{output_path}.png'.")
+        if 'html' in save_as:
+            fig.write_html(
+              f'{output_path}.html'
+            )
+            if verbose:
+                logger.info(f"Saved figure to '{output_path}.html'.")
       
 
 class PlotlyFigure:
