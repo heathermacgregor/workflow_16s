@@ -560,9 +560,11 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     for level in ["genus"]:
         figures["pca"][level] = {}
         logger.info("Calculating PCA...")
+        
+        meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
             
         pca_results = beta_diversity.pca(
-            table=data.tables[level],
+            table=table,
             n_components=3
         )
             
@@ -571,7 +573,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         pca_plot = pca(
                 components = pca_results['components'], 
                 proportion_explained = pca_results['exp_var_ratio'], 
-                metadata=data.meta,
+                metadata=meta,
                 color_col=color_col, 
                 color_map=color_maps[color_col],
                 symbol_col='nuclear_contamination_status',
@@ -589,9 +591,11 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         for metric in ["braycurtis"]:
             figures["pcoa"][level][metric] = {}
             logger.info("Calculating PCoA...")
+
+            meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
             
             pcoa_results = beta_diversity.pcoa(
-                table=data.tables[level],
+                table=table,
                 metric=metric,
                 n_dimensions=3
             )
@@ -601,7 +605,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             pcoa_plot = pcoa(
                 components = pcoa_results.samples, 
                 proportion_explained = pcoa_results.proportion_explained, 
-                metadata=data.meta,
+                metadata=meta,
                 metric=metric,
                 color_col='dataset_name', 
                 color_map=color_maps['dataset_name'],
@@ -618,9 +622,10 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     for level in ["genus"]:
         figures["tsne"][level] = {}
         logger.info("Calculating TSNE...")
-            
-        rabw_results = beta_diversity.tsne(
-                table=data.tables[level].T,
+
+        meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
+        tsne_results = beta_diversity.tsne(
+                table=table,
                 n_components=3
         )
             
@@ -628,7 +633,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             
         tsne_plot = mds(
             df=tsne_results, 
-            metadata=data.meta,
+            metadata=meta,
             group_col='dataset_name', 
             symbol_col='nuclear_contamination_status',
             show=False,
