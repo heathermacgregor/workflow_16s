@@ -569,7 +569,6 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 components = pca_results['components'], 
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=data.meta,
-                metric=metric,
                 color_col='dataset_name', 
                 symbol_col='nuclear_contamination_status',
                 show=False,
