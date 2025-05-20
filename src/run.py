@@ -566,8 +566,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         logger.info("Plotting PCA...")
             
         pca_plot = pca(
-                components = pca_results.components, 
-                proportion_explained = pca_results.proportion_explained, 
+                components = pca_results['components'], 
+                proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=data.meta,
                 metric=metric,
                 color_col='dataset_name', 
