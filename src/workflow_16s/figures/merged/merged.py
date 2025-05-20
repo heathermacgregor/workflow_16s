@@ -55,6 +55,7 @@ def _prepare_visualization_data(
     print(components.shape)
     print(metadata.shape)
     common_idx = components.index.intersection(metadata.index)
+    print(common_idx)
     metadata = metadata.loc[common_idx].copy()
     components = components.loc[common_idx].copy()
     
