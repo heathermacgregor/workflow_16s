@@ -518,6 +518,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
+from workflow_16s.figures.html_report import HTMLReportGenerator
 from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
 from workflow_16s.stats import beta_diversity 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
@@ -559,7 +560,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             
         pca_results = beta_diversity.pca(
             table=data.tables[level],
-            n_dimensions=3
+            n_components=3
         )
             
         logger.info("Plotting PCA...")
@@ -610,6 +611,11 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             figures["pcoa"][level][metric][color_col] = pcoa_plot
 
     print(figures)
+    report = HTMLReportGenerator(
+        output_file="my_report.html",
+        plotly_config={'responsive': True}
+    )
+    report.generate(figures)
         
 if __name__ == "__main__":
     main()
