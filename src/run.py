@@ -518,7 +518,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa
+from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
 from workflow_16s.stats import beta_diversity 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
@@ -528,6 +528,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     logger = setup_logging(project_dir.logs)
 
+    figures = {}
         
     data = file_utils.AmpliconData(
         project_dir=project_dir.main,
@@ -538,32 +539,77 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #data.tables
     #data.presence_absence_tables 
     #data.meta
+    figures["sample_map"] = {}
     logger.info("Creating sample map...")
-    sample_map_categorical(
-        metadata=data.meta, 
-        show=False, 
-        output_dir=Path(project_dir.figures) / 'merged', 
-        color_col='dataset_name',
-    )
-    logger.info("Calculating PCoA...")
-    pcoa_results = beta_diversity.pcoa(
-        table=data.tables['genus'],
-        metric='braycurtis',
-        n_dimensions=3
-    )
-    logger.info("Plotting PCoA...")
-    pcoa_plot = pcoa(
-        components = pcoa_results.samples, 
-        proportion_explained = pcoa_results.proportion_explained, 
-        metadata=data.meta,
-        metric='braycurtis',
-        color_col='dataset_name', 
-        symbol_col='nuclear_contamination_status',
-        show=False,
-        output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
-        transformation=None,
-        x=1, 
-        y=2
-    )
+    
+    for col in ['dataset_name', 'nuclear_contamination_status']:
+        fig = sample_map_categorical(
+            metadata=data.meta, 
+            show=False, 
+            output_dir=Path(project_dir.figures) / 'merged', 
+            color_col=col,
+        )
+        figures["sample_map"][col] = fig
+
+
+    figures["pca"] = {}
+    for level in ["genus"]:
+        figures["pca"][level] = {}
+        logger.info("Calculating PCA...")
+            
+        pca_results = beta_diversity.pca(
+            table=data.tables[level],
+            n_dimensions=3
+        )
+            
+        logger.info("Plotting PCA...")
+            
+        pca_plot = pca(
+                components = pca_results.samples, 
+                proportion_explained = pca_results.proportion_explained, 
+                metadata=data.meta,
+                metric=metric,
+                color_col='dataset_name', 
+                symbol_col='nuclear_contamination_status',
+                show=False,
+                output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
+                transformation=None,
+                x=1, 
+                y=2
+        )
+        figures["pca"][level][color_col] = pca_plot
+
+    figures["pcoa"] = {}
+    for level in ["genus"]:
+        figures["pcoa"][level] = {}
+        for metric in ["braycurtis"]:
+            figures["pcoa"][level][metric] = {}
+            logger.info("Calculating PCoA...")
+            
+            pcoa_results = beta_diversity.pcoa(
+                table=data.tables[level],
+                metric=metric,
+                n_dimensions=3
+            )
+            
+            logger.info("Plotting PCoA...")
+            
+            pcoa_plot = pcoa(
+                components = pcoa_results.samples, 
+                proportion_explained = pcoa_results.proportion_explained, 
+                metadata=data.meta,
+                metric=metric,
+                color_col='dataset_name', 
+                symbol_col='nuclear_contamination_status',
+                show=False,
+                output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
+                transformation=None,
+                x=1, 
+                y=2
+            )
+            figures["pcoa"][level][metric][color_col] = pcoa_plot
+
+    print(figures)
+        
 if __name__ == "__main__":
     main()
