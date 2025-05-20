@@ -182,8 +182,11 @@ def sample_map_categorical(
     #fig.show()
     if output_dir:
         output_path = Path(output_dir) / f"sample_map.{color_col}"
-        print(output_path)
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
+
+        colordict = color_mapping
+        legend_path = Path(output_dir) / f'legend.{color_col}.png'
+        plot_legend(colordict, color_col, legend_path)
     return fig#, legend
     
 
@@ -312,7 +315,7 @@ def pcoa(
         plotly_show_and_save(
             fig, show, Path(output_dir) / 'pcoa' / file_stem
         )
-        legend_path = output_path / f'legend.{color_col}.png'
+        legend_path = Path(output_dir) / 'pcoa' / f'legend.{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
     
     return fig, colordict
@@ -393,9 +396,9 @@ def pca(
             f"{x}-{y}.{color_col}.{symbol_col}"
         )
         plotly_show_and_save(
-            fig, show, Path(output_dir) / 'pca'/ file_stem
+            fig, show, Path(output_dir) / 'pca' / file_stem
         )
-        legend_path = output_path / f'legend_{color_col}.png'
+        legend_path = Path(output_dir) / 'pca' / f'legend_{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
     
     return fig, colordict
@@ -473,7 +476,7 @@ def mds(
         plotly_show_and_save(
             fig, show, Path(output_dir) / mode.lower() / file_stem
         )
-        legend_path = output_path / f'legend_{group_col}.png'
+        legend_path = Path(output_dir) / mode.lower() / f'legend_{group_col}.png'
         plot_legend(colordict, group_col, legend_path)
     
     return fig, colordict
