@@ -52,6 +52,8 @@ def _prepare_visualization_data(
     placeholder: str = 'unknown'
 ) -> pd.DataFrame:
     """Prepare merged component and metadata data for visualization."""
+    print(components.shape)
+    print(metadata.shape)
     common_idx = components.index.intersection(metadata.index)
     metadata = metadata.loc[common_idx].copy()
     components = components.loc[common_idx].copy()
