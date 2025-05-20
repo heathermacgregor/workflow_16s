@@ -235,15 +235,19 @@ def plot_legend(
     ax.set_xlim(0, 3)
     ax.set_ylim(0, n)
 
-    plotly_show_and_save(
-        fig,
-        show=show,
-        output_path=output_path   
-    )
+    
     # Save the figure
-    if output_path:
-        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
-    if show:
-        plt.show()
+    try:
+        if output_path:
+            plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
+        if show:
+            plt.show()
+    else:
+        if output_path:
+            plotly_show_and_save(
+                fig,
+                show=show,
+                output_path=output_path   
+            )
     plt.close()
     return fig
