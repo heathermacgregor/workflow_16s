@@ -54,6 +54,7 @@ def _prepare_visualization_data(
     """Prepare merged component and metadata data for visualization."""
     print(components.shape)
     print(metadata.shape)
+    print(components.index)
     common_idx = components.index.intersection(metadata.index)
     print(common_idx)
     metadata = metadata.loc[common_idx].copy()
