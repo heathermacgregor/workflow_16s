@@ -223,8 +223,11 @@ def collapse_taxa(
     with h5py.File(output_biom_path, 'w') as f:
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
+        n_features, n_samples = table.shape
+        # Format into [x, y] string
+        shape_str = f"[{n_features}, {n_samples}]"
         logger.info(
-            f"Wrote table ({str(table.shape)}) collapsed to {target_level} to '{output_biom_path}'"
+            f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
         )
     
     return collapsed_table
@@ -275,8 +278,11 @@ def presence_absence(
     with h5py.File(output_biom_path, 'w') as f:
         pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
+        n_features, n_samples = pa_table.shape
+        # Format into [x, y] string
+        shape_str = f"[{n_features}, {n_samples}]"
         logger.info(
-            f"Wrote presence-absence table ({str(pa_table.shape)}) to '{output_biom_path}'"
+            f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
         )
     
     return pa_table
@@ -591,7 +597,10 @@ def import_merged_table_biom(
         with h5py.File(output_path, 'w') as f:
             merged_table.to_hdf5(f, generated_by="workflow_16s")
         if verbose:
-            logger.info(f"Saved merged table to {output_path}")
+            n_features, n_samples = table.shape
+            # Format into [x, y] string
+            shape_str = f"[{n_features}, {n_samples}]"
+            logger.info(f"Wrote table {shape_str} to {output_path}")
 
     return merged_table if as_type == 'table' else merged_table.to_dataframe()
 
