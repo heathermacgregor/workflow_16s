@@ -521,6 +521,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
 from workflow_16s.figures.html_report import HTMLReportGenerator
 from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
 from workflow_16s.stats import beta_diversity 
+from workflow_16s.stats.stats import preprocess_table
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
     per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
