@@ -224,7 +224,7 @@ def collapse_taxa(
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
         logger.info(
-            f"Wrote table ({str(table.shape}}) collapsed to {target_level} to '{output_biom_path}'"
+            f"Wrote table ({str(table.shape)}) collapsed to {target_level} to '{output_biom_path}'"
         )
     
     return collapsed_table
