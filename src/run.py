@@ -349,6 +349,9 @@ def process_sequences(
     else:
         return raw_seqs_paths, pd.DataFrame()
 
+# =================================== MAIN WORKFLOW ================================== #
+
+
 
 # =================================== MAIN WORKFLOW ================================== #
 
@@ -530,12 +533,17 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=True
     )
-    print(data.meta['nuclear_contamination_status'].value_counts)
+    print(data.meta['nuclear_contamination_status'].value_counts())
     #data.tables
     #data.presence_absence_tables 
     #data.meta
     logger.info("Creating sample map...")
-    sample_map_categorical(data.meta, show=True, color_col='nuclear_contamination_status')
+    sample_map_categorical(
+        metadata=data.meta, 
+        show=False, 
+        output_dir=Path(project_dir.figures) / 'merged', 
+        color_col='dataset_name',
+    )
     logger.info("Calculating PCoA...")
     pcoa_results = beta_diversity.pcoa(
         table=data.tables['genus'],
@@ -551,7 +559,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         color_col='dataset_name', 
         symbol_col='nuclear_contamination_status',
         show=False,
-        output_dir=Path(project_dir.data) / 'merged', 
+        output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
         transformation=None,
         x=1, 
         y=2
