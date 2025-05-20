@@ -367,6 +367,8 @@ def pca(
     x_title = f"PC{x} ({round(100 * proportion_explained[x-1], 2)}%)"
     y_title = f"PC{y} ({round(100 * proportion_explained[y-1], 2)}%)"
 
+    data['index'] = data.index
+
     fig = _create_scatter_figure(
         data=data,
         x_col=x_col,
@@ -447,6 +449,8 @@ def mds(
         raise ValueError(f"Missing {mode} coordinates in data columns")
 
     colordict, _ = marker_color_map(data, group_col, continuous_color_set=False)
+
+    data['index'] = data.index
     
     fig = _create_scatter_figure(
         data=data,
