@@ -25,7 +25,7 @@ logger = logging.getLogger('workflow_16s')
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.time import timer
+#from workflow_16s.time import timer
 
 # ================================= DEFAULT VALUES =================================== #
 
