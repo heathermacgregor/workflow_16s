@@ -464,8 +464,7 @@ def mds(
     )
     _configure_axes(fig, f'{mode}{x}', f'{mode}{y}')
 
-    if output_dir:
-        output_path = 
+    if output_dir: 
         file_stem = (
             f"{mode}.{f'{transformation}.' if transformation else ''}"
             f"{x}-{y}.{group_col}.{symbol_col}"
