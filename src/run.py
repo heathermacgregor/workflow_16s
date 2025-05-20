@@ -560,7 +560,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         logger.info("Calculating PCA...")
             
         pca_results = beta_diversity.pca(
-            table=data.tables[level],
+            table=data.tables[level].T,
             n_components=3
         )
             
@@ -588,7 +588,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             logger.info("Calculating PCoA...")
             
             pcoa_results = beta_diversity.pcoa(
-                table=data.tables[level],
+                table=data.tables[level].T,
                 metric=metric,
                 n_dimensions=3
             )
