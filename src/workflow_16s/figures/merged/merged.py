@@ -383,9 +383,9 @@ def pca(
         x_col=x_col,
         y_col=y_col,
         color_col=color_col,
-        color_map=color_map,
         symbol_col=symbol_col,
-        color_map=colordict,
+        #color_map=colordict,
+        color_map=color_map,
         hover_data=['index', color_col]
     )
     
