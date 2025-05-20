@@ -52,8 +52,10 @@ def _prepare_visualization_data(
     placeholder: str = 'unknown'
 ) -> pd.DataFrame:
     """Prepare merged component and metadata data for visualization."""
-    metadata['run_accession'] = metadata['#SampleID']
-    metadata.index = metadata['#SampleID']
+    #metadata['run_accession'] = metadata['#SampleID']
+    print(metadata.columns)
+    print(metadata['run_accession'])
+    metadata.index = metadata['run_accession']
     common_idx = components.index.intersection(metadata.index)
     print(common_idx)
     metadata = metadata.loc[common_idx].copy()
