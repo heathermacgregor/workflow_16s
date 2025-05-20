@@ -519,7 +519,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
         print(f"Critical initialization error: {str(e)}")
 
 from workflow_16s.figures.html_report import HTMLReportGenerator
-from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, tsne
+from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
@@ -619,27 +619,26 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         figures["tsne"][level] = {}
         logger.info("Calculating TSNE...")
             
-        pcoa_results = beta_diversity.tsne(
+        rabw_results = beta_diversity.tsne(
                 table=data.tables[level].T,
                 n_components=3
         )
             
-        logger.info("Plotting PCoA...")
+        logger.info("Plotting TSNE...")
             
-        pcoa_plot = tsne(
-                components = pcoa_results.samples, 
-                proportion_explained = pcoa_results.proportion_explained, 
-                metadata=data.meta,
-                metric=metric,
-                color_col='dataset_name', 
-                color_map=color_maps['dataset_name'],
-                symbol_col='nuclear_contamination_status',
-                show=False,
-                output_dir=Path(project_dir.figures) / 'merged' / 'l2', 
-                transformation=None,
-                x=1, 
-                y=2
+        tsne_plot = mds(
+            df=tsne_results, 
+            metadata=data.meta,
+            group_col='dataset_name', 
+            symbol_col='nuclear_contamination_status',
+            show=False,
+            output_dir=Path(project_dir.figures) / 'merged' / 'l6',
+            transformation: str = None,
+            mode='TSNE',
+            x=1, 
+            y=2
         )
+    
         figures["tsne"][level][color_col] = tsne_plot
 
     print(figures)
