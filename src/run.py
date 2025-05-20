@@ -544,7 +544,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     )
     logger.info("Plotting PCoA...")
     pcoa_plot = pcoa(
-        components = pcoa_results.coordinates , 
+        components = pcoa_results.samples, 
         proportion_explained = pcoa_results.proportion_explained, 
         metadata=data.meta,
         metric='braycurtis',
