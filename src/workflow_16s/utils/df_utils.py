@@ -67,6 +67,24 @@ ENA_METADATA_COLUMNS_TO_RENAME = {
 
 # ==================================== FUNCTIONS ===================================== #
 
+def match_indices_or_transpose(df1, df2):
+    """
+    If df1 and df2 have overlapping indices, return them as-is.
+    If not, transpose df2 and check again.
+    Returns:
+        Tuple: (df1, possibly transposed df2, boolean indicating whether transpose occurred)
+    """
+    if df1.index.intersection(df2.index).any():
+        return df1, df2, False  # No transpose needed
+
+    # Try transposing df2
+    df2_t = df2.T
+    if df1.index.intersection(df2_t.index).any():
+        return df1, df2_t, True  # Transposed
+
+    # Still no match
+    return df1, df2, False  # Return as-is, no match found
+
 def get_first_existing_column(df, columns):
     # Loop through the list of columns
     for col in columns:
