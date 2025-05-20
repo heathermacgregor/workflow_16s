@@ -565,12 +565,12 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         )
             
         logger.info("Plotting PCA...")
-            
+        color_col='dataset_name'
         pca_plot = pca(
                 components = pca_results['components'], 
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=data.meta,
-                color_col='dataset_name', 
+                color_col=color_col, 
                 symbol_col='nuclear_contamination_status',
                 show=False,
                 output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
