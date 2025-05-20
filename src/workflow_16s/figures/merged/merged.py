@@ -81,7 +81,6 @@ def _create_scatter_figure(
         x=x_col,
         y=y_col,
         color=color_col,
-        color_discrete_map=color_map,
         symbol=symbol_col,
         hover_data=hover_data or data.index,
         color_discrete_map=color_map,
