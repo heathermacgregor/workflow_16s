@@ -543,17 +543,19 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #data.meta
     figures["sample_map"] = {}
     logger.info("Creating sample map...")
-    
+    color_maps = {}
     for col in ['dataset_name', 'nuclear_contamination_status']:
-        fig = sample_map_categorical(
+        fig, map = sample_map_categorical(
             metadata=data.meta, 
             show=False, 
             output_dir=Path(project_dir.figures) / 'merged', 
             color_col=col,
         )
         figures["sample_map"][col] = fig
+        color_maps[col] = map
+        
 
-
+    print(color_maps)
     figures["pca"] = {}
     for level in ["genus"]:
         figures["pca"][level] = {}
@@ -571,6 +573,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=data.meta,
                 color_col=color_col, 
+                color_map=color_maps[color_col],
                 symbol_col='nuclear_contamination_status',
                 show=False,
                 output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
@@ -601,6 +604,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 metadata=data.meta,
                 metric=metric,
                 color_col='dataset_name', 
+                color_map=color_maps['dataset_name']
                 symbol_col='nuclear_contamination_status',
                 show=False,
                 output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
