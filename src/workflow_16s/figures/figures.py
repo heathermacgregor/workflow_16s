@@ -242,7 +242,7 @@ def plot_legend(
             plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
         if show:
             plt.show()
-    else:
+    except:
         if output_path:
             plotly_show_and_save(
                 fig,
