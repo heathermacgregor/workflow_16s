@@ -203,9 +203,10 @@ def execute_per_dataset_qiime_workflow(
     ]
     missing_outputs = file_utils.missing_output_files(expected_outputs)
     if missing_outputs:
+        missing_outputs_txt = '\n'.join(['  • ' + str(item) for item in missing_outputs])
         raise RuntimeError(
             f"Missing required QIIME outputs: \n"
-            f"{'\n  • '.join(map(str, missing_outputs))}"
+            f"{missing_outputs_txt}"
         )
     return {
         "metadata": metadata_path,
