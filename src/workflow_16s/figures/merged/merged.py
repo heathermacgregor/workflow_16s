@@ -81,6 +81,7 @@ def _create_scatter_figure(
         x=x_col,
         y=y_col,
         color=color_col,
+        color_discrete_map=color_map,
         symbol=symbol_col,
         hover_data=hover_data or data.index,
         color_discrete_map=color_map,
@@ -127,7 +128,7 @@ def sample_map_categorical(
     opacity: float = 0.3,
     lat: str = 'latitude_deg', 
     lon: str = 'longitude_deg',
-    color_col: str = 'project_name',
+    color_col: str = 'dataset_name',
 ):
     """"""
     metadata[color_col] = metadata[color_col].replace('', np.nan)  # first convert empty strings to NaN
@@ -192,7 +193,7 @@ def sample_map_categorical(
         colordict = color_mapping
         legend_path = Path(output_dir) / f'legend.{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
-    return fig#, legend
+    return fig, color_mapping#, legend
     
 
 def heatmap_feature_abundance(
@@ -241,6 +242,7 @@ def pcoa(
     proportion_explained: np.ndarray, 
     metadata: pd.DataFrame,
     metric: str = 'braycurtis',
+    color_map: Dict = None,
     color_col: str = 'dataset_name', 
     symbol_col: str = 'nuclear_contamination_status',
     show: bool = False,
@@ -295,6 +297,7 @@ def pcoa(
         x_col=x_col,
         y_col=y_col,
         color_col=color_col,
+        color_map=color_map,
         symbol_col=symbol_col,
         color_map=colordict,
         hover_data=['index', color_col]
@@ -331,6 +334,7 @@ def pca(
     proportion_explained: np.ndarray, 
     metadata: pd.DataFrame,
     color_col: str = 'dataset_name', 
+    color_map: Dict = None,
     symbol_col: str = 'nuclear_contamination_status',
     show: bool = False,
     output_dir: Union[str, Path] = None, 
@@ -379,6 +383,7 @@ def pca(
         x_col=x_col,
         y_col=y_col,
         color_col=color_col,
+        color_map=color_map,
         symbol_col=symbol_col,
         color_map=colordict,
         hover_data=['index', color_col]
