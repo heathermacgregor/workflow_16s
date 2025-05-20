@@ -519,7 +519,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
         print(f"Critical initialization error: {str(e)}")
 
 from workflow_16s.figures.html_report import HTMLReportGenerator
-from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
+from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, tsne
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
@@ -562,7 +562,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         logger.info("Calculating PCA...")
             
         pca_results = beta_diversity.pca(
-            table=data.tables[level].T,
+            table=data.tables[level],
             n_components=3
         )
             
@@ -591,7 +591,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             logger.info("Calculating PCoA...")
             
             pcoa_results = beta_diversity.pcoa(
-                table=data.tables[level].T,
+                table=data.tables[level],
                 metric=metric,
                 n_dimensions=3
             )
@@ -613,6 +613,34 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 y=2
             )
             figures["pcoa"][level][metric][color_col] = pcoa_plot
+
+    figures["tsne"] = {}
+    for level in ["genus"]:
+        figures["tsne"][level] = {}
+        logger.info("Calculating TSNE...")
+            
+        pcoa_results = beta_diversity.tsne(
+                table=data.tables[level].T,
+                n_components=3
+        )
+            
+        logger.info("Plotting PCoA...")
+            
+        pcoa_plot = tsne(
+                components = pcoa_results.samples, 
+                proportion_explained = pcoa_results.proportion_explained, 
+                metadata=data.meta,
+                metric=metric,
+                color_col='dataset_name', 
+                color_map=color_maps['dataset_name'],
+                symbol_col='nuclear_contamination_status',
+                show=False,
+                output_dir=Path(project_dir.figures) / 'merged' / 'l2', 
+                transformation=None,
+                x=1, 
+                y=2
+        )
+        figures["tsne"][level][color_col] = tsne_plot
 
     print(figures)
     report = HTMLReportGenerator(
