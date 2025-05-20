@@ -182,6 +182,7 @@ def sample_map_categorical(
     #fig.show()
     if output_dir:
         output_path = Path(output_dir) / f"sample_map.{color_col}"
+        print(output_path)
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
     return fig#, legend
     
