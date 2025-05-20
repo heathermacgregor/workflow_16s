@@ -67,6 +67,19 @@ ENA_METADATA_COLUMNS_TO_RENAME = {
 
 # ==================================== FUNCTIONS ===================================== #
 
+def table_to_dataframe(
+    table: Union[Dict, BiomTable]
+) -> pd.DataFrame:
+    """Convert a feature table to a pandas DataFrame."""
+    # Convert table to DataFrame 
+    if isinstance(table, Table):
+        table = table.to_dataframe(dense=True) # features x samples
+        table = table.T                        # samples  x features
+    if isinstance(table, Dict):
+        table = pd.DataFrame(table)            # samples  x features
+
+    return table
+
 def match_indices_or_transpose(df1, df2):
     """
     If df1 and df2 have overlapping indices, return them as-is.
@@ -74,6 +87,8 @@ def match_indices_or_transpose(df1, df2):
     Returns:
         Tuple: (df1, possibly transposed df2, boolean indicating whether transpose occurred)
     """
+    if not isinstance(df2, pd.DataFrame):
+        df2 = table_to_dataframe(df2)
     df1.index = df1['#sampleid']
     if df1.index.intersection(df2.index).any():
         return df1, df2, False  # No transpose needed
