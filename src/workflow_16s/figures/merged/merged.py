@@ -656,7 +656,6 @@ def ancom(
     )
 
     if output_dir:
-        output_path = 
         plotly_show_and_save(
             fig, show, Path(output_dir) / 'ancom' / f"ancom.{feature_type.lower()}"
         )
