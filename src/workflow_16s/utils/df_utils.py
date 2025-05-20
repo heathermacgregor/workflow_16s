@@ -72,7 +72,7 @@ def table_to_dataframe(
 ) -> pd.DataFrame:
     """Convert a feature table to a pandas DataFrame."""
     # Convert table to DataFrame 
-    if isinstance(table, Table):
+    if isinstance(table, BiomTable):
         table = table.to_dataframe(dense=True) # features x samples
         table = table.T                        # samples  x features
     if isinstance(table, Dict):
