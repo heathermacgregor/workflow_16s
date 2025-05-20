@@ -178,7 +178,7 @@ def sample_map_categorical(
     # Update marker size to make the dots smaller and semi-transparent
     fig.update_traces(marker=dict(size=size, opacity=opacity)) 
 
-    fig.show()
+    #fig.show()
     if output_dir:
         output_path = Path(output_dir) / f"sample_map"
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
