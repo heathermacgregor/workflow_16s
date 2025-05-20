@@ -120,6 +120,7 @@ def filter_samples(
 
 def preprocess_table(
     table: Union[Dict, Table, pd.DataFrame], 
+    filter: bool = False,
     normalize: bool = True,
     clr_transform: bool = True
 ) -> pd.DataFrame:
@@ -139,6 +140,9 @@ def preprocess_table(
         table = table_to_dataframe(table)
     if isinstance(table_0, Table):
         table = table.T
+
+    if filter:
+        table = filter_table(table)
         
     if normalize:
         table = normalize_table(table, axis=0)
