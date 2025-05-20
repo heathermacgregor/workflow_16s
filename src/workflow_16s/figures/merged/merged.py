@@ -279,6 +279,8 @@ def pcoa(
     x_title = f"PCo{x} ({round(100 * proportion_explained[x-1], 2)}%)"
     y_title = f"PCo{y} ({round(100 * proportion_explained[y-1], 2)}%)"
 
+    data['index'] = data.index
+    
     fig = _create_scatter_figure(
         data=data,
         x_col=x_col,
@@ -309,7 +311,7 @@ def pcoa(
         plotly_show_and_save(
             fig, show, Path(output_dir) / 'pcoa' / file_stem
         )
-        legend_path = output_path / f'legend_{color_col}.png'
+        legend_path = output_path / f'legend.{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
     
     return fig, colordict
@@ -592,7 +594,7 @@ def violin_feature(
 
     if output_dir:
         plotly_show_and_save(
-            fig, show, Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'
+            fig, show, Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'.lower()
         )
     
     return fig
@@ -657,11 +659,11 @@ def ancom(
     if output_dir:
         output_path = 
         plotly_show_and_save(
-            fig, show, Path(output_dir) / 'ancom' / f"ancom.{feature_type}"
+            fig, show, Path(output_dir) / 'ancom' / f"ancom.{feature_type.lower()}"
         )
         plot_legend(
             colordict, color_col, 
-            Path(output_dir) / 'ancom' / f'legend.{feature_type}.png'
+            Path(output_dir) / 'ancom' / f'legend.{feature_type.lower()}.png'
         )
     
     return fig, colordict
@@ -706,7 +708,7 @@ def plot_correlation_matrix(
 
     if output_dir:
         plotly_show_and_save(
-            fig, show, Path(output_dir) / 'correlation' / f"correlation.{feature_type}"
+            fig, show, Path(output_dir) / 'correlation' / f"correlation.{feature_type.lower()}"
         )
     
     return fig
