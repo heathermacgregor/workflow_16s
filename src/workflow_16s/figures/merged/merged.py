@@ -39,7 +39,9 @@ def _validate_metadata(metadata: pd.DataFrame, required_cols: List[str]) -> None
     """Validate presence of required columns in metadata."""
     missing = [col for col in required_cols if col not in metadata.columns]
     if missing:
-        raise ValueError(f"Missing required columns in metadata: {', '.join(missing)}")
+        raise ValueError(
+            f"Missing required columns in metadata: {', '.join(missing)}"
+        )
       
 
 def _prepare_visualization_data(
@@ -75,7 +77,7 @@ def _create_scatter_figure(
         y=y_col,
         color=color_col,
         symbol=symbol_col,
-        hover_data=hover_data or ['index'],
+        hover_data=hover_data or data.index,
         color_discrete_map=color_map,
     )
     fig.update_traces(
@@ -124,7 +126,7 @@ def sample_map_categorical(
 ):
     """"""
     metadata[color_col] = metadata[color_col].replace('', np.nan)  # first convert empty strings to NaN
-    metadata[color_col] = metadata[color_col].fillna('other')          # then fill NaN with ''
+    metadata[color_col] = metadata[color_col].fillna('other')      # then fill NaN with ''
     metadata = metadata.sort_values(by=color_col, ascending=True)
     
     # Group by 'color_col' and count samples
@@ -135,7 +137,8 @@ def sample_map_categorical(
     metadata = metadata.merge(cat_counts, on=color_col, how='left')
 
     # Create a color mapping for datasets
-    color_mapping = {c: largecolorset[i % len(largecolorset)] for i, c in enumerate(cat_counts[color_col])}
+    color_mapping = {c: largecolorset[i % len(largecolorset)] 
+                     for i, c in enumerate(cat_counts[color_col])}
     
     # Print the assigned colors
     for cat, assigned_color in color_mapping.items():
@@ -153,8 +156,6 @@ def sample_map_categorical(
         hover_name=color_col, 
         hover_data={'sample_count': True}  
     )
-
-    fig.layout.template = 'heather'  
     
     fig.update_geos(
         projection_type=projection_type,  
@@ -180,7 +181,7 @@ def sample_map_categorical(
 
     #fig.show()
     if output_dir:
-        output_path = Path(output_dir) / f"sample_map"
+        output_path = Path(output_dir) / f"sample_map.{color_col}"
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
     return fig#, legend
     
@@ -220,7 +221,7 @@ def heatmap_feature_abundance(
     )
     
     if output_dir:
-        output_path = Path(output_dir) / f"heatmap_{feature_type}"
+        output_path = Path(output_dir) / f"heatmap.{feature_type.lower()}"
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
     
     return fig
@@ -301,9 +302,13 @@ def pcoa(
     _configure_axes(fig, x_title, y_title, linewidth=7)
 
     if output_dir:
-        output_path = Path(output_dir) / 'pcoa'
-        file_stem = f"pcoa_{transformation or metric}_{x}-{y}_{color_col}_{symbol_col}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
+        file_stem = (
+            f"pcoa.{f'{transformation}.' if transformation else ''}"
+            f"{metric}.{x}-{y}.{color_col}.{symbol_col}"
+        )
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / 'pcoa' / file_stem
+        )
         legend_path = output_path / f'legend_{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
     
@@ -380,9 +385,13 @@ def pca(
     _configure_axes(fig, x_title, y_title)
 
     if output_dir:
-        output_path = Path(output_dir) / 'pca'
-        file_stem = f"pca_{transformation or ''}_{x}-{y}_{color_col}_{symbol_col}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
+        file_stem = (
+            f"pca.{f'{transformation}.' if transformation else ''}"
+            f"{x}-{y}.{color_col}.{symbol_col}"
+        )
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / 'pca'/ file_stem
+        )
         legend_path = output_path / f'legend_{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
     
@@ -454,9 +463,14 @@ def mds(
     _configure_axes(fig, f'{mode}{x}', f'{mode}{y}')
 
     if output_dir:
-        output_path = Path(output_dir) / mode.lower()
-        file_stem = f"{mode}_{x}-{y}_{group_col}_{symbol_col}_{transformation or ''}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
+        output_path = 
+        file_stem = (
+            f"{mode}.{f'{transformation}.' if transformation else ''}"
+            f"{x}-{y}.{group_col}.{symbol_col}"
+        )
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / mode.lower() / file_stem
+        )
         legend_path = output_path / f'legend_{group_col}.png'
         plot_legend(colordict, group_col, legend_path)
     
@@ -524,9 +538,12 @@ def plot_ubiquity(
     )
 
     if output_dir:
-        output_path = Path(output_dir) / 'ubiquity'
-        file_stem = f"ubiquity_{transformation or ''}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
+        file_stem = (
+            f"ubiquity.{f'{transformation}.' if transformation else ''}"
+        )
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / 'ubiquity' / file_stem
+        )
     
     return fig
   
@@ -574,9 +591,9 @@ def violin_feature(
     )
 
     if output_dir:
-        output_path = Path(output_dir) / sub_output_dir
-        output_path.mkdir(exist_ok=True)
-        plotly_show_and_save(fig, show, output_path / f'violin_{feature}_{status_col}')
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'
+        )
     
     return fig
   
@@ -638,9 +655,14 @@ def ancom(
     )
 
     if output_dir:
-        output_path = Path(output_dir) / 'ancom'
-        plotly_show_and_save(fig, show, output_path / f"ancom_{feature_type}")
-        plot_legend(colordict, color_col, output_path / f'legend_{feature_type}.png')
+        output_path = 
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / 'ancom' / f"ancom.{feature_type}"
+        )
+        plot_legend(
+            colordict, color_col, 
+            Path(output_dir) / 'ancom' / f'legend.{feature_type}.png'
+        )
     
     return fig, colordict
   
@@ -683,7 +705,8 @@ def plot_correlation_matrix(
     )
 
     if output_dir:
-        output_path = Path(output_dir) / 'correlation'
-        plotly_show_and_save(fig, show, output_path / f"correlation_{feature_type}")
+        plotly_show_and_save(
+            fig, show, Path(output_dir) / 'correlation' / f"correlation.{feature_type}"
+        )
     
     return fig
