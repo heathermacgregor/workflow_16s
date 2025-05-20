@@ -276,7 +276,7 @@ def presence_absence(
         pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
         logger.info(
-            f"Wrote presence-absence table ({str(pa_table.shape}}) to '{output_biom_path}'"
+            f"Wrote presence-absence table ({str(pa_table.shape)}) to '{output_biom_path}'"
         )
     
     return pa_table
