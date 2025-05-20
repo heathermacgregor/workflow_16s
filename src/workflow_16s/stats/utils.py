@@ -135,8 +135,11 @@ def preprocess_table(
         table:         Processed table ready for downstream analysis.
     """
     if not isinstance(table, pd.DataFrame):
+        table_0 = table
         table = table_to_dataframe(table)
-    
+    if isinstance(table_0, Table):
+        table = table.T
+        
     if normalize:
         table = normalize_table(table, axis=0)
         
