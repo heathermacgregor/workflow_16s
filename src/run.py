@@ -41,7 +41,7 @@ from workflow_16s.config import get_config
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
-from workflow_16s.utils import dir_utils, file_utils, misc_utils
+from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
