@@ -100,9 +100,11 @@ def pcoa(
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
+    print(table.shape)
     # Compute distance matrix
     dm = distance_matrix(table, metric=metric)
     dm_df = pd.DataFrame(dm, index=table.index, columns=table.index)
+    print(dm_df.shape)
     # Run PCoA
     if n_dimensions:
         return PCoA(dm_df, number_of_dimensions=n_dimensions)
@@ -130,7 +132,7 @@ def pca(
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
-
+    print(table.shape)
     # Standardize features
     scaled = StandardScaler().fit_transform(table.values)
     scaled_df = pd.DataFrame(scaled, index=table.index, columns=table.columns)
