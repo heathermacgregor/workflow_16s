@@ -74,6 +74,7 @@ def match_indices_or_transpose(df1, df2):
     Returns:
         Tuple: (df1, possibly transposed df2, boolean indicating whether transpose occurred)
     """
+    df1.index = df1['#sampleid']
     if df1.index.intersection(df2.index).any():
         return df1, df2, False  # No transpose needed
 
