@@ -584,7 +584,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         figures["pca"][level][color_col] = pca_plot
 
     figures["pcoa"] = {}
-    for level in ["genus"]:
+    for level in ["phylum"]:
         figures["pcoa"][level] = {}
         for metric in ["braycurtis"]:
             figures["pcoa"][level][metric] = {}
@@ -607,7 +607,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 color_map=color_maps['dataset_name'],
                 symbol_col='nuclear_contamination_status',
                 show=False,
-                output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
+                output_dir=Path(project_dir.figures) / 'merged' / 'l2', 
                 transformation=None,
                 x=1, 
                 y=2
