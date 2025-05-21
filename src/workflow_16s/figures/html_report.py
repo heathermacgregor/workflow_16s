@@ -30,11 +30,14 @@ class HTMLReportGenerator:
         content = self._generate_sections(figure_dict)
         full_html = self._wrap_in_template(content)
         
+        # Convert to absolute path and ensure directory exists
+        self.output_file = self.output_file.resolve()
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
         self.output_file.write_text(full_html)
         
         if self.auto_open:
-            webbrowser.open(self.output_file.as_uri())
+            # Use proper file URI format with absolute path
+            webbrowser.open(f"file://{self.output_file.absolute()}")
 
     def _validate_structure(self, data: Dict, path: str = "root"):
         """Enhanced validation that handles figure-containing tuples"""
