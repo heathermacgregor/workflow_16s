@@ -1,7 +1,6 @@
 # ===================================== IMPORTS ====================================== #
 
 import os
-import webbrowser
 from pathlib import Path
 from typing import Dict, Union
 from plotly.graph_objs import Figure
@@ -38,26 +37,30 @@ class HTMLReportWriter:
     <h1>Data Analysis Report</h1>''')
 
         # Process each section
-        # In your HTMLReportWriter class, modify this loop:
         for section_title, figures_list in self.input_data.items():
             html_content.append(f'<div class="section"><h2>{section_title}</h2>')
             
-            # Add enumerate() here to get the index
-            for figure_idx, fig_dict in enumerate(figures_list, 1):  # <-- THIS IS THE FIX
+            for figure_idx, fig_dict in enumerate(figures_list, 1):
                 try:
                     fig = fig_dict['figure']
                     fig_html = fig.to_html(
                         full_html=False,
-                        include_plotlyjs='cdn',
-                        div_id=f"plot_{section_title}_{figure_idx}"  # Now using properly defined index
+                        include_plotlyjs=False,  # Changed from 'cdn' since we already include it in header
+                        div_id=f"plot_{section_title}_{figure_idx}"
                     )
+                    
+                    # Split into div and script parts
+                    div_part, script_part = fig_html.split("</div>", 1)
+                    div_part += "</div>"
+                    
+                    html_content.append(f'<div class="figure-container">{div_part}</div>')
+                    scripts.append(script_part.strip())
                 
-                # Split into div and script parts
-                div_part, script_part = fig_html.split("</div>", 1)
-                div_part += "</div>"
-                
-                html_content.append(f'<div class="figure-container">{div_part}</div>')
-                scripts.append(script_part.strip())
+                except Exception as e:
+                    error_msg = f'''<div class="figure-container" style="color: red; padding: 1em;">
+                        Error in {section_title} figure {figure_idx}: {str(e)}
+                    </div>'''
+                    html_content.append(error_msg)
             
             html_content.append('</div>')  # Close section div
 
