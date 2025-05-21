@@ -81,7 +81,7 @@ class HTMLReportWriter:
                     html_content.append(error_msg)
 
             html_content.append('</div>')
-
+        scripts_txt = '\n'.join(scripts)
         html_content.append(f'''
             <script>
                 // Force redraw after initial render
@@ -94,7 +94,7 @@ class HTMLReportWriter:
                     console.error('Plotly Error:', e.error);
                 }});
             </script>
-            {'\n'.join(scripts)}
+            {scripts_txt}
             </body></html>
         ''')
 
