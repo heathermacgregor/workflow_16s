@@ -518,47 +518,33 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-from workflow_16s.figures.html_report import HTMLReportGenerator
+from workflow_16s.figures.html_report import HTMLReportWriter
 from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
-def main (config_path: Path = DEFAULT_CONFIG) -> None:
-    cfg = get_config(config_path)
-    per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
-        
-    project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    logger = setup_logging(project_dir.logs)
 
-    figures = {}
-        
-    data = file_utils.AmpliconData(
-        project_dir=project_dir.main,
-        mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
-        verbose=True
-    )
-    print(data.meta['nuclear_contamination_status'].value_counts())
-    #data.tables
-    #data.presence_absence_tables 
-    #data.meta
-    figures["sample_map"] = {}
+def plot_sample_map(meta: pd.DataFrame, figures: Dict):
+    
     logger.info("Creating sample map...")
     color_maps = {}
     for col in ['dataset_name', 'nuclear_contamination_status']:
         fig, map = sample_map_categorical(
-            metadata=data.meta, 
+            metadata=meta, 
             show=False, 
             output_dir=Path(project_dir.figures) / 'merged', 
             color_col=col,
         )
-        figures["sample_map"][col] = fig
+        figures["sample_map"].append({
+            'color_col' = col,
+            'figure': fig
+        })
         color_maps[col] = map
         
+    #print(color_maps)
 
-    print(color_maps)
-    figures["pca"] = {}
+def plot_pca(data: file_utils.AmpliconData, figures: Dict):
+    
     for level in ["genus"]:
-        figures["pca"][level] = {}
         logger.info("Calculating PCA...")
         
         meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
@@ -583,9 +569,41 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 x=1, 
                 y=2
         )
-        figures["pca"][level][color_col] = pca_plot
+        figures["pca"].append({
+            'level': level,
+            'color_col': color_col,
+            'symbol_col': symbol_col,
+            'transformation': None,
+            'figure': pca_plot
+        })
 
-    figures["pcoa"] = {}
+def main (config_path: Path = DEFAULT_CONFIG) -> None:
+    cfg = get_config(config_path)
+    per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
+    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+        
+    project_dir = dir_utils.SubDirs(cfg["project_dir"])
+    logger = setup_logging(project_dir.logs)
+
+    figures = {}
+        
+    data = file_utils.AmpliconData(
+        project_dir=project_dir.main,
+        mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
+        verbose=True
+    )
+    print(data.meta['nuclear_contamination_status'].value_counts())
+    #data.tables
+    #data.presence_absence_tables 
+    #data.meta
+    figures["sample_map"] = []
+    figures["pca"] = []
+    figures["pcoa"] = []
+    plot_sample_map(meta=data.meta, figures=figures)
+    plot_pca(data=data, figures=figures)
+    
+
+    '''
     for level in ["phylum"]:
         figures["pcoa"][level] = {}
         for metric in ["braycurtis"]:
@@ -617,8 +635,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 y=2
             )
             figures["pcoa"][level][metric][color_col] = pcoa_plot
-
-    figures["tsne"] = {}
+    '''
+    figures["tsne"] = []
     for level in ["genus"]:
         figures["tsne"][level] = {}
         logger.info("Calculating TSNE...")
@@ -644,14 +662,15 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             y=2
         )
     
-        figures["tsne"][level][color_col] = tsne_plot
+        figures["tsne"].append({
+            'level': level,
+            'color_col': color_col,
+            'figure': tsne_plot
+        })
 
-    print(figures)
-    report = HTMLReportGenerator(
-        output_file="my_report.html",
-        plotly_config={'responsive': True}
-    )
-    report.generate(figures)
+    #print(figures)
+    writer = HTMLReportWriter(figures, "my_report.html")
+    writer.write_report()
         
 if __name__ == "__main__":
     main()
