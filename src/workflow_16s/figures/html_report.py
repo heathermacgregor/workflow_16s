@@ -9,7 +9,7 @@ from plotly.graph_objs import Figure
 # ==================================== FUNCTIONS ===================================== #
 
 class HTMLReportWriter:
-    def __init__(self, input_data, filename='report.html'):
+    def __init__(self, input_data, filename='my_report.html'):
         self.input_data = input_data
         self.filename = filename
 
