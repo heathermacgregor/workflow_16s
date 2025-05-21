@@ -558,7 +558,7 @@ def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logge
         logger.info("Plotting PCA...")
         color_col='dataset_name'
         symbol_col='nuclear_contamination_status'
-        pca_plot = pca(
+        pca_plot, _ = pca(
                 components = pca_results['components'], 
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=meta,
@@ -651,7 +651,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             
         logger.info("Plotting TSNE...")
             
-        tsne_plot = mds(
+        tsne_plot, _ = mds(
             df=tsne_results, 
             metadata=meta,
             group_col='dataset_name', 
