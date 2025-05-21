@@ -538,6 +538,7 @@ def plot_sample_map(meta: pd.DataFrame, figures: Dict, logger: logging.Logger, p
             'color_col': col,
             'figure': fig
         })
+        print(type(fig))
         color_maps[col] = map
     return color_maps    
     #print(color_maps)
@@ -577,6 +578,7 @@ def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logge
             'transformation': None,
             'figure': pca_plot
         })
+        print(type(pca_plot))
 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
@@ -668,6 +670,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             'symbol_col': 'nuclear_contamination_status',
             'figure': tsne_plot
         })
+        print(type(tsne_plot))
 
     #print(figures)
     writer = HTMLReportWriter(figures, "my_report.html")
