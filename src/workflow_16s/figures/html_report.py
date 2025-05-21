@@ -43,7 +43,9 @@ class HTMLReportWriter:
             
             for fig_dict in figures_list:
                 fig = fig_dict['figure']
-                fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
+                fig_html = fig.to_html(full_html=False, 
+                      include_plotlyjs='cdn',
+                      div_id=f"plot_{section_title}_{i}")
                 
                 # Split into div and script parts
                 div_part, script_part = fig_html.split("</div>", 1)
