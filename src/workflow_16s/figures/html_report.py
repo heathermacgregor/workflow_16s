@@ -25,7 +25,7 @@ class HTMLReportGenerator:
         }
 
     def generate(self, figure_dict: Dict):
-        """Generate report from strictly nested dictionary of Plotly figures"""
+        """Generate report from nested dictionary structure with Plotly figures"""
         self._validate_structure(figure_dict)
         content = self._generate_sections(figure_dict)
         full_html = self._wrap_in_template(content)
@@ -37,24 +37,33 @@ class HTMLReportGenerator:
             webbrowser.open(self.output_file.as_uri())
 
     def _validate_structure(self, data: Dict, path: str = "root"):
-        """Recursively validate the figure dictionary structure"""
+        """Enhanced validation that handles figure-containing tuples"""
         for key, value in data.items():
             current_path = f"{path} -> {key}"
+            
             if isinstance(value, dict):
                 self._validate_structure(value, current_path)
+            elif isinstance(value, tuple):
+                if not any(isinstance(item, Figure) for item in value):
+                    raise TypeError(
+                        f"Tuple at {current_path} contains no Plotly Figure. "
+                        f"Contents: {tuple(type(x) for x in value)}"
+                    )
             elif not isinstance(value, Figure):
                 raise TypeError(
                     f"Invalid type {type(value)} at {current_path}. "
-                    f"Expected only nested dictionaries terminating in Plotly Figures."
+                    f"Expected Plotly Figure or tuple containing Figure."
                 )
 
     def _generate_sections(self, data: Dict, level: int = 0) -> str:
-        """Generate nested HTML sections from validated structure"""
+        """Generate HTML content with tuple handling"""
         html = []
         for key, value in data.items():
             if isinstance(value, dict):
                 section_content = self._generate_sections(value, level + 1)
                 html.append(self._section_template(key, section_content, level))
+            elif isinstance(value, tuple):
+                html.append(self._tuple_template(key, value))
             else:
                 html.append(self._figure_template(key, value))
         return '\n'.join(html)
@@ -68,10 +77,21 @@ class HTMLReportGenerator:
         </div>
         """
 
+    def _tuple_template(self, title: str, figures: tuple) -> str:
+        """Handle tuples of figures"""
+        return f"""
+        <div class="tuple-container">
+            <h4>{self._format_title(title)}</h4>
+            <div class="figure-group">
+                {"".join(self._figure_template("", fig) for fig in figures if isinstance(fig, Figure))}
+            </div>
+        </div>
+        """
+
     def _figure_template(self, title: str, figure: Figure) -> str:
         return f"""
         <div class="figure-container">
-            <h4>{self._format_title(title)}</h4>
+            {f'<h5>{title}</h5>' if title else ''}
             {figure.to_html(full_html=False, include_plotlyjs=False, config=self.plotly_config)}
         </div>
         """
@@ -95,17 +115,27 @@ class HTMLReportGenerator:
                 }}
                 .section {{
                     margin: 1rem 0;
-                    padding-left: {15 * level}px;
+                    padding-left: 15px;
                 }}
-                .figure-container {{
-                    margin: 1rem 0;
+                .tuple-container {{
+                    margin: 2rem 0;
                     padding: 1rem;
                     background: #f8f9fa;
                     border-radius: 8px;
                 }}
-                h2 {{ color: #2c3e50; }}
-                h3 {{ color: #34495e; }}
-                h4 {{ color: #7f8c8d; font-size: 1.1rem; }}
+                .figure-group {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                    gap: 1rem;
+                }}
+                .figure-container {{
+                    padding: 1rem;
+                    background: white;
+                    border: 1px solid #eee;
+                    border-radius: 8px;
+                }}
+                h4 {{ margin-bottom: 0.5rem; color: #444; }}
+                h5 {{ font-size: 0.9em; color: #666; margin: 0.5rem 0; }}
             </style>
         </head>
         <body>
