@@ -639,7 +639,6 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     '''
     figures["tsne"] = []
     for level in ["genus"]:
-        figures["tsne"][level] = {}
         logger.info("Calculating TSNE...")
 
         meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
