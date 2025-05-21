@@ -664,7 +664,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     
         figures["tsne"].append({
             'level': level,
-            'color_col': color_col,
+            'color_col': 'dataset_name',
+            'symbol_col': 'nuclear_contamination_status',
             'figure': tsne_plot
         })
 
