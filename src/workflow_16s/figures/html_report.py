@@ -8,67 +8,48 @@ from plotly.graph_objs import Figure
 # ==================================== FUNCTIONS ===================================== #
 
 class HTMLReportWriter:
-    def __init__(self, input_data, filename='my_report.html'):
+    def __init__(self, input_data, filename='report.html'):
         self.input_data = input_data
         self.filename = filename
+        self._jupyter_cleanup = True  # Flag to prevent Jupyter HTML wrapping
 
     def write_report(self):
-        """
-        Generates an HTML report with sections and embedded Plotly figures
-        """
-        html_content = []
-        scripts = []  # INITIALIZE SCRIPTS LIST HERE
+        """Generate a clean HTML report immune to Jupyter wrapping"""
+        content = [
+            '<!DOCTYPE html>',
+            '<html>',
+            '<head>',
+            '<meta charset="UTF-8">',
+            '<title>Analysis Report</title>',
+            '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>',
+            '<style>',
+            '  body { padding: 20px; font-family: Arial, sans-serif; }',
+            '  .section { margin-bottom: 40px; }',
+            '  .plot-container { margin: 20px 0; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '<h1>Data Analysis Report</h1>'
+        ]
 
-        # HTML header with Plotly JS and basic styling
-        html_content.append('''<!DOCTYPE html>
-<html>
-<head>
-    <title>Data Report</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 2em; }
-        .section { margin-bottom: 3em; border-bottom: 1px solid #ccc; padding-bottom: 2em; }
-        h1 { color: #333; }
-        h2 { color: #666; margin-top: 1.5em; }
-        .figure-container { margin: 1.5em 0; padding: 1em; background: #f9f9f9; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <h1>Data Analysis Report</h1>''')
-
-        # Process each section
-        for section_title, figures_list in self.input_data.items():
-            html_content.append(f'<div class="section"><h2>{section_title}</h2>')
-            
-            for figure_idx, fig_dict in enumerate(figures_list, 1):
+        for section, figures in self.input_data.items():
+            content.append(f'<div class="section"><h2>{section}</h2>')
+            for idx, fig_data in enumerate(figures, 1):
                 try:
-                    fig = fig_dict['figure']
-                    fig_html = fig.to_html(
+                    fig = fig_data['figure']
+                    plot_div = f'plot_{section}_{idx}'.replace(' ', '_')
+                    plot_html = fig.to_html(
                         full_html=False,
                         include_plotlyjs=False,
-                        div_id=f"plot_{section_title}_{figure_idx}"
+                        div_id=plot_div,
+                        config={'responsive': True}
                     )
-                    
-                    # Split into div and script parts
-                    div_end = fig_html.find('</div>') + len('</div>')
-                    div_part = fig_html[:div_end]
-                    script_part = fig_html[div_end:]
-                    
-                    html_content.append(f'<div class="figure-container">{div_part}</div>')
-                    scripts.append(script_part.strip())  # ADD TO SCRIPTS LIST
-                
+                    content.append(f'<div class="plot-container">{plot_html}</div>')
                 except Exception as e:
-                    error_msg = f'''<div style="color: red; padding: 1em;">
-                        Error in {section_title} figure {figure_idx}: {str(e)}
-                    </div>'''
-                    html_content.append(error_msg)
-            
-            html_content.append('</div>')  # Close section div
+                    content.append(f'<div style="color: red">Error: {str(e)}</div>')
+            content.append('</div>')
 
-        # Add all scripts at the end
-        html_content.append('\n'.join(scripts))
-        html_content.append('''</body></html>''')
+        content += ['</body>', '</html>']
 
-        # Write to file
         with open(self.filename, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(html_content))
+            f.write('\n'.join(content))
