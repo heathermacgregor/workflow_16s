@@ -556,13 +556,14 @@ def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logge
             
         logger.info("Plotting PCA...")
         color_col='dataset_name'
+        symbol_col='nuclear_contamination_status'
         pca_plot = pca(
                 components = pca_results['components'], 
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=meta,
                 color_col=color_col, 
                 color_map=color_maps[color_col],
-                symbol_col='nuclear_contamination_status',
+                symbol_col=symbol_col,
                 show=False,
                 output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
                 transformation=None,
