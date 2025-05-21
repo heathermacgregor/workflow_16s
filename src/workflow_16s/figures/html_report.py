@@ -38,14 +38,19 @@ class HTMLReportWriter:
     <h1>Data Analysis Report</h1>''')
 
         # Process each section
+        # In your HTMLReportWriter class, modify this loop:
         for section_title, figures_list in self.input_data.items():
             html_content.append(f'<div class="section"><h2>{section_title}</h2>')
             
-            for fig_dict in figures_list:
-                fig = fig_dict['figure']
-                fig_html = fig.to_html(full_html=False, 
-                      include_plotlyjs='cdn',
-                      div_id=f"plot_{section_title}_{i}")
+            # Add enumerate() here to get the index
+            for figure_idx, fig_dict in enumerate(figures_list, 1):  # <-- THIS IS THE FIX
+                try:
+                    fig = fig_dict['figure']
+                    fig_html = fig.to_html(
+                        full_html=False,
+                        include_plotlyjs='cdn',
+                        div_id=f"plot_{section_title}_{figure_idx}"  # Now using properly defined index
+                    )
                 
                 # Split into div and script parts
                 div_part, script_part = fig_html.split("</div>", 1)
