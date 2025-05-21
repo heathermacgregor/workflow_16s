@@ -598,7 +598,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #data.meta
     figures["sample_map"] = []
     figures["pca"] = []
-    figures["pcoa"] = []
+    #figures["pcoa"] = []
     plot_sample_map(meta=data.meta, figures=figures, logger=logger)
     plot_pca(data=data, figures=figures, logger=logger)
     
