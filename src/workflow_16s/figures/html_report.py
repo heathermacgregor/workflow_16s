@@ -9,23 +9,22 @@ from plotly.graph_objs import Figure
 # ==================================== FUNCTIONS ===================================== #
 
 import os
-import webbrowser
 from pathlib import Path
 from typing import Dict, Union
 from plotly.graph_objs import Figure
 
 class HTMLReportGenerator:
-    def __init__(self, output_file: str = "report.html", auto_open: bool = True,
+    def __init__(self, output_file: str = "report.html", auto_open: bool = False,  # Changed default to False
                  plotly_config: dict = None):
         self.output_file = Path(output_file)
-        self.auto_open = auto_open
+        self.auto_open = auto_open  # Now defaults to False
         self.plotly_config = plotly_config or {
             'responsive': True,
             'displayModeBar': True,
         }
 
     def generate(self, figure_dict: Dict):
-        """Generate report from nested dictionary structure with Plotly figures"""
+        """Generate report and save to file without automatic opening"""
         self._validate_structure(figure_dict)
         content = self._generate_sections(figure_dict)
         full_html = self._wrap_in_template(content)
@@ -35,12 +34,10 @@ class HTMLReportGenerator:
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
         self.output_file.write_text(full_html)
         
-        if self.auto_open:
-            # Use proper file URI format with absolute path
-            webbrowser.open(f"file://{self.output_file.absolute()}")
+        # Removed the auto-open functionality completely
 
     def _validate_structure(self, data: Dict, path: str = "root"):
-        """Enhanced validation that handles figure-containing tuples"""
+        """Validation remains the same"""
         for key, value in data.items():
             current_path = f"{path} -> {key}"
             
@@ -59,7 +56,7 @@ class HTMLReportGenerator:
                 )
 
     def _generate_sections(self, data: Dict, level: int = 0) -> str:
-        """Generate HTML content with tuple handling"""
+        """Content generation remains the same"""
         html = []
         for key, value in data.items():
             if isinstance(value, dict):
@@ -81,7 +78,6 @@ class HTMLReportGenerator:
         """
 
     def _tuple_template(self, title: str, figures: tuple) -> str:
-        """Handle tuples of figures"""
         return f"""
         <div class="tuple-container">
             <h4>{self._format_title(title)}</h4>
