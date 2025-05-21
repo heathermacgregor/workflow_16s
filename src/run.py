@@ -523,7 +523,7 @@ from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
 
-def plot_sample_map(meta: pd.DataFrame, figures: Dict):
+def plot_sample_map(meta: pd.DataFrame, figures: Dict, logger: logging.Logger,):
     
     logger.info("Creating sample map...")
     color_maps = {}
@@ -542,7 +542,7 @@ def plot_sample_map(meta: pd.DataFrame, figures: Dict):
         
     #print(color_maps)
 
-def plot_pca(data: file_utils.AmpliconData, figures: Dict):
+def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logger,):
     
     for level in ["genus"]:
         logger.info("Calculating PCA...")
@@ -599,8 +599,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     figures["sample_map"] = []
     figures["pca"] = []
     figures["pcoa"] = []
-    plot_sample_map(meta=data.meta, figures=figures)
-    plot_pca(data=data, figures=figures)
+    plot_sample_map(meta=data.meta, figures=figures, logger=logger)
+    plot_pca(data=data, figures=figures, logger=logger)
     
 
     '''
