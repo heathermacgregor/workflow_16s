@@ -539,10 +539,10 @@ def plot_sample_map(meta: pd.DataFrame, figures: Dict, logger: logging.Logger, p
             'figure': fig
         })
         color_maps[col] = map
-        
+    return color_maps    
     #print(color_maps)
 
-def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logger, project_dir: dir_utils.SubDirs):
+def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logger, project_dir: dir_utils.SubDirs, color_maps: Dict):
     
     for level in ["genus"]:
         logger.info("Calculating PCA...")
@@ -599,8 +599,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     figures["sample_map"] = []
     figures["pca"] = []
     #figures["pcoa"] = []
-    plot_sample_map(meta=data.meta, figures=figures, logger=logger, project_dir=project_dir)
-    plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir)
+    color_maps = plot_sample_map(meta=data.meta, figures=figures, logger=logger, project_dir=project_dir)
+    plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
     
 
     '''
