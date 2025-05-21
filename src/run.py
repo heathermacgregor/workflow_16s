@@ -535,7 +535,7 @@ def plot_sample_map(meta: pd.DataFrame, figures: Dict):
             color_col=col,
         )
         figures["sample_map"].append({
-            'color_col' = col,
+            'color_col': col,
             'figure': fig
         })
         color_maps[col] = map
