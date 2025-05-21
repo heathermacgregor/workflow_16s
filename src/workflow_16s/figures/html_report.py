@@ -11,7 +11,7 @@ from plotly.graph_objs import Figure
 import os
 import webbrowser
 from pathlib import Path
-from typing import Dict, Union, Tuple, Any
+from typing import Dict, Union
 from plotly.graph_objs import Figure
 
 class HTMLReportGenerator:
@@ -24,9 +24,10 @@ class HTMLReportGenerator:
             'displayModeBar': True,
         }
 
-    def generate(self, figure_dict: Dict[str, Any]):
-        """Handle complex nested structure with mixed types"""
-        content = self._generate_content(figure_dict)
+    def generate(self, figure_dict: Dict):
+        """Generate report from strictly nested dictionary of Plotly figures"""
+        self._validate_structure(figure_dict)
+        content = self._generate_sections(figure_dict)
         full_html = self._wrap_in_template(content)
         
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -35,50 +36,48 @@ class HTMLReportGenerator:
         if self.auto_open:
             webbrowser.open(self.output_file.as_uri())
 
-    def _generate_content(self, data: Any, level: int = 0) -> str:
-        """Recursive content generator handling multiple types"""
-        if isinstance(data, dict):
-            return self._process_dict(data, level)
-        if isinstance(data, tuple):
-            return self._process_tuple(data, level)
-        if isinstance(data, Figure):
-            return self._generate_figure("", data)
-        raise TypeError(f"Unsupported type {type(data)}")
+    def _validate_structure(self, data: Dict, path: str = "root"):
+        """Recursively validate the figure dictionary structure"""
+        for key, value in data.items():
+            current_path = f"{path} -> {key}"
+            if isinstance(value, dict):
+                self._validate_structure(value, current_path)
+            elif not isinstance(value, Figure):
+                raise TypeError(
+                    f"Invalid type {type(value)} at {current_path}. "
+                    f"Expected only nested dictionaries terminating in Plotly Figures."
+                )
 
-    def _process_dict(self, data: Dict[str, Any], level: int) -> str:
-        """Process dictionary items with automatic heading creation"""
+    def _generate_sections(self, data: Dict, level: int = 0) -> str:
+        """Generate nested HTML sections from validated structure"""
         html = []
         for key, value in data.items():
-            html.append(f"""
-            <div class="section level-{level}">
-                <h{min(level+2, 6)}>{self._format_key(key)}</h{min(level+2, 6)}>
-                {self._generate_content(value, level+1)}
-            </div>
-            """)
+            if isinstance(value, dict):
+                section_content = self._generate_sections(value, level + 1)
+                html.append(self._section_template(key, section_content, level))
+            else:
+                html.append(self._figure_template(key, value))
         return '\n'.join(html)
 
-    def _process_tuple(self, data: Tuple, level: int) -> str:
-        """Process tuples as horizontal figure groups"""
-        html = []
-        for item in data:
-            if isinstance(item, Figure):
-                html.append(self._generate_figure("", item))
-            elif isinstance(item, dict):
-                html.append(self._process_dict(item, level))
-            else:
-                html.append(f"<div class='metadata'>{str(item)}</div>")
-        return f"<div class='tuple-container'>{''.join(html)}</div>"
+    def _section_template(self, title: str, content: str, level: int) -> str:
+        heading_level = min(level + 2, 6)
+        return f"""
+        <div class="section level-{level}">
+            <h{heading_level}>{self._format_title(title)}</h{heading_level}>
+            {content}
+        </div>
+        """
 
-    def _generate_figure(self, title: str, figure: Figure) -> str:
+    def _figure_template(self, title: str, figure: Figure) -> str:
         return f"""
         <div class="figure-container">
-            {f'<h4>{title}</h4>' if title else ''}
+            <h4>{self._format_title(title)}</h4>
             {figure.to_html(full_html=False, include_plotlyjs=False, config=self.plotly_config)}
         </div>
         """
 
-    def _format_key(self, key: str) -> str:
-        return key.replace('_', ' ').title()
+    def _format_title(self, text: str) -> str:
+        return text.replace('_', ' ').title()
 
     def _wrap_in_template(self, content: str) -> str:
         return f"""
@@ -86,47 +85,31 @@ class HTMLReportGenerator:
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Microbiome Analysis Report</title>
+            <title>Analysis Report</title>
             <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
             <style>
                 body {{ 
                     font-family: Arial, sans-serif;
                     margin: 2rem;
                     color: #333;
-                    background-color: #fafafa;
                 }}
                 .section {{
                     margin: 1rem 0;
-                    padding: 1rem;
-                    background: white;
-                    border-radius: 8px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                }}
-                .tuple-container {{
-                    display: grid;
-                    gap: 1rem;
-                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                    margin: 1rem 0;
+                    padding-left: {15 * level}px;
                 }}
                 .figure-container {{
-                    padding: 1rem;
-                    background: white;
-                    border: 1px solid #eee;
-                    border-radius: 8px;
-                }}
-                h2 {{ color: #2c3e50; border-bottom: 2px solid #eee; }}
-                h3 {{ color: #34495e; }}
-                h4 {{ color: #7f8c8d; font-size: 0.9em; }}
-                .metadata {{ 
+                    margin: 1rem 0;
                     padding: 1rem;
                     background: #f8f9fa;
-                    border-radius: 4px;
-                    font-family: monospace;
+                    border-radius: 8px;
                 }}
+                h2 {{ color: #2c3e50; }}
+                h3 {{ color: #34495e; }}
+                h4 {{ color: #7f8c8d; font-size: 1.1rem; }}
             </style>
         </head>
         <body>
-            <h1>Microbiome Analysis Report</h1>
+            <h1>Analysis Report</h1>
             {content}
         </body>
         </html>
