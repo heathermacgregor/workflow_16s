@@ -53,3 +53,7 @@ clr_transform: True
 
 presence_absence: True
 
+stats:
+  t_test:
+    - raw: True
+    - presence_absence: True
