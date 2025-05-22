@@ -16,6 +16,7 @@ import logging
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.utils.dir_utils import SubDirs
+from workflow_16s.stats.utils import t_test
 
 logger = logging.getLogger('workflow_16s')
 
@@ -238,7 +239,8 @@ def presence_absence(
     output_dir: Union[str, Path],
     verbose: bool = True
 ) -> Table:
-    """Convert table to presence/absence format and filter by abundance.
+    """
+    Convert table to presence/absence format and filter by abundance.
     
     Args:
         table: Input BIOM Table or DataFrame.
@@ -295,7 +297,8 @@ def filter_presence_absence(
     prevalence_threshold: float = 0.05, 
     group_threshold: float = 0.05
 ) -> Table:
-    """Filter presence/absence table based on prevalence and group differences.
+    """
+    Filter presence/absence table based on prevalence and group differences.
     
     Args:
         table: Input BIOM Table
@@ -339,7 +342,8 @@ def filter_presence_absence(
     
     
 class AmpliconData:
-    """Main class for handling amplicon sequencing data analysis.
+    """
+    Main class for handling amplicon sequencing data analysis.
     
     Attributes:
         project_dir: Root directory for project data
@@ -353,16 +357,21 @@ class AmpliconData:
     """
     def __init__(
         self, 
+        cfg,
         project_dir: Union[str, Path] = "/usr2/people/macgregor/amplicon/test",
         mode: str = 'genus',
         verbose: bool = True
     ):
+        self.cfg = cfg
         self.project_dir = project_dir
         self.mode = mode
         self.verbose = verbose
         self.table = None
         self.meta = None
         self.taxa = None
+
+        self.tables = {}
+        self.presence_absence_tables = {}
         
         if self.mode == 'asv':
             table_dir = 'table'
@@ -380,8 +389,7 @@ class AmpliconData:
         self._get_biom_table()
         
         # Collapse tables
-        self.tables = {}
-        self.presence_absence_tables = {}
+        
         if self.mode == 'genus':
             for level in ['phylum', 'class', 'order', 'family']:
                 collapsed_table = collapse_taxa(
@@ -392,17 +400,46 @@ class AmpliconData:
                 )
                 self.tables[level] = collapsed_table
             self.tables['genus'] = self.table   
-    
-            for level in self.tables:
-                pa = presence_absence(
-                    self.tables[level], 
-                    level, 
-                    Path(project_dir) / 'data' / 'merged',
-                    self.verbose
-                )
-                self.presence_absence_tables[level] = pa
+
+            if self.cfg['presence_absence']:
+                for level in self.tables:
+                    pa = presence_absence(
+                        self.tables[level], 
+                        level, 
+                        Path(project_dir) / 'data' / 'merged',
+                        self.verbose
+                    )
+                    self.presence_absence_tables[level] = pa
+
+        
         elif self.mode == 'asv':
-            print("ASV mode is not yet supported!")
+            logger.info("ASV mode is not yet supported!")
+
+        self.stats = {}
+        self.stats['raw'] = {}
+        if self.cfg['stats']['raw']['t_test']:
+            self.stats['raw']['t_test'] = {}
+            for level in self.tables:
+                results = t_test(
+                    table=self.tables[level], 
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats['raw']['t_test'][level] = results
+
+        self.stats['presence_absence'] = {}
+        if self.cfg['stats']['presence_absence']['t_test']:
+            self.stats['presence_absence']['t_test'] = {}
+            for level in self.presence_absence_tables:
+                results = t_test(
+                    table=self.presence_absence_tables[level], 
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats['presence_absence']['t_test'][level] = results
+            
 
     def _get_biom_paths(self) -> List[str]:
         """Get paths to BIOM files matching pattern."""
