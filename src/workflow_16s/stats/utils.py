@@ -279,8 +279,8 @@ def t_test(
   
     results = []
     for feature in table_with_col.columns.drop(col):
-        group_1 = metadata_df[metadata_df[col] == col_values[0]][feature]
-        group_2 = metadata_df[metadata_df[col] == col_values[1]][feature]
+        group_1 = metadata[metadata[col] == col_values[0]][feature]
+        group_2 = metadata[metadata[col] == col_values[1]][feature]
         t_statistic, p_value = ttest_ind(group_1, group_2)
         results.append({
             'feature': col, 
