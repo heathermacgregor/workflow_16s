@@ -54,6 +54,7 @@ clr_transform: True
 presence_absence: True
 
 stats:
-  t_test:
-    - raw: True
-    - presence_absence: True
+  - raw:
+    - t_test: True
+  - presence_absence:
+    - t_test: True
