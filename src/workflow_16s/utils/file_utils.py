@@ -523,7 +523,7 @@ class AmpliconData:
                 y=2
             )
             
-            figures["pca"].append({
+            self.figures["pca"].append({
                 'title': f'PCA ({transformation})' if transformation != None else f'PCA',
                 'level': level,
                 'color_col': color_col,
@@ -549,7 +549,10 @@ class AmpliconData:
         for level in tables:
             logger.info(f"Calculating TSNE ({level})...")
     
-            meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
+            meta, table, _ = df_utils.match_indices_or_transpose(
+                self.meta, 
+                self.tables[level]
+            )
             tsne_results = beta_diversity.tsne(
                     table=table,
                     n_components=3
@@ -570,7 +573,7 @@ class AmpliconData:
                 y=2
             )
         
-            figures["tsne"].append({
+            self.figures["tsne"].append({
                 'title': f'TSNE ({transformation})' if transformation != None else f'PCA',
                 'level': level,
                 'color_col': 'dataset_name',
