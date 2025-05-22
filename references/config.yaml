@@ -47,3 +47,8 @@ qiime2:
       retain_threshold: 80
     
 clean_fastq: True
+
+normalize: True
+clr_transform: True
+
+
