@@ -104,7 +104,7 @@ class HTMLReport:
                 try:
                     fig_html = _fig_html(fig_data['figure'])
                     self.html_content.append(fig_html)
-                    self.html_content.append(f'<div class="figure-container">{fig_html}</div>')
+                    #self.html_content.append(f'<div class="figure-container">{fig_html}</div>')
                     #print(f'<div class="figure-container">{fig_html}</div>')
                 except Exception as e:
                     self.html_content.append(f'<div style="color: red">Error: {str(e)}</div>')
