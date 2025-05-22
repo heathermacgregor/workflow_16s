@@ -254,6 +254,9 @@ def k_means(
 
 
 # Statistical tests
+DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+
 def t_test(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
@@ -272,28 +275,41 @@ def t_test(
     Returns:
         results:    Results sorted by p-value with test statistics.
     """
+    # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-
-    table_with_col = table.join(metadata[[col]])
-  
+        table = table_to_dataframe(table)  # Ensure this function is defined
+    
+    # Check for column name conflict before joining
+    if col in table.columns:
+        raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
+    
+    # Join metadata group column to the table
+    table_with_col = table.join(metadata[[col]], how='inner')  # Ensure index alignment
+    
     results = []
     for feature in table_with_col.columns.drop(col):
-        group_labels = table_with_col[col].values
-        group_1 = table_with_col[group_labels == col_values[0]] # Contaminated
-        group_2 = table_with_col[group_labels == col_values[1]] # Pristine
-        group_1_feature = group_1[feature].dropna()
-        group_2_feature = group_2[feature].dropna()
-        t_statistic, p_value = ttest_ind(group_1_feature, group_2_feature)
-        results.append({
-            'feature': col, 
-            't_statistic': t_statistic, 
-            'p_value': p_value
-        })
+        # Subset groups using boolean masks
+        mask_group1 = (table_with_col[col] == col_values[0])
+        mask_group2 = (table_with_col[col] == col_values[1])
         
-    results = pd.DataFrame(results)
-    results = results.sort_values(by='p_value', ascending=True)
-    return results
+        group1_values = table_with_col.loc[mask_group1, feature].dropna()
+        group2_values = table_with_col.loc[mask_group2, feature].dropna()
+        
+        # Skip feature if either group has no data
+        if len(group1_values) < 1 or len(group2_values) < 1:
+            continue
+        
+        t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=False)  # Welch’s t-test
+        
+        results.append({
+            'feature': feature,  # Corrected: Use actual feature name
+            't_statistic': t_stat,
+            'p_value': p_val
+        })
+    
+    results_df = pd.DataFrame(results)
+    results_df.sort_values('p_value', inplace=True)
+    return results_df
 
 
 def mwu_bonferroni(
