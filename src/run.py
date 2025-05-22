@@ -549,49 +549,7 @@ def plot_sample_map(
     return color_maps    
     #print(color_maps)
 
-def plot_pca(
-    data: file_utils.AmpliconData, 
-    figures: Dict, 
-    logger: logging.Logger, 
-    project_dir: dir_utils.SubDirs, 
-    color_maps: Dict
-):
-    
-    for level in ["genus"]:
-        logger.info("Calculating PCA...")
-        
-        meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
-            
-        pca_results = beta_diversity.pca(
-            table=table,
-            n_components=3
-        )
-        transformation=None  
-        logger.info("Plotting PCA...")
-        color_col='dataset_name'
-        symbol_col='nuclear_contamination_status'
-        pca_plot, _ = pca(
-                components = pca_results['components'], 
-                proportion_explained = pca_results['exp_var_ratio'], 
-                metadata=meta,
-                color_col=color_col, 
-                color_map=color_maps[color_col],
-                symbol_col=symbol_col,
-                show=False,
-                output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
-                transformation=transformation,
-                x=1, 
-                y=2
-        )
-        figures["pca"].append({
-            'title': f'PCA ({transformation})' if transformation != None else f'PCA',
-            'level': level,
-            'color_col': color_col,
-            'symbol_col': symbol_col,
-            'transformation': transformation,
-            'figure': pca_plot
-        })
-        print(type(pca_plot))
+
 
 def main (config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
@@ -617,12 +575,6 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     figures["sample_map"] = []
     #figures["pca"] = []
     #figures["pcoa"] = []
-    color_maps = plot_sample_map(
-        meta=data.meta, 
-        figures=figures, 
-        logger=logger, 
-        project_dir=project_dir
-    )
     #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
     
 
@@ -659,42 +611,10 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             )
             figures["pcoa"][level][metric][color_col] = pcoa_plot
     
-    figures["tsne"] = []
-    for level in ["genus"]:
-        logger.info("Calculating TSNE...")
-
-        meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
-        tsne_results = beta_diversity.tsne(
-                table=table,
-                n_components=3
-        )
-            
-        logger.info("Plotting TSNE...")
-            
-        tsne_plot, _ = mds(
-            df=tsne_results, 
-            metadata=meta,
-            group_col='dataset_name', 
-            symbol_col='nuclear_contamination_status',
-            show=False,
-            output_dir=Path(project_dir.figures) / 'merged' / 'l6',
-            transformation=None,
-            mode='TSNE',
-            x=1, 
-            y=2
-        )
-    
-        figures["tsne"].append({
-            'level': level,
-            'color_col': 'dataset_name',
-            'symbol_col': 'nuclear_contamination_status',
-            'figure': tsne_plot
-        })
-        print(type(tsne_plot))
     '''
     #print(figures)
-    writer = HTMLReport(figures)
-    writer.write_report()
+    #writer = HTMLReport(figures)
+    #writer.write_report()
         
 if __name__ == "__main__":
     main()
