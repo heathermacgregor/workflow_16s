@@ -279,9 +279,12 @@ def t_test(
   
     results = []
     for feature in table_with_col.columns.drop(col):
-        group_1 = table_with_col[metadata[col] == col_values[0]][feature]
-        group_2 = table_with_col[metadata[col] == col_values[1]][feature]
-        t_statistic, p_value = ttest_ind(group_1, group_2)
+        group_labels = table_with_col[col].values
+        group_1 = table_with_col[group_labels == col_values[0]] # Contaminated
+        group_2 = table_with_col[group_labels == col_values[1]] # Pristine
+        group_1_feature = group_1[feature].dropna()
+        group_2_feature = group_2[feature].dropna()
+        t_statistic, p_value = ttest_ind(group_1_feature, group_2_feature)
         results.append({
             'feature': col, 
             't_statistic': t_statistic, 
