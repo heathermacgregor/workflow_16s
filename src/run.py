@@ -518,7 +518,7 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-from workflow_16s.figures.html_report import HTMLReportWriter
+from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
