@@ -96,7 +96,6 @@ class HTMLReport:
         self.input_data = input_data
         self.filename = filename
         self.html_content = html_content if html_content is not None else list(INITIAL_HTML_CONTENT)
-        self._jupyter_cleanup = True  # Flag to prevent Jupyter HTML wrapping
 
     def write_report(self):
         for section, figures in self.input_data.items():
@@ -104,6 +103,7 @@ class HTMLReport:
             for idx, fig_data in enumerate(figures, 1):
                 try:
                     fig_html = _fig_html(fig_data['figure'])
+                    self.html_content.append(fig_html)
                     self.html_content.append(f'<div class="figure-container">{fig_html}</div>')
                     #print(f'<div class="figure-container">{fig_html}</div>')
                 except Exception as e:
