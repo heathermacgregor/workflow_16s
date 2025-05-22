@@ -442,6 +442,7 @@ class AmpliconData:
                     col='nuclear_contamination_status',
                     col_values=[True, False]
                 )
+                print(results.head())
                 self.stats['presence_absence']['t_test'][level] = results
         
 
