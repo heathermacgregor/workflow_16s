@@ -523,7 +523,12 @@ from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import preprocess_table
 
-def plot_sample_map(meta: pd.DataFrame, figures: Dict, logger: logging.Logger, project_dir: dir_utils.SubDirs):
+def plot_sample_map(
+    meta: pd.DataFrame, 
+    figures: Dict, 
+    logger: logging.Logger, 
+    project_dir: dir_utils.SubDirs
+):
     
     logger.info("Creating sample map...")
     color_maps = {}
@@ -543,7 +548,13 @@ def plot_sample_map(meta: pd.DataFrame, figures: Dict, logger: logging.Logger, p
     return color_maps    
     #print(color_maps)
 
-def plot_pca(data: file_utils.AmpliconData, figures: Dict, logger: logging.Logger, project_dir: dir_utils.SubDirs, color_maps: Dict):
+def plot_pca(
+    data: file_utils.AmpliconData, 
+    figures: Dict, 
+    logger: logging.Logger, 
+    project_dir: dir_utils.SubDirs, 
+    color_maps: Dict
+):
     
     for level in ["genus"]:
         logger.info("Calculating PCA...")
@@ -600,10 +611,10 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #data.presence_absence_tables 
     #data.meta
     figures["sample_map"] = []
-    figures["pca"] = []
+    #figures["pca"] = []
     #figures["pcoa"] = []
     color_maps = plot_sample_map(meta=data.meta, figures=figures, logger=logger, project_dir=project_dir)
-    plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
+    #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
     
 
     '''
@@ -638,7 +649,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
                 y=2
             )
             figures["pcoa"][level][metric][color_col] = pcoa_plot
-    '''
+    
     figures["tsne"] = []
     for level in ["genus"]:
         logger.info("Calculating TSNE...")
@@ -671,9 +682,9 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
             'figure': tsne_plot
         })
         print(type(tsne_plot))
-
+    '''
     #print(figures)
-    writer = HTMLReportWriter(figures, "my_report.html")
+    writer = HTMLReport(figures)
     writer.write_report()
         
 if __name__ == "__main__":
