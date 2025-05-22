@@ -95,7 +95,7 @@ class HTMLReport:
     def __init__(self, input_data, filename='/usr2/people/macgregor/report.html', html_content=None):
         self.input_data = input_data
         self.filename = filename
-        self.html_content = html_content if html_content is not None else list(INITIAL_HTML_CONTENT)
+        self.html_content = html_content if html_content is not None else [INITIAL_HTML_CONTENT]
 
     def write_report(self):
         for section, figures in self.input_data.items():
@@ -112,8 +112,9 @@ class HTMLReport:
 
         self.html_content += ['</body>', '</html>']
 
-        with open(self.filename, 'w') as f:
+        with open(self.filename, 'w', encoding='utf-8') as f:
             f.write(' '.join(self.html_content))
+
         print(f"Report generated successfully at {self.filename}")
 
 
