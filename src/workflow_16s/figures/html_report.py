@@ -104,8 +104,8 @@ class HTMLReport:
             for idx, fig_data in enumerate(figures, 1):
                 try:
                     fig_html = _fig_html(fig_data['figure'])
-                    self.html_content.append(f'<div class="fig-container">{fig_html}</div>')
-                    print(f'<div class="fig-container">{fig_html}</div>')
+                    self.html_content.append(f'<div class="figure-container">{fig_html}</div>')
+                    #print(f'<div class="figure-container">{fig_html}</div>')
                 except Exception as e:
                     self.html_content.append(f'<div style="color: red">Error: {str(e)}</div>')
             self.html_content.append('</div>')
