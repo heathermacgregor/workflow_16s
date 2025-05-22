@@ -7,7 +7,7 @@ from plotly.graph_objs import Figure
 
 # ==================================== FUNCTIONS ===================================== #
 
-html_content = ["""
+INITIAL_HTML_CONTENT = ["""
     <!DOCTYPE html>
     <html>
     <head>
@@ -92,10 +92,10 @@ def _fig_html(fig):
     return fig_html
     
 class HTMLReport:
-    def __init__(self, input_data, filename='/usr2/people/macgregor/report.html', html_content=html_content):
+    def __init__(self, input_data, filename='/usr2/people/macgregor/report.html', html_content=None):
         self.input_data = input_data
         self.filename = filename
-        self.html_content = html_content
+        self.html_content = html_content if html_content is not None else list(INITIAL_HTML_CONTENT)
         self._jupyter_cleanup = True  # Flag to prevent Jupyter HTML wrapping
 
     def write_report(self):
