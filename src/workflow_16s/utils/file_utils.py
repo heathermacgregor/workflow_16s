@@ -580,7 +580,7 @@ class AmpliconData:
             
     def _get_biom_paths(self) -> List[str]:
         """Get paths to BIOM files matching pattern."""
-        return glob.glob(str(Path(self.project_dir) / self.BIOM_PATTERN), recursive=True)    
+        return glob.glob(str(Path(self.project_dir.main) / self.BIOM_PATTERN), recursive=True)    
 
     def _get_meta_paths(self) -> List[Path]:
         """Generate metadata paths corresponding to BIOM files."""
