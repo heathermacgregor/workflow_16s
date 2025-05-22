@@ -514,7 +514,7 @@ class AmpliconData:
                 proportion_explained = pca_results['exp_var_ratio'], 
                 metadata=meta,
                 color_col=color_col, 
-                color_map=color_maps[color_col],
+                color_map=self.color_maps[color_col],
                 symbol_col=symbol_col,
                 show=False,
                 output_dir=Path(self.project_dir.figures) / 'merged' / f'l{levels[level]+1}', 
