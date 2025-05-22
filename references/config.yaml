@@ -51,4 +51,5 @@ clean_fastq: True
 normalize: True
 clr_transform: True
 
+presence_absence: True
 
