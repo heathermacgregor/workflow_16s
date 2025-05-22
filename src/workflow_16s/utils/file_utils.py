@@ -429,7 +429,8 @@ class AmpliconData:
                     col_values=[True, False]
                 )
                 self.stats['raw']['t_test'][level] = results
-
+                print(results)
+        """
         self.stats['presence_absence'] = {}
         if self.cfg['stats']['presence_absence']['t_test']:
             self.stats['presence_absence']['t_test'] = {}
@@ -442,7 +443,7 @@ class AmpliconData:
                     col_values=[True, False]
                 )
                 self.stats['presence_absence']['t_test'][level] = results
-            
+        """
 
     def _get_biom_paths(self) -> List[str]:
         """Get paths to BIOM files matching pattern."""
