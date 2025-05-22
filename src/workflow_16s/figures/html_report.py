@@ -7,7 +7,7 @@ from plotly.graph_objs import Figure
 
 # ==================================== FUNCTIONS ===================================== #
 
-INITIAL_HTML_CONTENT = """
+INITIAL_HTML_CONTENT = ["""
     <!DOCTYPE html>
     <html>
     <head>
@@ -85,7 +85,7 @@ INITIAL_HTML_CONTENT = """
     <body>
         <div class="container">
             <h1>ASV Analysis Report</h1>
-    """
+    """]
 
 def _fig_html(fig):
     fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
@@ -95,7 +95,7 @@ class HTMLReport:
     def __init__(self, input_data, filename='/usr2/people/macgregor/report.html', html_content=None):
         self.input_data = input_data
         self.filename = filename
-        self.html_content = html_content if html_content is not None else [INITIAL_HTML_CONTENT]
+        self.html_content = html_content if html_content is not None else INITIAL_HTML_CONTENT
 
     def write_report(self):
         for section, figures in self.input_data.items():
