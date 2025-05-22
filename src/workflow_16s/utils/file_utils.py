@@ -363,7 +363,7 @@ class AmpliconData:
     def __init__(
         self, 
         cfg,
-        project_dir: Union[str, Path] = "/usr2/people/macgregor/amplicon/test",
+        project_dir,
         mode: str = 'genus',
         verbose: bool = True
     ):
@@ -391,7 +391,7 @@ class AmpliconData:
             'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
             'FWD_*_REV_*', table_dir, 'feature-table.biom'
         ])
-        self.output_path = Path(project_dir) / 'data' / 'merged' / output_dir / 'feature-table.biom'
+        self.output_path = Path(self.project_dir.main) / 'data' / 'merged' / output_dir / 'feature-table.biom'
         self._get_metadata()
 
         self._plot_sample_map()
@@ -407,7 +407,7 @@ class AmpliconData:
                 collapsed_table = collapse_taxa(
                     self.table, 
                     level, 
-                    Path(project_dir) / 'data' / 'merged',
+                    Path(self.project_dir.main) / 'data' / 'merged',
                     self.verbose
                 )
                 self.tables[level] = collapsed_table
@@ -418,7 +418,7 @@ class AmpliconData:
                     pa = presence_absence(
                         self.tables[level], 
                         level, 
-                        Path(project_dir) / 'data' / 'merged',
+                        Path(self.project_dir.main) / 'data' / 'merged',
                         self.verbose
                     )
                     self.presence_absence_tables[level] = pa
