@@ -540,6 +540,7 @@ def plot_sample_map(
             color_col=col,
         )
         figures["sample_map"].append({
+            'title': f'Sample Map',
             'color_col': col,
             'figure': fig
         })
@@ -565,7 +566,7 @@ def plot_pca(
             table=table,
             n_components=3
         )
-            
+        transformation=None  
         logger.info("Plotting PCA...")
         color_col='dataset_name'
         symbol_col='nuclear_contamination_status'
@@ -578,15 +579,16 @@ def plot_pca(
                 symbol_col=symbol_col,
                 show=False,
                 output_dir=Path(project_dir.figures) / 'merged' / 'l6', 
-                transformation=None,
+                transformation=transformation,
                 x=1, 
                 y=2
         )
         figures["pca"].append({
+            'title': f'PCA ({transformation})' if transformation != None else f'PCA',
             'level': level,
             'color_col': color_col,
             'symbol_col': symbol_col,
-            'transformation': None,
+            'transformation': transformation,
             'figure': pca_plot
         })
         print(type(pca_plot))
@@ -602,18 +604,25 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     figures = {}
         
     data = file_utils.AmpliconData(
+        cfg=cfg,
         project_dir=project_dir.main,
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=True
     )
     print(data.meta['nuclear_contamination_status'].value_counts())
+    print(data.stats)
     #data.tables
     #data.presence_absence_tables 
     #data.meta
     figures["sample_map"] = []
     #figures["pca"] = []
     #figures["pcoa"] = []
-    color_maps = plot_sample_map(meta=data.meta, figures=figures, logger=logger, project_dir=project_dir)
+    color_maps = plot_sample_map(
+        meta=data.meta, 
+        figures=figures, 
+        logger=logger, 
+        project_dir=project_dir
+    )
     #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
     
 
