@@ -421,7 +421,7 @@ class AmpliconData:
         if self.cfg['stats']['raw']['t_test']:
             self.stats['raw']['t_test'] = {}
             for level in self.tables:
-                logger.info(f"Running t-test for {level}..."J)
+                logger.info(f"Running t-test for {level}...")
                 results = t_test(
                     table=self.tables[level], 
                     metadata=self.meta,
@@ -434,7 +434,7 @@ class AmpliconData:
         if self.cfg['stats']['presence_absence']['t_test']:
             self.stats['presence_absence']['t_test'] = {}
             for level in self.presence_absence_tables:
-                logger.info(f"Running t-test for {level}..."J)
+                logger.info(f"Running t-test for {level}...")
                 results = t_test(
                     table=self.presence_absence_tables[level], 
                     metadata=self.meta,
