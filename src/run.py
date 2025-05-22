@@ -563,7 +563,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         
     data = file_utils.AmpliconData(
         cfg=cfg,
-        project_dir=project_dir.main,
+        project_dir=project_dir,
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=True
     )
