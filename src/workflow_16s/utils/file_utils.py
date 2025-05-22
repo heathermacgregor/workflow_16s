@@ -224,6 +224,7 @@ def collapse_taxa(
     with h5py.File(output_biom_path, 'w') as f:
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
+        print(table)
         n_features, n_samples = table.shape
         # Format into [x, y] string
         shape_str = f"[{n_features}, {n_samples}]"
@@ -420,6 +421,7 @@ class AmpliconData:
         if self.cfg['stats']['raw']['t_test']:
             self.stats['raw']['t_test'] = {}
             for level in self.tables:
+                logger.info(f"Running t-test for {level}..."J)
                 results = t_test(
                     table=self.tables[level], 
                     metadata=self.meta,
@@ -432,6 +434,7 @@ class AmpliconData:
         if self.cfg['stats']['presence_absence']['t_test']:
             self.stats['presence_absence']['t_test'] = {}
             for level in self.presence_absence_tables:
+                logger.info(f"Running t-test for {level}..."J)
                 results = t_test(
                     table=self.presence_absence_tables[level], 
                     metadata=self.meta,
