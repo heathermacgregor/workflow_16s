@@ -7,7 +7,7 @@ from plotly.graph_objs import Figure
 
 # ==================================== FUNCTIONS ===================================== #
 
-html_content = """
+html_content = ["""
     <!DOCTYPE html>
     <html>
     <head>
@@ -85,7 +85,7 @@ html_content = """
     <body>
         <div class="container">
             <h1>ASV Analysis Report</h1>
-    """
+    """]
 
 def _fig_html(fig):
     fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
