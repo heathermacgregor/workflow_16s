@@ -113,7 +113,7 @@ class HTMLReport:
         self.html_content += ['</body>', '</html>']
 
         with open(self.filename, 'w') as f:
-            f.write(self.html_content)
+            f.write(' '.join(self.html_content))
         print(f"Report generated successfully at {self.filename}")
 
 
