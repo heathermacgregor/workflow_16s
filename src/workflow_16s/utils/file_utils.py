@@ -18,6 +18,11 @@ import logging
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats.utils import t_test
 
+from workflow_16s.figures.html_report import HTMLReport
+from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
+from workflow_16s.stats import beta_diversity 
+from workflow_16s.stats.utils import preprocess_table
+
 logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
@@ -372,6 +377,8 @@ class AmpliconData:
 
         self.tables = {}
         self.presence_absence_tables = {}
+        self.figures = {}
+        self.color_maps = {}
         
         if self.mode == 'asv':
             table_dir = 'table'
@@ -386,7 +393,12 @@ class AmpliconData:
         ])
         self.output_path = Path(project_dir) / 'data' / 'merged' / output_dir / 'feature-table.biom'
         self._get_metadata()
+
+        self._plot_sample_map()
+        
         self._get_biom_table()
+
+        
         
         # Collapse tables
         
@@ -414,6 +426,10 @@ class AmpliconData:
         
         elif self.mode == 'asv':
             logger.info("ASV mode is not yet supported!")
+
+
+        self._plot_pca()
+        self._plot_tsne()
         self.stats = {}
         """
         
@@ -445,7 +461,123 @@ class AmpliconData:
                 print(results.head())
                 self.stats['presence_absence']['t_test'][level] = results
         
+    def _plot_sample_map(self) -> None:
+        self.figures["sample_map"] = []
+        logger.info("Creating sample map...")
+        
+        for col in ['dataset_name', 'nuclear_contamination_status']:
+            fig, map = sample_map_categorical(
+                metadata=self.meta, 
+                show=False, 
+                output_dir=Path(self.project_dir.figures) / 'merged', 
+                color_col=col,
+            )
+            self.figures["sample_map"].append({
+                'title': f'Sample Map',
+                'color_col': col,
+                'figure': fig
+            })
+            self.color_maps[col] = map
 
+    def _plot_pca(self):
+        self.figures["pca"] = []
+        
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        transformation = None  
+        presence_absence = False
+        color_col='dataset_name'
+        symbol_col='nuclear_contamination_status'
+        
+        if presence_absence == False and transformation == None:
+            tables = self.tables
+        
+        if presence_absence and transformation == None:
+            tables = self.presence_absence_tables
+            
+        for level in tables:
+            logger.info(f"Calculating PCA ({level})...")
+            
+            meta, table, _ = df_utils.match_indices_or_transpose(
+                self.meta, 
+                tables[level]
+            )
+                
+            pca_results = beta_diversity.pca(
+                table=table,
+                n_components=3
+            )
+            
+            logger.info("Plotting PCA...")
+            
+            pca_plot, _ = pca(
+                components = pca_results['components'], 
+                proportion_explained = pca_results['exp_var_ratio'], 
+                metadata=meta,
+                color_col=color_col, 
+                color_map=color_maps[color_col],
+                symbol_col=symbol_col,
+                show=False,
+                output_dir=Path(self.project_dir.figures) / 'merged' / f'l{levels[level]+1}', 
+                transformation=transformation,
+                x=1, 
+                y=2
+            )
+            
+            figures["pca"].append({
+                'title': f'PCA ({transformation})' if transformation != None else f'PCA',
+                'level': level,
+                'color_col': color_col,
+                'symbol_col': symbol_col,
+                'transformation': transformation,
+                'figure': pca_plot
+            })
+
+    def _plot_tsne(self) -> None:
+        self.figures["tsne"] = []
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        transformation = None  
+        presence_absence = False
+        color_col='dataset_name'
+        symbol_col='nuclear_contamination_status'
+        
+        if presence_absence == False and transformation == None:
+            tables = self.tables
+        
+        if presence_absence and transformation == None:
+            tables = self.presence_absence_tables
+            
+        for level in tables:
+            logger.info(f"Calculating TSNE ({level})...")
+    
+            meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
+            tsne_results = beta_diversity.tsne(
+                    table=table,
+                    n_components=3
+            )
+                
+            logger.info("Plotting TSNE...")
+                
+            tsne_plot, _ = mds(
+                df=tsne_results, 
+                metadata=meta,
+                group_col=color_col, 
+                symbol_col=symbol_col,
+                show=False,
+                output_dir=Path(self.project_dir.figures) / 'merged' / f'l{levels[level]+1}',
+                transformation=None,
+                mode='TSNE',
+                x=1, 
+                y=2
+            )
+        
+            figures["tsne"].append({
+                'title': f'TSNE ({transformation})' if transformation != None else f'PCA',
+                'level': level,
+                'color_col': 'dataset_name',
+                'symbol_col': 'nuclear_contamination_status',
+                'figure': tsne_plot
+            })
+            
     def _get_biom_paths(self) -> List[str]:
         """Get paths to BIOM files matching pattern."""
         return glob.glob(str(Path(self.project_dir) / self.BIOM_PATTERN), recursive=True)    
