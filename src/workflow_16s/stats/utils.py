@@ -329,7 +329,10 @@ def t_test(
     if results_df.empty:
         logger.error(f"No features passed t-test for {col_values} in '{col}'")
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
-
+    logger.info(results_df[
+        results_df['p_value'].notna() & 
+        (results_df['p_value'] > 0)
+    ].sort_values('p_value').head())
     return results_df[
         results_df['p_value'].notna() & 
         (results_df['p_value'] > 0)
