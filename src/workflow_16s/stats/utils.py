@@ -287,13 +287,16 @@ def t_test(
     table_with_col[col] = table_with_col.index.map(
         metadata[col]
     )
-    print(table.shape)
     
     results = []
     for feature in table_with_col.columns.drop(col):
         # Subset groups using boolean masks
         mask_group1 = (table_with_col[col] == col_values[0])
         mask_group2 = (table_with_col[col] == col_values[1])
+        logger.debug(
+            f"Comparing groups: {col_values[0]} (n={mask_group1.sum()}), "
+            f"{col_values[1]} (n={mask_group2.sum()})"
+        )
         
         group1_values = table_with_col.loc[mask_group1, feature].dropna()
         group2_values = table_with_col.loc[mask_group2, feature].dropna()
@@ -309,12 +312,15 @@ def t_test(
             't_statistic': t_stat,
             'p_value': p_val
         })
-    print(results)
     results_df = pd.DataFrame(results)
-    # Discard rows with p_value = 0 or NaN
+    if results_df.empty:
+        logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
+        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
     results_df.sort_values('p_value', inplace=True)
     return results_df
+
 
 
 def mwu_bonferroni(
