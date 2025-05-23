@@ -362,13 +362,6 @@ import warnings
 # Suppress scipy warnings
 warnings.filterwarnings(action='ignore', category=UserWarning)
 
-# Import internal modules
-from . import beta_diversity, df_utils
-from .io import import_merged_table_biom
-from .viz import sample_map_categorical, pca, mds
-
-logger = logging.getLogger(__name__)
-
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_VALUES = [True, False]
 STATS_DIR_NAME = 'stats'
