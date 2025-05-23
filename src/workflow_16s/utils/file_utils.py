@@ -133,7 +133,7 @@ def processed_dataset_files(
     Returns:
         Dictionary mapping file types to their expected paths
     """
-    classifier = cfg["Classifier"]
+    classifier = cfg["classifier"]
     base_dir = (
         Path(dirs.qiime_data_per_dataset) / dataset / params['instrument_platform'].lower() / 
         params['library_layout'].lower() / params['target_subfragment'].lower() / 
@@ -143,9 +143,12 @@ def processed_dataset_files(
     return {
         'metadata_tsv': Path(dirs.metadata_per_dataset) / dataset / 'metadata.tsv',
         'manifest_tsv': base_dir / 'manifest.tsv',
-        'table_biom': base_dir / 'table' / 'feature-table.biom',  # BIOM feature table
-        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  # Representative seqs
-        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  # Taxonomy
+        # BIOM feature table
+        'table_biom': base_dir / 'table' / 'feature-table.biom',  
+        # Representative seqs
+        'seqs_fasta': base_dir / 'rep-seqs' / 'dna-sequences.fasta',  
+        # Taxonomy
+        'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  
     }
 
 
@@ -231,7 +234,7 @@ class AmpliconData:
         
             parts = biom_path.parts
             meta_path = str(
-                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[-5:-1])))
+                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[-5:-1]))
             ) + '/sample-metadata.tsv'        
             meta_paths.append(meta_path)
         logger.info(f"Found {len(meta_paths)} unique metadata files.")
