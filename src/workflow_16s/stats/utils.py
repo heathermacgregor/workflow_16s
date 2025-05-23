@@ -284,7 +284,7 @@ def t_test(
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
-        
+    logger.info(metadata[col].value_counts())   
     table_with_col = table.join(metadata[[col]], how='inner') 
     print(table_with_col.head())
     
