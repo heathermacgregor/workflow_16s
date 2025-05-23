@@ -250,9 +250,10 @@ class AmpliconData:
 
     def _process_meta_path(
         self, 
-        csv_path: Path, 
+        csv_path: Union[str, Path], 
         column_renames: List[Tuple[str, str]]
     ) -> pd.DataFrame:
+        csv_path = Path(csv_path)
         if not csv_path.exists():
             raise FileNotFoundError(f"Metadata file not found: {csv_path}")
             
