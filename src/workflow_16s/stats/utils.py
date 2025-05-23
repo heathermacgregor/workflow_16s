@@ -285,12 +285,15 @@ def t_test(
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
     logger.info(metadata[col].value_counts())   
-    table_with_col = table.join(metadata[[col]], how='inner') 
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
-    )
+    table_with_col = table.join(metadata[[col]]) 
+    #table_with_col = table.copy()
+    #table_with_col[col] = table_with_col.index.map(
+    #    metadata[col]
+    #)
+    
     print(table_with_col.head())
+    if table_with_col.shape[0] == 0:
+        break
     
     results = []
     for feature in table_with_col.columns.drop(col):
