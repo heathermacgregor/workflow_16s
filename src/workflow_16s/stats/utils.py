@@ -20,6 +20,7 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from umap import UMAP
+import logging
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -34,6 +35,8 @@ DEFAULT_RANDOM_STATE = 0
 
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+
+logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
