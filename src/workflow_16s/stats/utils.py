@@ -278,13 +278,16 @@ def t_test(
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)  # Ensure this function is defined
-    print(table.shape)
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
     
     # Join metadata group column to the table
-    table_with_col = table.join(metadata[[col]], how='inner')  # Ensure index alignment
+    table_with_col = table.copy()
+    table_with_col[col] = table_with_col.index.map(
+        metadata.set_index('#SampleID')[col]
+    )
+    print(table.shape)
     
     results = []
     for feature in table_with_col.columns.drop(col):
@@ -341,7 +344,11 @@ def mwu_bonferroni(
         raise ValueError(f"Column '{col}' already exists in the table.")
     
     # Join metadata with inner alignment
-    table_with_col = table.join(metadata[[col]], how='inner')
+    table_with_col = table.copy()
+    table_with_col[col] = table_with_col.index.map(
+        metadata.set_index('#SampleID')[col]
+    )
+    print(table.shape)
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_col.columns.drop(col))
@@ -417,7 +424,11 @@ def kruskal_bonferroni(
         raise ValueError(f"Column '{col}' already exists in the table.")
     
     # Join metadata with inner alignment
-    table_with_col = table.join(metadata[[col]], how='inner')
+    table_with_col = table.copy()
+    table_with_col[col] = table_with_col.index.map(
+        metadata.set_index('#SampleID')[col]
+    )
+    print(table.shape)
     
     # Get unique groups if col_values not specified
     if col_values is None:
@@ -488,6 +499,11 @@ def variability_explained(
         table = table_to_dataframe(table)
 
     table_with_col = table.join(metadata[[col]])
+    table_with_col = table.copy()
+    table_with_col[col] = table_with_col.index.map(
+        metadata.set_index('#SampleID')[col]
+    )
+    print(table.shape)
     
     # Extract explanatory variable
     explanatory_variable = table_with_col[col].values.reshape(-1, 1)
