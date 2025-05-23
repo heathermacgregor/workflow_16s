@@ -291,6 +291,7 @@ def t_test(
     results = []
     for feature in table_with_col.columns.drop(col):
         # Subset groups using boolean masks
+        logger.info(table_with_col[col].value_counts())
         mask_group1 = (table_with_col[col] == col_values[0])
         mask_group2 = (table_with_col[col] == col_values[1])
         logger.debug(
