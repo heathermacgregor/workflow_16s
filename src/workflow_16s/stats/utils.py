@@ -286,9 +286,15 @@ def t_test(
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
      
     
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
+    # Method 1: Using join (simplest for index-based merging)
+    table_with_col = table.join(metadata[[col]], how='left')  # Adds the column from metadata
+    
+    # Method 2: Using merge (explicit index control)
+    table_with_col = table.merge(
+        metadata[[col]], 
+        left_index=True, 
+        right_index=True, 
+        how='left'
     )
     logger.info(table_with_col.index)
     logger.info(metadata[col].value_counts())  
