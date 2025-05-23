@@ -316,13 +316,13 @@ class AmpliconData:
         self.meta = pd.concat(meta_dfs)
         
     def _genus_mode(self):
-    for level in ['phylum', 'class', 'order', 'family']:
-        self.tables[level] = collapse_taxa(
-            self.table, 
-            level, 
-            Path(self.project_dir.tables) / 'merged',
-            self.verbose
-        )
+        for level in ['phylum', 'class', 'order', 'family']:
+            self.tables[level] = collapse_taxa(
+                self.table, 
+                level, 
+                Path(self.project_dir.tables) / 'merged',
+                self.verbose
+            )
         # Transpose genus table to match samples-as-rows format
         self.tables['genus'] = self.table.T  # Samples become rows
     
