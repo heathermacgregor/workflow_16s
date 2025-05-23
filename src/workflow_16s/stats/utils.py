@@ -270,7 +270,7 @@ def t_test(
     
     Args:
         table:      Input abundance table (samples x features).
-        metadata:   Sample metadata DataFrame.
+        metadata:   Sample metadata DataFrame with index matching the table.
         col:        Metadata column containing group labels.
         col_values: Two group identifiers to compare.
         
@@ -280,33 +280,44 @@ def t_test(
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)  # Ensure this function is defined
+    
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
      
-    missing = table.index.difference(metadata.index)
-    logger.info("Missing keys in metadata:", missing)
-    # Method 1: Using join (simplest for index-based merging)
-    table_with_col = table.join(metadata[[col]], how='left')  # Adds the column from metadata
+    # Check for index overlap
+    common_indices = table.index.intersection(metadata.index)
+    if not common_indices.empty:
+        logger.info(f"Common indices count: {len(common_indices)}")
+    else:
+        raise ValueError("No common indices between table and metadata. Check metadata index alignment.")
     
-    # Method 2: Using merge (explicit index control)
+    # Merge metadata column into the table
     table_with_col = table.merge(
         metadata[[col]], 
         left_index=True, 
         right_index=True, 
         how='left'
     )
-    for i in table_with_col.columns:
-        logger.info(i)
-    logger.info(metadata[col].value_counts())  
-    logger.info(table_with_col[col])
+    
+    # Check if the merged column has NaNs for all entries
+    if table_with_col[col].isna().all():
+        missing_total = table_with_col[col].isna().sum()
+        raise ValueError(
+            f"All values in merged column '{col}' are NaN. "
+            f"{missing_total} samples missing metadata. Ensure metadata index matches table index."
+        )
+    
+    # Log group distribution
+    logger.info(f"Group distribution in metadata:\n{metadata[col].value_counts()}")
+    logger.info(f"Merged group counts:\n{table_with_col[col].value_counts(dropna=False)}")
     
     results = []
     for feature in table_with_col.columns.drop(col):
         # Subset groups using boolean masks
-        
         mask_group1 = (table_with_col[col] == col_values[0])
         mask_group2 = (table_with_col[col] == col_values[1])
+        
         logger.debug(
             f"Comparing groups: {col_values[0]} (n={mask_group1.sum()}), "
             f"{col_values[1]} (n={mask_group2.sum()})"
@@ -322,10 +333,11 @@ def t_test(
         t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=False)  # Welch’s t-test
         
         results.append({
-            'feature': feature,  # Corrected: Use actual feature name
+            'feature': feature,
             't_statistic': t_stat,
             'p_value': p_val
         })
+    
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
