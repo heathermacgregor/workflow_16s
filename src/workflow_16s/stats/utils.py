@@ -43,15 +43,15 @@ logger = logging.getLogger('workflow_16s')
 def table_to_dataframe(
     table: Union[Dict, Table]
 ) -> pd.DataFrame:
-    """Convert a feature table to a pandas DataFrame."""
-    # Convert table to DataFrame 
+    """Convert a BIOM Table or dictionary to a samples × features DataFrame."""
     if isinstance(table, Table):
-        table = table.to_dataframe(dense=True) # features x samples
-        table = table.T                        # samples  x features
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)            # samples  x features
-
-    return table
+        df = table.to_dataframe(dense=True).T  # Samples × features
+    elif isinstance(table, dict):
+        df = pd.DataFrame(table)               # Samples × features 
+    else:
+        raise TypeError("Input must be a BIOM Table or dictionary.")
+    logger.info(df.index)
+    return df
 
 def filter_table(
     table: Union[Dict, Table, pd.DataFrame], 
