@@ -284,23 +284,20 @@ def t_test(
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
-    logger.info(metadata[col].value_counts())   
+     
     
-    table_with_col = table.join(metadata[[col]]) 
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
         metadata[col]
     )
-    logger.info(table.index)
-    logger.info(metadata.index)
     logger.info(table_with_col.index)
-    
-    print(table_with_col.head())
+    logger.info(metadata[col].value_counts())  
+    logger.info(table_with_col[col].value_counts())
     
     results = []
     for feature in table_with_col.columns.drop(col):
         # Subset groups using boolean masks
-        logger.info(table_with_col[col].value_counts())
+        
         mask_group1 = (table_with_col[col] == col_values[0])
         mask_group2 = (table_with_col[col] == col_values[1])
         logger.debug(
