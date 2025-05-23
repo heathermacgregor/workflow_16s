@@ -318,7 +318,7 @@ class AmpliconData:
     def _genus_mode(self):
         for level in ['phylum', 'class', 'order', 'family']:
             self.tables[level] = collapse_taxa(
-                self.table.T, 
+                self.table, 
                 level, 
                 Path(self.project_dir.tables) / 'merged',
                 self.verbose
@@ -328,8 +328,11 @@ class AmpliconData:
     
         if self.cfg['presence_absence']:
             for level in self.tables:
+                table = self.tables[level]
+                if level == 'genus':
+                    table = table.T
                 self.presence_absence_tables[level] = presence_absence(
-                    self.tables[level], 
+                    table, 
                     level, 
                     Path(self.project_dir.tables) / 'merged',
                     self.verbose
