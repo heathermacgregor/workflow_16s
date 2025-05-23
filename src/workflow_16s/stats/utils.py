@@ -286,6 +286,7 @@ def t_test(
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
     print(metadata.head())
     print(table.head())
+    """
     # Join metadata group column to the table
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
@@ -324,7 +325,7 @@ def t_test(
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
     results_df.sort_values('p_value', inplace=True)
     return results_df
-
+    """
 
 
 def mwu_bonferroni(
