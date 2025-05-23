@@ -323,7 +323,7 @@ class AmpliconData:
                 Path(self.project_dir.tables) / 'merged',
                 self.verbose
             )
-        self.tables['genus'] = self.table   
+        self.tables['genus'] = self.table.T   
 
         if self.cfg['presence_absence']:
             for level in self.tables:
