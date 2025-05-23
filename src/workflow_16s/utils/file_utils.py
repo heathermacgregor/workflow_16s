@@ -202,7 +202,7 @@ class AmpliconData:
             'genus': ('table_6', 'l6')
         }
         
-        table_dir, output_dir = mode_map.get(mode, (None, None))
+        self.table_dir, output_dir = mode_map.get(mode, (None, None))
 
         
         self.output_path = (
