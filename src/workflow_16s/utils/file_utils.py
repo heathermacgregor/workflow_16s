@@ -347,363 +347,364 @@ def filter_presence_absence(
     )
     
     
-# -*- coding: utf-8 -*-
-"""Amplicon sequencing data analysis pipeline main class."""
-from pathlib import Path
-import glob
-import logging
-from typing import Union, List, Dict, Tuple, Optional
-import pandas as pd
-import numpy as np
-from scipy.stats import ttest_ind, mannwhitneyu, kruskal
-from tqdm import tqdm
-from skbio import Table
-import warnings
-
-# Suppress scipy warnings
-warnings.filterwarnings(action='ignore', category=UserWarning)
-
-DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
-DEFAULT_GROUP_VALUES = [True, False]
-STATS_DIR_NAME = 'stats'
-TOP_FEATURES_DIR_NAME = 'top_features'
-
 class AmpliconData:
-    """Main class for amplicon sequencing data analysis pipeline.
+    """
+    Main class for handling amplicon sequencing data analysis.
     
     Attributes:
-        cfg (dict): Configuration parameters
-        project_dir (Path): Project directory structure
-        mode (str): Analysis mode ('asv' or 'genus')
-        verbose (bool): Verbose output flag
-        table (pd.DataFrame): Feature abundance table
-        meta (pd.DataFrame): Sample metadata
-        taxa (pd.DataFrame): Taxonomy information
-        tables (dict): Collapsed tables by taxonomic level
-        presence_absence_tables (dict): Presence/absence tables
-        figures (dict): Generated visualization objects
-        stats (dict): Statistical analysis results
-        color_maps (dict): Color mappings for visualizations
-        top_features (dict): Top differential features
+        project_dir: Subdirs object with directory path attributes
+        mode: Analysis mode ('asv' or 'genus')
+        verbose: Enable verbose logging
+        table: Main feature table
+        meta: Metadata DataFrame
+        taxa: Taxonomy information
+        tables: Dictionary of collapsed tables by level
+        presence_absence_tables: PA tables by taxonomic level
     """
-
     def __init__(
-        self,
-        cfg: dict,
-        project_dir: Path,
+        self, 
+        cfg,
+        project_dir,
         mode: str = 'genus',
         verbose: bool = True
     ):
-        """Initialize and execute full analysis pipeline."""
-        # Initialize core attributes
         self.cfg = cfg
         self.project_dir = project_dir
-        self.mode = mode.lower()
+        self.mode = mode
         self.verbose = verbose
-        self._validate_mode()
-        
-        # Data storage attributes
-        self.table = pd.DataFrame()
-        self.meta = pd.DataFrame()
-        self.taxa = pd.DataFrame()
+        self.table = None
+        self.meta = None
+        self.taxa = None
+
         self.tables = {}
         self.presence_absence_tables = {}
         self.figures = {}
         self.color_maps = {}
-        self.stats = {}
-        self.top_features = {}
-
-        # Execute pipeline
-        self._initialize_directories()
-        self._load_and_validate_data()
-        self._process_taxonomic_data()
-        self._generate_presence_absence()
-        self._perform_visualizations()
-        self._conduct_statistical_analyses()
-        self._identify_significant_features()
-        self._save_all_outputs()
-
-    def _validate_mode(self) -> None:
-        """Verify analysis mode is valid."""
-        if self.mode not in {'asv', 'genus'}:
-            raise ValueError(f"Invalid mode '{self.mode}'. Must be 'asv' or 'genus'")
-
-    def _initialize_directories(self) -> None:
-        """Create required output directories."""
-        (self.project_dir.results / STATS_DIR_NAME).mkdir(exist_ok=True)
-        (self.project_dir.results / TOP_FEATURES_DIR_NAME).mkdir(exist_ok=True)
-        self.project_dir.figures.mkdir(exist_ok=True)
-
-    def _load_and_validate_data(self) -> None:
-        """Load and validate core data components."""
-        self._load_metadata()
-        self._load_biom_table()
-        self._align_data_indices()
-        self._validate_metadata()
-
-    def _load_metadata(self) -> None:
-        """Load and merge metadata from all datasets."""
-        meta_paths = self._discover_metadata_paths()
-        meta_dfs = [self._process_single_metadata(p) for p in meta_paths]
-        self.meta = pd.concat(meta_dfs, ignore_index=True).drop_duplicates()
-
-    def _discover_metadata_paths(self) -> List[Path]:
-        """Find all metadata files corresponding to BIOM tables."""
-        return [self._biom_to_meta_path(p) for p in self._find_biom_files()]
-
-    def _biom_to_meta_path(self, biom_path: Path) -> Path:
-        """Convert BIOM path to corresponding metadata path."""
-        parts = biom_path.parts
-        qiime_index = parts.index('qiime')
-        return Path(*parts[:qiime_index]) / 'metadata' / Path(*parts[qiime_index+1:-3]) / 'sample-metadata.tsv'
-
-    def _find_biom_files(self) -> List[Path]:
-        """Discover BIOM files matching pattern."""
-        biom_files = list(Path(self.project_dir.main).glob(self._biom_glob_pattern))
-        if not biom_files:
-            raise FileNotFoundError(f"No BIOM files found at {self._biom_glob_pattern}")
-        return biom_files
-
-    @property
-    def _biom_glob_pattern(self) -> str:
-        """Return BIOM file search pattern based on mode."""
-        table_level = 'table_6' if self.mode == 'genus' else 'table'
-        return f"data/per_dataset/qiime/*/*/*/FWD_*_REV_*/{table_level}/feature-table.biom"
-
-    def _process_single_metadata(self, path: Path) -> pd.DataFrame:
-        """Process individual metadata file."""
-        df = pd.read_csv(path, sep='\t', dtype=str)
-        df.columns = df.columns.str.strip().str.lower()
         
-        # Standardize critical columns
-        df['sample_id'] = self._extract_sample_id(df, path)
-        df['dataset_id'] = self._extract_dataset_id(df, path)
-        df[DEFAULT_GROUP_COLUMN] = df.get(DEFAULT_GROUP_COLUMN, False).astype(bool)
-        
-        return df[['sample_id', 'dataset_id', DEFAULT_GROUP_COLUMN]]
+        if self.mode == 'asv':
+            table_dir = 'table'
+            output_dir = 'asv'
+        elif self.mode == 'genus':
+            table_dir = 'table_6'
+            output_dir = 'l6'
 
-    def _extract_sample_id(self, df: pd.DataFrame, path: Path) -> pd.Series:
-        """Extract or generate sample IDs."""
-        for col in ['sampleid', '#sampleid', 'run_accession']:
-            if col in df.columns:
-                return df[col].str.strip()
-        return pd.Series([f"{path.parent.stem}_sample_{i}" for i in range(len(df))])
+        self.BIOM_PATTERN = '/'.join([
+            'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
+            'FWD_*_REV_*', table_dir, 'feature-table.biom'
+        ])
+        self.output_path = self.project_dir.data_merged / output_dir / 'feature-table.biom'
+        self._get_metadata()
 
-    def _extract_dataset_id(self, df: pd.DataFrame, path: Path) -> str:
-        """Extract dataset ID from metadata or path."""
-        if 'dataset_id' in df.columns:
-            return df['dataset_id'].iloc[0]
-        return path.parent.parent.parent.stem
+        self._plot_sample_map()
+        self._get_biom_table()
 
-    def _load_biom_table(self) -> None:
-        """Load and merge BIOM tables."""
-        biom_files = self._find_biom_files()
-        self.table = import_merged_table_biom(
-            biom_files, 
-            output_path=self.project_dir.results / 'merged_table.biom',
-            verbose=self.verbose
-        )
-
-    def _align_data_indices(self) -> None:
-        """Align table and metadata indices."""
-        common_samples = self.table.index.intersection(self.meta['sample_id'])
-        self.table = self.table.loc[common_samples]
-        self.meta = self.meta[self.meta['sample_id'].isin(common_samples)]
-
-    def _validate_metadata(self) -> None:
-        """Validate metadata integrity."""
-        if self.meta.empty:
-            raise ValueError("No metadata remaining after alignment")
-        if self.meta[DEFAULT_GROUP_COLUMN].nunique() < 2:
-            raise ValueError("Insufficient groups for statistical comparison")
-
-    def _process_taxonomic_data(self) -> None:
-        """Process taxonomic data based on mode."""
         if self.mode == 'genus':
-            self._collapse_to_taxonomic_levels()
-            self._filter_low_abundance_features()
-
-    def _collapse_to_taxonomic_levels(self) -> None:
-        """Collapse table to different taxonomic levels."""
-        levels = ['phylum', 'class', 'order', 'family']
-        for level in levels:
-            self.tables[level] = collapse_taxa(
-                self.table, 
-                level=level,
-                min_abundance=self.cfg.get('min_abundance', 0.001),
-                verbose=self.verbose
-            )
-
-    def _filter_low_abundance_features(self) -> None:
-        """Filter low abundance features from all tables."""
-        for level, table in self.tables.items():
-            self.tables[level] = table.loc[:, table.sum() > self.cfg.get('min_total_abundance', 10)]
-
-    def _generate_presence_absence(self) -> None:
-        """Generate presence/absence tables."""
-        if self.cfg.get('presence_absence', False):
-            for level, table in self.tables.items():
-                self.presence_absence_tables[level] = (table > 0).astype(int)
-
-    def _perform_visualizations(self) -> None:
-        """Execute all configured visualizations."""
-        self._create_sample_distribution_map()
-        self._perform_dimensionality_reduction()
-
-    def _create_sample_distribution_map(self) -> None:
-        """Create geographical sample distribution map."""
-        fig = sample_map_categorical(
-            metadata=self.meta,
-            color_col=DEFAULT_GROUP_COLUMN,
-            output_dir=self.project_dir.figures
-        )
-        self.figures['sample_distribution'] = fig
-
-    def _perform_dimensionality_reduction(self) -> None:
-        """Perform PCA and t-SNE analyses."""
-        for method in ['pca', 'tsne']:
-            self.figures[method] = {}
-            for level, table in self.tables.items():
-                self.figures[method][level] = self._create_ordination_figure(
-                    table=table,
-                    method=method,
-                    level=level
+            for level in ['phylum', 'class', 'order', 'family']:
+                collapsed_table = collapse_taxa(
+                    self.table, 
+                    level, 
+                    self.project_dir.data_merged,
+                    self.verbose
                 )
+                self.tables[level] = collapsed_table
+            self.tables['genus'] = self.table   
 
-    def _create_ordination_figure(self, table: pd.DataFrame, method: str, level: str) -> plt.Figure:
-        """Create ordination visualization figure."""
-        if method == 'pca':
-            components, variance = beta_diversity.pca(table)
-            return pca(
-                components=components,
-                metadata=self.meta,
-                variance_explained=variance,
-                color_col=DEFAULT_GROUP_COLUMN
+            if self.cfg['presence_absence']:
+                for level in self.tables:
+                    pa = presence_absence(
+                        self.tables[level], 
+                        level, 
+                        self.project_dir.data_merged,
+                        self.verbose
+                    )
+                    self.presence_absence_tables[level] = pa
+
+        elif self.mode == 'asv':
+            logger.info("ASV mode is not yet supported!")
+
+        self._plot_pca()
+        self._plot_tsne()
+        self.stats = {}
+
+        self.stats['presence_absence'] = {}
+
+        if self.cfg['stats']['presence_absence']['t_test']:
+            self.stats['presence_absence']['t_test'] = {}
+            for level in self.presence_absence_tables:
+                logger.info(f"Running t-test for {level}...")
+                results = t_test(
+                    table=self.presence_absence_tables[level], 
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats['presence_absence']['t_test'][level] = results
+        
+        if self.cfg['stats']['presence_absence'].get('mwu_bonferroni', False):
+            self.stats['presence_absence']['mwu_bonferroni'] = {}
+            for level in self.presence_absence_tables:
+                logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
+                results = mwu_bonferroni(
+                    table=self.presence_absence_tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats['presence_absence']['mwu_bonferroni'][level] = results
+        
+        if self.cfg['stats']['presence_absence'].get('kruskal_bonferroni', False):
+            self.stats['presence_absence']['kruskal_bonferroni'] = {}
+            for level in self.presence_absence_tables:
+                logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
+                results = kruskal_bonferroni(
+                    table=self.presence_absence_tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status'
+                )
+                self.stats['presence_absence']['kruskal_bonferroni'][level] = results
+
+        # Save statistical results
+        stats_dir = self.project_dir.stats / 'presence_absence'
+        stats_dir.mkdir(parents=True, exist_ok=True)
+        
+        for test_type in self.stats['presence_absence']:
+            test_dir = stats_dir / test_type
+            test_dir.mkdir(exist_ok=True)
+            for level in self.stats['presence_absence'][test_type]:
+                df = self.stats['presence_absence'][test_type][level]
+                output_path = test_dir / f"{level}_results.tsv"
+                df.to_csv(output_path, sep='\t', index=True)
+
+        # Find top features
+        contaminated_features = []
+        pristine_features = []
+        
+        for test_type in self.stats['presence_absence']:
+            for level in self.stats['presence_absence'][test_type]:
+                df = self.stats['presence_absence'][test_type][level]
+                sig_df = df[df['q_value'] < 0.05]
+                for feature, row in sig_df.iterrows():
+                    effect = row.get('mean_diff', row.get('effect_size', 0))
+                    if effect > 0:
+                        contaminated_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': effect,
+                            'q_value': row['q_value']
+                        })
+                    else:
+                        pristine_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': abs(effect),
+                            'q_value': row['q_value']
+                        })
+
+        # Process and save top features
+        top_dir = self.project_dir.stats / 'top_features'
+        top_dir.mkdir(parents=True, exist_ok=True)
+        
+        def _process_features(feature_list):
+            if not feature_list:
+                return pd.DataFrame()
+            df = pd.DataFrame(feature_list)
+            return df.sort_values(['effect', 'q_value'], ascending=[False, True]).head(20)
+
+        top_contam = _process_features(contaminated_features)
+        top_pristine = _process_features(pristine_features)
+
+        top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
+        top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
+
+    def _plot_sample_map(self) -> None:
+        self.figures["sample_map"] = []
+        logger.info("Creating sample map...")
+        
+        for col in ['dataset_name', 'nuclear_contamination_status']:
+            fig, map = sample_map_categorical(
+                metadata=self.meta, 
+                show=False, 
+                output_dir=self.project_dir.figures / 'sample_maps', 
+                color_col=col,
             )
+            self.figures["sample_map"].append({
+                'title': f'Sample Map - {col}',
+                'color_col': col,
+                'figure': fig
+            })
+            self.color_maps[col] = map
+
+    def _plot_pca(self):
+        self.figures["pca"] = []
+        
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        color_col='dataset_name'
+        symbol_col='nuclear_contamination_status'
+        
+        tables = self.presence_absence_tables if self.cfg['presence_absence'] else self.tables
+            
+        for level in tables:
+            logger.info(f"Calculating PCA ({level})...")
+            
+            meta, table, _ = df_utils.match_indices_or_transpose(
+                self.meta, 
+                tables[level]
+            )
+                
+            pca_results = beta_diversity.pca(
+                table=table,
+                n_components=3
+            )
+            
+            logger.info("Plotting PCA...")
+            
+            pca_plot, _ = pca(
+                components = pca_results['components'], 
+                proportion_explained = pca_results['exp_var_ratio'], 
+                metadata=meta,
+                color_col=color_col, 
+                color_map=self.color_maps[color_col],
+                symbol_col=symbol_col,
+                show=False,
+                output_dir=self.project_dir.figures / 'pca' / f'l{levels[level]+1}', 
+                x=1, 
+                y=2
+            )
+            
+            self.figures["pca"].append({
+                'title': f'PCA - {level}',
+                'level': level,
+                'color_col': color_col,
+                'symbol_col': symbol_col,
+                'figure': pca_plot
+            })
+
+    def _plot_tsne(self) -> None:
+        self.figures["tsne"] = []
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        color_col='dataset_name'
+        symbol_col='nuclear_contamination_status'
+        
+        tables = self.presence_absence_tables if self.cfg['presence_absence'] else self.tables
+            
+        for level in tables:
+            logger.info(f"Calculating TSNE ({level})...")
+    
+            meta, table, _ = df_utils.match_indices_or_transpose(
+                self.meta, 
+                tables[level]
+            )
+            tsne_results = beta_diversity.tsne(
+                    table=table,
+                    n_components=3
+            )
+                
+            logger.info("Plotting TSNE...")
+                
+            tsne_plot, _ = mds(
+                df=tsne_results, 
+                metadata=meta,
+                group_col=color_col, 
+                symbol_col=symbol_col,
+                show=False,
+                output_dir=self.project_dir.figures / 'tsne' / f'l{levels[level]+1}',
+                mode='TSNE',
+                x=1, 
+                y=2
+            )
+        
+            self.figures["tsne"].append({
+                'title': f'TSNE - {level}',
+                'level': level,
+                'color_col': color_col,
+                'symbol_col': symbol_col,
+                'figure': tsne_plot
+            })
+            
+    def _get_biom_paths(self) -> List[str]:
+        return glob.glob(str(self.project_dir.data_raw / self.BIOM_PATTERN), recursive=True)    
+
+    def _get_meta_paths(self) -> List[Path]:
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            biom_path = Path(biom_path)
+            current = biom_path
+            data_dir = None
+            while current != current.root:
+                if current.name == 'data':
+                    data_dir = current
+                    break
+                current = current.parent
+            if not data_dir:
+                continue
+            
+            biom_dir = data_dir / "per_dataset" / "qiime"
+            try:
+                rel_path = biom_path.parent.relative_to(biom_dir)
+            except ValueError:
+                continue
+            
+            sliced_parts = rel_path.parts[:-1]
+            
+            meta_path = (
+                data_dir / "per_dataset" / "metadata"
+                / Path(*sliced_parts)
+                / "sample-metadata.tsv"
+            )
+            meta_paths.append(meta_path)
+        return meta_paths
+        
+    def _get_biom_table(self):
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
+            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'dataframe',
+            self.output_path,
+            self.verbose
+        )
+        
+    def _get_metadata(self):
+        meta_dfs = []
+        for meta_path in self._get_meta_paths():  
+            meta_df = self._process_meta_path(meta_path, [])
+            meta_dfs.append(meta_df)
+        self.meta = pd.concat(meta_dfs, ignore_index=True)
+
+    def _process_meta_path(
+        self, 
+        csv_path: Path, 
+        column_renames: List[Tuple[str, str]]
+    ) -> pd.DataFrame:
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
+            
+        df = pd.read_csv(csv_path, sep='\t')
+        df.columns = df.columns.str.lower()
+        
+        sample_id_col = next((col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns), None)
+        if sample_id_col:
+            df['SAMPLE ID'] = df[sample_id_col]
         else:
-            embeddings = beta_diversity.tsne(table)
-            return mds(
-                coordinates=embeddings,
-                metadata=self.meta,
-                color_col=DEFAULT_GROUP_COLUMN
-            )
+            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" for i in range(1, len(df)+1)]
+            
+        dataset_id_col = next((col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns), None)
+        if dataset_id_col:
+            df['DATASET ID'] = df[dataset_id_col]
+        else:
+            df['DATASET ID'] = Path(csv_path).parents[5].name
+            
+        if 'nuclear_contamination_status' not in df.columns:
+            df['nuclear_contamination_status'] = False
 
-    def _conduct_statistical_analyses(self) -> None:
-        """Perform configured statistical tests."""
-        if self.cfg['stats'].get('t_test', False):
-            self._perform_ttests()
-        if self.cfg['stats'].get('mwu', False):
-            self._perform_mannwhitney()
-        if self.cfg['stats'].get('kruskal', False):
-            self._perform_kruskal()
-
-    def _perform_ttests(self) -> None:
-        """Run independent t-tests for all features."""
-        self.stats['t_test'] = {}
-        for level, table in self.tables.items():
-            self.stats['t_test'][level] = t_test(
-                table=table,
-                metadata=self.meta,
-                group_col=DEFAULT_GROUP_COLUMN,
-                groups=DEFAULT_GROUP_VALUES
-            )
-
-    def _perform_mannwhitney(self) -> None:
-        """Run Mann-Whitney U tests with Bonferroni correction."""
-        self.stats['mannwhitney'] = {}
-        for level, table in self.tables.items():
-            self.stats['mannwhitney'][level] = mwu_bonferroni(
-                table=table,
-                metadata=self.meta,
-                group_col=DEFAULT_GROUP_COLUMN,
-                groups=DEFAULT_GROUP_VALUES
-            )
-
-    def _perform_kruskal(self) -> None:
-        """Run Kruskal-Wallis tests with Bonferroni correction."""
-        self.stats['kruskal'] = {}
-        for level, table in self.tables.items():
-            self.stats['kruskal'][level] = kruskal_bonferroni(
-                table=table,
-                metadata=self.meta,
-                group_col=DEFAULT_GROUP_COLUMN
-            )
-
-    def _identify_significant_features(self) -> None:
-        """Identify top differential features across tests."""
-        self.top_features = {
-            'contaminated': self._aggregate_features(direction='positive'),
-            'pristine': self._aggregate_features(direction='negative')
-        }
-
-    def _aggregate_features(self, direction: str) -> List[Dict]:
-        """Aggregate features showing consistent differential abundance."""
-        features = defaultdict(lambda: {'count': 0, 'effects': []})
-        
-        for test in self.stats.values():
-            for level, results in test.items():
-                for _, row in results.iterrows():
-                    effect = self._get_effect_size(row, test)
-                    if self._check_direction(effect, direction):
-                        features[row['feature']]['count'] += 1
-                        features[row['feature']]['effects'].append(effect)
-        
-        return self._rank_features(features, direction)
-
-    def _get_effect_size(self, row: pd.Series, test: str) -> float:
-        """Get appropriate effect size for test type."""
-        if 't_test' in test:
-            return row['mean_difference']
-        if 'mannwhitney' in test:
-            return row['median_difference']
-        return row['epsilon_squared']
-
-    def _check_direction(self, effect: float, direction: str) -> bool:
-        """Check if effect matches desired direction."""
-        if direction == 'positive':
-            return effect > 0
-        return effect < 0
-
-    def _rank_features(self, features: dict, direction: str) -> List[Dict]:
-        """Rank features by consistency and effect size."""
-        ranked = sorted(
-            features.items(),
-            key=lambda x: (
-                -x[1]['count'], 
-                -np.mean(np.abs(x[1]['effects']))
-                        )
-            )
-        return [{
-            'feature': name,
-            'test_count': info['count'],
-            'mean_effect': np.mean(info['effects']),
-            'max_effect': np.max(np.abs(info['effects']))
-        } for name, info in ranked[:20]]
-
-    def _save_all_outputs(self) -> None:
-        """Save all results to persistent storage."""
-        self._save_statistical_results()
-        self._save_top_features()
-        self._save_visualizations()
-
-    def _save_statistical_results(self) -> None:
-        """Save statistical results to TSV files."""
-        for test, levels in self.stats.items():
-            for level, results in levels.items():
-                path = self.project_dir.results / STATS_DIR_NAME / f"{test}_{level}.tsv"
-                results.to_csv(path, sep='\t', index=False)
-
-    def _save_top_features(self) -> None:
-        """Save top features to TSV files."""
-        for direction, features in self.top_features.items():
-            path = self.project_dir.results / TOP_FEATURES_DIR_NAME / f"top_{direction}.tsv"
-            pd.DataFrame(features).to_csv(path, sep='\t', index=False)
-
-    def _save_visualizations(self) -> None:
-        """Save all figures to files."""
-        for fig_name, figure in self.figures.items():
-            path = self.project_dir.figures / f"{fig_name}.png"
-            figure.savefig(path, dpi=300, bbox_inches='tight')
+        for old, new in column_renames:
+            if old in df.columns:
+                df.rename(columns={old: new}, inplace=True)
+                
+        return df
 
 
 
