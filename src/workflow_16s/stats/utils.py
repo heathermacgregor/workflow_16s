@@ -284,7 +284,8 @@ def t_test(
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
-    
+    print(metadata.head())
+    print(table.head())
     # Join metadata group column to the table
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
