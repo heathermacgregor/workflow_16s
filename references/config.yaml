@@ -56,5 +56,9 @@ presence_absence: True
 stats:
   raw:
     t_test: True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
   presence_absence:
     t_test: True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
