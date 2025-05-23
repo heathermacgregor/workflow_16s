@@ -316,6 +316,7 @@ class AmpliconData:
         self.meta = pd.concat(meta_dfs)
         
     def _genus_mode(self):
+        # Collapse tables for higher taxonomic levels
         for level in ['phylum', 'class', 'order', 'family']:
             self.tables[level] = collapse_taxa(
                 self.table, 
@@ -323,20 +324,22 @@ class AmpliconData:
                 Path(self.project_dir.tables) / 'merged',
                 self.verbose
             )
-        # Transpose genus table to match samples-as-rows format
-        self.tables['genus'] = self.table.T  # Samples become rows
+        
+        # Keep genus table in original orientation (taxa-as-rows)
+        self.tables['genus'] = self.table  # Removed .T transpose
     
         if self.cfg['presence_absence']:
             for level in self.tables:
-                table = self.tables[level]
-                if level == 'genus':
-                    table = table.T
+                # Get the table in taxa-as-rows orientation
+                taxa_as_rows = self.tables[level]
+                
+                # Convert to presence/absence while maintaining orientation
                 self.presence_absence_tables[level] = presence_absence(
-                    table, 
-                    level, 
+                    taxa_as_rows,  # Input is taxa x samples
+                    level,
                     Path(self.project_dir.tables) / 'merged',
                     self.verbose
-                )
+                ).T
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
 
