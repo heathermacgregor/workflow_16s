@@ -273,7 +273,7 @@ def t_test(
         col_values: Two group identifiers to compare.
         
     Returns:
-        results:    Results sorted by p-value with test statistics.
+        results:    Results sorted by p-value with test statistics, excluding features with p=0 or NaN.
     """
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
@@ -308,6 +308,8 @@ def t_test(
         })
     
     results_df = pd.DataFrame(results)
+    # Discard rows with p_value = 0 or NaN
+    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
     results_df.sort_values('p_value', inplace=True)
     return results_df
 
@@ -319,7 +321,7 @@ def mwu_bonferroni(
     col_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
 ) -> pd.DataFrame:
     """
-    Performs Mann-Whitney U tests with Bonferroni correction.
+    Performs Mann-Whitney U tests with Bonferroni correction for two groups.
     
     Args:
         table:      Input abundance table (samples x features).
@@ -328,62 +330,140 @@ def mwu_bonferroni(
         col_values: Two group identifiers to compare.
         
     Returns:
-        results:    Filtered results meeting Bonferroni-corrected threshold.
+        results:    Results with p-values below Bonferroni-corrected threshold.
     """
+    # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-
-    table_with_col = table.join(metadata[[col]])
-  
-    group_labels = table_with_col[col].values
-    group_1 = table_with_col[group_labels == col_values[0]] # Contaminated
-    group_2 = table_with_col[group_labels == col_values[1]] # Pristine
-
-    # Perform Mann-Whitney U test for each OTU
+        table = table_to_dataframe(table)  # Ensure this function is defined
+    
+    # Check for column name conflict
+    if col in table.columns:
+        raise ValueError(f"Column '{col}' already exists in the table.")
+    
+    # Join metadata with inner alignment
+    table_with_col = table.join(metadata[[col]], how='inner')
+    
+    # Total features tested (for Bonferroni)
+    total_features = len(table_with_col.columns.drop(col))
+    threshold = 0.01 / total_features
+    
     results = []
     for feature in tqdm(
-      table_with_col.columns.drop(col), 
-      desc="Calculating MWU (Bonferroni)..."
+        table_with_col.columns.drop(col), 
+        desc="Calculating MWU (Bonferroni)..."
     ):
-        group_1_feature = group_1[feature].dropna()
-        group_2_feature = group_2[feature].dropna()
-
+        # Subset groups safely
+        mask_group1 = (table_with_col[col] == col_values[0])
+        mask_group2 = (table_with_col[col] == col_values[1])
+        
+        group1_values = table_with_col.loc[mask_group1, feature].dropna()
+        group2_values = table_with_col.loc[mask_group2, feature].dropna()
+        
+        # Skip features with empty groups
+        if len(group1_values) < 1 or len(group2_values) < 1:
+            continue
+        
+        # Perform MWU test
         u_stat, p_val = mannwhitneyu(
-          group_1_feature, 
-          group_2_feature, 
-          alternative='two-sided'
+            group1_values, 
+            group2_values, 
+            alternative='two-sided'
         )
-        s, p = kruskal(group_1_feature, group_2_feature)
         
-        # Effect size (r) computation
-        n1, n2 = len(group_1_feature), len(group_2_feature)
-        effect_size_r = 1 - ((2 * u_stat) / (n1 * n2))
-        
-        # Mean difference for context
-        mean_diff = np.mean(group_1_feature) - np.mean(group_2_feature)
+        # Effect size and median difference
+        n1, n2 = len(group1_values), len(group2_values)
+        effect_size_r = 1 - (2 * u_stat) / (n1 * n2)
+        median_diff = group1_values.median() - group2_values.median()
         
         results.append({
             'feature': feature,
             'u_statistic': u_stat,
-            'p_value': p_val,
-            'kruskal_s': s,
-            'kruskal_p_value': p,
-            'mean_difference': mean_diff,
+            'p_value': max(p_val, 1e-10),  # Cap p-values
+            'median_difference': median_diff,
             'effect_size_r': effect_size_r
         })
     
-    results = pd.DataFrame(results)
+    results_df = pd.DataFrame(results)
+    
+    # Apply Bonferroni threshold
+    results_filtered = results_df[results_df['p_value'] <= threshold]
+    return results_filtered.sort_values('p_value')
 
-    # Cap extremely small p-values to avoid numerical precision issues
-    results['p_value'] = np.maximum(results['p_value'], 1e-10)
-    results['kruskal_p_value'] = np.maximum(results['kruskal_p_value'], 1e-10)
 
+def kruskal_bonferroni(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    col: str = DEFAULT_GROUP_COLUMN,
+    col_values: List[Union[bool, int, str]] = None
+) -> pd.DataFrame:
+    """
+    Performs Kruskal-Wallis H-test with Bonferroni correction for ≥3 groups.
+    
+    Args:
+        table:      Input abundance table (samples x features)
+        metadata:   Sample metadata DataFrame
+        col:        Metadata column containing group labels
+        col_values: List of group identifiers to compare (None = use all groups)
+        
+    Returns:
+        results:    DataFrame with significant features after Bonferroni correction
+    """
+    # Convert input to DataFrame if necessary
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+    
+    # Check for column conflicts
+    if col in table.columns:
+        raise ValueError(f"Column '{col}' already exists in the table.")
+    
+    # Join metadata with inner alignment
+    table_with_col = table.join(metadata[[col]], how='inner')
+    
+    # Get unique groups if col_values not specified
+    if col_values is None:
+        col_values = table_with_col[col].unique().tolist()
+    
+    # Pre-calculate Bonferroni threshold
+    total_features = len(table_with_col.columns.drop(col))
+    threshold = 0.01 / total_features
+    
+    results = []
+    for feature in tqdm(table_with_col.columns.drop(col), 
+                       desc="Kruskal-Wallis (Bonferroni)"):
+        # Collect data for all groups
+        groups = []
+        for group_val in col_values:
+            mask = (table_with_col[col] == group_val)
+            group_data = table_with_col.loc[mask, feature].dropna()
+            if len(group_data) > 0:  # Skip empty groups
+                groups.append(group_data)
+        
+        # Skip feature if <2 groups have data
+        if len(groups) < 2:
+            continue
+        
+        try:
+            h_stat, p_val = kruskal(*groups)
+        except ValueError:
+            continue  # Handle identical values in all groups
+            
+        # Calculate effect size (epsilon squared)
+        n_total = sum(len(g) for g in groups)
+        epsilon_sq = h_stat / (n_total - 1)
+        
+        results.append({
+            'feature': feature,
+            'h_statistic': h_stat,
+            'p_value': max(p_val, 1e-10),
+            'epsilon_squared': epsilon_sq,
+            'groups_tested': len(groups)
+        })
+    
+    results_df = pd.DataFrame(results)
+    
     # Apply Bonferroni correction
-    threshold = 0.01 / len(results)
-    results = results[
-    (results['p_value'] <= threshold) & (results['kruskal_p_value'] <= threshold)
-    ]
-    return results
+    results_df = results_df[results_df['p_value'] <= threshold]
+    return results_df.sort_values('p_value')
 
 
 def variability_explained(
