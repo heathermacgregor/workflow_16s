@@ -278,7 +278,7 @@ def t_test(
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)  # Ensure this function is defined
-    
+    print(table.shape)
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
