@@ -304,7 +304,6 @@ def t_test(
         right_index=True, 
         how='inner'  # Stricter merge to exclude samples without metadata
     )
-    logger.info(table_with_col[col])
     # Validate successful merge
     if table_with_col[col].isna().any():
         missing = table_with_col[col].isna().sum()
@@ -358,15 +357,36 @@ def mwu_bonferroni(
     """
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)  # Ensure this function is defined
+        table = table_to_dataframe(table)
     
+    # Sanitize indices (critical fix)
+    table.index = table.index.astype(str).str.strip().str.lower()
+    metadata = metadata.copy()  # Avoid modifying original metadata
+    metadata.index = metadata.index.astype(str).str.strip().str.lower()
+
     # Check for column name conflict
     if col in table.columns:
-        raise ValueError(f"Column '{col}' already exists in the table.")
-    
-    # Join metadata with inner alignment
-    table_with_col = table.join(metadata[[col]], how='inner') 
-    print(table_with_col.head())
+        raise ValueError(f"Column '{col}' already exists in table. Choose different group column.")
+
+    # Validate index alignment
+    common_indices = table.index.intersection(metadata.index)
+    if not common_indices.size:
+        logger.error(f"Table samples: {table.index.tolist()[:5]}...")
+        logger.error(f"Metadata samples: {metadata.index.tolist()[:5]}...")
+        raise ValueError("No common indices between table and metadata after sanitization.")
+
+    # Merge with sanitized indices
+    table_with_col = table.merge(
+        metadata[[col]], 
+        left_index=True, 
+        right_index=True, 
+        how='inner'  # Stricter merge to exclude samples without metadata
+    )
+    # Validate successful merge
+    if table_with_col[col].isna().any():
+        missing = table_with_col[col].isna().sum()
+        raise ValueError(f"{missing} samples have NaN in '{col}' after merge. Check metadata completeness.")
+
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_col.columns.drop(col))
@@ -442,13 +462,34 @@ def kruskal_bonferroni(
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
     
-    # Check for column conflicts
+    # Sanitize indices (critical fix)
+    table.index = table.index.astype(str).str.strip().str.lower()
+    metadata = metadata.copy()  # Avoid modifying original metadata
+    metadata.index = metadata.index.astype(str).str.strip().str.lower()
+
+    # Check for column name conflict
     if col in table.columns:
-        raise ValueError(f"Column '{col}' already exists in the table.")
-    
-    # Join metadata with inner alignment
-    table_with_col = table.join(metadata[[col]], how='inner') 
-    print(table_with_col.head())
+        raise ValueError(f"Column '{col}' already exists in table. Choose different group column.")
+
+    # Validate index alignment
+    common_indices = table.index.intersection(metadata.index)
+    if not common_indices.size:
+        logger.error(f"Table samples: {table.index.tolist()[:5]}...")
+        logger.error(f"Metadata samples: {metadata.index.tolist()[:5]}...")
+        raise ValueError("No common indices between table and metadata after sanitization.")
+
+    # Merge with sanitized indices
+    table_with_col = table.merge(
+        metadata[[col]], 
+        left_index=True, 
+        right_index=True, 
+        how='inner'  # Stricter merge to exclude samples without metadata
+    )
+    # Validate successful merge
+    if table_with_col[col].isna().any():
+        missing = table_with_col[col].isna().sum()
+        raise ValueError(f"{missing} samples have NaN in '{col}' after merge. Check metadata completeness.")
+
     
     # Get unique groups if col_values not specified
     if col_values is None:
