@@ -12,6 +12,7 @@ from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
 import logging
+import matplotlib.pyplot as plt
 
 # ================================== LOCAL IMPORTS =================================== #
 
