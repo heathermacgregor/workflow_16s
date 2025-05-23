@@ -33,32 +33,35 @@ from workflow_16s.figures.merged.merged import (
     sample_map_categorical, pcoa, pca, mds
 )
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
-    """Load dataset IDs from configuration file.
+    """
+    Load dataset IDs from configuration file.
     
     Args:
-        path: Path to text file containing dataset IDs (one per line)
+        path: Path to text file containing dataset IDs (one per line).
     
     Returns:
-        List of dataset ID strings
+        List of dataset ID strings.
     """
     with open(path, "r") as f:
         return [line.strip() for line in f if line.strip()]
     
     
 def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
-    """Load dataset metadata from TSV file.
+    """
+    Load dataset metadata from TSV file.
     
     Args:
-        tsv_path: Path to TSV file containing dataset metadata
+        tsv_path: Path to TSV file containing dataset metadata.
     
     Returns:
-        DataFrame with dataset information, cleaned of unnamed columns
+        DataFrame with dataset information, cleaned of unnamed columns.
     """
     df = pd.read_csv(tsv_path, sep="\t", dtype={'ena_project_accession': str})
     # Remove 'Unnamed' columns
@@ -67,17 +70,18 @@ def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
 
 
 def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
-    """Find matching dataset information from metadata DataFrame.
+    """
+    Find matching dataset information from metadata DataFrame.
     
     Args:
-        dataset_info: DataFrame containing dataset metadata
-        dataset: Dataset identifier to search for
+        dataset_info: DataFrame containing dataset metadata.
+        dataset:      Dataset identifier to search for.
     
     Returns:
-        First matching row from dataset_info as a pandas Series
+        First matching row from dataset_info as a pandas Series.
     
     Raises:
-        ValueError: If no matches found for the dataset
+        ValueError: If no matches found for the dataset.
     """
     # Case-insensitive masks
     mask_ena_type = dataset_info['dataset_type'].str.lower().eq('ena')
@@ -122,16 +126,17 @@ def processed_dataset_files(
     params: Any, 
     cfg: Any
 ) -> Dict[str, Path]:
-    """Generate expected file paths for processed dataset outputs.
+    """
+    Generate expected file paths for processed dataset outputs.
     
     Args:
-        dirs: Project directory structure
-        dataset: Dataset identifier
-        params: Processing parameters dictionary
-        cfg: Configuration dictionary
+        dirs:    Project directory structure.
+        dataset: Dataset identifier.
+        params:  Processing parameters dictionary.
+        cfg:     Configuration dictionary.
     
     Returns:
-        Dictionary mapping file types to their expected paths
+        Dictionary mapping file types to their expected paths.
     """
     classifier = cfg["classifier"]
     base_dir = (
@@ -155,17 +160,19 @@ def processed_dataset_files(
 
 
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
-    """Identify missing output files from a list of expected paths.
+    """
+    Identify missing output files from a list of expected paths.
     
     Args:
-        file_list: List of file paths to check
+        file_list: List of file paths to check.
     
     Returns:
-        List of Path objects for files that don't exist
+        List of Path objects for files that don't exist.
     """
     return [Path(file) for file in file_list if not Path(file).exists()]
 
-# ==================================== FUNCTIONS ===================================== #    
+# ==================================== FUNCTIONS ===================================== #   
+
 class AmpliconData:
     def __init__(
         self, 
@@ -179,45 +186,44 @@ class AmpliconData:
         self.mode = mode
         self.verbose = verbose
         
-        self.table = None
-        self.meta = None
-        self.taxa = None
+        self.table, self.meta, self.taxa = None, None, None
 
         self.tables = {}
-        if self.cfg['presence_absence']:
-            self.presence_absence_tables = {}
+        self.presence_absence_tables = {} if self.cfg['presence_absence']
         
         self.figures = {}
         self.color_maps = {}
 
         self.stats = {}
         
-        if self.mode == 'asv':
-            self.table_dir = 'table'
-            self.output_dir = 'asv'
-        elif self.mode == 'genus':
-            self.table_dir = 'table_6'
-            self.output_dir = 'l6'
+        mode_map = {
+            'asv': ('table', 'asv'),
+            'genus': ('table_6', 'l6')
+        }
+        
+        table_dir, output_dir = mode_map.get(mode, (None, None))
+
         
         self.output_path = (
-            Path(self.project_dir.data) / 'merged' / self.output_dir / 
+            Path(self.project_dir.data) / 'merged' / output_dir / 
             'feature-table.biom'
         )
 
         self._get_metadata()
         self._get_biom_table()
 
-        if self.mode == 'genus':
-            self._genus_mode()
-
-        elif self.mode == 'asv':
-            self._asv_mode()
-
-        if self.cfg['presence_absence']:
-            self._run_statistical_analyses('presence_absence')
-            self._top_features('presence_absence')
-
+        mode_funcs = {
+            'genus': self._genus_mode,
+            'asv': self._asv_mode,
+        }
+        mode_funcs[mode]()  
         
+        # Run statistical analyses
+        self._run_statistical_analyses('raw')
+        self._top_features('raw')
+        if self.cfg['presence_absence']:   
+            self._run_statistical_analyses('presence_absence') 
+            self._top_features('presence_absence') 
 
     def _get_biom_paths(self) -> List:
         BIOM_PATTERN = '/'.join(
@@ -304,9 +310,9 @@ class AmpliconData:
     def _get_metadata(self):
         meta_dfs = []
         for meta_path in self._get_meta_paths():  
-            meta_df = self._process_meta_path(meta_path, [])
+            meta_df = self._process_meta_path(meta_path, []).set_index('#sampleid')
             meta_dfs.append(meta_df)
-        self.meta = pd.concat(meta_dfs, ignore_index=True)
+        self.meta = pd.concat(meta_dfs)
         
     def _genus_mode(self):
         for level in ['phylum', 'class', 'order', 'family']:
@@ -398,6 +404,39 @@ class AmpliconData:
                 df = self.stats[table_type][test_type][level]
                 output_path = test_dir / f"{level}_results.tsv"
                 df.to_csv(output_path, sep='\t', index=True)
+                print(f"Saved results to {str(output_path)}")
+                
+
+        if self.cfg['stats'][table_type].get('pca', False):
+            self.stats[table_type]['pca'] = {}
+            for level in tables:
+                logger.info(f"Calculating PCA ({level})...")
+            
+                meta, table, _ = df_utils.match_indices_or_transpose(
+                    self.meta, 
+                    tables[level]
+                )
+                    
+                pca_results = beta_diversity.pca(
+                    table=table,
+                    n_components=3
+                )
+                self.stats[table_type]['pca'][level] = pca_results
+                
+        if self.cfg['stats'][table_type].get('tsne', False):
+            self.stats[table_type]['tsne'] = {}
+            for level in tables:
+                logger.info(f"Calculating TSNE ({level})...")
+        
+                meta, table, _ = df_utils.match_indices_or_transpose(
+                    self.meta, 
+                    tables[level]
+                )
+                tsne_results = beta_diversity.tsne(
+                    table=table,
+                    n_components=3
+                )
+                self.stats[table_type]['tsne'][level] = tsne_results
 
     def _top_features(
         self, 
@@ -447,7 +486,64 @@ class AmpliconData:
         top_pristine = _process_features(pristine_features)
 
         top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
+        logger.info(f"Saved top 20 features associated with contaminated environments to {str(top_dir / 'top20_contaminated.tsv')}")
         top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
+        logger.info(f"Saved top 20 features associated with pristine environments to {str(top_dir / 'top20_pristine.tsv')}")
+
+    def _plot_stuff(
+        self, 
+        table_type: str = 'presence_absence',
+        figure_type: str = 'pca'
+    ):
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        color_cols=['dataset_name']
+        symbol_col='nuclear_contamination_status'
+        
+        tables = self._fetch_tables(table_type) 
+        self.figures[table_type] = {}
+        self.figures[table_type][figure_type] = []
+        
+        for level in tables:
+            results = self.stats[table_type][figure_type][level]
+
+            logger.info(f"Plotting {figure_type.upper()}...")
+            for color_col in color_cols:
+                if figure_type == 'pca':
+                    plot, _ = pca(
+                        components = results['components'], 
+                        proportion_explained = results['exp_var_ratio'], 
+                        metadata=self.meta,
+                        color_col=color_col, 
+                        color_map=self.color_maps[color_col],
+                        symbol_col=symbol_col,
+                        show=False,
+                        output_dir=Path(self.project_dir.figures) / 'pca' / f'l{levels[level]+1}', 
+                        x=1, 
+                        y=2
+                    )
+                elif figure_type == 'tsne':
+                    plot, _ = mds(
+                        df=results, 
+                        metadata=self.meta,
+                        group_col=color_col, 
+                        symbol_col=symbol_col,
+                        show=False,
+                        output_dir=Path(self.project_dir.figures) / 'tsne' / f'l{levels[level]+1}',
+                        mode='TSNE',
+                        x=1, 
+                        y=2
+                    )
+                
+                self.figures[figure_type].append({
+                    'title': f'{figure_type.upper()} - {level}',
+                    'level': level,
+                    'color_col': color_col,
+                    'symbol_col': symbol_col,
+                    'figure': plot
+                })
+        
+
+
 
 """
 class AmpliconData:
@@ -898,7 +994,7 @@ def import_merged_table_biom(
         with h5py.File(output_path, 'w') as f:
             merged_table.to_hdf5(f, generated_by="workflow_16s")
         if verbose:
-            n_features, n_samples = table.shape
+            n_features, n_samples = merged_table.shape
             # Format into [x, y] string
             shape_str = f"[{n_features}, {n_samples}]"
             logger.info(f"Wrote table {shape_str} to {output_path}")
