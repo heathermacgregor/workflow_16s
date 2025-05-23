@@ -464,7 +464,7 @@ class AmpliconData:
                 self.stats['presence_absence']['kruskal_bonferroni'][level] = results
 
         # Save statistical results
-        stats_dir = self.project_dir.stats / 'presence_absence'
+        stats_dir = Path(project_dir.main) / 'final' / 'tables' / 'stats' / 'presence_absence'
         stats_dir.mkdir(parents=True, exist_ok=True)
         
         for test_type in self.stats['presence_absence']:
@@ -503,7 +503,7 @@ class AmpliconData:
                         })
 
         # Process and save top features
-        top_dir = self.project_dir.stats / 'top_features'
+        top_dir = Path(project_dir.main) / 'final' / 'tables' / 'stats' / 'top_features'
         top_dir.mkdir(parents=True, exist_ok=True)
         
         def _process_features(feature_list):
@@ -526,7 +526,7 @@ class AmpliconData:
             fig, map = sample_map_categorical(
                 metadata=self.meta, 
                 show=False, 
-                output_dir=self.project_dir.figures / 'sample_maps', 
+                output_dir=Path(project_dir.main) / 'final' / 'figures' / 'sample_maps', 
                 color_col=col,
             )
             self.figures["sample_map"].append({
@@ -568,7 +568,7 @@ class AmpliconData:
                 color_map=self.color_maps[color_col],
                 symbol_col=symbol_col,
                 show=False,
-                output_dir=self.project_dir.figures / 'pca' / f'l{levels[level]+1}', 
+                output_dir=Path(project_dir.main) / 'final' / 'figures' / 'pca' / f'l{levels[level]+1}', 
                 x=1, 
                 y=2
             )
@@ -609,7 +609,7 @@ class AmpliconData:
                 group_col=color_col, 
                 symbol_col=symbol_col,
                 show=False,
-                output_dir=self.project_dir.figures / 'tsne' / f'l{levels[level]+1}',
+                output_dir=Path(project_dir.main) / 'final' / 'figures' / 'tsne' / f'l{levels[level]+1}',
                 mode='TSNE',
                 x=1, 
                 y=2
@@ -624,7 +624,7 @@ class AmpliconData:
             })
             
     def _get_biom_paths(self) -> List[str]:
-        return glob.glob(str(self.project_dir.data_raw / self.BIOM_PATTERN), recursive=True)    
+        return glob.glob(str(Path(project_dir.main) / 'data' / 'per_dataset' / self.BIOM_PATTERN), recursive=True)    
 
     def _get_meta_paths(self) -> List[Path]:
         meta_paths = []
