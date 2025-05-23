@@ -365,12 +365,15 @@ class AmpliconData:
         self.stats[table_type] = {}
         
         tables = self._fetch_tables(table_type)   
+        
         if self.cfg['stats'][table_type].get('t_test', False):
             self.stats[table_type]['t_test'] = {}
             for level in tables:
                 logger.info(f"Running t-test for {level}...")
+                # Convert sparse to dense for calculations
+                dense_table = tables[level].sparse.to_dense() if tables[level].dtypes.any().name.startswith('Sparse') else tables[level]
                 results = t_test(
-                    table=tables[level], 
+                    table=dense_table,  # Use dense version
                     metadata=self.meta,
                     col='nuclear_contamination_status',
                     col_values=[True, False]
@@ -381,8 +384,10 @@ class AmpliconData:
             self.stats[table_type]['mwu_bonferroni'] = {}
             for level in tables:
                 logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
+                # Convert sparse to dense for calculations
+                dense_table = tables[level].sparse.to_dense() if tables[level].dtypes.any().name.startswith('Sparse') else tables[level]
                 results = mwu_bonferroni(
-                    table=tables[level],
+                    table=dense_table,  # Use dense version
                     metadata=self.meta,
                     col='nuclear_contamination_status',
                     col_values=[True, False]
