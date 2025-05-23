@@ -288,10 +288,10 @@ def t_test(
     logger.info(table.index)
     logger.info(metadata.index)
     table_with_col = table.join(metadata[[col]]) 
-    #table_with_col = table.copy()
-    #table_with_col[col] = table_with_col.index.map(
-    #    metadata[col]
-    #)
+    table_with_col = table.copy()
+    table_with_col[col] = table_with_col.index.map(
+        metadata[col]
+    )
     
     print(table_with_col.head())
     
