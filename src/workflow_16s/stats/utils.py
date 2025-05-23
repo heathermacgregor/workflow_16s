@@ -285,7 +285,7 @@ def t_test(
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
      
     missing = table.index.difference(metadata.index)
-    print("Missing keys in metadata:", missing)
+    logger.info("Missing keys in metadata:", missing)
     # Method 1: Using join (simplest for index-based merging)
     table_with_col = table.join(metadata[[col]], how='left')  # Adds the column from metadata
     
