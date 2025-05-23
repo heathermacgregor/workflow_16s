@@ -295,7 +295,9 @@ def t_test(
     if not common_indices.size:
         logger.error(f"Table samples: {table.index.tolist()[:5]}...")
         logger.error(f"Metadata samples: {metadata.index.tolist()[:5]}...")
-        raise ValueError("No common indices between table and metadata after sanitization.")
+        logger.error("No common indices between table and metadata after sanitization.")
+        table = table.T
+        table.index = table.index.astype(str).str.strip().str.lower()
 
     # Merge with sanitized indices
     table_with_col = table.merge(
