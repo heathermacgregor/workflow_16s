@@ -398,8 +398,13 @@ def mwu_bonferroni(
             'median_difference': median_diff,
             'effect_size_r': effect_size_r
         })
-    
     results_df = pd.DataFrame(results)
+    if results_df.empty:
+        logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
+        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+
+    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    results_df.sort_values('p_value', inplace=True)
     
     # Apply Bonferroni threshold
     results_filtered = results_df[results_df['p_value'] <= threshold]
@@ -480,6 +485,11 @@ def kruskal_bonferroni(
         })
     
     results_df = pd.DataFrame(results)
+    if results_df.empty:
+        logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
+        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+
+    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
     
     # Apply Bonferroni correction
     results_df = results_df[results_df['p_value'] <= threshold]
