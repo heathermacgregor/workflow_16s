@@ -225,11 +225,13 @@ class AmpliconData:
     def _get_meta_paths(self) -> List:
         meta_paths = []
         for biom_path in self._get_biom_paths():
-            parts = Path(biom_path).parts
-            if parts[0] == os.sep or parts[0] == '':
-                parts = parts[1:]  # remove root
+            biom_path = Path(biom_path)
+            if biom_path.is_file() or biom_path.suffix:
+                biom_path = biom_path.parent
+        
+            parts = biom_path.parts
             meta_path = str(
-                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[1:5]))
+                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[-5:-1])))
             ) + '/sample-metadata.tsv'        
             meta_paths.append(meta_path)
         logger.info(f"Found {len(meta_paths)} unique metadata files.")
