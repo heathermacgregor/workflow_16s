@@ -448,6 +448,8 @@ class AmpliconData:
                 print(results)
         """
         self.stats['presence_absence'] = {}
+
+        # Existing t-test code
         if self.cfg['stats']['presence_absence']['t_test']:
             self.stats['presence_absence']['t_test'] = {}
             for level in self.presence_absence_tables:
@@ -460,6 +462,36 @@ class AmpliconData:
                 )
                 print(results.head())
                 self.stats['presence_absence']['t_test'][level] = results
+        
+        # Add MWU with Bonferroni
+        if self.cfg['stats']['presence_absence'].get('mwu_bonferroni', False):
+            self.stats['presence_absence']['mwu_bonferroni'] = {}
+            for level in self.presence_absence_tables:
+                logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
+                results = mwu_bonferroni(
+                    table=self.presence_absence_tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                print(f"MWU significant features ({level}):")
+                print(results.head())
+                self.stats['presence_absence']['mwu_bonferroni'][level] = results
+        
+        # Add Kruskal-Wallis with Bonferroni
+        if self.cfg['stats']['presence_absence'].get('kruskal_bonferroni', False):
+            self.stats['presence_absence']['kruskal_bonferroni'] = {}
+            for level in self.presence_absence_tables:
+                logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
+                results = kruskal_bonferroni(
+                    table=self.presence_absence_tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]  # Optional: Remove to use all groups
+                )
+                print(f"Kruskal-Wallis significant features ({level}):")
+                print(results.head())
+                self.stats['presence_absence']['kruskal_bonferroni'][level] = results
         
     def _plot_sample_map(self) -> None:
         self.figures["sample_map"] = []
