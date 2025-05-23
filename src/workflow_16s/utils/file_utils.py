@@ -1,28 +1,38 @@
 # ===================================== IMPORTS ====================================== #
 
-from typing import Any, Dict, List, Optional, Tuple, Union
-from pathlib import Path
-import re
-import os
+# Standard Library Imports
 import glob
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+# Third-Party Imports
 import h5py
-import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
-import logging
-import matplotlib.pyplot as plt
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.dir_utils import SubDirs
-from workflow_16s.stats.utils import t_test
+from workflow_16s.utils.biom_utils import (
+    collapse_taxa, presence_absence, filter_presence_absence
+)
 from workflow_16s.utils import df_utils
-from workflow_16s.figures.html_report import HTMLReport
-from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
+from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
-from workflow_16s.stats.utils import preprocess_table, mwu_bonferroni, kruskal_bonferroni
+from workflow_16s.stats.utils import (
+    preprocess_table, mwu_bonferroni, kruskal_bonferroni, t_test
+)
+from workflow_16s.figures.html_report import HTMLReport
+from workflow_16s.figures.merged.merged import (
+    sample_map_categorical, pcoa, pca, mds
+)
+
 
 logger = logging.getLogger('workflow_16s')
 
@@ -150,205 +160,243 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     """
     return [Path(file) for file in file_list if not Path(file).exists()]
 
-# ==================================== FUNCTIONS ===================================== #
-
-def convert_to_biom(table: pd.DataFrame) -> Table:
-    """Convert pandas DataFrame to BIOM Table.
-    
-    Args:
-        table: Input DataFrame containing feature counts
-    
-    Returns:
-        BIOM Table representation of the DataFrame
-    """
-    if not isinstance(table, pd.DataFrame):
-        return table
-    
-    observation_ids = table.index.astype(str).tolist()
-    sample_ids = table.columns.astype(str).tolist()
-    data = table.values
-    
-    return Table(
-        data=data,
-        observation_ids=observation_ids,
-        sample_ids=sample_ids,
-        type="OTU table"
-    )
-    
-
-def collapse_taxa(
-    table: Union[pd.DataFrame, Table], 
-    target_level: str, 
-    output_dir: Union[str, Path],
-    verbose: bool = True
-) -> Table:
-    """Collapse feature table to specified taxonomic level.
-    
-    Args:
-        table: Input BIOM Table or DataFrame
-        target_level: Taxonomic level to collapse to (phylum/class/order/family)
-        output_dir: Directory to save collapsed table
-    
-    Returns:
-        Collapsed BIOM Table
-    
-    Raises:
-        ValueError: For invalid target_level
-    """
-    if not isinstance(table, Table):
-        table = convert_to_biom(table)
-        
-    levels = {
-        'phylum': 1, 'class': 2, 'order': 3, 'family': 4
-    }
-
-    if target_level not in levels:
-        raise ValueError(
-            f"Invalid `target_level`: {target_level}. "
-            f"Expected one of {list(levels.keys())}")
-
-    level_idx = levels[target_level]
-
-    # Create taxonomy mapping
-    id_map = {}
-    for taxon in table.ids(axis='observation').astype(str):
-        parts = taxon.split(';')
-        truncated = ';'.join(parts[:level_idx + 1]) if len(parts) >= level_idx + 1 else 'Unclassified'
-        id_map[taxon] = truncated
-
-    # Collapse table
-    collapsed_table = table.collapse(
-        lambda id, _: id_map.get(id, 'Unclassified'),
-        norm=False,
-        axis='observation',
-        include_collapsed_metadata=False
-    ).remove_empty()
-
-    # Save output
-    output_biom_path = Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
-    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(output_biom_path, 'w') as f:
-        collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-    if verbose:
-        n_features, n_samples = table.shape
-        # Format into [x, y] string
-        shape_str = f"[{n_features}, {n_samples}]"
-        logger.info(
-            f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
-        )
-    
-    return collapsed_table
-
-def presence_absence(
-    table: Union[Table, pd.DataFrame], 
-    target_level: str, 
-    output_dir: Union[str, Path],
-    verbose: bool = True
-) -> Table:
-    """
-    Convert table to presence/absence format and filter by abundance.
-    
-    Args:
-        table: Input BIOM Table or DataFrame.
-        target_level: Taxonomic level for output naming.
-        output_dir: Directory to save output.
-    
-    Returns:
-        Presence/absence BIOM Table filtered by abundance.
-    """
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    if not isinstance(table, Table):
-        table = convert_to_biom(table)
-
-    levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
-    
-    # Filter by abundance
-    feature_sums = np.array(table.sum(axis='observation')).flatten()
-    sorted_idx = np.argsort(feature_sums)[::-1]
-    cumulative = np.cumsum(feature_sums[sorted_idx]) / feature_sums.sum()
-    stop_idx = np.searchsorted(cumulative, 0.99) + 1
-    keep_ids = [table.ids(axis='observation')[i] for i in sorted_idx[:stop_idx]]
-    
-    # Convert to presence/absence
-    pa_table = table.pa(inplace=False)
-    pa_table_filtered = pa_table.filter(keep_ids, axis='observation')
-    pa_df_filtered = pa_table_filtered.to_dataframe(dense=True)
-
-    # Save output
-    pa_table = Table(
-        pa_df_filtered.values,
-        pa_df_filtered.index,
-        pa_df_filtered.columns,
-        table_id='Presence Absence BIOM Table'
-    )
-    output_biom_path = Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
-    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(output_biom_path, 'w') as f:
-        pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-    if verbose:
-        n_features, n_samples = pa_table.shape
-        # Format into [x, y] string
-        shape_str = f"[{n_features}, {n_samples}]"
-        logger.info(
-            f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
-        )
-    
-    return pa_table
-
-
-def filter_presence_absence(
-    table: Table, 
-    metadata: pd.DataFrame, 
-    col: str = 'nuclear_contamination_status', 
-    prevalence_threshold: float = 0.05, 
-    group_threshold: float = 0.05
-) -> Table:
-    """
-    Filter presence/absence table based on prevalence and group differences.
-    
-    Args:
-        table: Input BIOM Table
-        metadata: Sample metadata DataFrame
-        col: Metadata column to group by
-        prevalence_threshold: Minimum prevalence across all samples
-        group_threshold: Minimum prevalence difference between groups
-    
-    Returns:
-        Filtered BIOM Table
-    """
-    df = table.to_dataframe(dense=True).T
-    metadata = metadata.set_index("run_accession.1")
-    df_with_meta = df.join(metadata[[col]], how='inner')
-
-    # Apply prevalence filter
-    if prevalence_threshold:
-        species_data = df_with_meta.drop(columns=[col])
-        prev = species_data.mean(axis=0)
-        filtered_species = prev[prev >= prevalence_threshold].index
-        df_with_meta = df_with_meta[filtered_species.union(pd.Index([col]))]
-
-    # Apply group filter
-    if group_threshold:
-        groups = df_with_meta.groupby(col)
-        if True not in groups.groups or False not in groups.groups:
-            raise ValueError(f"Metadata column '{col}' must have True/False groups")
-        sum_per_group = groups.sum(numeric_only=True)
-        n_samples = groups.size()
-        percentages = sum_per_group.div(n_samples, axis=0)
-        mask = (percentages.loc[True] >= group_threshold) & (percentages.loc[False] >= group_threshold)
-        selected_species = mask[mask].index
-        df_with_meta = df_with_meta[selected_species.union(pd.Index([col]))]
-
-    return Table(
-        df_with_meta.drop(columns=[col]).values.T,
-        df_with_meta.columns.tolist(),
-        df_with_meta.index.tolist(),
-        table_id='Filtered Presence/Absence Table'
-    )
-    
-    
+# ==================================== FUNCTIONS ===================================== #    
 class AmpliconData:
-    """
+    def __init__(
+        self, 
+        cfg,
+        project_dir,
+        mode: str = 'genus',
+        verbose: bool = True
+    ):
+        self.cfg = cfg
+        self.project_dir = project_dir
+        self.mode = mode
+        self.verbose = verbose
+        
+        self.table = None
+        self.meta = None
+        self.taxa = None
+
+        self.tables = {}
+        if self.cfg['presence_absence']:
+            self.presence_absence_tables = {}
+        
+        self.figures = {}
+        self.color_maps = {}
+
+        self.stats = {}
+        
+        if self.mode == 'asv':
+            self.table_dir = 'table'
+            self.output_dir = 'asv'
+        elif self.mode == 'genus':
+            self.table_dir = 'table_6'
+            self.output_dir = 'l6'
+        
+        self.output_path = Path(self.project_dir.main) / 'data' / 'merged' / self.output_dir / 'feature-table.biom'
+
+        self._get_metadata()
+        self._get_biom_table()
+
+        if self.mode == 'genus':
+            self._genus_mode()
+
+        elif self.mode == 'asv':
+            self._asv_mode()
+
+        if self.cfg['presence_absence']:
+            self._run_statistical_analyses('presence_absence')
+            self._top_features('presence_absence')
+
+        
+
+    def _get_biom_paths(self) -> List:
+        BIOM_PATTERN = '/'.join(
+            ['*', '*', '*', '*', 'FWD_*_REV_*', self.table_dir, 'feature-table.biom']
+        )
+        biom_paths = glob.glob(
+            str(Path(self.project_dir.qiime_data_per_dataset) / BIOM_PATTERN), 
+            recursive=True
+        )
+        logger.info(f"Found {len(biom_paths)} unique feature tables.")
+        return biom_paths
+        
+    def _get_meta_paths(self) -> List:
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            parts = Path(biom_path).parts[
+            if parts[0] == os.sep or parts[0] == '':
+                parts = parts[1:]  # remove root
+            meta_path = str(
+                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[1:5]))
+            ) + '/sample-metadata.tsv'        
+            meta_paths.append(meta_path)
+        logger.info(f"Found {len(meta_paths)} unique metadata files.")
+        return meta_paths
+
+    def _get_biom_table(self):
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
+            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'dataframe',
+            self.output_path,
+            self.verbose
+        )
+    
+    def _get_metadata(self):
+        meta_dfs = []
+        for meta_path in self._get_meta_paths():  
+            meta_df = self._process_meta_path(meta_path, [])
+            meta_dfs.append(meta_df)
+        self.meta = pd.concat(meta_dfs, ignore_index=True)
+        
+    def _genus_mode(self):
+        for level in ['phylum', 'class', 'order', 'family']:
+            self.tables[level] = collapse_taxa(
+                self.table, 
+                level, 
+                Path(self.project_dir.tables) / 'merged',
+                self.verbose
+            )
+        self.tables['genus'] = self.table   
+
+        if self.cfg['presence_absence']:
+            for level in self.tables:
+                self.presence_absence_tables[level] = presence_absence(
+                    self.tables[level], 
+                    level, 
+                    Path(self.project_dir.tables) / 'merged',
+                    self.verbose
+                )
+                
+    def _asv_mode(self):
+        logger.info("ASV mode is not yet supported!")
+
+    def _fetch_tables(
+        self, 
+        table_type: str = 'presence_absence'
+    ):
+        if table_type == 'raw':
+            tables = self.tables
+        elif table_type == 'presence_absence':
+            tables = self.presence_absence_tables
+        else:
+            logger.error(
+                f"Unknown table type '{table_type}.'"
+                f"Expected either 'raw' or 'presence_absence'."
+            )
+        return tables
+
+    def _run_statistical_analyses(
+        self, 
+        table_type: str = 'presence_absence'
+    ):
+        self.stats[table_type] = {}
+        
+        tables = self._fetch_tables(table_type)   
+        if self.cfg['stats'][table_type].get('t_test', False):
+            self.stats[table_type]['t_test'] = {}
+            for level in tables:
+                logger.info(f"Running t-test for {level}...")
+                results = t_test(
+                    table=tables[level], 
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats[table_type]['t_test'][level] = results
+        
+        if self.cfg['stats'][table_type].get('mwu_bonferroni', False):
+            self.stats[table_type]['mwu_bonferroni'] = {}
+            for level in tables:
+                logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
+                results = mwu_bonferroni(
+                    table=tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status',
+                    col_values=[True, False]
+                )
+                self.stats[table_type]['mwu_bonferroni'][level] = results
+        
+        if self.cfg['stats'][table_type].get('kruskal_bonferroni', False):
+            self.stats[table_type]['kruskal_bonferroni'] = {}
+            for level in tables:
+                logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
+                results = kruskal_bonferroni(
+                    table=tables[level],
+                    metadata=self.meta,
+                    col='nuclear_contamination_status'
+                )
+                self.stats[table_type]['kruskal_bonferroni'][level] = results
+
+        # Save statistical results
+        stats_dir = Path(self.project_dir.tables) / 'stats' / table_type
+        stats_dir.mkdir(parents=True, exist_ok=True)
+        
+        for test_type in self.stats[table_type]:
+            test_dir = stats_dir / test_type
+            test_dir.mkdir(exist_ok=True)
+            for level in self.stats[table_type][test_type]:
+                df = self.stats[table_type][test_type][level]
+                output_path = test_dir / f"{level}_results.tsv"
+                df.to_csv(output_path, sep='\t', index=True)
+
+    def _top_features(
+        self, 
+        table_type: str = 'presence_absence'    
+    ):
+        # Find top features
+        contaminated_features = []
+        pristine_features = []
+        
+        self.stats[table_type] = {}
+        tables = self._fetch_tables(table_type)
+        
+        for test_type in self.stats[table_type]:
+            for level in self.stats[table_type][test_type]:
+                df = self.stats[table_type][test_type][level]
+                sig_df = df[df['q_value'] < 0.05]
+                for feature, row in sig_df.iterrows():
+                    effect = row.get('mean_diff', row.get('effect_size', 0))
+                    if effect > 0:
+                        contaminated_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': effect,
+                            'q_value': row['q_value']
+                        })
+                    else:
+                        pristine_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': abs(effect),
+                            'q_value': row['q_value']
+                        })
+
+        # Process and save top features
+        top_dir = Path(self.project_dir.tables) / 'stats' / 'top_features'
+        top_dir.mkdir(parents=True, exist_ok=True)
+        
+        def _process_features(feature_list):
+            if not feature_list:
+                return pd.DataFrame()
+            df = pd.DataFrame(feature_list)
+            return df.sort_values(['effect', 'q_value'], ascending=[False, True]).head(20)
+
+        top_contam = _process_features(contaminated_features)
+        top_pristine = _process_features(pristine_features)
+
+        top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
+        top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
+
+"""
+class AmpliconData:
+    '''
     Main class for handling amplicon sequencing data analysis.
     
     Attributes:
@@ -360,7 +408,7 @@ class AmpliconData:
         taxa: Taxonomy information
         tables: Dictionary of collapsed tables by level
         presence_absence_tables: PA tables by taxonomic level
-    """
+    '''
     def __init__(
         self, 
         cfg,
@@ -388,10 +436,8 @@ class AmpliconData:
             table_dir = 'table_6'
             output_dir = 'l6'
 
-        self.BIOM_PATTERN = '/'.join([
-            'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
-            'FWD_*_REV_*', table_dir, 'feature-table.biom'
-        ])
+        table_paths, meta_path = get_amplicon_data_paths(project_dir, table_dir)
+        
         self.output_path = Path(self.project_dir.main) / 'data' / 'merged' / output_dir / 'feature-table.biom'
         self._get_metadata()
 
@@ -424,7 +470,7 @@ class AmpliconData:
 
         self._plot_pca()
         self._plot_tsne()
-        self.stats = {}
+        
 
         self.stats['presence_absence'] = {}
 
@@ -707,7 +753,7 @@ class AmpliconData:
         return df
 
 
-
+"""
 def import_metadata_tsv(
     tsv_path: Union[str, Path], 
     index_col: str = '#SampleID'
