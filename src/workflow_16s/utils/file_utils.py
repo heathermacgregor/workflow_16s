@@ -325,21 +325,24 @@ class AmpliconData:
                 self.verbose
             )
         
-        # Keep genus table in original orientation (taxa-as-rows)
-        self.tables['genus'] = self.table  # Removed .T transpose
+        # Keep genus table in original BIOM format
+        self.tables['genus'] = self.table
     
         if self.cfg['presence_absence']:
             for level in self.tables:
-                # Get the table in taxa-as-rows orientation
-                taxa_as_rows = self.tables[level]
+                # Convert BIOM Table to DataFrame first
+                table_df = self.tables[level].to_dataframe().T  # Transpose to samples x features
                 
-                # Convert to presence/absence while maintaining orientation
-                self.presence_absence_tables[level] = presence_absence(
-                    taxa_as_rows,  # Input is taxa x samples
+                # Create presence/absence table
+                pa_table = presence_absence(
+                    table_df,  # Input is now DataFrame with samples as rows
                     level,
                     Path(self.project_dir.tables) / 'merged',
                     self.verbose
-                ).T
+                )
+                
+                # Store as DataFrame
+                self.presence_absence_tables[level] = pa_table
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
 
