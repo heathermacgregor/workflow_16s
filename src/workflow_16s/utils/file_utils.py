@@ -318,7 +318,7 @@ class AmpliconData:
     def _genus_mode(self):
         for level in ['phylum', 'class', 'order', 'family']:
             self.tables[level] = collapse_taxa(
-                self.table, 
+                self.table.T, 
                 level, 
                 Path(self.project_dir.tables) / 'merged',
                 self.verbose
