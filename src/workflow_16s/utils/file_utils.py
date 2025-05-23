@@ -21,7 +21,7 @@ from workflow_16s.utils import df_utils
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
 from workflow_16s.stats import beta_diversity 
-from workflow_16s.stats.utils import preprocess_table
+from workflow_16s.stats.utils import preprocess_table, mwu_bonferroni, kruskal_bonferroni
 
 logger = logging.getLogger('workflow_16s')
 
