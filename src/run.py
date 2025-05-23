@@ -52,6 +52,9 @@ import workflow_16s.custom_tmp_config
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
+pd.set_option('display.max_colwidth', None)
+pd.set_option('future.no_silent_downcasting', True)
+
 # ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_CONFIG = (
