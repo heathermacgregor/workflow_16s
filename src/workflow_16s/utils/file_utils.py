@@ -238,13 +238,56 @@ class AmpliconData:
     def _get_biom_table(self):
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
+            raise FileNotFoundError(
+                f"No BIOM files found matching {self.BIOM_PATTERN}"
+            )   
         self.table = import_merged_table_biom(
             biom_paths, 
             'dataframe',
             self.output_path,
             self.verbose
         )
+
+    def _process_meta_path(
+        self, 
+        csv_path: Path, 
+        column_renames: List[Tuple[str, str]]
+    ) -> pd.DataFrame:
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
+            
+        df = pd.read_csv(csv_path, sep='\t')
+        df.columns = df.columns.str.lower()
+        
+        sample_id_col = next(
+            (col for col in ['run_accession', '#sampleid', 'sample-id'] 
+             if col in df.columns), 
+            None
+        )
+        if sample_id_col:
+            df['SAMPLE ID'] = df[sample_id_col]
+        else:
+            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" 
+                               for i in range(1, len(df)+1)]
+            
+        dataset_id_col = next(
+            (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
+             if col in df.columns), 
+            None
+        )
+        if dataset_id_col:
+            df['DATASET ID'] = df[dataset_id_col]
+        else:
+            df['DATASET ID'] = Path(csv_path).parents[5].name
+            
+        if 'nuclear_contamination_status' not in df.columns:
+            df['nuclear_contamination_status'] = False
+
+        for old, new in column_renames:
+            if old in df.columns:
+                df.rename(columns={old: new}, inplace=True)
+                
+        return df
     
     def _get_metadata(self):
         meta_dfs = []
