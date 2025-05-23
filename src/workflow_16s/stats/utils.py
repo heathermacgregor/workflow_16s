@@ -270,7 +270,7 @@ def t_test(
     
     Args:
         table:      Input abundance table (samples x features).
-        metadata:   Sample metadata DataFrame with index matching the table.
+        metadata:   Sample metadata DataFrame (must contain the same samples as the table).
         col:        Metadata column containing group labels.
         col_values: Two group identifiers to compare.
         
@@ -279,73 +279,62 @@ def t_test(
     """
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)  # Ensure this function is defined
+        table = table_to_dataframe(table)
     
-    # Check for column name conflict before joining
+    # Sanitize indices (critical fix)
+    table.index = table.index.astype(str).str.strip().str.lower()
+    metadata = metadata.copy()  # Avoid modifying original metadata
+    metadata.index = metadata.index.astype(str).str.strip().str.lower()
+
+    # Check for column name conflict
     if col in table.columns:
-        raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
-     
-    # Check for index overlap
+        raise ValueError(f"Column '{col}' already exists in table. Choose different group column.")
+
+    # Validate index alignment
     common_indices = table.index.intersection(metadata.index)
-    if not common_indices.empty:
-        logger.info(f"Common indices count: {len(common_indices)}")
-    else:
-        raise ValueError("No common indices between table and metadata. Check metadata index alignment.")
-    
-    # Merge metadata column into the table
+    if not common_indices.size:
+        logger.error(f"Table samples: {table.index.tolist()[:5]}...")
+        logger.error(f"Metadata samples: {metadata.index.tolist()[:5]}...")
+        raise ValueError("No common indices between table and metadata after sanitization.")
+
+    # Merge with sanitized indices
     table_with_col = table.merge(
         metadata[[col]], 
         left_index=True, 
         right_index=True, 
-        how='left'
+        how='inner'  # Stricter merge to exclude samples without metadata
     )
-    
-    # Check if the merged column has NaNs for all entries
-    if table_with_col[col].isna().all():
-        missing_total = table_with_col[col].isna().sum()
-        raise ValueError(
-            f"All values in merged column '{col}' are NaN. "
-            f"{missing_total} samples missing metadata. Ensure metadata index matches table index."
-        )
-    
-    # Log group distribution
-    logger.info(f"Group distribution in metadata:\n{metadata[col].value_counts()}")
-    logger.info(f"Merged group counts:\n{table_with_col[col].value_counts(dropna=False)}")
-    
+
+    # Validate successful merge
+    if table_with_col[col].isna().any():
+        missing = table_with_col[col].isna().sum()
+        raise ValueError(f"{missing} samples have NaN in '{col}' after merge. Check metadata completeness.")
+
+    # Rest of the t-test logic remains unchanged
     results = []
     for feature in table_with_col.columns.drop(col):
-        # Subset groups using boolean masks
         mask_group1 = (table_with_col[col] == col_values[0])
         mask_group2 = (table_with_col[col] == col_values[1])
-        
-        logger.debug(
-            f"Comparing groups: {col_values[0]} (n={mask_group1.sum()}), "
-            f"{col_values[1]} (n={mask_group2.sum()})"
-        )
         
         group1_values = table_with_col.loc[mask_group1, feature].dropna()
         group2_values = table_with_col.loc[mask_group2, feature].dropna()
         
-        # Skip feature if either group has no data
         if len(group1_values) < 1 or len(group2_values) < 1:
             continue
-        
-        t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=False)  # Welch’s t-test
-        
-        results.append({
-            'feature': feature,
-            't_statistic': t_stat,
-            'p_value': p_val
-        })
+            
+        t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=False)
+        results.append({'feature': feature, 't_statistic': t_stat, 'p_value': p_val})
     
+    # Results processing
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
+        logger.error(f"No features passed t-test for {col_values} in '{col}'")
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
-    return results_df
+    return results_df[
+        results_df['p_value'].notna() & 
+        (results_df['p_value'] > 0)
+    ].sort_values('p_value')
     
 
 
