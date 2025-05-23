@@ -403,7 +403,7 @@ class AmpliconData:
                 collapsed_table = collapse_taxa(
                     self.table, 
                     level, 
-                    self.project_dir.data_merged,
+                    Path(project_dir.main) / 'data' / 'merged',
                     self.verbose
                 )
                 self.tables[level] = collapsed_table
@@ -414,7 +414,7 @@ class AmpliconData:
                     pa = presence_absence(
                         self.tables[level], 
                         level, 
-                        self.project_dir.data_merged,
+                        Path(project_dir.main) / 'data' / 'merged',
                         self.verbose
                     )
                     self.presence_absence_tables[level] = pa
