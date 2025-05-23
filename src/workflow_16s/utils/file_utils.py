@@ -674,7 +674,11 @@ class AmpliconData:
         """Rank features by consistency and effect size."""
         ranked = sorted(
             features.items(),
-            key=lambda x: (-x[1]['count'], -np.mean(np.abs(x[1]['effects'])))
+            key=lambda x: (
+                -x[1]['count'], 
+                -np.mean(np.abs(x[1]['effects']))
+                        )
+            )
         return [{
             'feature': name,
             'test_count': info['count'],
