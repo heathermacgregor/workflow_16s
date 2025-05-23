@@ -225,7 +225,7 @@ class AmpliconData:
     def _get_meta_paths(self) -> List:
         meta_paths = []
         for biom_path in self._get_biom_paths():
-            parts = Path(biom_path).parts[
+            parts = Path(biom_path).parts
             if parts[0] == os.sep or parts[0] == '':
                 parts = parts[1:]  # remove root
             meta_path = str(
