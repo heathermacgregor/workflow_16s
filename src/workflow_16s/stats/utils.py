@@ -304,7 +304,7 @@ def t_test(
         right_index=True, 
         how='inner'  # Stricter merge to exclude samples without metadata
     )
-
+    logger.info(table_with_col[col])
     # Validate successful merge
     if table_with_col[col].isna().any():
         missing = table_with_col[col].isna().sum()
