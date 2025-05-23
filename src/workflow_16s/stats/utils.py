@@ -50,7 +50,6 @@ def table_to_dataframe(
         df = pd.DataFrame(table)               # Samples × features 
     else:
         raise TypeError("Input must be a BIOM Table or dictionary.")
-    logger.info(df.index)
     return df
 
 def filter_table(
@@ -296,9 +295,10 @@ def t_test(
         right_index=True, 
         how='left'
     )
-    logger.info(table_with_col.index)
+    for i in table_with_col.columns:
+        logger.info(i)
     logger.info(metadata[col].value_counts())  
-    logger.info(table_with_col[col].value_counts())
+    logger.info(table_with_col[col])
     
     results = []
     for feature in table_with_col.columns.drop(col):
