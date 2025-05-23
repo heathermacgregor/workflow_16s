@@ -306,7 +306,7 @@ def t_test(
             't_statistic': t_stat,
             'p_value': p_val
         })
-    
+    print(results)
     results_df = pd.DataFrame(results)
     # Discard rows with p_value = 0 or NaN
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
