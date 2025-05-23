@@ -284,14 +284,9 @@ def t_test(
     # Check for column name conflict before joining
     if col in table.columns:
         raise ValueError(f"Column '{col}' already exists in the table. Choose a different group column name.")
-    print(metadata.head())
-    print(table.head())
-    """
-    # Join metadata group column to the table
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
-    )
+        
+    table_with_col = table.join(metadata[[col]], how='inner') 
+    print(table_with_col.head())
     
     results = []
     for feature in table_with_col.columns.drop(col):
@@ -325,7 +320,7 @@ def t_test(
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
     results_df.sort_values('p_value', inplace=True)
     return results_df
-    """
+    
 
 
 def mwu_bonferroni(
@@ -355,11 +350,8 @@ def mwu_bonferroni(
         raise ValueError(f"Column '{col}' already exists in the table.")
     
     # Join metadata with inner alignment
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
-    )
-    print(table.shape)
+    table_with_col = table.join(metadata[[col]], how='inner') 
+    print(table_with_col.head())
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_col.columns.drop(col))
@@ -440,11 +432,8 @@ def kruskal_bonferroni(
         raise ValueError(f"Column '{col}' already exists in the table.")
     
     # Join metadata with inner alignment
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
-    )
-    print(table.shape)
+    table_with_col = table.join(metadata[[col]], how='inner') 
+    print(table_with_col.head())
     
     # Get unique groups if col_values not specified
     if col_values is None:
@@ -519,12 +508,8 @@ def variability_explained(
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
 
-    table_with_col = table.join(metadata[[col]])
-    table_with_col = table.copy()
-    table_with_col[col] = table_with_col.index.map(
-        metadata[col]
-    )
-    print(table.shape)
+    table_with_col = table.join(metadata[[col]], how='inner') 
+    print(table_with_col.head())
     
     # Extract explanatory variable
     explanatory_variable = table_with_col[col].values.reshape(-1, 1)
