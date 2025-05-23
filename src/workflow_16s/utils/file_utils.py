@@ -135,8 +135,10 @@ def processed_dataset_files(
     """
     classifier = cfg["classifier"]
     base_dir = (
-        Path(dirs.qiime_data_per_dataset) / dataset / params['instrument_platform'].lower() / 
-        params['library_layout'].lower() / params['target_subfragment'].lower() / 
+        Path(dirs.qiime_data_per_dataset) / dataset / 
+        params['instrument_platform'].lower() / 
+        params['library_layout'].lower() / 
+        params['target_subfragment'].lower() / 
         f"FWD_{params['pcr_primer_fwd_seq']}_REV_{params['pcr_primer_rev_seq']}"
     )
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -197,7 +199,10 @@ class AmpliconData:
             self.table_dir = 'table_6'
             self.output_dir = 'l6'
         
-        self.output_path = Path(self.project_dir.main) / 'data' / 'merged' / self.output_dir / 'feature-table.biom'
+        self.output_path = (
+            Path(self.project_dir.data) / 'merged' / self.output_dir / 
+            'feature-table.biom'
+        )
 
         self._get_metadata()
         self._get_biom_table()
@@ -234,7 +239,8 @@ class AmpliconData:
         
             parts = biom_path.parts
             meta_path = str(
-                Path(self.project_dir.metadata_per_dataset) / '/'.join(list(parts[-5:-1]))
+                Path(self.project_dir.metadata_per_dataset) / 
+                '/'.join(list(parts[-6:-1]))
             ) + '/sample-metadata.tsv'        
             meta_paths.append(meta_path)
         logger.info(f"Found {len(meta_paths)} unique metadata files.")
