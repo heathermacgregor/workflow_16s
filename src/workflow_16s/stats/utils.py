@@ -292,8 +292,6 @@ def t_test(
     #)
     
     print(table_with_col.head())
-    if table_with_col.shape[0] == 0:
-        break
     
     results = []
     for feature in table_with_col.columns.drop(col):
