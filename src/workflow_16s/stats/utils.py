@@ -285,7 +285,7 @@ def t_test(
     # Join metadata group column to the table
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
-        metadata.set_index('#SampleID')[col]
+        metadata[col]
     )
     print(table.shape)
     
@@ -346,7 +346,7 @@ def mwu_bonferroni(
     # Join metadata with inner alignment
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
-        metadata.set_index('#SampleID')[col]
+        metadata[col]
     )
     print(table.shape)
     
@@ -426,7 +426,7 @@ def kruskal_bonferroni(
     # Join metadata with inner alignment
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
-        metadata.set_index('#SampleID')[col]
+        metadata[col]
     )
     print(table.shape)
     
@@ -501,7 +501,7 @@ def variability_explained(
     table_with_col = table.join(metadata[[col]])
     table_with_col = table.copy()
     table_with_col[col] = table_with_col.index.map(
-        metadata.set_index('#SampleID')[col]
+        metadata[col]
     )
     print(table.shape)
     
