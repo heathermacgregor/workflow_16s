@@ -392,7 +392,7 @@ class AmpliconData:
             'data', 'per_dataset', 'qiime', '*', '*', '*', '*', 
             'FWD_*_REV_*', table_dir, 'feature-table.biom'
         ])
-        self.output_path = self.project_dir.data_merged / output_dir / 'feature-table.biom'
+        self.output_path = Path(project_dir.main) / 'data' / 'merged' / output_dir / 'feature-table.biom'
         self._get_metadata()
 
         self._plot_sample_map()
