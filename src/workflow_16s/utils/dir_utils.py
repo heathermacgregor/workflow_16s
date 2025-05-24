@@ -8,8 +8,10 @@ import shutil
 import pandas as pd
 
 import logging
-logger = logging.getLogger('workflow_16s')
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
