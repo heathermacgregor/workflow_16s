@@ -21,6 +21,16 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from umap import UMAP
 import logging
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    track,
+)
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
