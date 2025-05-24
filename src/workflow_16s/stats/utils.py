@@ -684,7 +684,10 @@ def variability_explained(
     # Validate successful merge
     if table_with_col[col].isna().any():
         missing = table_with_col[col].isna().sum()
-        raise ValueError(f"{missing} samples have NaN in '{col}' after merge. Check metadata completeness.")
+        raise ValueError(
+            f"{missing} samples have NaN in '{col}' after merge. "
+            f"Check metadata completeness."
+        )
     
     # Extract explanatory variable
     explanatory_variable = table_with_col[col].values.reshape(-1, 1)
@@ -711,7 +714,7 @@ def variability_explained(
               'r^2': r2
             })
         except Exception as e:
-            print(f"Skipping feature '{feature}' due to error: {e}")
+            logger.error(f"Skipping feature '{feature}' due to error: {e}")
             continue
     
     results = pd.DataFrame(results).sort_values(by='r^2', ascending=False)
