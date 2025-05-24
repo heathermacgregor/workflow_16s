@@ -26,6 +26,7 @@ from rich.progress import (
     MofNCompleteColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
