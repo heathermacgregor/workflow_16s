@@ -185,7 +185,7 @@ def variability_explained(
     task_desc = f"[bold cyan]R² Analysis[/] ({level or 'all features'})"
     task_id = progress.add_task(
         description=task_desc,
-        total=len(features)),
+        total=len(features),
         parent=parent_task_id
     )
 
