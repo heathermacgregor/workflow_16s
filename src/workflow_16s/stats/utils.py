@@ -70,6 +70,39 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     if isinstance(table, dict):
         return pd.DataFrame(table)
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
+
+
+def merge_table_with_metadata(
+    table: pd.DataFrame,
+    metadata: pd.DataFrame, 
+    group_column: str
+) -> pd.DataFrame:
+    """Merge abundance table with metadata column after index sanitization."""
+    # Make copies to avoid modifying originals
+    table = table.copy().reset_index()
+    metadata = metadata[[group_column]].copy().reset_index()
+    
+    # Sanitize IDs by stripping whitespace and converting to lowercase
+    table['index'] = table['index'].astype(str).str.strip().str.lower()
+    metadata['index'] = metadata['index'].astype(str).str.strip().str.lower()
+    
+    # Perform merge
+    merged = pd.merge(
+        table,
+        metadata,
+        on='index',
+        how='inner'
+    ).set_index('index')
+    
+    # Validate merge
+    if merged[group_column].isna().any():
+        missing = merged[group_column].isna().sum()
+        raise ValueError(
+            f"{missing} samples have NaN in '{group_column}' after merge. "
+            "Check metadata completeness."
+        )
+        
+    return merged
     
 
 def filter_table(
