@@ -368,7 +368,10 @@ class AmpliconData:
             for level in tables:
                 logger.info(f"Running t-test for {level}...")
                 # Convert sparse to dense for calculations
-                dense_table = tables[level].sparse.to_dense() if tables[level].dtype.any().name.startswith('Sparse') else tables[level]
+                if tables[level].dtypes.astype(str).str.startswith('Sparse').any():
+                    dense_table = tables[level].sparse.to_dense()
+                else:
+                    dense_table = tables[level]
                 results = t_test(
                     table=dense_table,  # Use dense version
                     metadata=self.meta,
@@ -382,7 +385,10 @@ class AmpliconData:
             for level in tables:
                 logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
                 # Convert sparse to dense for calculations
-                dense_table = tables[level].sparse.to_dense() if tables[level].dtypes.any().name.startswith('Sparse') else tables[level]
+                if tables[level].dtypes.astype(str).str.startswith('Sparse').any():
+                    dense_table = tables[level].sparse.to_dense()
+                else:
+                    dense_table = tables[level]
                 results = mwu_bonferroni(
                     table=dense_table,  # Use dense version
                     metadata=self.meta,
