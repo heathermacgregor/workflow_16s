@@ -442,6 +442,7 @@ class AmpliconData:
             main_task = progress.add_task(
                 f"[bold green]Analyzing {table_type.replace('_', ' ').title()}",
                 total=len(enabled_tests)*len(tables)
+            )
             
             # Statistical tests
             test_handlers = {
