@@ -478,9 +478,6 @@ class AmpliconData:
         contaminated_features = []
         pristine_features = []
         
-        # REMOVE THE FOLLOWING LINE TO PREVENT OVERWRITING STATS
-        # self.stats[table_type] = {}  # <--- THIS LINE IS THE ISSUE
-        
         tables = self._fetch_tables(table_type)
         
         # Ensure the stats for the table_type exist
