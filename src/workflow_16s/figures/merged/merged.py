@@ -28,7 +28,7 @@ from workflow_16s.figures.figures import (
     plot_legend,
 )
 
-# ================================= GLOBAL VARIABLES ================================= #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 sns.set_style('whitegrid')  # Set seaborn style globally
 logger = logging.getLogger('workflow_16s')
@@ -56,8 +56,9 @@ def _prepare_visualization_data(
     common_idx = components.index.intersection(metadata.index)
     metadata = metadata.loc[common_idx].copy()
     components = components.loc[common_idx].copy()
-    
-    metadata = metadata.dropna(subset=[color_col, symbol_col], how='all').fillna(placeholder)
+    metadata = metadata.dropna(
+        subset=[color_col, symbol_col], how='all'
+    ).fillna(placeholder)
     return components.join(metadata[[color_col, symbol_col]], how='inner')
   
 
@@ -83,7 +84,12 @@ def _create_scatter_figure(
     )
     fig.update_traces(
         marker_size=marker_size,
-        marker=dict(line=dict(width=0.1, color='black'))
+        marker=dict(
+            line=dict(
+                width=0.1, 
+                color='black'
+            )
+        )
     )
     return fig
   
@@ -112,7 +118,7 @@ def _configure_axes(
         mirror=mirror,
         automargin=True
     )
-
+# ==================================== FUNCTIONS ===================================== #
 def sample_map_categorical(
     metadata: pd.DataFrame, 
     show: bool = False,
@@ -124,10 +130,44 @@ def sample_map_categorical(
     lat: str = 'latitude_deg', 
     lon: str = 'longitude_deg',
     color_col: str = 'dataset_name',
-):
-    """"""
-    metadata[color_col] = metadata[color_col].replace('', np.nan)  # first convert empty strings to NaN
-    metadata[color_col] = metadata[color_col].fillna('other')      # then fill NaN with ''
+    limit_axes: bool = False,
+    verbose: bool = False
+) -> Tuple[go.Figure, Any]:
+    """
+    Generate an interactive geographical map of samples colored by categorical 
+    metadata.
+
+    Args:
+        metadata:         DataFrame containing sample metadata with coordinates.
+        show:             Whether to display the figure immediately. Defaults 
+                          to False.
+        output_dir:       Directory to save figure/legend. Defaults to None.
+        projection_type:  Geo projection style. Defaults to 'natural earth'.
+        height:           Figure height in pixels. Defaults to 800.
+        size:             Marker size for samples. Defaults to 5.
+        opacity:          Marker opacity (0-1). Defaults to 0.3.
+        lat:              Metadata column containing latitude values. Defaults 
+                          to 'latitude_deg'.
+        lon:              Metadata column containing longitude values. Defaults 
+                          to 'longitude_deg'.
+        color_col:        Metadata column for color grouping. Defaults to 
+                          'dataset_name'.
+        limit_axes:       Toggle to limit axes by the present data points.
+        verbose:
+
+    Returns:
+        Tuple containing:
+        - Plotly Figure object with geographical sample distribution
+        - Dictionary mapping categories to assigned colors
+
+    Notes:
+        - Handles missing values by filling with 'other' category
+        - Automatically generates and saves legend when output_dir is specified
+        - Logs color assignments for tracking category-color relationships
+    """
+    # Convert empty strings in 'color_col' to NaN, then 'other'
+    metadata[color_col] = metadata[color_col].replace('', np.nan) 
+    metadata[color_col] = metadata[color_col].fillna('other')      
     metadata = metadata.sort_values(by=color_col, ascending=True)
     
     # Group by 'color_col' and count samples
@@ -138,12 +178,13 @@ def sample_map_categorical(
     metadata = metadata.merge(cat_counts, on=color_col, how='left')
 
     # Create a color mapping for datasets
-    color_mapping = {c: largecolorset[i % len(largecolorset)] 
-                     for i, c in enumerate(cat_counts[color_col])}
-    
-    # Print the assigned colors
-    for cat, assigned_color in color_mapping.items():
-        logger.info(f"[{assigned_color}]    {cat}")
+    colordict = {c: largecolorset[i % len(largecolorset)] 
+                 for i, c in enumerate(cat_counts[color_col])}
+
+    if verbose:
+        # Print the assigned colors
+        for cat, assigned_color in colordict.items():
+            logger.info(f"[{assigned_color}]    {cat}")
         
     #legend = plot_legend(color_mapping, color_col)
     
@@ -153,7 +194,7 @@ def sample_map_categorical(
         lat=lat, 
         lon=lon, 
         color=color_col, 
-        color_discrete_map=color_mapping,  
+        color_discrete_map=colordict,  
         hover_name=color_col, 
         hover_data={'sample_count': True}  
     )
@@ -165,14 +206,19 @@ def sample_map_categorical(
         showland=True, landcolor="#e8e8e8",
         showlakes=True, lakecolor="#fff",
         showrivers=True, rivercolor="#fff",
-        # Set axis limits based on the range of latitude and longitude values
-        #lonaxis_range=[metadata[lon].min() - 20, metadata[lon].max() + 20], 
-        #lataxis_range=[metadata[lat].min() - 20, metadata[lat].max() + 20]
     )
+    if limit_axes:
+        # Set axis limits based on the range of latitude and longitude values
+        fig.update_geos(
+            lonaxis_range=[metadata[lon].min() - 20, 
+                           metadata[lon].max() + 20], 
+            lataxis_range=[metadata[lat].min() - 20, 
+                           metadata[lat].max() + 20]
+        )
     
     fig.update_layout(
         template='heather',
-        margin=dict(l=5, r=5, t=5, b=5), # Set the layout with increased width and height
+        margin=dict(l=5, r=5, t=5, b=5), # Increase width and height
         showlegend=False, 
         font_size=12
     )  
@@ -185,10 +231,9 @@ def sample_map_categorical(
         output_path = Path(output_dir) / f"sample_map.{color_col}"
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
 
-        colordict = color_mapping
         legend_path = Path(output_dir) / f'legend.{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
-    return fig, color_mapping#, legend
+    return fig, colordict#, legend
     
 
 def heatmap_feature_abundance(
@@ -607,7 +652,9 @@ def violin_feature(
 
     if output_dir:
         plotly_show_and_save(
-            fig, show, Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'.lower()
+            fig, 
+            show, 
+            Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'.lower()
         )
     
     return fig
@@ -671,10 +718,13 @@ def ancom(
 
     if output_dir:
         plotly_show_and_save(
-            fig, show, Path(output_dir) / 'ancom' / f"ancom.{feature_type.lower()}"
+            fig, 
+            show, 
+            Path(output_dir) / 'ancom' / f"ancom.{feature_type.lower()}"
         )
         plot_legend(
-            colordict, color_col, 
+            colordict, 
+            color_col, 
             Path(output_dir) / 'ancom' / f'legend.{feature_type.lower()}.png'
         )
     
@@ -720,7 +770,9 @@ def plot_correlation_matrix(
 
     if output_dir:
         plotly_show_and_save(
-            fig, show, Path(output_dir) / 'correlation' / f"correlation.{feature_type.lower()}"
+            fig, 
+            show, 
+            Path(output_dir) / 'correlation' / f"correlation.{feature_type.lower()}"
         )
     
     return fig
