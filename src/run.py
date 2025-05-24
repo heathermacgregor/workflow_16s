@@ -570,14 +570,8 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=True
     )
-    print(data.meta['nuclear_contamination_status'].value_counts())
-    print(data.stats)
-    #data.tables
-    #data.presence_absence_tables 
-    #data.meta
-    figures["sample_map"] = []
-    #figures["pca"] = []
-    #figures["pcoa"] = []
+    #print(data.meta['nuclear_contamination_status'].value_counts())
+    #print(data.stats)
     #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
     
 
