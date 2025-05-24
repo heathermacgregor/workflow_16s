@@ -427,11 +427,7 @@ def mwu_bonferroni(
 
     
     # Total features tested (for Bonferroni)
-    total_features = len(table_with_col.columns.drop(col))
-    threshold = 0.01 / total_features
-    
-    results = []
-     features = table_with_col.columns.drop(col)
+    features = table_with_col.columns.drop(col)
     total_features = len(features)
     threshold = 0.01 / total_features
     
