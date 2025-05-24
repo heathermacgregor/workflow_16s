@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from functools import reduce
 
 # Third-Party Imports
 import h5py
@@ -465,11 +466,13 @@ class AmpliconData:
         if table_type not in self.stats:
             logger.warning(f"No statistical results found for {table_type}.")
             return
-        
-        for test_type in self.stats[table_type]:
-            for level in self.stats[table_type][test_type]:
-                df = self.stats[table_type][test_type][level]
-                # Check if 'q_value' exists to avoid KeyError
+        for level in self.stats[table_type][test_type]:
+            dfs = [self.stats[table_type][test_type][level] for test_type in self.stats[table_type]]
+            # Merge list of DataFrames on 'feature' using outer join
+            df = reduce(lambda left, right: pd.merge(left, right, on='feature', how='outer'), dfs)
+            logger.info(df.head())
+            
+            """
                 if 'q_value' not in df.columns:
                     logger.warning(f"'q_value' column missing in {test_type} results for {level}.")
                     continue
@@ -492,6 +495,7 @@ class AmpliconData:
                             'effect': abs(effect),
                             'q_value': row['q_value']
                         })
+                """
     
         # Process and save top features
         top_dir = Path(self.project_dir.tables) / 'stats' / 'top_features'
