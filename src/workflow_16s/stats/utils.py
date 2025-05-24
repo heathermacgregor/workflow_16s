@@ -365,135 +365,138 @@ def t_test(
     
 
 
+from typing import Union, List, Optional, Dict
+import pandas as pd
+from scipy.stats import mannwhitneyu
+import logging
+
+logger = logging.getLogger(__name__)
+
 def mwu_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
+    table: Union[Dict, 'Table', pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str = DEFAULT_GROUP_COLUMN,
-    col_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
+    col: str,
+    col_values: List[Union[bool, int, str]],
+    progress: Optional['Progress'] = None,
+    parent_task_id: Optional['TaskID'] = None,
     level: Optional[str] = None
 ) -> pd.DataFrame:
     """
     Performs Mann-Whitney U tests with Bonferroni correction for two groups.
-    
+
     Args:
         table:      Input abundance table (samples x features).
         metadata:   Sample metadata DataFrame.
         col:        Metadata column containing group labels.
         col_values: Two group identifiers to compare.
-        
+        progress:   Optional progress reporter.
+        parent_task_id: Optional parent task ID for progress.
+        level:      Optional feature level label for progress.
+
     Returns:
-        results:    Results with p-values below Bonferroni-corrected threshold.
+        A DataFrame of features with Bonferroni-corrected p-values below threshold.
     """
     # Convert input to DataFrame if necessary
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
-    
-    # Sanitize indices (critical fix)
+
+    # Sanitize indices
     table.index = table.index.astype(str).str.strip().str.lower()
-    metadata = metadata.copy()  # Avoid modifying original metadata
+    metadata = metadata.copy()
     metadata.index = metadata.index.astype(str).str.strip().str.lower()
 
-    # Check for column name conflict
+    # Prevent column name conflicts
     if col in table.columns:
         raise ValueError(
-            f"Column '{col}' already exists in table. Choose different group column."
+            f"Column '{col}' already exists in the table. Choose a different group column."
         )
 
-    # Validate index alignment
+    # Align indices
     common_indices = table.index.intersection(metadata.index)
     if not common_indices.size:
         logger.error(f"Table samples: {table.index.tolist()[:5]}...")
         logger.error(f"Metadata samples: {metadata.index.tolist()[:5]}...")
-        logger.error("No common indices between table and metadata after sanitization.")
-        table = table.T
-        table.index = table.index.astype(str).str.strip().str.lower()
+        raise ValueError("No common indices between table and metadata after sanitization.")
 
-    # Merge with sanitized indices
+    # Merge table with group column
     table_with_col = table.merge(
-        metadata[[col]], 
-        left_index=True, 
-        right_index=True, 
-        how='inner'  # Stricter merge to exclude samples without metadata
+        metadata[[col]],
+        left_index=True,
+        right_index=True,
+        how='inner'
     )
-    # Validate successful merge
+
     if table_with_col[col].isna().any():
-        missing = table_with_col[col].isna().sum()
         raise ValueError(
-            f"{missing} samples have NaN in '{col}' after merge. "
+            f"{table_with_col[col].isna().sum()} samples have NaN in '{col}' after merge. "
             f"Check metadata completeness."
         )
 
-    
-    # Total features tested (for Bonferroni)
+    # Setup
     features = table_with_col.columns.drop(col)
     total_features = len(features)
     threshold = 0.01 / total_features
-    
+
     results = []
     subtask_id = None
-    
+
     try:
-        # Create transient subtask if progress available
-        if progress and parent_task_id is not None and level:
-            subtask_desc = f"[dim]├─ MWU: {level[:15]}..." if len(level) > 15 else f"[dim]├─ MWU: {level}"
+        # Add progress subtask if applicable
+        if progress and parent_task_id and level:
+            desc = f"[dim]├─ MWU: {level[:15]}..." if len(level) > 15 else f"[dim]├─ MWU: {level}"
             subtask_id = progress.add_task(
-                description=subtask_desc,
+                description=desc,
                 total=total_features,
                 parent=parent_task_id,
                 transient=True
             )
-            # Subset groups safely
-            mask_group1 = (table_with_col[col] == col_values[0])
-            mask_group2 = (table_with_col[col] == col_values[1])
-            
-            group1_values = table_with_col.loc[mask_group1, feature].dropna()
-            group2_values = table_with_col.loc[mask_group2, feature].dropna()
-            
-            # Skip features with empty groups
-            if len(group1_values) < 1 or len(group2_values) < 1:
-                continue
-            
-            # Perform MWU test
-            u_stat, p_val = mannwhitneyu(
-                group1_values, 
-                group2_values, 
-                alternative='two-sided'
-            )
-            
-            # Effect size and median difference
-            n1, n2 = len(group1_values), len(group2_values)
-            effect_size_r = 1 - (2 * u_stat) / (n1 * n2)
-            median_diff = group1_values.median() - group2_values.median()
 
-            if progress and subtask_id is not None:
-                progress.advance(subtask_id)
+        for feature in features:
+            # Select group values
+            mask1 = table_with_col[col] == col_values[0]
+            mask2 = table_with_col[col] == col_values[1]
+            group1 = table_with_col.loc[mask1, feature].dropna()
+            group2 = table_with_col.loc[mask2, feature].dropna()
+
+            if len(group1) < 1 or len(group2) < 1:
+                continue
+
+            # MWU test
+            u_stat, p_val = mannwhitneyu(group1, group2, alternative='two-sided')
+            n1, n2 = len(group1), len(group2)
+            effect_size_r = 1 - (2 * u_stat) / (n1 * n2)
+            median_diff = group1.median() - group2.median()
 
             results.append({
                 'feature': feature,
                 'u_statistic': u_stat,
-                # Cap p-values
                 'mwu_bonferroni_p_value': max(p_val, 1e-10),
                 'median_difference': median_diff,
                 'effect_size_r': effect_size_r
             })
+
+            if progress and subtask_id:
+                progress.advance(subtask_id)
+
     finally:
-        # Cleanup progress task
-        if progress and subtask_id is not None:
+        if progress and subtask_id:
             progress.remove_task(subtask_id)
-            
+
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
+        logger.error(f"No features passed the MWU test for groups {col_values} in column '{col}'")
         return pd.DataFrame(columns=['feature', 'u_statistic', 'mwu_bonferroni_p_value'])
 
-    results_df = results_df[(results_df['mwu_bonferroni_p_value'] != 0) & (results_df['mwu_bonferroni_p_value'].notna())]
+    results_df = results_df[
+        (results_df['mwu_bonferroni_p_value'] != 0) &
+        (results_df['mwu_bonferroni_p_value'].notna())
+    ]
     results_df.sort_values('mwu_bonferroni_p_value', inplace=True)
-    
-    # Apply Bonferroni threshold
+
+    # Filter with Bonferroni threshold
     results_filtered = results_df[results_df['mwu_bonferroni_p_value'] <= threshold]
     return results_filtered.sort_values('mwu_bonferroni_p_value')
+
 
 
 def kruskal_bonferroni(
