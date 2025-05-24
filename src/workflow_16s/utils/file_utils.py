@@ -17,6 +17,16 @@ import pandas as pd
 from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    track,
+)
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -37,6 +47,8 @@ from workflow_16s.figures.merged.merged import (
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
+
+DEFAULT_PROGRESS_TEXT_N = 50
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -362,49 +374,90 @@ class AmpliconData:
         table_type: str = 'presence_absence'
     ):
         self.stats[table_type] = {}
+        tables = self._fetch_tables(table_type)
         
-        tables = self._fetch_tables(table_type)   
-        
-        if self.cfg['stats'][table_type].get('t_test', False):
-            self.stats[table_type]['t_test'] = {}
-            for level in tables:
-                logger.info(f"Running t-test for {level}...")
-                # Convert sparse to dense for calculations
-                dense_table = tables[level]
-                results = t_test(
-                    table=dense_table,  # Use dense version
-                    metadata=self.meta,
-                    col='nuclear_contamination_status',
-                    col_values=[True, False]
-                )
-                self.stats[table_type]['t_test'][level] = results
-        
-        if self.cfg['stats'][table_type].get('mwu_bonferroni', False):
-            self.stats[table_type]['mwu_bonferroni'] = {}
-            for level in tables:
-                logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
-                # Convert sparse to dense for calculations
-                dense_table = tables[level]
-                results = mwu_bonferroni(
-                    table=dense_table,  # Use dense version
-                    metadata=self.meta,
-                    col='nuclear_contamination_status',
-                    col_values=[True, False]
-                )
-                self.stats[table_type]['mwu_bonferroni'][level] = results
-        
-        if self.cfg['stats'][table_type].get('kruskal_bonferroni', False):
-            self.stats[table_type]['kruskal_bonferroni'] = {}
-            for level in tables:
-                logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
-                results = kruskal_bonferroni(
-                    table=tables[level],
-                    metadata=self.meta,
-                    col='nuclear_contamination_status'
-                )
-                self.stats[table_type]['kruskal_bonferroni'][level] = results
+        # Calculate total steps
+        enabled_tests = [
+            test for test in ['t_test', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne']
+            if self.cfg['stats'][table_type].get(test, False)
+        ]
+        total_steps = len(enabled_tests) * len(tables)
 
-        # Save statistical results
+        with Progress(*self._create_progress_columns()) as progress:
+            main_task = progress.add_task(
+                "[white]Running statistical analyses...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                total=total_steps
+            )
+
+            # T-Test
+            if self.cfg['stats'][table_type].get('t_test', False):
+                self.stats[table_type]['t_test'] = {}
+                for level in tables:
+                    progress.update(main_task, advance=0.1, description=f"[cyan]T-Test: {level}")
+                    logger.info(f"Running t-test for {level}...")
+                    dense_table = tables[level]
+                    results = t_test(
+                        table=dense_table,
+                        metadata=self.meta,
+                        col='nuclear_contamination_status',
+                        col_values=[True, False]
+                    )
+                    self.stats[table_type]['t_test'][level] = results
+                    progress.update(main_task, advance=0.9)
+
+            # Mann-Whitney U with Bonferroni
+            if self.cfg['stats'][table_type].get('mwu_bonferroni', False):
+                self.stats[table_type]['mwu_bonferroni'] = {}
+                for level in tables:
+                    progress.update(main_task, advance=0.1, description=f"[magenta]Mann-Whitney U: {level}")
+                    logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
+                    dense_table = tables[level]
+                    results = mwu_bonferroni(
+                        table=dense_table,
+                        metadata=self.meta,
+                        col='nuclear_contamination_status',
+                        col_values=[True, False]
+                    )
+                    self.stats[table_type]['mwu_bonferroni'][level] = results
+                    progress.update(main_task, advance=0.9)
+
+            # Kruskal-Wallis with Bonferroni
+            if self.cfg['stats'][table_type].get('kruskal_bonferroni', False):
+                self.stats[table_type]['kruskal_bonferroni'] = {}
+                for level in tables:
+                    progress.update(main_task, advance=0.1, description=f"[yellow]Kruskal-Wallis: {level}")
+                    logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
+                    results = kruskal_bonferroni(
+                        table=tables[level],
+                        metadata=self.meta,
+                        col='nuclear_contamination_status'
+                    )
+                    self.stats[table_type]['kruskal_bonferroni'][level] = results
+                    progress.update(main_task, advance=0.9)
+
+            # PCA
+            if self.cfg['stats'][table_type].get('pca', False):
+                self.stats[table_type]['pca'] = {}
+                for level in tables:
+                    progress.update(main_task, advance=0.1, description=f"[green]PCA: {level}")
+                    logger.info(f"Calculating PCA ({level})...")
+                    meta, table, _ = df_utils.match_indices_or_transpose(self.meta, tables[level])
+                    pca_results = beta_diversity.pca(table=table, n_components=3)
+                    self.stats[table_type]['pca'][level] = pca_results
+                    progress.update(main_task, advance=0.9)
+
+            # t-SNE
+            if self.cfg['stats'][table_type].get('tsne', False):
+                self.stats[table_type]['tsne'] = {}
+                for level in tables:
+                    progress.update(main_task, advance=0.1, description=f"[blue]t-SNE: {level}")
+                    logger.info(f"Calculating t-SNE ({level})...")
+                    meta, table, _ = df_utils.match_indices_or_transpose(self.meta, tables[level])
+                    tsne_results = beta_diversity.tsne(table=table, n_components=3)
+                    self.stats[table_type]['tsne'][level] = tsne_results
+                    progress.update(main_task, advance=0.9)
+
+        # Save statistical results (same as before)
         stats_dir = Path(self.project_dir.tables) / 'stats' / table_type
         stats_dir.mkdir(parents=True, exist_ok=True)
         
@@ -416,38 +469,6 @@ class AmpliconData:
                 output_path = test_dir / f"{level}_results.tsv"
                 df.to_csv(output_path, sep='\t', index=True)
                 print(f"Saved results to {str(output_path)}")
-                
-
-        if self.cfg['stats'][table_type].get('pca', False):
-            self.stats[table_type]['pca'] = {}
-            for level in tables:
-                logger.info(f"Calculating PCA ({level})...")
-            
-                meta, table, _ = df_utils.match_indices_or_transpose(
-                    self.meta, 
-                    tables[level]
-                )
-                    
-                pca_results = beta_diversity.pca(
-                    table=table,
-                    n_components=3
-                )
-                self.stats[table_type]['pca'][level] = pca_results
-                
-        if self.cfg['stats'][table_type].get('tsne', False):
-            self.stats[table_type]['tsne'] = {}
-            for level in tables:
-                logger.info(f"Calculating TSNE ({level})...")
-        
-                meta, table, _ = df_utils.match_indices_or_transpose(
-                    self.meta, 
-                    tables[level]
-                )
-                tsne_results = beta_diversity.tsne(
-                    table=table,
-                    n_components=3
-                )
-                self.stats[table_type]['tsne'][level] = tsne_results
 
     def _top_features(
         self, 
@@ -569,7 +590,18 @@ class AmpliconData:
                     'figure': plot
                 })
         
-
+    @staticmethod
+    def _create_progress_columns():
+        return [
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("[white]•"),
+            TimeElapsedColumn(),
+            TextColumn("[white]•"),
+            TimeRemainingColumn(),
+        ]
 
 
 """
