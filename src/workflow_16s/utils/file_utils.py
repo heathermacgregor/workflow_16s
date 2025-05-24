@@ -227,6 +227,7 @@ class AmpliconData:
             self._top_features('presence_absence') 
 
     def _get_biom_paths(self) -> List:
+        """Get feature table BIOM paths from a pattern."""
         BIOM_PATTERN = '/'.join(
             ['*', '*', '*', '*', 'FWD_*_REV_*', self.table_dir, 'feature-table.biom']
         )
@@ -238,6 +239,7 @@ class AmpliconData:
         return biom_paths
         
     def _get_meta_paths(self) -> List:
+        """"""
         meta_paths = []
         for biom_path in self._get_biom_paths():
             biom_path = Path(biom_path)
@@ -326,7 +328,6 @@ class AmpliconData:
             )
             self.tables[level] = biom_table
         
-    
         if self.cfg['presence_absence']:
             for level in self.tables:
                 pa_table = presence_absence(
@@ -455,12 +456,23 @@ class AmpliconData:
         contaminated_features = []
         pristine_features = []
         
-        self.stats[table_type] = {}
+        # REMOVE THE FOLLOWING LINE TO PREVENT OVERWRITING STATS
+        # self.stats[table_type] = {}  # <--- THIS LINE IS THE ISSUE
+        
         tables = self._fetch_tables(table_type)
+        
+        # Ensure the stats for the table_type exist
+        if table_type not in self.stats:
+            logger.warning(f"No statistical results found for {table_type}.")
+            return
         
         for test_type in self.stats[table_type]:
             for level in self.stats[table_type][test_type]:
                 df = self.stats[table_type][test_type][level]
+                # Check if 'q_value' exists to avoid KeyError
+                if 'q_value' not in df.columns:
+                    logger.warning(f"'q_value' column missing in {test_type} results for {level}.")
+                    continue
                 sig_df = df[df['q_value'] < 0.05]
                 for feature, row in sig_df.iterrows():
                     effect = row.get('mean_diff', row.get('effect_size', 0))
@@ -480,7 +492,7 @@ class AmpliconData:
                             'effect': abs(effect),
                             'q_value': row['q_value']
                         })
-
+    
         # Process and save top features
         top_dir = Path(self.project_dir.tables) / 'stats' / 'top_features'
         top_dir.mkdir(parents=True, exist_ok=True)
@@ -490,10 +502,10 @@ class AmpliconData:
                 return pd.DataFrame()
             df = pd.DataFrame(feature_list)
             return df.sort_values(['effect', 'q_value'], ascending=[False, True]).head(20)
-
+    
         top_contam = _process_features(contaminated_features)
         top_pristine = _process_features(pristine_features)
-
+    
         top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
         logger.info(f"Saved top 20 features associated with contaminated environments to {str(top_dir / 'top20_contaminated.tsv')}")
         top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
