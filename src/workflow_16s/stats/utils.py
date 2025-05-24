@@ -579,12 +579,12 @@ def kruskal_bonferroni(
 
         for feature in features:
             # Collect data for all groups
-        groups = []
-        for group_val in col_values:
-            mask = (table_with_col[col] == group_val)
-            group_data = table_with_col.loc[mask, feature].dropna()
-            if len(group_data) > 0:  # Skip empty groups
-                groups.append(group_data)
+            groups = []
+            for group_val in col_values:
+                mask = (table_with_col[col] == group_val)
+                group_data = table_with_col.loc[mask, feature].dropna()
+                if len(group_data) > 0:  # Skip empty groups
+                    groups.append(group_data)
             
             # Skip feature if <2 groups have data
             if len(groups) < 2:
