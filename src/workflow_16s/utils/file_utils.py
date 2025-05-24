@@ -315,31 +315,28 @@ class AmpliconData:
             meta_dfs.append(meta_df)
         self.meta = pd.concat(meta_dfs)
         
-    def _genus_mode(self):
+    def _genus_mode(self):                
         # Collapse tables for higher taxonomic levels (returns BIOM Tables)
-        for level in ['phylum', 'class', 'order', 'family']:
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
             biom_table = collapse_taxa(
                 self.table, 
                 level, 
                 Path(self.project_dir.tables) / 'merged',
                 self.verbose
             )
-            # Convert to DataFrame immediately
-            self.tables[level] = biom_table.to_dataframe().T  # Samples x Features
+            self.tables[level] = biom_table
         
-        # Genus table is already a DataFrame (samples x features)
-        self.tables['genus'] = self.table.to_dataframe().T if isinstance(self.table, Table) else self.table.T
     
         if self.cfg['presence_absence']:
             for level in self.tables:
-                # All tables are now DataFrames with samples as rows
                 pa_table = presence_absence(
-                    self.tables[level],  # Input is DataFrame (samples x features)
+                    self.tables[level],  
                     level,
                     Path(self.project_dir.tables) / 'merged',
                     self.verbose
                 )
                 self.presence_absence_tables[level] = pa_table
+                
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
 
