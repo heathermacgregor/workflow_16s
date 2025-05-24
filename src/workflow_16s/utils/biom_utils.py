@@ -116,7 +116,7 @@ def collapse_taxa(
     with h5py.File(output_biom_path, 'w') as f:
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
     if verbose:
-        n_features, n_samples = table.shape
+        n_features, n_samples = collapsed_table.shape
         # Format into [x, y] string
         shape_str = f"[{n_features}, {n_samples}]"
         logger.info(
