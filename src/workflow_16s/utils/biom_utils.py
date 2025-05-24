@@ -30,6 +30,7 @@ from workflow_16s.figures.merged.merged import (
     sample_map_categorical, pcoa, pca, mds
 )
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
 
@@ -99,7 +100,9 @@ def collapse_taxa(
     id_map = {}
     for taxon in table.ids(axis='observation').astype(str):
         parts = taxon.split(';')
-        truncated = ';'.join(parts[:level_idx + 1]) if len(parts) >= level_idx + 1 else 'Unclassified'
+        truncated = ';'.join(
+            parts[:level_idx + 1]
+        ) if len(parts) >= level_idx + 1 else 'Unclassified'
         id_map[taxon] = truncated
 
     # Collapse table
@@ -111,13 +114,15 @@ def collapse_taxa(
     ).remove_empty()
 
     # Save output
-    output_biom_path = Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
+    output_biom_path = (
+        Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
+    )
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
         collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+        
     if verbose:
         n_features, n_samples = collapsed_table.shape
-        # Format into [x, y] string
         shape_str = f"[{n_features}, {n_samples}]"
         logger.info(
             f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
@@ -168,13 +173,15 @@ def presence_absence(
         pa_df_filtered.columns,
         table_id='Presence Absence BIOM Table'
     )
-    output_biom_path = Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
+    output_biom_path = (
+        Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
+    )
     output_biom_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_biom_path, 'w') as f:
         pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+        
     if verbose:
         n_features, n_samples = pa_table.shape
-        # Format into [x, y] string
         shape_str = f"[{n_features}, {n_samples}]"
         logger.info(
             f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
