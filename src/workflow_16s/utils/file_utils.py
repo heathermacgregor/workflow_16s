@@ -1124,7 +1124,7 @@ def import_merged_table_biom(
             n_features, n_samples = merged_table.shape
             # Format into [x, y] string
             shape_str = f"[{n_features}, {n_samples}]"
-            logger.info(f"Wrote table {shape_str} to {output_path}")
+            #logger.info(f"Wrote table {shape_str} to {output_path}")
 
     return merged_table if as_type == 'table' else merged_table.to_dataframe()
 
