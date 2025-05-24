@@ -61,6 +61,114 @@ DEFAULT_PSEUDOCOUNT = 1e-5
 
 # ================================ CORE FUNCTIONALITY ================================ #
 
+def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
+    """Convert BIOM Table/dict to samples × features DataFrame."""
+    if isinstance(table, pd.DataFrame):
+        return table
+    if isinstance(table, Table):
+        return table.to_dataframe(dense=True).T
+    if isinstance(table, dict):
+        return pd.DataFrame(table)
+    raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
+    
+
+def filter_table(
+    table: Union[Dict, Table, pd.DataFrame], 
+    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = DEFAULT_MIN_SAMPLES,
+    min_counts: int = DEFAULT_MIN_COUNTS
+) -> pd.DataFrame:
+    """Filter features and samples based on abundance thresholds."""
+    df = table_to_dataframe(table)
+    df = filter_features(df, min_rel_abundance, min_samples)
+    df = filter_samples(df, min_counts)
+    return df
+    
+
+def filter_features(
+    table: pd.DataFrame,
+    min_rel_abundance: float,
+    min_samples: int
+) -> pd.DataFrame:
+    """Filter features by relative abundance and sample presence."""
+    min_abs = min_rel_abundance / 100
+    feature_mask = (table.max(axis=0) >= min_abs) & (table.astype(bool).sum(axis=0) >= min_samples)
+    return table.loc[:, feature_mask]
+    
+
+def filter_samples(table: pd.DataFrame, min_counts: int) -> pd.DataFrame:
+    """Filter samples by total counts."""
+    sample_mask = table.sum(axis=1) >= min_counts
+    return table.loc[sample_mask]
+    
+
+def preprocess_table(
+    table: Union[Dict, Table, pd.DataFrame], 
+    apply_filter: bool = False,
+    normalize: bool = True,
+    clr_transform: bool = True,
+    pseudocount: float = DEFAULT_PSEUDOCOUNT
+) -> pd.DataFrame:
+    """Preprocess table with filtering, normalization, and CLR."""
+    df = table_to_dataframe(table)
+    
+    if apply_filter:
+        df = filter_table(df)
+    if normalize:
+        df = normalize_table(df)
+    if clr_transform:
+        df = clr_transform_table(df, pseudocount)
+    return df
+    
+
+def normalize_table(table: pd.DataFrame, axis: int = 0) -> pd.DataFrame:
+    """Convert to relative abundances along specified axis."""
+    return table.div(table.sum(axis=axis), axis=1-axis)
+    
+
+def clr_transform_table(table: pd.DataFrame, pseudocount: float) -> pd.DataFrame:
+    """Apply centered log-ratio transformation."""
+    return pd.DataFrame(
+        clr(table + pseudocount),
+        index=table.index,
+        columns=table.columns
+    )
+    
+
+def presence_absence(
+    table: Union[Dict, Table, pd.DataFrame],
+    threshold: float = DEFAULT_PA_THRESHOLD
+) -> pd.DataFrame:
+    """Binarize table keeping features comprising threshold fraction of total abundance."""
+    df = table_to_dataframe(table).T  # Features × samples
+    sorted_features = df.sum(axis=1).sort_values(ascending=False)
+    cumulative = sorted_features.cumsum() / sorted_features.sum()
+    keep = cumulative[cumulative <= threshold].index
+    return df.reindex(keep).gt(0).astype(int).T
+    
+
+def k_means(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    group_column: str = DEFAULT_GROUP_COLUMN,
+    n_clusters: int = DEFAULT_N_CLUSTERS, 
+    random_state: int = DEFAULT_RANDOM_STATE
+) -> pd.Series:
+    """Apply K-means clustering and return cluster labels."""
+    df = table_to_dataframe(table)
+    merged = merge_table_with_metadata(df, metadata, group_column)
+    
+    kmeans = KMeans(
+        n_clusters, 
+        random_state=random_state
+    ).fit(merged.drop(group_column, axis=1))
+    return pd.Series(
+        kmeans.labels_, 
+        index=merged.index, 
+        name='kmeans_cluster'
+    )
+    
+
 def _base_statistical_test(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
@@ -93,7 +201,9 @@ def _base_statistical_test(
 
     try:
         for feature in features:
-            groups = [g.dropna() for _, g in merged.groupby(group_column)[feature]]
+            groups = [
+                g.dropna() for _, g in merged.groupby(group_column)[feature]
+            ]
             if len(groups) < 2:
                 progress.advance(task_id)
                 continue
