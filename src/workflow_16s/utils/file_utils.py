@@ -368,7 +368,7 @@ class AmpliconData:
             for level in tables:
                 logger.info(f"Running t-test for {level}...")
                 # Convert sparse to dense for calculations
-                dense_table = tables[level].sparse.to_dense() if tables[level].dtypes.any().name.startswith('Sparse') else tables[level]
+                dense_table = tables[level].sparse.to_dense() if tables[level].dtype.any().name.startswith('Sparse') else tables[level]
                 results = t_test(
                     table=dense_table,  # Use dense version
                     metadata=self.meta,
