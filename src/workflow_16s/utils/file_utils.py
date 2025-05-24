@@ -466,8 +466,10 @@ class AmpliconData:
         if table_type not in self.stats:
             logger.warning(f"No statistical results found for {table_type}.")
             return
-        for level in self.stats[table_type][test_type]:
-            dfs = [self.stats[table_type][test_type][level] for test_type in self.stats[table_type]]
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            dfs = []
+            for test_type in self.stats[table_type]:    
+                dfs.append(self.stats[table_type][test_type][level])
             # Merge list of DataFrames on 'feature' using outer join
             df = reduce(lambda left, right: pd.merge(left, right, on='feature', how='outer'), dfs)
             logger.info(df.head())
