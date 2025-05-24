@@ -251,6 +251,7 @@ def t_test(
         equal_var=False
     )
 
+
 def mwu_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
@@ -271,6 +272,24 @@ def mwu_bonferroni(
     )
     threshold = 0.01 / len(results)
     return results[results.p_value <= threshold].sort_values('p_value')
+
+
+def kruskal_bonferroni(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    group_column: str = DEFAULT_GROUP_COLUMN,
+    **kwargs
+) -> pd.DataFrame:
+    """Kruskal-Wallis test with Bonferroni correction."""
+    df = table_to_dataframe(table)
+    results = _base_statistical_test(
+        df, metadata, group_column, 
+        test_func=kruskal,
+        **kwargs
+    )
+    threshold = 0.01 / len(results)
+    return results[results.p_value <= threshold].sort_values('p_value')
+    
 
 def variability_explained(
     table: Union[Dict, Table, pd.DataFrame], 
