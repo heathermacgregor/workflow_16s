@@ -78,21 +78,28 @@ def merge_table_with_metadata(
     group_column: str
 ) -> pd.DataFrame:
     """Merge abundance table with metadata column after index sanitization."""
-    # Make copies to avoid modifying originals
-    table = table.copy().reset_index()
-    metadata = metadata[[group_column]].copy().reset_index()
+    # Preserve original index names
+    table_index_name = table.index.name or 'index'
+    meta_index_name = metadata.index.name or 'index'
     
-    # Sanitize IDs by stripping whitespace and converting to lowercase
-    table['index'] = table['index'].astype(str).str.strip().str.lower()
-    metadata['index'] = metadata['index'].astype(str).str.strip().str.lower()
+    # Reset indexes for merging
+    table = table.reset_index().rename(columns={table_index_name: 'temp_index'})
+    metadata = metadata.reset_index().rename(columns={meta_index_name: 'temp_index'})
+    
+    # Sanitize IDs
+    table['temp_index'] = table['temp_index'].astype(str).str.strip().str.lower()
+    metadata['temp_index'] = metadata['temp_index'].astype(str).str.strip().str.lower()
     
     # Perform merge
     merged = pd.merge(
         table,
-        metadata,
-        on='index',
+        metadata[[group_column, 'temp_index']],
+        on='temp_index',
         how='inner'
-    ).set_index('index')
+    ).set_index('temp_index')
+    
+    # Restore original index name
+    merged.index.name = table_index_name
     
     # Validate merge
     if merged[group_column].isna().any():
