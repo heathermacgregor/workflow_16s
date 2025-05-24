@@ -80,11 +80,12 @@ def collapse_taxa(
     Raises:
         ValueError: For invalid target_level.
     """
+    table = table.copy()
     if not isinstance(table, Table):
         table = convert_to_biom(table)
         
     levels = {
-        'phylum': 1, 'class': 2, 'order': 3, 'family': 4
+        'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5
     }
 
     if target_level not in levels:
