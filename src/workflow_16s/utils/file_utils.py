@@ -468,6 +468,7 @@ class AmpliconData:
                     "[bold magenta]Visual Analyses",
                     parent=main_task,
                     total=len(enabled_tests)*len(tables)
+                )
                 
                 levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
                 
