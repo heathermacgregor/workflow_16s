@@ -531,7 +531,7 @@ class AmpliconData:
                 ), 
                 dfs
             )
-            logger.info(df.head())
+            #logger.info(df.head())
             
             """
                 if 'q_value' not in df.columns:
