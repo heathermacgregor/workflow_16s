@@ -324,21 +324,21 @@ def t_test(
             continue
             
         t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=False)
-        results.append({'feature': feature, 't_statistic': t_stat, 'p_value': p_val})
+        results.append({'feature': feature, 't_statistic': t_stat, 't_test_p_value': p_val})
     
     # Results processing
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(f"No features passed t-test for {col_values} in '{col}'")
-        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+        return pd.DataFrame(columns=['feature', 't_statistic', 't_test_p_value'])
     logger.info(results_df[
-        results_df['p_value'].notna() & 
-        (results_df['p_value'] > 0)
-    ].sort_values('p_value').head())
+        results_df['t_test_p_value'].notna() & 
+        (results_df['t_test_p_value'] > 0)
+    ].sort_values('t_test_p_value').head())
     return results_df[
-        results_df['p_value'].notna() & 
-        (results_df['p_value'] > 0)
-    ].sort_values('p_value')
+        results_df['t_test_p_value'].notna() & 
+        (results_df['t_test_p_value'] > 0)
+    ].sort_values('t_test_p_value')
     
 
 
@@ -430,21 +430,21 @@ def mwu_bonferroni(
         results.append({
             'feature': feature,
             'u_statistic': u_stat,
-            'p_value': max(p_val, 1e-10),  # Cap p-values
+            'mwu_bonferroni_p_value': max(p_val, 1e-10),  # Cap p-values
             'median_difference': median_diff,
             'effect_size_r': effect_size_r
         })
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
-        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+        return pd.DataFrame(columns=['feature', 'u_statistic', 'mwu_bonferroni_p_value'])
 
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
+    results_df = results_df[(results_df['mwu_bonferroni_p_value'] != 0) & (results_df['mwu_bonferroni_p_value'].notna())]
+    results_df.sort_values('mwu_bonferroni_p_value', inplace=True)
     
     # Apply Bonferroni threshold
-    results_filtered = results_df[results_df['p_value'] <= threshold]
-    return results_filtered.sort_values('p_value')
+    results_filtered = results_df[results_df['mwu_bonferroni_p_value'] <= threshold]
+    return results_filtered.sort_values('mwu_bonferroni_p_value')
 
 
 def kruskal_bonferroni(
@@ -535,7 +535,7 @@ def kruskal_bonferroni(
         results.append({
             'feature': feature,
             'h_statistic': h_stat,
-            'p_value': max(p_val, 1e-10),
+            'kruskal_bonferroni_p_value': max(p_val, 1e-10),
             'epsilon_squared': epsilon_sq,
             'groups_tested': len(groups)
         })
@@ -543,13 +543,13 @@ def kruskal_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(f"No features passed the t-test for groups: {col_values} in column '{col}'")
-        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+        return pd.DataFrame(columns=['feature', 't_statistic', 'kruskal_bonferroni_p_value'])
 
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    results_df = results_df[(results_df['kruskal_bonferroni_p_value'] != 0) & (results_df['kruskal_bonferroni_p_value'].notna())]
     
     # Apply Bonferroni correction
-    results_df = results_df[results_df['p_value'] <= threshold]
-    return results_df.sort_values('p_value')
+    results_df = results_df[results_df['kruskal_bonferroni_p_value'] <= threshold]
+    return results_df.sort_values('kruskal_bonferroni_p_value')
 
 
 def variability_explained(
