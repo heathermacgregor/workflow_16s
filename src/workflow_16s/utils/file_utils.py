@@ -252,13 +252,17 @@ class AmpliconData:
             'genus': self._genus_mode,
         }
         mode_funcs[mode]()  
+
+            
+            
         
         # Run statistical analyses
-        self._run_statistical_analyses('raw')
-        self._top_features('raw')
-        if self.cfg['presence_absence']:   
-            self._run_statistical_analyses('presence_absence') 
-            self._top_features('presence_absence') 
+        #self._run_statistical_analyses('raw')
+        #self._top_features('raw')
+        #if self.cfg['presence_absence']:   
+        #    self._run_statistical_analyses('presence_absence') 
+        #    self._top_features('presence_absence') 
+-
 
     def _get_biom_paths(self) -> List:
         """Get feature table BIOM paths from a pattern."""
@@ -332,6 +336,7 @@ class AmpliconData:
         table_dir = Path(self.project_dir.tables) / 'merged'
     
         if self.verbose:
+            self.tables["raw"] = {}
             for level in tax_levels:
                 biom_table = collapse_taxa(
                     self.table,
@@ -339,25 +344,66 @@ class AmpliconData:
                     table_dir,
                     self.verbose
                 )
-                self.tables[level] = biom_table
+                self.tables["raw"][level] = biom_table
                 logger.info(f"Collapsed to {level} level")
     
             if self.cfg['presence_absence']:
-                for level in self.tables:
+                self.tables["presence_absence"] = {}
+                for level in self.tables["raw"]:
                     pa_table = presence_absence(
                         self.tables[level],
                         level,
                         table_dir,
                         self.verbose
                     )
-                    self.presence_absence_tables[level] = pa_table
+                    self.tables["presence_absence"][level] = pa_table
                     logger.info(f"Converted {level} table to presence/absence")
+
+            filter_table = True
+            normalize_table = True
+            clr_table = True
+            if filter_table:
+                self.tables["filtered"] = {}
+                for level in tax_levels:
+                    table = preprocess_table(
+                        table=self.tables["raw"][level],
+                        apply_filter=True,
+                        normalize=False,
+                        clr_transform=False,
+                    )
+                    self.tables["filtered"][level] = table
+                    logger.info(f"Filtered {level} table")
+
+            if filter_table and normalize_table:
+                self.tables["normalized"] = {}
+                for level in tax_levels:
+                    table = preprocess_table(
+                        table=self.tables["filtered"][level],
+                        apply_filter=False,
+                        normalize=True,
+                        clr_transform=False,
+                    )
+                    self.tables["normalized"][level] = table
+                    logger.info(f"Normalized {level} table")
+
+            if filter_table and normalize_table and clr_table:
+                self.tables["clr"] = {}
+                for level in tax_levels:
+                    table = preprocess_table(
+                        table=self.tables["normalized"][level],
+                        apply_filter=False,
+                        normalize=False,
+                        clr_transform=True,
+                    )
+                    self.tables["clr"][level] = table
+                    logger.info(f"CLR-transformed {level} table")
         else:
             with create_progress() as progress:
                 collapse_task = progress.add_task(
                     "[white]Collapsing taxonomy...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(tax_levels)
                 )
+                self.tables["raw"] = {}
                 for level in tax_levels:
                     biom_table = collapse_taxa(
                         self.table,
@@ -365,23 +411,75 @@ class AmpliconData:
                         table_dir,
                         self.verbose
                     )
-                    self.tables[level] = biom_table
+                    self.tables["raw"][level] = biom_table
                     progress.update(collapse_task, advance=1)
     
                 if self.cfg['presence_absence']:
+                    self.tables["presence_absence"] = {}
                     pa_task = progress.add_task(
                         "[white]Generating presence/absence tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(self.tables)
                     )
-                    for level in self.tables:
+                    for level in self.tables["raw"]:
                         pa_table = presence_absence(
-                            self.tables[level],
+                            self.tables["raw"][level],
                             level,
                             table_dir,
                             self.verbose
                         )
-                        self.presence_absence_tables[level] = pa_table
+                        self.tables["presence_absence"][level] = pa_table
                         progress.update(pa_task, advance=1)
+
+                filter_table = True
+                normalize_table = True
+                clr_table = True
+                if filter_table:
+                    self.tables["filtered"] = {}
+                    filter_task = progress.add_task(
+                        "[white]Filtering tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        total=len(self.tables)
+                    )
+                    for level in tax_levels:
+                        table = preprocess_table(
+                            table=self.tables["raw"][level],
+                            apply_filter=True,
+                            normalize=False,
+                            clr_transform=False,
+                        )
+                        self.tables["filtered"][level] = table
+                        progress.update(filter_task, advance=1)
+    
+                if filter_table and normalize_table:
+                    self.tables["normalized"] = {}
+                    n_task = progress.add_task(
+                        "[white]Normalizing tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        total=len(self.tables)
+                    )
+                    for level in tax_levels:
+                        table = preprocess_table(
+                            table=self.tables["filtered"][level],
+                            apply_filter=False,
+                            normalize=True,
+                            clr_transform=False,
+                        )
+                        self.tables["normalized"][level] = table
+                        progress.update(n_task, advance=1)
+    
+                if filter_table and normalize_table and clr_table:
+                    self.tables["clr"] = {}
+                    clr_task = progress.add_task(
+                        "[white]CLR-transforming tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        total=len(self.tables)
+                    )
+                    for level in tax_levels:
+                        table = preprocess_table(
+                            table=self.tables["normalized"][level],
+                            apply_filter=False,
+                            normalize=False,
+                            clr_transform=True,
+                        )
+                        self.tables["clr"][level] = table
+                        progress.update(clr_task, advance=1)
 
                 
     def _asv_mode(self):
@@ -472,7 +570,7 @@ class AmpliconData:
                 results[level] = test_func(
                     table=tables[level],
                     metadata=self.meta,
-                    group_column='nuclear_contamination_status'
+                    group_column='nuclear_contamination_status',
                 )
                 progress.update(parent_task_id, advance=1)
         # stop and hide progress bar for this step when done
