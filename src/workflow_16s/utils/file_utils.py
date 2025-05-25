@@ -604,452 +604,97 @@ class AmpliconData:
                     'figure': plot
                 })
         
-    @staticmethod
-    def _create_progress_columns():
-        return [
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
-        ]
-
-"""
-class AmpliconData:
-    '''
-    Main class for handling amplicon sequencing data analysis.
-    
-    Attributes:
-        project_dir: Subdirs object with directory path attributes
-        mode: Analysis mode ('asv' or 'genus')
-        verbose: Enable verbose logging
-        table: Main feature table
-        meta: Metadata DataFrame
-        taxa: Taxonomy information
-        tables: Dictionary of collapsed tables by level
-        presence_absence_tables: PA tables by taxonomic level
-    '''
-    def __init__(
-        self, 
-        cfg,
-        project_dir,
-        mode: str = 'genus',
-        verbose: bool = True
-    ):
-        self.cfg = cfg
-        self.project_dir = project_dir
-        self.mode = mode
-        self.verbose = verbose
-        self.table = None
-        self.meta = None
-        self.taxa = None
-
-        self.tables = {}
-        self.presence_absence_tables = {}
-        self.figures = {}
-        self.color_maps = {}
-        
-        if self.mode == 'asv':
-            table_dir = 'table'
-            output_dir = 'asv'
-        elif self.mode == 'genus':
-            table_dir = 'table_6'
-            output_dir = 'l6'
-
-        table_paths, meta_path = get_amplicon_data_paths(project_dir, table_dir)
-        
-        self.output_path = Path(self.project_dir.main) / 'data' / 'merged' / output_dir / 'feature-table.biom'
-        self._get_metadata()
-
-        self._plot_sample_map()
-        self._get_biom_table()
-
-        if self.mode == 'genus':
-            for level in ['phylum', 'class', 'order', 'family']:
-                collapsed_table = collapse_taxa(
-                    self.table, 
-                    level, 
-                    Path(self.project_dir.main) / 'data' / 'merged',
-                    self.verbose
-                )
-                self.tables[level] = collapsed_table
-            self.tables['genus'] = self.table   
-
-            if self.cfg['presence_absence']:
-                for level in self.tables:
-                    pa = presence_absence(
-                        self.tables[level], 
-                        level, 
-                        Path(self.project_dir.main) / 'data' / 'merged',
-                        self.verbose
-                    )
-                    self.presence_absence_tables[level] = pa
-
-        elif self.mode == 'asv':
-            logger.info("ASV mode is not yet supported!")
-
-        self._plot_pca()
-        self._plot_tsne()
-        
-
-        self.stats['presence_absence'] = {}
-
-        if self.cfg['stats']['presence_absence']['t_test']:
-            self.stats['presence_absence']['t_test'] = {}
-            for level in self.presence_absence_tables:
-                logger.info(f"Running t-test for {level}...")
-                results = t_test(
-                    table=self.presence_absence_tables[level], 
-                    metadata=self.meta,
-                    col='nuclear_contamination_status',
-                    col_values=[True, False]
-                )
-                self.stats['presence_absence']['t_test'][level] = results
-        
-        if self.cfg['stats']['presence_absence'].get('mwu_bonferroni', False):
-            self.stats['presence_absence']['mwu_bonferroni'] = {}
-            for level in self.presence_absence_tables:
-                logger.info(f"Running Mann-Whitney U with Bonferroni for {level}...")
-                results = mwu_bonferroni(
-                    table=self.presence_absence_tables[level],
-                    metadata=self.meta,
-                    col='nuclear_contamination_status',
-                    col_values=[True, False]
-                )
-                self.stats['presence_absence']['mwu_bonferroni'][level] = results
-        
-        if self.cfg['stats']['presence_absence'].get('kruskal_bonferroni', False):
-            self.stats['presence_absence']['kruskal_bonferroni'] = {}
-            for level in self.presence_absence_tables:
-                logger.info(f"Running Kruskal-Wallis with Bonferroni for {level}...")
-                results = kruskal_bonferroni(
-                    table=self.presence_absence_tables[level],
-                    metadata=self.meta,
-                    col='nuclear_contamination_status'
-                )
-                self.stats['presence_absence']['kruskal_bonferroni'][level] = results
-
-        # Save statistical results
-        stats_dir = Path(self.project_dir.main) / 'final' / 'tables' / 'stats' / 'presence_absence'
-        stats_dir.mkdir(parents=True, exist_ok=True)
-        
-        for test_type in self.stats['presence_absence']:
-            test_dir = stats_dir / test_type
-            test_dir.mkdir(exist_ok=True)
-            for level in self.stats['presence_absence'][test_type]:
-                df = self.stats['presence_absence'][test_type][level]
-                output_path = test_dir / f"{level}_results.tsv"
-                df.to_csv(output_path, sep='\t', index=True)
-
-        # Find top features
-        contaminated_features = []
-        pristine_features = []
-        
-        for test_type in self.stats['presence_absence']:
-            for level in self.stats['presence_absence'][test_type]:
-                df = self.stats['presence_absence'][test_type][level]
-                sig_df = df[df['q_value'] < 0.05]
-                for feature, row in sig_df.iterrows():
-                    effect = row.get('mean_diff', row.get('effect_size', 0))
-                    if effect > 0:
-                        contaminated_features.append({
-                            'feature': feature,
-                            'level': level,
-                            'test': test_type,
-                            'effect': effect,
-                            'q_value': row['q_value']
-                        })
-                    else:
-                        pristine_features.append({
-                            'feature': feature,
-                            'level': level,
-                            'test': test_type,
-                            'effect': abs(effect),
-                            'q_value': row['q_value']
-                        })
-
-        # Process and save top features
-        top_dir = Path(self.project_dir.main) / 'final' / 'tables' / 'stats' / 'top_features'
-        top_dir.mkdir(parents=True, exist_ok=True)
-        
-        def _process_features(feature_list):
-            if not feature_list:
-                return pd.DataFrame()
-            df = pd.DataFrame(feature_list)
-            return df.sort_values(['effect', 'q_value'], ascending=[False, True]).head(20)
-
-        top_contam = _process_features(contaminated_features)
-        top_pristine = _process_features(pristine_features)
-
-        top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
-        top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
-
-    def _plot_sample_map(self) -> None:
-        self.figures["sample_map"] = []
-        logger.info("Creating sample map...")
-        
-        for col in ['dataset_name', 'nuclear_contamination_status']:
-            fig, map = sample_map_categorical(
-                metadata=self.meta, 
-                show=False, 
-                output_dir=Path(self.project_dir.main) / 'final' / 'figures' / 'sample_maps', 
-                color_col=col,
-            )
-            self.figures["sample_map"].append({
-                'title': f'Sample Map - {col}',
-                'color_col': col,
-                'figure': fig
-            })
-            self.color_maps[col] = map
-
-    def _plot_pca(self):
-        self.figures["pca"] = []
-        
-        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
-        color_col='dataset_name'
-        symbol_col='nuclear_contamination_status'
-        
-        tables = self.presence_absence_tables if self.cfg['presence_absence'] else self.tables
-            
-        for level in tables:
-            logger.info(f"Calculating PCA ({level})...")
-            
-            meta, table, _ = df_utils.match_indices_or_transpose(
-                self.meta, 
-                tables[level]
-            )
-                
-            pca_results = beta_diversity.pca(
-                table=table,
-                n_components=3
-            )
-            
-            logger.info("Plotting PCA...")
-            
-            pca_plot, _ = pca(
-                components = pca_results['components'], 
-                proportion_explained = pca_results['exp_var_ratio'], 
-                metadata=meta,
-                color_col=color_col, 
-                color_map=self.color_maps[color_col],
-                symbol_col=symbol_col,
-                show=False,
-                output_dir=Path(self.project_dir.main) / 'final' / 'figures' / 'pca' / f'l{levels[level]+1}', 
-                x=1, 
-                y=2
-            )
-            
-            self.figures["pca"].append({
-                'title': f'PCA - {level}',
-                'level': level,
-                'color_col': color_col,
-                'symbol_col': symbol_col,
-                'figure': pca_plot
-            })
-
-    def _plot_tsne(self) -> None:
-        self.figures["tsne"] = []
-        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
-        color_col='dataset_name'
-        symbol_col='nuclear_contamination_status'
-        
-        tables = self.presence_absence_tables if self.cfg['presence_absence'] else self.tables
-            
-        for level in tables:
-            logger.info(f"Calculating TSNE ({level})...")
-    
-            meta, table, _ = df_utils.match_indices_or_transpose(
-                self.meta, 
-                tables[level]
-            )
-            tsne_results = beta_diversity.tsne(
-                    table=table,
-                    n_components=3
-            )
-                
-            logger.info("Plotting TSNE...")
-                
-            tsne_plot, _ = mds(
-                df=tsne_results, 
-                metadata=meta,
-                group_col=color_col, 
-                symbol_col=symbol_col,
-                show=False,
-                output_dir=Path(self.project_dir.main) / 'final' / 'figures' / 'tsne' / f'l{levels[level]+1}',
-                mode='TSNE',
-                x=1, 
-                y=2
-            )
-        
-            self.figures["tsne"].append({
-                'title': f'TSNE - {level}',
-                'level': level,
-                'color_col': color_col,
-                'symbol_col': symbol_col,
-                'figure': tsne_plot
-            })
-            
-    def _get_biom_paths(self) -> List[str]:
-        return glob.glob(str(Path(self.project_dir.main) / 'data' / 'per_dataset' / self.BIOM_PATTERN), recursive=True)    
-
-    def _get_meta_paths(self) -> List[Path]:
-        meta_paths = []
-        for biom_path in self._get_biom_paths():
-            biom_path = Path(biom_path)
-            current = biom_path
-            data_dir = None
-            while current != current.root:
-                if current.name == 'data':
-                    data_dir = current
-                    break
-                current = current.parent
-            if not data_dir:
-                continue
-            
-            biom_dir = data_dir / "per_dataset" / "qiime"
-            try:
-                rel_path = biom_path.parent.relative_to(biom_dir)
-            except ValueError:
-                continue
-            
-            sliced_parts = rel_path.parts[:-1]
-            
-            meta_path = (
-                data_dir / "per_dataset" / "metadata"
-                / Path(*sliced_parts)
-                / "sample-metadata.tsv"
-            )
-            meta_paths.append(meta_path)
-        return meta_paths
-        
-    def _get_biom_table(self):
-        biom_paths = self._get_biom_paths()
-        if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found matching {self.BIOM_PATTERN}")   
-        self.table = import_merged_table_biom(
-            biom_paths, 
-            'dataframe',
-            self.output_path,
-            self.verbose
-        )
-        
-    def _get_metadata(self):
-        meta_dfs = []
-        for meta_path in self._get_meta_paths():  
-            meta_df = self._process_meta_path(meta_path, [])
-            meta_dfs.append(meta_df)
-        self.meta = pd.concat(meta_dfs, ignore_index=True)
-
-    def _process_meta_path(
-        self, 
-        csv_path: Path, 
-        column_renames: List[Tuple[str, str]]
-    ) -> pd.DataFrame:
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
-            
-        df = pd.read_csv(csv_path, sep='\t')
-        df.columns = df.columns.str.lower()
-        
-        sample_id_col = next((col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns), None)
-        if sample_id_col:
-            df['SAMPLE ID'] = df[sample_id_col]
-        else:
-            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" for i in range(1, len(df)+1)]
-            
-        dataset_id_col = next((col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns), None)
-        if dataset_id_col:
-            df['DATASET ID'] = df[dataset_id_col]
-        else:
-            df['DATASET ID'] = Path(csv_path).parents[5].name
-            
-        if 'nuclear_contamination_status' not in df.columns:
-            df['nuclear_contamination_status'] = False
-
-        for old, new in column_renames:
-            if old in df.columns:
-                df.rename(columns={old: new}, inplace=True)
-                
-        return df
-
-
-"""
-
 def import_meta_tsv(
-    tsv_path: Union[str, Path], 
-    column_renames: List[Tuple[str, str]]
+    tsv_path: Union[str, Path],
+    column_renames: Optional[List[Tuple[str, str]]] = None
 ) -> pd.DataFrame:
+    """
+    Load a single sample-metadata.tsv, rename columns, and ensure required fields exist.
+    """
     tsv_path = Path(tsv_path)
     if not tsv_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {tsv_path}")
-            
+
+    # ensure we can iterate even if None was passed
+    if column_renames is None:
+        column_renames = []
+
     df = pd.read_csv(tsv_path, sep='\t')
     df.columns = df.columns.str.lower()
-        
+
+    # determine sample ID
     sample_id_col = next(
-        (col for col in ['run_accession', '#sampleid', 'sample-id'] 
-            if col in df.columns), 
+        (col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns),
         None
     )
     if sample_id_col:
         df['SAMPLE ID'] = df[sample_id_col]
     else:
-        df['SAMPLE ID'] = [f"{Path(tsv_path).parents[5].name}_x{i}" 
-                            for i in range(1, len(df)+1)]
-            
+        df['SAMPLE ID'] = [
+            f"{Path(tsv_path).parents[5].name}_x{i}"
+            for i in range(1, len(df) + 1)
+        ]
+
+    # determine dataset ID
     dataset_id_col = next(
-        (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
-            if col in df.columns), 
+        (col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns),
         None
     )
     if dataset_id_col:
         df['DATASET ID'] = df[dataset_id_col]
     else:
         df['DATASET ID'] = Path(tsv_path).parents[5].name
-            
+
+    # ensure nuclear_contamination_status exists
     if 'nuclear_contamination_status' not in df.columns:
         df['nuclear_contamination_status'] = False
 
+    # apply any requested renames
     for old, new in column_renames:
         if old in df.columns:
             df.rename(columns={old: new}, inplace=True)
-                
+
     return df
-    
+
+
 def import_merged_meta_tsv(
-    meta_paths: List[Union[str, Path]], 
-    output_path: Union[str, Path] = None, 
-    column_renames: List[Tuple[str, str]] = None,
+    meta_paths: List[Union[str, Path]],
+    output_path: Union[str, Path] = None,
+    column_renames: Optional[List[Tuple[str, str]]] = None,
     verbose: bool = False
-):
+) -> pd.DataFrame:
+    """
+    Load multiple sample-metadata.tsv files, concatenate them, and optionally write out.
+    """
     dfs = []
-    for path in meta_paths:  
+    for path in meta_paths:
         try:
             df = import_meta_tsv(path, column_renames)
             dfs.append(df)
             if verbose:
-                logger.info(f"Loaded {Path(path).name} with {len(df.shape[0])} samples")
+                logger.info(f"Loaded {Path(path).name} with {df.shape[0]} samples")
         except Exception as e:
-            logger.error(f"Failed to load {path}: {str(e)}")
-    
-    df = pd.concat(dfs)
+            logger.error(f"Failed to load {path}: {e!r}")
+
+    # guard against empty list
+    if not dfs:
+        raise FileNotFoundError(
+            "None of the metadata files could be loaded; "
+            "check that your sample-metadata.tsv files exist and are readable."
+        )
+
+    df_merged = pd.concat(dfs, ignore_index=True)
 
     if output_path:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(output_path, sep='\t', index=True)
+        df_merged.to_csv(output_path, sep='\t', index=True)
         if verbose:
-            n_samples, n_features = df.shape
-            shape_str = f"[{n_samples}, {n_features}]"
-            logger.info(f"Wrote table {shape_str} to {output_path}")
+            n_samples, n_features = df_merged.shape
+            logger.info(f"Wrote merged metadata [{n_samples}, {n_features}] to {output_path}")
 
-    return df
+    return df_merged
 
-
-   
 # ======================================= BIOM ======================================= #
 
 def import_table_biom(
