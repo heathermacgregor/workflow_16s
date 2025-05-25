@@ -568,7 +568,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
         cfg=cfg,
         project_dir=project_dir,
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
-        verbose=True
+        verbose=False
     )
     #print(data.meta['nuclear_contamination_status'].value_counts())
     #print(data.stats)
