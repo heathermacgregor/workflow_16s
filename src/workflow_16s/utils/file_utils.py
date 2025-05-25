@@ -461,7 +461,7 @@ class AmpliconData:
         results = {}
         for level in tables:
             task_desc = f"[white]{test_name} [dim]({level})".ljust(DEFAULT_PROGRESS_TEXT_N)
-            features = tables[level].shape[1]
+            features = tables[level].shape[0]
             task_id = progress.add_task(
                 description=task_desc,
                 total=features,
