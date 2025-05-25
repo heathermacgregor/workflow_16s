@@ -245,6 +245,18 @@ class AmpliconData:
             self._run_statistical_analyses('presence_absence') 
             self._top_features('presence_absence') 
 
+    @staticmethod
+    def create_progress() -> Progress:
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            expand=True
+        )
+
     def _get_biom_paths(self) -> List:
         """Get feature table BIOM paths from a pattern."""
         BIOM_PATTERN = '/'.join(
