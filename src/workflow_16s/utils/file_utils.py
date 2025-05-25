@@ -209,7 +209,7 @@ class AmpliconData:
         cfg,
         project_dir,
         mode: str = 'genus',
-        verbose: bool = True
+        verbose: bool = False
     ):
         self.cfg = cfg
         self.project_dir = project_dir
