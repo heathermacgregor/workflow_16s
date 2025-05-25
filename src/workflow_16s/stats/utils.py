@@ -285,6 +285,7 @@ def t_test(
         df, metadata, group_column,
         test_name="Student's t-test",
         test_func=ttest_ind,
+        test_name="T-Test",  # Add test name
         progress=progress,
         parent_task_id=parent_task_id,
         level=level,
@@ -324,6 +325,7 @@ def kruskal_bonferroni(
     df = table_to_dataframe(table)
     results = _base_statistical_test(
         df, metadata, group_column, 
+        test_name="Kruskal-Wallis",  # Add test name
         test_func=kruskal,
         **kwargs
     )
