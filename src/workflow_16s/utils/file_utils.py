@@ -278,7 +278,7 @@ class AmpliconData:
                 Path(self.project_dir.metadata_per_dataset) / 
                 '/'.join(list(parts[-6:-1]))
             ) + '/sample-metadata.tsv'        
-            meta_paths.append(meta_path)
+            meta_paths.append(Path(meta_path))
         logger.info(f"Found {len(meta_paths)} unique metadata files.")
         return meta_paths
     
