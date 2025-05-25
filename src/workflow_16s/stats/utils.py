@@ -211,7 +211,7 @@ def k_means(
 def t_test(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
-    group_col: str,
+    col: str,
     groups: List,
     progress: Optional[Progress] = None,
     parent_task_id: Optional[TaskID] = None,
