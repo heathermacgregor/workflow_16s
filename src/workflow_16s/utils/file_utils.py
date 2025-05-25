@@ -326,29 +326,63 @@ class AmpliconData:
             None,
             self.verbose
         )
-
+        
+    def _genus_mode(self):
+        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
+        table_dir = Path(self.project_dir.tables) / 'merged'
     
-        
-    def _genus_mode(self):                
-        # Collapse tables for higher taxonomic levels (returns BIOM Tables)
-        for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            biom_table = collapse_taxa(
-                self.table, 
-                level, 
-                Path(self.project_dir.tables) / 'merged',
-                self.verbose
-            )
-            self.tables[level] = biom_table
-        
-        if self.cfg['presence_absence']:
-            for level in self.tables:
-                pa_table = presence_absence(
-                    self.tables[level],  
+        if self.verbose:
+            for level in tax_levels:
+                biom_table = collapse_taxa(
+                    self.table,
                     level,
-                    Path(self.project_dir.tables) / 'merged',
+                    table_dir,
                     self.verbose
                 )
-                self.presence_absence_tables[level] = pa_table
+                self.tables[level] = biom_table
+                logger.info(f"Collapsed to {level} level")
+    
+            if self.cfg['presence_absence']:
+                for level in self.tables:
+                    pa_table = presence_absence(
+                        self.tables[level],
+                        level,
+                        table_dir,
+                        self.verbose
+                    )
+                    self.presence_absence_tables[level] = pa_table
+                    logger.info(f"Converted {level} table to presence/absence")
+        else:
+            with create_progress() as progress:
+                collapse_task = progress.add_task(
+                    "[white]Collapsing taxonomy...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(tax_levels)
+                )
+                for level in tax_levels:
+                    biom_table = collapse_taxa(
+                        self.table,
+                        level,
+                        table_dir,
+                        self.verbose
+                    )
+                    self.tables[level] = biom_table
+                    progress.update(collapse_task, advance=1)
+    
+                if self.cfg['presence_absence']:
+                    pa_task = progress.add_task(
+                        "[white]Generating presence/absence tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        total=len(self.tables)
+                    )
+                    for level in self.tables:
+                        pa_table = presence_absence(
+                            self.tables[level],
+                            level,
+                            table_dir,
+                            self.verbose
+                        )
+                        self.presence_absence_tables[level] = pa_table
+                        progress.update(pa_task, advance=1)
+
                 
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
