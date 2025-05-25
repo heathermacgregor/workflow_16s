@@ -434,7 +434,7 @@ class AmpliconData:
                         "[white]Filtering tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(self.tables)
                     )
-                    for level in tax_levels:
+                    for level in self.tables["raw"]:
                         table = preprocess_table(
                             table=self.tables["raw"][level],
                             apply_filter=True,
@@ -450,7 +450,7 @@ class AmpliconData:
                         "[white]Normalizing tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(self.tables)
                     )
-                    for level in tax_levels:
+                    for level in self.tables["filtered"]:
                         table = preprocess_table(
                             table=self.tables["filtered"][level],
                             apply_filter=False,
@@ -466,7 +466,7 @@ class AmpliconData:
                         "[white]CLR-transforming tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(self.tables)
                     )
-                    for level in tax_levels:
+                    for level in self.tables["normalized"]:
                         table = preprocess_table(
                             table=self.tables["normalized"][level],
                             apply_filter=False,
@@ -512,14 +512,25 @@ class AmpliconData:
             )
             # T-Test
             if 't_test' in enabled_tests:
-                self.stats[table_type]['t_test'] = self._run_test_for_all_levels(
-                    progress=progress,
-                    parent_task_id=main_task,
-                    test_name="T-Test",
-                    test_func=t_test,
-                    tables=tables
+                self.stats[table_type]['t-test'] = {}
+                ttest_task = progress.add_task(
+                    "[white]T-Test...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(tables)
                 )
-
+                for level in tables:
+                    self.stats[table_type]['t-test'][level] = t_test(
+                        table=tables[level],
+                        metadata=self.meta,
+                        group_col='nuclear_contamination_status',
+                        groups=[True, False],
+                        progress=progress,
+                        parent_task_id=main_task,
+                        level=level,
+                    )
+                    progress.update(ttest_task, advance=1)
+                progress.stop_task(ttest_task)
+                progress.update(ttest_task, visible=False)
+            """
             # Mann-Whitney U with Bonferroni
             if 'mwu_bonferroni' in enabled_tests:
                 self.stats[table_type]['mwu_bonferroni'] = self._run_test_for_all_levels(
@@ -549,6 +560,7 @@ class AmpliconData:
                     tables=tables,
                     enabled_tests=enabled_tests
                 )
+            """
 
     def _run_test_for_all_levels(self, progress, parent_task_id, test_name, test_func, tables):
         results = {}
