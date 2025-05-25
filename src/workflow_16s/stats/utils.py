@@ -21,6 +21,17 @@ from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 import logging
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    track,
+    TaskID
+)
 
 logger = logging.getLogger('workflow_16s')
 
