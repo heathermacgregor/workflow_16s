@@ -251,7 +251,7 @@ class AmpliconData:
             'asv': self._asv_mode,
             'genus': self._genus_mode,
         }
-        #mode_funcs[mode]()  
+        mode_funcs[mode]()  
         
         # Run statistical analyses
         #self._run_statistical_analyses('raw')
