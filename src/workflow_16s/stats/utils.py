@@ -113,7 +113,10 @@ def filter_features(
     return table.loc[:, feature_mask]
     
 
-def filter_samples(table: pd.DataFrame, min_counts: int) -> pd.DataFrame:
+def filter_samples(
+    table: pd.DataFrame, 
+    min_counts: int
+) -> pd.DataFrame:
     """Filter samples by total counts."""
     sample_mask = table.sum(axis=1) >= min_counts
     return table.loc[sample_mask]
@@ -124,13 +127,22 @@ def preprocess_table(
     apply_filter: bool = False,
     normalize: bool = True,
     clr_transform: bool = True,
+    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = DEFAULT_MIN_SAMPLES,
+    min_counts: int = DEFAULT_MIN_COUNTS,
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> pd.DataFrame:
     """Preprocess table with filtering, normalization, and CLR."""
     df = table_to_dataframe(table)
-    
+    print(df.shape)
     if apply_filter:
-        df = filter_table(df)
+        df = filter_table(
+            df,
+            min_rel_abundance, 
+            min_samples, 
+            min_counts
+        )
+    print(df.shape)
     if normalize:
         df = normalize_table(df)
     if clr_transform:
