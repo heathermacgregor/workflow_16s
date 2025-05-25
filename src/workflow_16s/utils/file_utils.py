@@ -665,18 +665,37 @@ def import_merged_meta_tsv(
 ) -> pd.DataFrame:
     """
     Load multiple sample-metadata.tsv files, concatenate them, and optionally write out.
+
+    Args:
+        meta_paths:
+        output_path:
+        column_renames:
+        verbose:
+
+    Returns:
+        Merged dataframe
     """
     dfs = []
-    for path in meta_paths:
-        try:
-            df = import_meta_tsv(path, column_renames)
-            dfs.append(df)
-            if verbose:
-                logger.info(f"Loaded {Path(path).name} with {df.shape[0]} samples")
-        except Exception as e:
-            logger.error(f"Failed to load {path}: {e!r}")
 
-    # guard against empty list
+    with create_progress() as progress:
+        task = progress.add_task(
+            "[white]Loading metadata files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            total=len(meta_paths)
+        )
+
+        for path in meta_paths:
+            try:
+                df = import_meta_tsv(path, column_renames)
+                dfs.append(df)
+                if verbose:
+                    logger.info(
+                        f"Loaded {Path(path).name} with {df.shape[0]} samples"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to load {path}: {e!r}")
+            finally:
+                progress.update(task, advance=1)
+
     if not dfs:
         raise FileNotFoundError(
             "None of the metadata files could be loaded; "
@@ -691,7 +710,9 @@ def import_merged_meta_tsv(
         df_merged.to_csv(output_path, sep='\t', index=True)
         if verbose:
             n_samples, n_features = df_merged.shape
-            logger.info(f"Wrote merged metadata [{n_samples}, {n_features}] to {output_path}")
+            logger.info(
+                f"Wrote merged metadata [{n_samples}, {n_features}] to {output_path}"
+            )
 
     return df_merged
 
@@ -726,6 +747,7 @@ def import_table_biom(
     else:
         raise ValueError(f"Invalid as_type: {as_type}. Use 'table' or 'dataframe'")
 
+
 def import_merged_table_biom(
     biom_paths: List[Union[str, Path]], 
     as_type: str = 'table',
@@ -744,18 +766,30 @@ def import_merged_table_biom(
         Merged BIOM Table or DataFrame
     """
     tables = []
-    for path in biom_paths:
-        try:
-            table = import_table_biom(path, 'table')
-            tables.append(table)
-            if verbose:
-                logger.info(f"Loaded {Path(path).name} with {len(table.ids('sample'))} samples")
-        except Exception as e:
-            logger.error(f"Failed to load {path}: {str(e)}")
-    
+
+    with create_progress() as progress:
+        task = progress.add_task(
+            "[white]Loading BIOM files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            total=len(biom_paths)
+        )
+
+        for path in biom_paths:
+            try:
+                table = import_table_biom(path, 'table')
+                tables.append(table)
+                if verbose:
+                    logger.info(
+                        f"Loaded {Path(path).name} with "
+                        f"{len(table.ids('sample'))} samples"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to load {path}: {str(e)}")
+            finally:
+                progress.update(task, advance=1)
+
     if not tables:
         raise ValueError("No valid BIOM tables loaded")
-    
+
     merged_table = tables[0]
     for table in tables[1:]:
         merged_table = merged_table.merge(table)
@@ -771,6 +805,7 @@ def import_merged_table_biom(
             logger.info(f"Wrote table {shape_str} to {output_path}")
 
     return merged_table if as_type == 'table' else merged_table.to_dataframe()
+
 
 # ====================================== FASTA ======================================= #
 
