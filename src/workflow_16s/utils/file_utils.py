@@ -26,6 +26,7 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
     track,
+    TaskID
 )
 
 # ================================== LOCAL IMPORTS =================================== #
