@@ -204,67 +204,59 @@ class AmpliconData:
         self.project_dir = project_dir
         self.mode = mode
         self.verbose = verbose
-        self.progress = self.create_progress()
         
         self.table, self.meta, self.taxa = None, None, None
+
         self.tables = {}
-        self.presence_absence_tables = {} if cfg['presence_absence'] else None
+        if self.cfg['presence_absence']:
+            self.presence_absence_tables = {} 
+        
         self.figures = {}
         self.color_maps = {}
-        self.stats = {}
 
+        self.stats = {}
+        
         mode_map = {
             'asv': ('table', 'asv'),
             'genus': ('table_6', 'l6')
         }
+        
         self.table_dir, output_dir = mode_map.get(mode, (None, None))
-        self.output_path = Path(project_dir.data) / 'merged' / output_dir / 'feature-table.biom'
 
-        self.progress.start()
-        try:
-            self._get_metadata()
-            self._get_biom_table()
-
-            mode_funcs = {
-                'genus': self._genus_mode,
-                'asv': self._asv_mode,
-            }
-            mode_func = mode_funcs[mode]
-            
-            main_task = self.progress.add_task("[bold green]Main Processing", total=3)
-            mode_func()
-            self.progress.advance(main_task, 1)
-            
-            self._run_statistical_analyses('raw', main_task)
-            self.progress.advance(main_task, 1)
-            
-            if self.cfg['presence_absence']:
-                self._run_statistical_analyses('presence_absence', main_task)
-                self.progress.advance(main_task, 1)
-            
-            self.progress.remove_task(main_task)
-            
-        finally:
-            self.progress.stop()
-
-    @staticmethod
-    def create_progress() -> Progress:
-        return Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True
+        
+        self.output_path = (
+            Path(self.project_dir.data) / 'merged' / output_dir / 
+            'feature-table.biom'
         )
 
-    def _get_biom_paths(self) -> List[Path]:
-        BIOM_PATTERN = '/'.join(['*', '*', '*', '*', 'FWD_*_REV_*', self.table_dir, 'feature-table.biom'])
-        biom_paths = glob.glob(str(Path(self.project_dir.qiime_data_per_dataset) / BIOM_PATTERN), recursive=True)
-        logger.info(f"Found {len(biom_paths)} BIOM tables")
-        return [Path(p) for p in biom_paths]
+        self._get_metadata()
+        self._get_biom_table()
 
+        mode_funcs = {
+            'genus': self._genus_mode,
+            'asv': self._asv_mode,
+        }
+        mode_funcs[mode]()  
+        
+        # Run statistical analyses
+        self._run_statistical_analyses('raw')
+        self._top_features('raw')
+        if self.cfg['presence_absence']:   
+            self._run_statistical_analyses('presence_absence') 
+            self._top_features('presence_absence') 
+
+    def _get_biom_paths(self) -> List:
+        """Get feature table BIOM paths from a pattern."""
+        BIOM_PATTERN = '/'.join(
+            ['*', '*', '*', '*', 'FWD_*_REV_*', self.table_dir, 'feature-table.biom']
+        )
+        biom_paths = glob.glob(
+            str(Path(self.project_dir.qiime_data_per_dataset) / BIOM_PATTERN), 
+            recursive=True
+        )
+        logger.info(f"Found {len(biom_paths)} unique feature tables.")
+        return biom_paths
+        
     def _get_meta_paths(self) -> List:
         """"""
         meta_paths = []
@@ -278,228 +270,359 @@ class AmpliconData:
                 Path(self.project_dir.metadata_per_dataset) / 
                 '/'.join(list(parts[-6:-1]))
             ) + '/sample-metadata.tsv'        
-            meta_paths.append(Path(meta_path))
+            meta_paths.append(meta_path)
         logger.info(f"Found {len(meta_paths)} unique metadata files.")
         return meta_paths
-    
-    def _process_meta_path(self, csv_path: Path) -> pd.DataFrame:
-        """Process metadata file with robust error handling."""
-        try:
-            df = pd.read_csv(csv_path, sep='\t', dtype=str)
-            
-            # Clean column names
-            df.columns = df.columns.str.strip().str.lower()
-            
-            # Handle different sample ID column names
-            id_columns = ['sampleid', 'sample-id', 'sample_id', 'run_accession']
-            found_cols = [col for col in id_columns if col in df.columns]
-            
-            if not found_cols:
-                raise ValueError(f"No valid ID columns found in {csv_path}")
-                
-            sample_id_col = found_cols[0]
-            df = df.set_index(sample_id_col)
-            
-            # Ensure required columns exist
-            if 'nuclear_contamination_status' not in df.columns:
-                df['nuclear_contamination_status'] = False
-                
-            return df
-            
-        except Exception as e:
-            logger.error(f"Failed to process {csv_path}: {str(e)}")
-            return pd.DataFrame()  # Return empty DataFrame for error tolerance
-    
-    def _get_metadata(self):
-        """Load and merge metadata with validation."""
-        meta_dfs = []
-        
-        meta_task = self.progress.add_task(
-            "[cyan]Loading metadata", 
-            total=len(self._get_meta_paths())
-        )
-        
-        try:
-            for meta_path in self._get_meta_paths():
-                self.progress.update(meta_task, description=f"[cyan]Loading {meta_path.name}")
-                
-                df = self._process_meta_path(meta_path)
-                if not df.empty:
-                    meta_dfs.append(df)
-                    
-                self.progress.advance(meta_task)
-                
-            if not meta_dfs:
-                raise ValueError("No valid metadata loaded")
-                
-            self.meta = pd.concat(meta_dfs)
-            logger.info(f"Loaded metadata for {len(self.meta)} samples")
-            
-        finally:
-            self.progress.remove_task(meta_task)
 
     def _get_biom_table(self):
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found in {self.table_dir}")
-        self.table = import_merged_table_biom(biom_paths, 'dataframe', self.output_path, self.verbose)
+            raise FileNotFoundError(
+                f"No BIOM files found matching {self.BIOM_PATTERN}"
+            )   
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'dataframe',
+            self.output_path,
+            self.verbose
+        )
 
-    def _genus_mode(self):
-        collapse_task = self.progress.add_task("[blue]Collapsing taxa", total=5)
-        try:
-            for level in ['phylum', 'class', 'order', 'family', 'genus']:
-                self.progress.update(collapse_task, description=f"[blue]Collapsing to {level}")
-                self.tables[level] = collapse_taxa(
-                    self.table, level, 
+    def _process_meta_path(
+        self, 
+        csv_path: Union[str, Path], 
+        column_renames: List[Tuple[str, str]]
+    ) -> pd.DataFrame:
+        csv_path = Path(csv_path)
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
+            
+        df = pd.read_csv(csv_path, sep='\t')
+        df.columns = df.columns.str.lower()
+        
+        sample_id_col = next(
+            (col for col in ['run_accession', '#sampleid', 'sample-id'] 
+             if col in df.columns), 
+            None
+        )
+        if sample_id_col:
+            df['SAMPLE ID'] = df[sample_id_col]
+        else:
+            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" 
+                               for i in range(1, len(df)+1)]
+            
+        dataset_id_col = next(
+            (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
+             if col in df.columns), 
+            None
+        )
+        if dataset_id_col:
+            df['DATASET ID'] = df[dataset_id_col]
+        else:
+            df['DATASET ID'] = Path(csv_path).parents[5].name
+            
+        if 'nuclear_contamination_status' not in df.columns:
+            df['nuclear_contamination_status'] = False
+
+        for old, new in column_renames:
+            if old in df.columns:
+                df.rename(columns={old: new}, inplace=True)
+                
+        return df
+    
+    def _get_metadata(self):
+        meta_dfs = []
+        for meta_path in self._get_meta_paths():  
+            meta_df = self._process_meta_path(meta_path, []).set_index('#sampleid')
+            meta_dfs.append(meta_df)
+        self.meta = pd.concat(meta_dfs)
+        
+    def _genus_mode(self):                
+        # Collapse tables for higher taxonomic levels (returns BIOM Tables)
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            biom_table = collapse_taxa(
+                self.table, 
+                level, 
+                Path(self.project_dir.tables) / 'merged',
+                self.verbose
+            )
+            self.tables[level] = biom_table
+        
+        if self.cfg['presence_absence']:
+            for level in self.tables:
+                pa_table = presence_absence(
+                    self.tables[level],  
+                    level,
                     Path(self.project_dir.tables) / 'merged',
                     self.verbose
                 )
-                self.progress.advance(collapse_task)
-        finally:
-            self.progress.remove_task(collapse_task)
-
-        if self.cfg['presence_absence']:
-            pa_task = self.progress.add_task("[magenta]Creating PA tables", total=5)
-            try:
-                for level in ['phylum', 'class', 'order', 'family', 'genus']:
-                    self.progress.update(pa_task, description=f"[magenta]PA {level}")
-                    self.presence_absence_tables[level] = presence_absence(
-                        self.tables[level], level,
-                        Path(self.project_dir.tables) / 'merged',
-                        self.verbose
-                    )
-                    self.progress.advance(pa_task)
-            finally:
-                self.progress.remove_task(pa_task)
-
+                self.presence_absence_tables[level] = pa_table
+                
     def _asv_mode(self):
-        logger.info("ASV mode not implemented")
+        logger.info("ASV mode is not yet supported!")
 
-    def _run_statistical_analyses(self, table_type: str, parent_task: TaskID):
-        analysis_task = self.progress.add_task(
-            f"[bold]Analyzing {table_type}", 
-            parent=parent_task,
-            total=len(self.cfg['stats'][table_type]) * len(self.tables)
+    def _fetch_tables(
+        self, 
+        table_type: str = 'presence_absence'
+    ):
+        if table_type == 'raw':
+            tables = self.tables
+        elif table_type == 'presence_absence':
+            tables = self.presence_absence_tables
+        else:
+            logger.error(
+                f"Unknown table type '{table_type}.'"
+                f"Expected either 'raw' or 'presence_absence'."
+            )
+        return tables
+
+    def _run_statistical_analyses(self, table_type: str = 'presence_absence'):
+        self.stats[table_type] = {}
+        tables = self._fetch_tables(table_type)
+        
+        enabled_tests = [
+            test for test in [
+                't_test', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
+            ] if self.cfg['stats'][table_type].get(test, False)
+        ]
+
+        with create_progress() as progress:
+            main_task = progress.add_task(
+                f"[bold green]Running {table_type} analyses",
+                total=len(enabled_tests)*len(tables)
+            
+            # T-Test
+            if 't_test' in enabled_tests:
+                self.stats[table_type]['t_test'] = self._run_test_for_all_levels(
+                    progress=progress,
+                    parent_task_id=main_task,
+                    test_name="T-Test",
+                    test_func=t_test,
+                    tables=tables
+                )
+
+            # Mann-Whitney U with Bonferroni
+            if 'mwu_bonferroni' in enabled_tests:
+                self.stats[table_type]['mwu_bonferroni'] = self._run_test_for_all_levels(
+                    progress=progress,
+                    parent_task_id=main_task,
+                    test_name="Mann-Whitney U",
+                    test_func=mwu_bonferroni,
+                    tables=tables
+                )
+
+            # Kruskal-Wallis with Bonferroni
+            if 'kruskal_bonferroni' in enabled_tests:
+                self.stats[table_type]['kruskal_bonferroni'] = self._run_test_for_all_levels(
+                    progress=progress,
+                    parent_task_id=main_task,
+                    test_name="Kruskal-Wallis",
+                    test_func=kruskal_bonferroni,
+                    tables=tables
+                )
+
+            # Visualization analyses (PCA/t-SNE)
+            if 'pca' in enabled_tests or 'tsne' in enabled_tests:
+                self._run_visual_analyses(
+                    progress=progress,
+                    parent_task_id=main_task,
+                    table_type=table_type,
+                    tables=tables,
+                    enabled_tests=enabled_tests
+                )
+
+    def _run_test_for_all_levels(self, progress, parent_task_id, test_name, test_func, tables):
+        results = {}
+        for level in tables:
+            task_desc = f"[cyan]{test_name} [dim]({level})"
+            with progress:
+                results[level] = test_func(
+                    table=tables[level],
+                    metadata=self.meta,
+                    group_column='nuclear_contamination_status',
+                    progress=progress,
+                    parent_task_id=parent_task_id,
+                    level=level
+                )
+                progress.update(parent_task_id, advance=1)
+        return results
+
+    def _run_visual_analyses(self, progress, parent_task_id, table_type, tables, enabled_tests):
+        vis_task = progress.add_task(
+            "[bold magenta]Visual Analyses",
+            parent=parent_task_id,
+            total=len(enabled_tests)*len(tables)
         )
         
-        try:
-            test_handlers = {
-                't_test': (t_test, "T-Test", "cyan"),
-                'mwu_bonferroni': (mwu_bonferroni, "Mann-Whitney U", "blue"),
-                'kruskal_bonferroni': (kruskal_bonferroni, "Kruskal-Wallis", "magenta"),
-                'pca': (self._run_pca, "PCA", "yellow"),
-                'tsne': (self._run_tsne, "t-SNE", "orange")
-            }
-            
-            self.stats[table_type] = {}
-            tables = self._fetch_tables(table_type)
-            
-            for test_key in self.cfg['stats'][table_type]:
-                if test_key not in test_handlers:
-                    continue
-                    
-                test_func, test_name, color = test_handlers[test_key]
-                self.stats[table_type][test_key] = {}
-                
-                test_task = self.progress.add_task(
-                    f"[{color}]{test_name}",
-                    parent=analysis_task,
-                    total=len(tables)
-                )
-                
-                try:
-                    for level in tables:
-                        self.progress.update(test_task, description=f"[{color}]{test_name} [dim]({level})")
-                        
-                        if test_key in ['pca', 'tsne']:
-                            result = test_func(tables[level])
-                        else:
-                            result = test_func(
-                                tables[level],
-                                self.meta,
-                                'nuclear_contamination_status',
-                                progress=self.progress,
-                                parent_task_id=test_task,
-                                level=level
-                            )
-                            
-                        self.stats[table_type][test_key][level] = result
-                        self.progress.advance(test_task)
-                        
-                finally:
-                    self.progress.remove_task(test_task)
-                    self.progress.advance(analysis_task, len(tables))
-                    
-        finally:
-            self.progress.remove_task(analysis_task)
-
-    def _run_pca(self, table):
-        meta, table, _ = df_utils.match_indices_or_transpose(self.meta, table)
-        return beta_diversity.pca(table=table, n_components=3)
-
-    def _run_tsne(self, table):
-        meta, table, _ = df_utils.match_indices_or_transpose(self.meta, table)
-        return beta_diversity.tsne(table=table, n_components=3)
-
-    def _fetch_tables(self, table_type: str) -> Dict[str, pd.DataFrame]:
-        return {
-            'raw': self.tables,
-            'presence_absence': self.presence_absence_tables
-        }.get(table_type, {})
-
-    def _top_features(self, table_type: str):
-        tables = self._fetch_tables(table_type)
-        top_task = self.progress.add_task(f"[yellow]Top Features ({table_type})", total=len(tables))
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
         
-        try:
-            contam_features = []
-            pristine_features = []
-            
+        if 'pca' in enabled_tests:
+            self.stats[table_type]['pca'] = {}
             for level in tables:
-                self.progress.update(top_task, description=f"[yellow]{level.title()}")
-                
-                dfs = [self.stats[table_type][test][level] for test in self.stats[table_type]]
-                combined = pd.concat(dfs).groupby('feature').agg({
-                    'p_value': 'min',
-                    'median_difference': 'mean',
-                    'effect_size_r': 'mean'
-                })
-                
-                sig_features = combined[combined.p_value < 0.05]
-                for feat, row in sig_features.iterrows():
-                    if row.median_difference > 0:
-                        contam_features.append(feat)
-                    else:
-                        pristine_features.append(feat)
-                        
-                self.progress.advance(top_task)
-            
-            output_dir = Path(self.project_dir.tables) / 'stats' / 'top_features'
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            pd.Series(contam_features).to_csv(output_dir / f'top_contaminated_{table_type}.tsv', index=False)
-            pd.Series(pristine_features).to_csv(output_dir / f'top_pristine_{table_type}.tsv', index=False)
-            
-        finally:
-            self.progress.remove_task(top_task)
+                progress.update(vis_task, description=f"[white]PCA {level}")
+                meta, table, _ = df_utils.match_indices_or_transpose(self.meta, tables[level])
+                pca_results = beta_diversity.pca(table=table, n_components=3)
+                self.stats[table_type]['pca'][level] = pca_results
+                progress.advance(vis_task)
 
-    def _plot_stuff(self, table_type: str, figure_type: str):
-        plot_task = self.progress.add_task(f"[green]Plotting {figure_type}", total=len(self.tables))
-        try:
-            for level in self.tables:
-                self.progress.update(plot_task, description=f"[green]{figure_type} {level}")
-                
-                results = self.stats[table_type][figure_type][level]
-                output_dir = Path(self.project_dir.figures) / figure_type / f'l{["phylum","class","order","family","genus"].index(level)+2}'
-                
+        if 'tsne' in enabled_tests:
+            self.stats[table_type]['tsne'] = {}
+            for level in tables:
+                progress.update(vis_task, description=f"[white]t-SNE {level}")
+                meta, table, _ = df_utils.match_indices_or_transpose(self.meta, tables[level])
+                tsne_results = beta_diversity.tsne(table=table, n_components=3)
+                self.stats[table_type]['tsne'][level] = tsne_results
+                progress.advance(vis_task)
+        """
+        # Save statistical results (same as before)
+        stats_dir = Path(self.project_dir.tables) / 'stats' / table_type
+        stats_dir.mkdir(parents=True, exist_ok=True)
+        
+        for test_type in self.stats[table_type]:
+            test_dir = stats_dir / test_type
+            test_dir.mkdir(exist_ok=True)
+            for level in self.stats[table_type][test_type]:
+                df = self.stats[table_type][test_type][level]
+                output_path = test_dir / f"{level}_results.tsv"
+                df.to_csv(output_path, sep='\t', index=True)
+                logger.info(
+                    f"Saved statistical analysis results to {str(output_path)}"
+                )
+        """
+
+    def _top_features(
+        self, 
+        table_type: str = 'presence_absence'    
+    ):
+        # Find top features
+        contaminated_features = []
+        pristine_features = []
+        
+        tables = self._fetch_tables(table_type)
+        
+        # Ensure the stats for the table_type exist
+        if table_type not in self.stats:
+            logger.warning(f"No statistical results found for {table_type}.")
+            return
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            dfs = []
+            for test_type in self.stats[table_type]:    
+                dfs.append(self.stats[table_type][test_type][level])
+            # Merge list of DataFrames on 'feature' using outer join
+            df = reduce(
+                lambda left, right: pd.merge(
+                    left, right, on='feature', how='outer'
+                ), 
+                dfs
+            )
+            #logger.info(df.head())
+            
+            """
+                if 'q_value' not in df.columns:
+                    logger.warning(f"'q_value' column missing in {test_type} results for {level}.")
+                    continue
+                sig_df = df[df['q_value'] < 0.05]
+                for feature, row in sig_df.iterrows():
+                    effect = row.get('mean_diff', row.get('effect_size', 0))
+                    if effect > 0:
+                        contaminated_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': effect,
+                            'q_value': row['q_value']
+                        })
+                    else:
+                        pristine_features.append({
+                            'feature': feature,
+                            'level': level,
+                            'test': test_type,
+                            'effect': abs(effect),
+                            'q_value': row['q_value']
+                        })
+                """
+    
+        # Process and save top features
+        top_dir = Path(self.project_dir.tables) / 'stats' / 'top_features'
+        top_dir.mkdir(parents=True, exist_ok=True)
+        
+        def _process_features(feature_list):
+            if not feature_list:
+                return pd.DataFrame()
+            df = pd.DataFrame(feature_list)
+            return df.sort_values(['effect', 'q_value'], ascending=[False, True]).head(20)
+    
+        top_contam = _process_features(contaminated_features)
+        top_pristine = _process_features(pristine_features)
+    
+        top_contam.to_csv(top_dir / 'top20_contaminated.tsv', sep='\t', index=False)
+        logger.info(f"Saved top 20 features associated with contaminated environments to {str(top_dir / 'top20_contaminated.tsv')}")
+        top_pristine.to_csv(top_dir / 'top20_pristine.tsv', sep='\t', index=False)
+        logger.info(f"Saved top 20 features associated with pristine environments to {str(top_dir / 'top20_pristine.tsv')}")
+
+    def _plot_stuff(
+        self, 
+        table_type: str = 'presence_absence',
+        figure_type: str = 'pca'
+    ):
+        levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
+        color_cols=['dataset_name']
+        symbol_col='nuclear_contamination_status'
+        
+        tables = self._fetch_tables(table_type) 
+        self.figures[table_type] = {}
+        self.figures[table_type][figure_type] = []
+        
+        for level in tables:
+            results = self.stats[table_type][figure_type][level]
+
+            logger.info(f"Plotting {figure_type.upper()}...")
+            for color_col in color_cols:
                 if figure_type == 'pca':
-                    plot_pca(results, self.meta, output_dir)
+                    plot, _ = pca(
+                        components = results['components'], 
+                        proportion_explained = results['exp_var_ratio'], 
+                        metadata=self.meta,
+                        color_col=color_col, 
+                        color_map=self.color_maps[color_col],
+                        symbol_col=symbol_col,
+                        show=False,
+                        output_dir=Path(self.project_dir.figures) / 'pca' / f'l{levels[level]+1}', 
+                        x=1, 
+                        y=2
+                    )
                 elif figure_type == 'tsne':
-                    plot_tsne(results, self.meta, output_dir)
-                    
-                self.progress.advance(plot_task)
-        finally:
-            self.progress.remove_task(plot_task)
+                    plot, _ = mds(
+                        df=results, 
+                        metadata=self.meta,
+                        group_col=color_col, 
+                        symbol_col=symbol_col,
+                        show=False,
+                        output_dir=Path(self.project_dir.figures) / 'tsne' / f'l{levels[level]+1}',
+                        mode='TSNE',
+                        x=1, 
+                        y=2
+                    )
+                
+                self.figures[figure_type].append({
+                    'title': f'{figure_type.upper()} - {level}',
+                    'level': level,
+                    'color_col': color_col,
+                    'symbol_col': symbol_col,
+                    'figure': plot
+                })
+        
+    @staticmethod
+    def _create_progress_columns():
+        return [
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("[white]•"),
+            TimeElapsedColumn(),
+            TextColumn("[white]•"),
+            TimeRemainingColumn(),
+        ]
 
 """
 class AmpliconData:
