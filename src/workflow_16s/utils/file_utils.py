@@ -266,44 +266,91 @@ class AmpliconData:
         return [Path(p) for p in biom_paths]
 
     def _get_meta_paths(self) -> List[Path]:
-        return [Path(str(p.parent).replace('qiime_data', 'metadata')) / 'sample-metadata.tsv' 
-                for p in self._get_biom_paths()]
-
-    def _get_biom_table(self):
-        biom_paths = self._get_biom_paths()
-        if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found in {self.table_dir}")
-        self.table = import_merged_table_biom(biom_paths, 'dataframe', self.output_path, self.verbose)
-
-    def _process_meta_path(self, csv_path: Path) -> pd.DataFrame:
-        df = pd.read_csv(csv_path, sep='\t')
-        df.columns = df.columns.str.lower()
-        
-        # Index handling
-        sample_id_col = next((c for c in ['#sampleid', 'sample-id', 'run_accession'] if c in df.columns), None)
-        df = df.set_index(sample_id_col) if sample_id_col else df.reset_index(drop=True)
-        
-        # Metadata validation
-        if 'nuclear_contamination_status' not in df.columns:
-            df['nuclear_contamination_status'] = False
+        """Get valid metadata paths corresponding to BIOM files."""
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            # Extract dataset identifier from BIOM path
+            parts = biom_path.parts
+            dataset_id = parts[-6]  # Adjust index based on your path structure
             
-        return df
-
+            # Construct metadata path
+            meta_path = (
+                Path(self.project_dir.metadata_per_dataset) 
+                / dataset_id
+                / "sample-metadata.tsv"
+            )
+            
+            if meta_path.exists():
+                meta_paths.append(meta_path)
+            else:
+                logger.warning(f"Metadata not found for {dataset_id} at {meta_path}")
+        
+        if not meta_paths:
+            raise FileNotFoundError("No valid metadata files found")
+        
+        return meta_paths
+    
+    def _process_meta_path(self, csv_path: Path) -> pd.DataFrame:
+        """Process metadata file with robust error handling."""
+        try:
+            df = pd.read_csv(csv_path, sep='\t', dtype=str)
+            
+            # Clean column names
+            df.columns = df.columns.str.strip().str.lower()
+            
+            # Handle different sample ID column names
+            id_columns = ['sampleid', 'sample-id', 'sample_id', 'run_accession']
+            found_cols = [col for col in id_columns if col in df.columns]
+            
+            if not found_cols:
+                raise ValueError(f"No valid ID columns found in {csv_path}")
+                
+            sample_id_col = found_cols[0]
+            df = df.set_index(sample_id_col)
+            
+            # Ensure required columns exist
+            if 'nuclear_contamination_status' not in df.columns:
+                df['nuclear_contamination_status'] = False
+                
+            return df
+            
+        except Exception as e:
+            logger.error(f"Failed to process {csv_path}: {str(e)}")
+            return pd.DataFrame()  # Return empty DataFrame for error tolerance
+    
     def _get_metadata(self):
+        """Load and merge metadata with validation."""
         meta_dfs = []
-        meta_task = self.progress.add_task("[cyan]Loading metadata", total=len(self._get_meta_paths()))
+        
+        meta_task = self.progress.add_task(
+            "[cyan]Loading metadata", 
+            total=len(self._get_meta_paths())
+        )
         
         try:
             for meta_path in self._get_meta_paths():
-                self.progress.update(meta_task, description=f"[cyan]Loading {meta_path.parent.name}")
-                meta_dfs.append(self._process_meta_path(meta_path))
+                self.progress.update(meta_task, description=f"[cyan]Loading {meta_path.name}")
+                
+                df = self._process_meta_path(meta_path)
+                if not df.empty:
+                    meta_dfs.append(df)
+                    
                 self.progress.advance(meta_task)
+                
+            if not meta_dfs:
+                raise ValueError("No valid metadata loaded")
                 
             self.meta = pd.concat(meta_dfs)
             logger.info(f"Loaded metadata for {len(self.meta)} samples")
             
         finally:
             self.progress.remove_task(meta_task)
+
+    def _get_biom_table(self):
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
+            raise FileNotFoundError(f"No BIOM files found in {self.table_dir}")
+        self.table = import_merged_table_biom(biom_paths, 'dataframe', self.output_path, self.verbose)
 
     def _genus_mode(self):
         collapse_task = self.progress.add_task("[blue]Collapsing taxa", total=5)
