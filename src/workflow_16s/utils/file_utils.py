@@ -194,14 +194,14 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
 
 def create_progress() -> Progress:
     return Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True
-        )
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        expand=False
+    )
     
 class AmpliconData:
     def __init__(
@@ -235,38 +235,30 @@ class AmpliconData:
         self.table_dir, output_dir = mode_map.get(mode, (None, None))
 
         
-        self.output_path = (
+        self.table_output_path = (
             Path(self.project_dir.data) / 'merged' / output_dir / 
             'feature-table.biom'
         )
+        self.meta_output_path = (
+            Path(self.project_dir.data) / 'merged' / 'metadata' / 
+            'sample-metadata.tsv'
+        )
 
-        self._get_metadata()
+        self._get_meta_df()
         self._get_biom_table()
 
         mode_funcs = {
-            'genus': self._genus_mode,
             'asv': self._asv_mode,
+            'genus': self._genus_mode,
         }
-        mode_funcs[mode]()  
+        #mode_funcs[mode]()  
         
         # Run statistical analyses
-        self._run_statistical_analyses('raw')
-        self._top_features('raw')
-        if self.cfg['presence_absence']:   
-            self._run_statistical_analyses('presence_absence') 
-            self._top_features('presence_absence') 
-
-    @staticmethod
-    def create_progress() -> Progress:
-        return Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True
-        )
+        #self._run_statistical_analyses('raw')
+        #self._top_features('raw')
+        #if self.cfg['presence_absence']:   
+        #    self._run_statistical_analyses('presence_absence') 
+        #    self._top_features('presence_absence') 
 
     def _get_biom_paths(self) -> List:
         """Get feature table BIOM paths from a pattern."""
@@ -277,7 +269,8 @@ class AmpliconData:
             str(Path(self.project_dir.qiime_data_per_dataset) / BIOM_PATTERN), 
             recursive=True
         )
-        logger.info(f"Found {len(biom_paths)} unique feature tables.")
+        if verbose:
+            logger.info(f"Found {len(biom_paths)} unique feature tables.")
         return biom_paths
         
     def _get_meta_paths(self) -> List:
@@ -287,77 +280,51 @@ class AmpliconData:
             biom_path = Path(biom_path)
             if biom_path.is_file() or biom_path.suffix:
                 biom_path = biom_path.parent
-        
             parts = biom_path.parts
             meta_path = str(
                 Path(self.project_dir.metadata_per_dataset) / 
                 '/'.join(list(parts[-6:-1]))
             ) + '/sample-metadata.tsv'        
             meta_paths.append(meta_path)
-        logger.info(f"Found {len(meta_paths)} unique metadata files.")
+        if verbose:
+            logger.info(f"Found {len(meta_paths)} unique metadata files.")
         return meta_paths
 
     def _get_biom_table(self):
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            raise FileNotFoundError(
-                f"No BIOM files found matching {self.BIOM_PATTERN}"
-            )   
+            error_text = f"No BIOM files found matching {self.BIOM_PATTERN}"
+            logger.error(error_text)
+            raise FileNotFoundError(error_text)   
+            
         self.table = import_merged_table_biom(
             biom_paths, 
             'dataframe',
-            self.output_path,
+            self.table_output_path,
             self.verbose
         )
 
-    def _process_meta_path(
-        self, 
-        csv_path: Union[str, Path], 
-        column_renames: List[Tuple[str, str]]
-    ) -> pd.DataFrame:
-        csv_path = Path(csv_path)
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Metadata file not found: {csv_path}")
-            
-        df = pd.read_csv(csv_path, sep='\t')
-        df.columns = df.columns.str.lower()
-        
-        sample_id_col = next(
-            (col for col in ['run_accession', '#sampleid', 'sample-id'] 
-             if col in df.columns), 
-            None
+    def _get_meta_df(self):
+        meta_paths = [
+            str(
+                Path(self.project_dir.metadata_per_dataset)
+                .joinpath(*(
+                    # take the last 6→1 parts of the BIOM dir
+                    (bp := Path(biom_path)).parent
+                    if bp.is_file() or bp.suffix
+                    else bp
+                ).parts[-6:-1], "sample-metadata.tsv")
+            )
+            for biom_path in self._get_biom_paths()
+        ]
+        self.meta = import_merged_meta_tsv(
+            meta_paths, 
+            self.meta_output_path, 
+            None,
+            self.verbose
         )
-        if sample_id_col:
-            df['SAMPLE ID'] = df[sample_id_col]
-        else:
-            df['SAMPLE ID'] = [f"{Path(csv_path).parents[5].name}_x{i}" 
-                               for i in range(1, len(df)+1)]
-            
-        dataset_id_col = next(
-            (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
-             if col in df.columns), 
-            None
-        )
-        if dataset_id_col:
-            df['DATASET ID'] = df[dataset_id_col]
-        else:
-            df['DATASET ID'] = Path(csv_path).parents[5].name
-            
-        if 'nuclear_contamination_status' not in df.columns:
-            df['nuclear_contamination_status'] = False
 
-        for old, new in column_renames:
-            if old in df.columns:
-                df.rename(columns={old: new}, inplace=True)
-                
-        return df
     
-    def _get_metadata(self):
-        meta_dfs = []
-        for meta_path in self._get_meta_paths():  
-            meta_df = self._process_meta_path(meta_path, []).set_index('#sampleid')
-            meta_dfs.append(meta_df)
-        self.meta = pd.concat(meta_dfs)
         
     def _genus_mode(self):                
         # Collapse tables for higher taxonomic levels (returns BIOM Tables)
@@ -1007,22 +974,77 @@ class AmpliconData:
 
 
 """
-def import_metadata_tsv(
+
+def import_meta_tsv(
     tsv_path: Union[str, Path], 
-    index_col: str = '#SampleID'
+    column_renames: List[Tuple[str, str]]
 ) -> pd.DataFrame:
-    """Import metadata from TSV file.
+    tsv_path = Path(tsv_path)
+    if not tsv_path.exists():
+        raise FileNotFoundError(f"Metadata file not found: {tsv_path}")
+            
+    df = pd.read_csv(tsv_path, sep='\t')
+    df.columns = df.columns.str.lower()
+        
+    sample_id_col = next(
+        (col for col in ['run_accession', '#sampleid', 'sample-id'] 
+            if col in df.columns), 
+        None
+    )
+    if sample_id_col:
+        df['SAMPLE ID'] = df[sample_id_col]
+    else:
+        df['SAMPLE ID'] = [f"{Path(tsv_path).parents[5].name}_x{i}" 
+                            for i in range(1, len(df)+1)]
+            
+    dataset_id_col = next(
+        (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
+            if col in df.columns), 
+        None
+    )
+    if dataset_id_col:
+        df['DATASET ID'] = df[dataset_id_col]
+    else:
+        df['DATASET ID'] = Path(tsv_path).parents[5].name
+            
+    if 'nuclear_contamination_status' not in df.columns:
+        df['nuclear_contamination_status'] = False
+
+    for old, new in column_renames:
+        if old in df.columns:
+            df.rename(columns={old: new}, inplace=True)
+                
+    return df
     
-    Args:
-        tsv_path: Path to metadata TSV
-        index_col: Column to use as index
+def import_merged_meta_tsv(
+    meta_paths: List[Union[str, Path], 
+    output_path: Union[str, Path] = None, 
+    column_renames: List[Tuple[str, str]] = None,
+    verbose: bool = False
+):
+    dfs = []
+    for path in meta_paths:  
+        try:
+            df = import_meta_tsv(path, column_renames)
+            dfs.append(df)
+            if verbose:
+                logger.info(f"Loaded {Path(path).name} with {len(df.shape[0])} samples")
+        except Exception as e:
+            logger.error(f"Failed to load {path}: {str(e)}")
     
-    Returns:
-        Metadata DataFrame
-    """
-    return pd.read_csv(
-        tsv_path, sep="\t", encoding="utf8", low_memory=False, index_col=index_col
-    ).sort_index()
+    df = pd.concat(dfs)
+
+    if output_path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(output_path, sep='\t', index=True)
+        if verbose:
+            n_samples, n_features = df.shape
+            shape_str = f"[{n_samples}, {n_features}]"
+            logger.info(f"Wrote table {shape_str} to {output_path}")
+
+    return df
+
 
    
 # ======================================= BIOM ======================================= #
@@ -1097,9 +1119,8 @@ def import_merged_table_biom(
             merged_table.to_hdf5(f, generated_by="workflow_16s")
         if verbose:
             n_features, n_samples = merged_table.shape
-            # Format into [x, y] string
             shape_str = f"[{n_features}, {n_samples}]"
-            #logger.info(f"Wrote table {shape_str} to {output_path}")
+            logger.info(f"Wrote table {shape_str} to {output_path}")
 
     return merged_table if as_type == 'table' else merged_table.to_dataframe()
 
