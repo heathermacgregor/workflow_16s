@@ -283,7 +283,6 @@ def t_test(
     df = table_to_dataframe(table)
     return _base_statistical_test(
         df, metadata, group_column,
-        test_name="Student's t-test",
         test_func=ttest_ind,
         test_name="T-Test",  # Add test name
         progress=progress,
