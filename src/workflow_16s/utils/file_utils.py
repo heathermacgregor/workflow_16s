@@ -389,7 +389,7 @@ class AmpliconData:
             main_task = progress.add_task(
                 f"[bold green]Running {table_type} analyses",
                 total=len(enabled_tests)*len(tables)
-            
+            )
             # T-Test
             if 't_test' in enabled_tests:
                 self.stats[table_type]['t_test'] = self._run_test_for_all_levels(
