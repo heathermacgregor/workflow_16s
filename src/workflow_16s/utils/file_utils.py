@@ -305,18 +305,21 @@ class AmpliconData:
         )
 
     def _get_meta_df(self):
-        meta_paths = [
-            str(
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            p = Path(biom_path)
+            # if it's a file *or* has a suffix, work in its parent dir
+            dataset_dir = p.parent if p.is_file() or p.suffix else p
+        
+            # grab the last 6→1 parts of that directory
+            tail_parts   = dataset_dir.parts[-6:-1]
+        
+            # build the full metadata path and cast to str
+            meta_file = (
                 Path(self.project_dir.metadata_per_dataset)
-                .joinpath(*(
-                    # take the last 6→1 parts of the BIOM dir
-                    (bp := Path(biom_path)).parent
-                    if bp.is_file() or bp.suffix
-                    else bp
-                ).parts[-6:-1], "sample-metadata.tsv")
+                .joinpath(*tail_parts, "sample-metadata.tsv")
             )
-            for biom_path in self._get_biom_paths()
-        ]
+            meta_paths.append(str(meta_file))
         self.meta = import_merged_meta_tsv(
             meta_paths, 
             self.meta_output_path, 
