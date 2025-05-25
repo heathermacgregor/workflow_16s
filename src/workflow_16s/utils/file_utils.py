@@ -414,7 +414,7 @@ class AmpliconData:
 
         with create_progress() as progress:
             main_task = progress.add_task(
-                f"[bold green]Running {table_type} analyses",
+                f"[white]Running {table_type} analyses",
                 total=len(enabled_tests)*len(tables)
             )
             # T-Test
@@ -460,17 +460,23 @@ class AmpliconData:
     def _run_test_for_all_levels(self, progress, parent_task_id, test_name, test_func, tables):
         results = {}
         for level in tables:
-            task_desc = f"[cyan]{test_name} [dim]({level})"
+            task_desc = f"[white]{test_name} [dim]({level})".ljust(DEFAULT_PROGRESS_TEXT_N)
+            task_id = progress.add_task(
+                description=task_desc,
+                total=len(features),
+                parent=parent_task_id
+            )
+            
             with progress:
                 results[level] = test_func(
                     table=tables[level],
                     metadata=self.meta,
-                    group_column='nuclear_contamination_status',
-                    progress=progress,
-                    parent_task_id=parent_task_id,
-                    level=level
+                    group_column='nuclear_contamination_status'
                 )
                 progress.update(parent_task_id, advance=1)
+        # stop and hide progress bar for this step when done
+        step_progress.stop_task(step_task_id)
+        step_progress.update(step_task_id, visible=False)
         return results
 
     def _run_visual_analyses(self, progress, parent_task_id, table_type, tables, enabled_tests):
