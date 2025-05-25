@@ -192,6 +192,17 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
 
 # ==================================== FUNCTIONS ===================================== #   
 
+def create_progress() -> Progress:
+    return Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            expand=True
+        )
+    
 class AmpliconData:
     def __init__(
         self, 
