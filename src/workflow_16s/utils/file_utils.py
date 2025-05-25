@@ -1017,7 +1017,7 @@ def import_meta_tsv(
     return df
     
 def import_merged_meta_tsv(
-    meta_paths: List[Union[str, Path], 
+    meta_paths: List[Union[str, Path]], 
     output_path: Union[str, Path] = None, 
     column_renames: List[Tuple[str, str]] = None,
     verbose: bool = False
