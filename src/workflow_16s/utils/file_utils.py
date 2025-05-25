@@ -269,7 +269,7 @@ class AmpliconData:
             str(Path(self.project_dir.qiime_data_per_dataset) / BIOM_PATTERN), 
             recursive=True
         )
-        if verbose:
+        if self.verbose:
             logger.info(f"Found {len(biom_paths)} unique feature tables.")
         return biom_paths
         
@@ -286,7 +286,7 @@ class AmpliconData:
                 '/'.join(list(parts[-6:-1]))
             ) + '/sample-metadata.tsv'        
             meta_paths.append(meta_path)
-        if verbose:
+        if self.verbose:
             logger.info(f"Found {len(meta_paths)} unique metadata files.")
         return meta_paths
 
