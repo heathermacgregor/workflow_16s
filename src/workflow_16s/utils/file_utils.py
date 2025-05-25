@@ -476,8 +476,8 @@ class AmpliconData:
                 )
                 progress.update(parent_task_id, advance=1)
         # stop and hide progress bar for this step when done
-        step_progress.stop_task(step_task_id)
-        step_progress.update(step_task_id, visible=False)
+        progress.stop_task(task_id)
+        progress.update(task_id, visible=False)
         return results
 
     def _run_visual_analyses(self, progress, parent_task_id, table_type, tables, enabled_tests):
