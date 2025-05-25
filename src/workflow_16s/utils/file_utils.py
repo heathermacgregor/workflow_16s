@@ -265,29 +265,21 @@ class AmpliconData:
         logger.info(f"Found {len(biom_paths)} BIOM tables")
         return [Path(p) for p in biom_paths]
 
-    def _get_meta_paths(self) -> List[Path]:
-        """Get valid metadata paths corresponding to BIOM files."""
+    def _get_meta_paths(self) -> List:
+        """"""
         meta_paths = []
         for biom_path in self._get_biom_paths():
-            # Extract dataset identifier from BIOM path
+            biom_path = Path(biom_path)
+            if biom_path.is_file() or biom_path.suffix:
+                biom_path = biom_path.parent
+        
             parts = biom_path.parts
-            dataset_id = parts[-6]  # Adjust index based on your path structure
-            
-            # Construct metadata path
-            meta_path = (
-                Path(self.project_dir.metadata_per_dataset) 
-                / dataset_id
-                / "sample-metadata.tsv"
-            )
-            
-            if meta_path.exists():
-                meta_paths.append(meta_path)
-            else:
-                logger.warning(f"Metadata not found for {dataset_id} at {meta_path}")
-        
-        if not meta_paths:
-            raise FileNotFoundError("No valid metadata files found")
-        
+            meta_path = str(
+                Path(self.project_dir.metadata_per_dataset) / 
+                '/'.join(list(parts[-6:-1]))
+            ) + '/sample-metadata.tsv'        
+            meta_paths.append(meta_path)
+        logger.info(f"Found {len(meta_paths)} unique metadata files.")
         return meta_paths
     
     def _process_meta_path(self, csv_path: Path) -> pd.DataFrame:
