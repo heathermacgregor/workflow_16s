@@ -228,9 +228,9 @@ def t_test(
             f"{missing} samples have NaN in '{col}' after merge. "
             f"Check metadata completeness."
         )
-    # Get unique groups if col_values not specified
-    if col_values is None:
-        col_values = table_with_col[col].unique().tolist()
+    # Get unique groups if groups not specified
+    if groups is None:
+        groups = table_with_col[col].unique().tolist()
     
     results = []
     group_data = metadata[group_col].values
