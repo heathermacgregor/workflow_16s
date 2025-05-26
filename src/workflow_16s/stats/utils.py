@@ -248,7 +248,8 @@ def t_test(
         try:
             g1 = table.loc[group_data == groups[0], feature].dropna()
             g2 = table.loc[group_data == groups[1], feature].dropna()
-            
+            print(len(g1)) 
+            print(len(g2))
             if len(g1) < 2 or len(g2) < 2:
                 continue
                 
