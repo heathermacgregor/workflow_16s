@@ -254,13 +254,16 @@ def t_test(
             total=len(features),
             parent=parent_task_id
         )
-
+    print(table.shape)
+    print(table_with_col.shape)
+    print(metadata.shape)
     for feature in features:
         try:
             # Use boolean Series for correct index alignment
             g1 = table.loc[group_series == groups[0], feature].dropna()
             g2 = table.loc[group_series == groups[1], feature].dropna()
-            
+            print(g1.shape)
+            print(g2.shape)
             if len(g1) < 2 or len(g2) < 2:
                 continue  # Skip features with insufficient data
                 
