@@ -118,7 +118,7 @@ def t_test(
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     results_df = results_df[results_df['p_value'].notna()]
-    results_df = results_df['p_value'] > 0)]
+    results_df = results_df[results_df['p_value'] > 0)]
     results_df = results_df.sort_values('p_value')
     logger.info(results_df.head())
     return results_df
