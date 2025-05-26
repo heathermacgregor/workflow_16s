@@ -56,6 +56,8 @@ DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 DEFAULT_PSEUDOCOUNT = 1e-5
 
+DEFAULT_PROGRESS_TEXT_N = 50
+
 # ================================ CORE FUNCTIONALITY ================================ #
 
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
