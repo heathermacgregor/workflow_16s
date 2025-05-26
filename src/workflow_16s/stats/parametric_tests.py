@@ -84,11 +84,8 @@ def t_test(
     Returns:
         results:    Results sorted by p-value with test statistics, excluding features with p=0 or NaN.
     """
-    print(table)
     table = table_to_dataframe(table)
-    print(table.head())
     table_with_col = merge_table_with_metadata(table, metadata, group_col)
-    print(table_with_col.head())
     features = list(table_with_col.columns.drop(group_col))
 
     task_desc = f"[white]T-Test[/] ({level or 'all features'})".ljust(DEFAULT_PROGRESS_TEXT_N)
@@ -105,8 +102,6 @@ def t_test(
         
         group1_values = table_with_col.loc[mask_group1, feature].dropna()
         group2_values = table_with_col.loc[mask_group2, feature].dropna()
-        print("Group1 values sample:", group1_values[:5])
-        print("Group2 values sample:", group2_values[:5])
         if len(group1_values) < 1 or len(group2_values) < 1:
             continue
             
