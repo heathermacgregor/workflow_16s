@@ -84,7 +84,9 @@ def t_test(
     Returns:
         results:    Results sorted by p-value with test statistics, excluding features with p=0 or NaN.
     """
+    print(table)
     table = table_to_dataframe(table)
+    print(table.head())
     table_with_col = merge_table_with_metadata(table, metadata, group_col)
     print(table_with_col.head())
     features = list(table_with_col.columns.drop(group_col))
