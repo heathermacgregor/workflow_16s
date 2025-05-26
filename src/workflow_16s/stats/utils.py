@@ -228,14 +228,25 @@ def t_test(
             f"{missing} samples have NaN in '{col}' after merge. "
             f"Check metadata completeness."
         )
-    # Get unique groups if groups not specified
-    if groups is None:
-        groups = table_with_col[col].unique().tolist()
     
-    results = []
-    group_data = metadata[col].values
+    # Determine and validate groups
+    unique_groups = table_with_col[col].unique().tolist()
+    if groups is None:
+        if len(unique_groups) != 2:
+            raise ValueError(f"Expected exactly two groups, found {len(unique_groups)}")
+        groups = unique_groups
+    else:
+        if len(groups) != 2:
+            raise ValueError("groups must contain exactly two elements")
+        for g in groups:
+            if g not in unique_groups:
+                raise ValueError(f"Group {g} not found in column '{col}'")
+    
+    group_series = table_with_col[col]  # Use merged data for group alignment
 
-    features = table.columns
+    results = []
+    features = table.columns  # Features from original table (aligned via merge validation)
+    
     if progress:
         task_desc = f"[white]T-Test[/] ({level or 'all features'})"
         task_id = progress.add_task(
@@ -246,12 +257,12 @@ def t_test(
 
     for feature in features:
         try:
-            g1 = table.loc[group_data == groups[0], feature].dropna()
-            g2 = table.loc[group_data == groups[1], feature].dropna()
-            print(len(g1)) 
-            print(len(g2))
+            # Use boolean Series for correct index alignment
+            g1 = table.loc[group_series == groups[0], feature].dropna()
+            g2 = table.loc[group_series == groups[1], feature].dropna()
+            
             if len(g1) < 2 or len(g2) < 2:
-                continue
+                continue  # Skip features with insufficient data
                 
             t, p = ttest_ind(g1, g2, equal_var=False)
             results.append({
@@ -272,7 +283,6 @@ def t_test(
         progress.update(task_id, visible=False)
         
     return pd.DataFrame(results).sort_values('p_value')
-    
 
 def mwu_bonferroni(
     table: pd.DataFrame,
