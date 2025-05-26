@@ -102,7 +102,8 @@ def t_test(
         
         group1_values = table_with_col.loc[mask_group1, feature].dropna()
         group2_values = table_with_col.loc[mask_group2, feature].dropna()
-        
+        print("Group1 values sample:", group1_values[:5])
+        print("Group2 values sample:", group2_values[:5])
         if len(group1_values) < 1 or len(group2_values) < 1:
             continue
             
