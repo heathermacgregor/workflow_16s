@@ -97,8 +97,8 @@ def t_test(
   
     results = []
     for feature in features:
-        mask_group1 = (table_with_col[col] == col_values[0])
-        mask_group2 = (table_with_col[col] == col_values[1])
+        mask_group1 = (table_with_col[group_col] == col_values[0])
+        mask_group2 = (table_with_col[group_col] == col_values[1])
         
         group1_values = table_with_col.loc[mask_group1, feature].dropna()
         group2_values = table_with_col.loc[mask_group2, feature].dropna()
