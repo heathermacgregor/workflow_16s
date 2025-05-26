@@ -254,8 +254,9 @@ class AmpliconData:
         }
         mode_funcs[mode]()  
         # Run statistical analyses
-        self._run_statistical_analyses('raw')
-        self._top_features('raw')
+        for table_type in ['raw', 'filtered', 'normalized', 'clr', 'presence_absence']:
+            self._run_statistical_analyses(table_type)
+            self._top_features(table_type)
         #if self.cfg['presence_absence']:   
         #    self._run_statistical_analyses('presence_absence') 
         #    self._top_features('presence_absence') -
