@@ -522,7 +522,7 @@ class AmpliconData:
                         table=tables[level],
                         metadata=self.meta,
                         group_column='nuclear_contamination_status',
-                        groups=[True, False],
+                        #groups=[True, False],
                         progress=progress,
                         parent_task_id=main_task,
                         level=level,
