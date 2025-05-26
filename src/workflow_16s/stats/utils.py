@@ -86,7 +86,7 @@ def merge_table_with_metadata(
     # Reset indexes for merging
     table = table.reset_index().rename(columns={table_index_name: 'temp_index'})
     metadata = metadata.reset_index().rename(columns={meta_index_name: 'temp_index'})
-    print(table.head())
+    
     # Sanitize IDs
     table['temp_index'] = table['temp_index'].astype(str).str.strip().str.lower()
     metadata['temp_index'] = metadata['temp_index'].astype(str).str.strip().str.lower()
