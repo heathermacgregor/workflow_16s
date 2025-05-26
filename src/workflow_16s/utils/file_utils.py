@@ -415,7 +415,7 @@ class AmpliconData:
                     self.tables["presence_absence"] = {}
                     pa_task = progress.add_task(
                         "[white]Generating presence/absence tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(self.tables)
+                        total=len(tax_levels)
                     )
                     for level in self.tables["raw"]:
                         pa_table = presence_absence(
@@ -434,7 +434,7 @@ class AmpliconData:
                     self.tables["filtered"] = {}
                     filter_task = progress.add_task(
                         "[white]Filtering tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(self.tables)
+                        total=len(tax_levels)
                     )
                     for level in self.tables["raw"]:
                         table = preprocess_table(
@@ -450,7 +450,7 @@ class AmpliconData:
                     self.tables["normalized"] = {}
                     n_task = progress.add_task(
                         "[white]Normalizing tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(self.tables)
+                        total=len(tax_levels)
                     )
                     for level in self.tables["filtered"]:
                         table = preprocess_table(
@@ -466,7 +466,7 @@ class AmpliconData:
                     self.tables["clr"] = {}
                     clr_task = progress.add_task(
                         "[white]CLR-transforming tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(self.tables)
+                        total=len(tax_levels)
                     )
                     for level in self.tables["normalized"]:
                         table = preprocess_table(
@@ -499,7 +499,7 @@ class AmpliconData:
 
     def _run_statistical_analyses(self, table_type: str = 'presence_absence'):
         self.stats[table_type] = {}
-        tables = self._fetch_tables(table_type)
+        #tables = self._fetch_tables(table_type)
         
         enabled_tests = [
             test for test in [
