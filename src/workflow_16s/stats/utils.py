@@ -218,8 +218,8 @@ def t_test(
     level: Optional[str] = None,
 ) -> pd.DataFrame:
     """Perform independent t-tests between groups."""
-    df = table_to_dataframe(table)
-    table_with_col = merge_table_with_metadata(df, metadata, col)
+    table = table_to_dataframe(table)
+    table_with_col = merge_table_with_metadata(table, metadata, col)
 
     # Validate successful merge
     if table_with_col[col].isna().any():
