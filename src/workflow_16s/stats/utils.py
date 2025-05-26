@@ -1,11 +1,20 @@
 # ===================================== IMPORTS ====================================== #
-
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from biom import Table
+from rich.progress import (
+    Progress, 
+    BarColumn, 
+    TextColumn, 
+    TimeRemainingColumn,
+    TimeElapsedColumn,
+    MofNCompleteColumn,
+    SpinnerColumn,
+    TaskID
+)
 from scipy import stats
 from scipy.spatial.distance import braycurtis, pdist, squareform
 from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
@@ -21,19 +30,22 @@ from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 import logging
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    track,
-    TaskID
-)
 
 logger = logging.getLogger('workflow_16s')
+
+# ================================= PROGRESS SETUP =================================== #
+
+def create_progress() -> Progress:
+    """Create a pre-configured Rich Progress instance."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        expand=True
+    )
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -124,10 +136,7 @@ def filter_features(
     return table.loc[:, feature_mask]
     
 
-def filter_samples(
-    table: pd.DataFrame, 
-    min_counts: int
-) -> pd.DataFrame:
+def filter_samples(table: pd.DataFrame, min_counts: int) -> pd.DataFrame:
     """Filter samples by total counts."""
     sample_mask = table.sum(axis=1) >= min_counts
     return table.loc[sample_mask]
@@ -138,20 +147,13 @@ def preprocess_table(
     apply_filter: bool = False,
     normalize: bool = True,
     clr_transform: bool = True,
-    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
-    min_samples: int = DEFAULT_MIN_SAMPLES,
-    min_counts: int = DEFAULT_MIN_COUNTS,
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> pd.DataFrame:
     """Preprocess table with filtering, normalization, and CLR."""
     df = table_to_dataframe(table)
+    
     if apply_filter:
-        df = filter_table(
-            df,
-            min_rel_abundance, 
-            min_samples, 
-            min_counts
-        )
+        df = filter_table(df)
     if normalize:
         df = normalize_table(df)
     if clr_transform:
@@ -207,237 +209,170 @@ def k_means(
     )
     
 
-# Statistical Test Implementations
-def t_test(
+def _base_statistical_test(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
-    col: str,
-    groups: List,
+    group_column: str,
+    test_name: str,
+    test_func: callable,
     progress: Optional[Progress] = None,
     parent_task_id: Optional[TaskID] = None,
     level: Optional[str] = None,
+    **test_kwargs
 ) -> pd.DataFrame:
-    """Perform independent t-tests between groups."""
-    table = table_to_dataframe(table)
-    table_with_col = merge_table_with_metadata(table, metadata, col)
-
-    # Validate successful merge
-    if table_with_col[col].isna().any():
-        missing = table_with_col[col].isna().sum()
-        raise ValueError(
-            f"{missing} samples have NaN in '{col}' after merge. "
-            f"Check metadata completeness."
-        )
-    
-    # Determine and validate groups
-    unique_groups = table_with_col[col].unique().tolist()
-    if groups is None:
-        if len(unique_groups) != 2:
-            raise ValueError(f"Expected exactly two groups, found {len(unique_groups)}")
-        groups = unique_groups
-    else:
-        if len(groups) != 2:
-            raise ValueError("groups must contain exactly two elements")
-        for g in groups:
-            if g not in unique_groups:
-                raise ValueError(f"Group {g} not found in column '{col}'")
-    
-    group_series = table_with_col[col]  # Use merged data for group alignment
-
+    """Base function for statistical tests with Rich progress integration."""
+    merged = merge_table_with_metadata(table, metadata, group_column)
+    features = merged.columns.drop(group_column)
     results = []
-    features = table.columns  # Features from original table (aligned via merge validation)
     
-    if progress:
-        task_desc = f"[white]T-Test[/] ({level or 'all features'})"
-        task_id = progress.add_task(
-            description=task_desc,
-            total=len(features),
-            parent=parent_task_id
-        )
-    print(table.shape)
-    print(table_with_col.shape)
-    print(metadata.shape)
-    for feature in features:
-        try:
-            # Use boolean Series for correct index alignment
-            g1 = table.loc[group_series == groups[0], feature].dropna()
-            g2 = table.loc[group_series == groups[1], feature].dropna()
-            print(g1.shape)
-            print(g2.shape)
-            if len(g1) < 2 or len(g2) < 2:
-                continue  # Skip features with insufficient data
-                
-            t, p = ttest_ind(g1, g2, equal_var=False)
-            results.append({
-                'feature': feature,
-                't_statistic': t,
-                'p_value': p,
-                'mean_difference': g1.mean() - g2.mean()
-            })
-        
-        except Exception as e:
-            logger.debug(f"Test failed for {feature}: {str(e)}")
+    # Progress management
+    auto_progress = False
+    if progress is None:
+        progress = create_progress()
+        auto_progress = True
+        progress.start()
 
-        if progress:
-            progress.update(task_id, advance=1)
-    
-    if progress:
-        progress.stop_task(task_id)
-        progress.update(task_id, visible=False)
+    task_desc = f"[bold cyan]{test_name}[/] ({level or 'all features'})"
+    task_id = progress.add_task(
+        description=task_desc,
+        total=len(features),
+        parent=parent_task_id
+    )
+
+    try:
+        for feature in features:
+            groups = [
+                g.dropna() for _, g in merged.groupby(group_column)[feature]
+            ]
+            if len(groups) < 2:
+                progress.advance(task_id)
+                continue
+
+            try:
+                stat, p = test_func(*groups, **test_kwargs)
+                results.append({
+                    'feature': feature,
+                    'statistic': stat,
+                    'p_value': max(p, 1e-10)  # Prevent log(0) in downstream analysis
+                })
+            except Exception as e:
+                logger.debug(f"Test failed for {feature}: {str(e)}")
+            
+            progress.advance(task_id)
         
-    return pd.DataFrame(results).sort_values('p_value')
+        # Update style for completed task
+        progress.update(task_id, description=f"[dim]{task_desc}")
+    
+    finally:
+        if auto_progress:
+            progress.stop()
+
+    return pd.DataFrame(results).dropna(subset=['p_value'])
+
+# ============================== STATISTICAL INTERFACE =============================== #
+
+def t_test(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    group_column: str = DEFAULT_GROUP_COLUMN,
+    progress: Optional[Progress] = None,
+    parent_task_id: Optional[TaskID] = None,
+    level: Optional[str] = None
+) -> pd.DataFrame:
+    """Independent t-tests between groups with Rich progress."""
+    df = table_to_dataframe(table)
+    return _base_statistical_test(
+        df, metadata, group_column,
+        test_func=ttest_ind,
+        test_name="T-Test",  # Add test name
+        progress=progress,
+        parent_task_id=parent_task_id,
+        level=level,
+        equal_var=False
+    )
+
 
 def mwu_bonferroni(
-    table: pd.DataFrame,
+    table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str,
-    groups: List,
+    group_column: str = DEFAULT_GROUP_COLUMN,
     progress: Optional[Progress] = None,
     parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None,
+    level: Optional[str] = None
 ) -> pd.DataFrame:
-    """Mann-Whitney U test with Bonferroni correction."""
-    df = table_to_dataframe(table)
-    table_with_col = merge_table_with_metadata(df, metadata, col)
+    """Mann-Whitney U tests with Bonferroni correction."""
+    results = _base_statistical_test(
+        table_to_dataframe(table), metadata, group_column,
+        test_name="Mann-Whitney U",
+        test_func=mannwhitneyu,
+        progress=progress,
+        parent_task_id=parent_task_id,
+        level=level,
+        alternative='two-sided'
+    )
+    threshold = 0.01 / len(results)
+    return results[results.p_value <= threshold].sort_values('p_value')
 
-    # Validate successful merge
-    if table_with_col[col].isna().any():
-        missing = table_with_col[col].isna().sum()
-        raise ValueError(
-            f"{missing} samples have NaN in '{col}' after merge. "
-            f"Check metadata completeness."
-        )
-    # Get unique groups if col_values not specified
-    if col_values is None:
-        col_values = table_with_col[col].unique().tolist()
-
-    # Pre-calculate Bonferroni threshold
-    total_features = len(table_with_col.columns.drop(col))
-    threshold = 0.01 / total_features
-
-    features = table.columns
-    if progress:
-        task_desc = f"[white]T-Test[/] ({level or 'all features'})"
-        task_id = progress.add_task(
-            description=task_desc,
-            total=len(features),
-            parent=parent_task_id
-        )
-    
-    results = []
-    group_data = metadata[col].values
-    
-    for feature in features:
-        try:
-            g1 = table.loc[group_data == groups[0], feature].dropna()
-            g2 = table.loc[group_data == groups[1], feature].dropna()
-            
-            if len(g1) < 1 or len(g2) < 1:
-                continue
-                
-            u, p = mannwhitneyu(g1, g2, alternative='two-sided')
-            results.append({
-                'feature': feature,
-                'u_statistic': u,
-                'p_value': p,
-                'median_difference': g1.median() - g2.median()
-            })
-        except Exception as e:
-            logger.debug(f"Test failed for {feature}: {str(e)}")
-
-        if progress:
-            progress.update(task_id, advance=1)
-    
-    if progress:
-        progress.stop_task(task_id)
-        progress.update(task_id, visible=False)
-    
-    df = pd.DataFrame(results)
-    df['p_value'] = np.minimum(df['p_value'] * len(df), 1.0)
-    return df.sort_values('p_value')
-    
 
 def kruskal_bonferroni(
-    table: pd.DataFrame,
+    table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    col: str,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None,
+    group_column: str = DEFAULT_GROUP_COLUMN,
+    **kwargs
 ) -> pd.DataFrame:
     """Kruskal-Wallis test with Bonferroni correction."""
     df = table_to_dataframe(table)
-    table_with_col = merge_table_with_metadata(df, metadata, col)
-
-    # Validate successful merge
-    if table_with_col[col].isna().any():
-        missing = table_with_col[col].isna().sum()
-        raise ValueError(
-            f"{missing} samples have NaN in '{col}' after merge. "
-            f"Check metadata completeness."
-        )
-    # Get unique groups if col_values not specified
-    if col_values is None:
-        col_values = table_with_col[col].unique().tolist()
-
-    # Pre-calculate Bonferroni threshold
-    total_features = len(table_with_col.columns.drop(col))
-    threshold = 0.01 / total_features
-        
-    results = []
-    groups = metadata[col].unique()
-
-    features = table.columns
-    if progress:
-        task_desc = f"[white]Kruskal (Bonferroni)[/] ({level or 'all features'})"
-        task_id = progress.add_task(
-            description=task_desc,
-            total=len(features),
-            parent=parent_task_id
-        )
-    
-    for feature in features:
-        try:
-            group_data = [table.loc[metadata[col] == g, feature].dropna().values for g in groups]
-            h, p = kruskal(*group_data)
-            esults.append({
-                'feature': feature,
-                'h_statistic': h,
-                'p_value': p,
-                'epsilon_squared': h / (len(table) - 1)
-            })
-        except ValueError:
-            continue
-            
-        if progress:
-            progress.update(task_id, advance=1)
-    
-    if progress:
-        progress.stop_task(task_id)
-        progress.update(task_id, visible=False)
-    
-    df = pd.DataFrame(results)
-    df['p_value'] = np.minimum(df['p_value'] * len(df), 1.0)
-    return df.sort_values('p_value')
+    results = _base_statistical_test(
+        df, metadata, group_column, 
+        test_name="Kruskal-Wallis",  # Add test name
+        test_func=kruskal,
+        **kwargs
+    )
+    threshold = 0.01 / len(results)
+    return results[results.p_value <= threshold].sort_values('p_value')
     
 
 def variability_explained(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
+    progress: Optional[Progress] = None,
+    parent_task_id: Optional[TaskID] = None,
+    level: Optional[str] = None
 ) -> pd.DataFrame:
-    """Calculate R²."""
+    """Calculate R² with Rich progress integration."""
     merged = merge_table_with_metadata(table_to_dataframe(table), metadata, group_column)
     X = merged[[group_column]]
     features = merged.columns.drop(group_column)
     r_squared = []
     
-    for feature in features:
-        y = merged[[feature]]
-        model = LinearRegression().fit(X, y)
-        r_squared.append({
-            'feature': feature,
-            'r_squared': model.score(X, y)
-        })
+    auto_progress = False
+    if progress is None:
+        progress = create_progress()
+        auto_progress = True
+        progress.start()
+
+    task_desc = f"[bold cyan]R² Analysis[/] ({level or 'all features'})"
+    task_id = progress.add_task(
+        description=task_desc,
+        total=len(features),
+        parent=parent_task_id
+    )
+
+    try:
+        for feature in features:
+            y = merged[[feature]]
+            model = LinearRegression().fit(X, y)
+            r_squared.append({
+                'feature': feature,
+                'r_squared': model.score(X, y)
+            })
+            progress.advance(task_id)
+        
+        progress.update(task_id, description=f"[dim]{task_desc}")
     
+    finally:
+        if auto_progress:
+            progress.stop()
+
     return pd.DataFrame(r_squared).sort_values('r_squared', ascending=False)
