@@ -519,9 +519,6 @@ class AmpliconData:
                     total=len(tables)
                 )
                 for level in self.tables[table_type]:
-                    logger.info(level)
-                    logger.info(tables[level])
-                    logger.info(self.tables[table_type][level])
                     self.stats[table_type]['t-test'][level] = t_test(
                         table=tables[level],
                         metadata=self.meta,
