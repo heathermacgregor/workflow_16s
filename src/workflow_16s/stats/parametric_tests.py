@@ -86,6 +86,7 @@ def t_test(
     """
     table = table_to_dataframe(table)
     table_with_col = merge_table_with_metadata(table, metadata, group_col)
+    print(talbe_with_col.head())
     features = list(table_with_col.columns.drop(group_col))
 
     task_desc = f"[white]T-Test[/] ({level or 'all features'})".ljust(DEFAULT_PROGRESS_TEXT_N)
