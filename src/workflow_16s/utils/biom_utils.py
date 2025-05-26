@@ -124,9 +124,9 @@ def collapse_taxa(
     if verbose:
         n_features, n_samples = collapsed_table.shape
         shape_str = f"[{n_features}, {n_samples}]"
-        #logger.info(
-        #    f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
-        #)
+        logger.info(
+            f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
+        )
     
     return collapsed_table
   
@@ -183,9 +183,9 @@ def presence_absence(
     if verbose:
         n_features, n_samples = pa_table.shape
         shape_str = f"[{n_features}, {n_samples}]"
-        #logger.info(
-        #    f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
-        #)
+        logger.info(
+            f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
+        )
     
     return pa_table
 
