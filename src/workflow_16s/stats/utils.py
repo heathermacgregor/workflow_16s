@@ -233,7 +233,7 @@ def t_test(
         groups = table_with_col[col].unique().tolist()
     
     results = []
-    group_data = metadata[group_col].values
+    group_data = metadata[col].values
 
     features = table.columns
     if progress:
@@ -311,7 +311,7 @@ def mwu_bonferroni(
         )
     
     results = []
-    group_data = metadata[group_col].values
+    group_data = metadata[col].values
     
     for feature in features:
         try:
@@ -384,7 +384,7 @@ def kruskal_bonferroni(
     
     for feature in features:
         try:
-            group_data = [table.loc[metadata[group_col] == g, feature].dropna().values for g in groups]
+            group_data = [table.loc[metadata[col] == g, feature].dropna().values for g in groups]
             h, p = kruskal(*group_data)
             esults.append({
                 'feature': feature,
