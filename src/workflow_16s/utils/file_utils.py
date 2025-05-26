@@ -500,7 +500,7 @@ class AmpliconData:
     def _run_statistical_analyses(self, table_type: str = 'presence_absence'):
         self.stats[table_type] = {}
         #tables = self._fetch_tables(table_type)
-        
+        tables = self.tables[table_type]
         enabled_tests = [
             test for test in [
                 't_test', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
