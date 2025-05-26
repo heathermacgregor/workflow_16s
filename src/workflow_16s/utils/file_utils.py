@@ -521,7 +521,7 @@ class AmpliconData:
                     self.stats[table_type]['t-test'][level] = t_test(
                         table=tables[level],
                         metadata=self.meta,
-                        col='nuclear_contamination_status',
+                        group_col='nuclear_contamination_status',
                         groups=[True, False],
                         progress=progress,
                         parent_task_id=main_task,
