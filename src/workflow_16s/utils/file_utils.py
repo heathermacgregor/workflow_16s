@@ -486,9 +486,9 @@ class AmpliconData:
         table_type: str = 'presence_absence'
     ):
         if table_type == 'raw':
-            tables = self.tables
+            tables = self.tables['raw']
         elif table_type == 'presence_absence':
-            tables = self.presence_absence_tables
+            tables = self.tables['presence_absence']
         else:
             logger.error(
                 f"Unknown table type '{table_type}.'"
@@ -518,8 +518,10 @@ class AmpliconData:
                     "[white]T-Test...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(tables)
                 )
-                for level in tables:
+                for level in self.tables[table_type]:
+                    logger.info(level)
                     logger.info(tables[level])
+                    logger.info(self.tables[table_type][level])
                     self.stats[table_type]['t-test'][level] = t_test(
                         table=tables[level],
                         metadata=self.meta,
