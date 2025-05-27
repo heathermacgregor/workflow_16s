@@ -169,18 +169,32 @@ def preprocess_table(
     return df
     
 
-def normalize_table(table: pd.DataFrame, axis: int = 0) -> pd.DataFrame:
+def normalize_table(
+    table: Union[Dict, Table, pd.DataFrame], 
+    axis: int = 1
+) -> pd.DataFrame:  # FIXED DEFAULT AXIS
     """Convert to relative abundances along specified axis."""
-    return table.div(table.sum(axis=axis), axis=1-axis)
+    df = table_to_dataframe(table)
+    logger.info(df.shape)
+    df = df.div(df.sum(axis=axis), axis=1-axis)
+    logger.info(df.shape)
+    return df
     
 
-def clr_transform_table(table: pd.DataFrame, pseudocount: float) -> pd.DataFrame:
+def clr_transform_table(
+    table: Union[Dict, Table, pd.DataFrame], 
+    pseudocount: float = DEFAULT_PSEUDOCOUNT
+) -> pd.DataFrame:
     """Apply centered log-ratio transformation."""
-    return pd.DataFrame(
-        clr(table + pseudocount),
-        index=table.index,
-        columns=table.columns
+    df = table_to_dataframe(table)
+    logger.info(df.shape)
+    df = pd.DataFrame(
+        clr(df + pseudocount),
+        index=df.index,
+        columns=df.columns
     )
+    logger.info(df.shape)
+    return 
 
 def presence_absence(
     table: Union[Dict, Table, pd.DataFrame],
