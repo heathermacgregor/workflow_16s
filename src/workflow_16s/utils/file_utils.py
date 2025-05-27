@@ -440,11 +440,11 @@ class AmpliconData:
                     for level in tax_levels:
                         logger.info(level)
                         logger.info('filtered')
-                        table = preprocess_table(
+                        table = filter_table(
                             table=self.tables["raw"][level],
-                            apply_filter=True,
-                            normalize=False,
-                            clr_transform=False,
+                            #min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+                            #min_samples: int = DEFAULT_MIN_SAMPLES,
+                            #min_counts: int = DEFAULT_MIN_COUNTS
                         )
                         self.tables["filtered"][level] = table
                         logger.info(table.shape)
@@ -459,11 +459,9 @@ class AmpliconData:
                     for level in tax_levels:
                         logger.info(level)
                         logger.info('normalized')
-                        table = preprocess_table(
+                        table = normalize_table(
                             table=self.tables["filtered"][level],
-                            apply_filter=False,
-                            normalize=True,
-                            clr_transform=False,
+                            axis=1
                         )
                         self.tables["normalized"][level] = table
                         logger.info(table.shape)
@@ -478,11 +476,8 @@ class AmpliconData:
                     for level in tax_levels:
                         logger.info(level)
                         logger.info('clr')
-                        table = preprocess_table(
+                        table = clr_transform_table(
                             table=self.tables["normalized"][level],
-                            apply_filter=False,
-                            normalize=False,
-                            clr_transform=True,
                         )
                         self.tables["clr"][level] = table
                         logger.info(table.shape)
