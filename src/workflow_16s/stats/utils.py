@@ -122,8 +122,11 @@ def filter_table(
 ) -> pd.DataFrame:
     """Filter features and samples based on abundance thresholds."""
     df = table_to_dataframe(table)
+    logger.info(df.shape)
     df = filter_features(df, min_rel_abundance, min_samples)
+    logger.info(df.shape)
     df = filter_samples(df, min_counts)
+    logger.info(df.shape)
     return df
     
 
@@ -153,13 +156,16 @@ def preprocess_table(
 ) -> pd.DataFrame:
     """Preprocess table with filtering, normalization, and CLR."""
     df = table_to_dataframe(table).T
-    
+    logger.info(df.shape)
     if apply_filter:
         df = filter_table(df)
+        logger.info(df.shape)
     if normalize:
         df = normalize_table(df)
+        logger.info(df.shape)
     if clr_transform:
         df = clr_transform_table(df, pseudocount)
+        logger.info(df.shape)
     return df
     
 
