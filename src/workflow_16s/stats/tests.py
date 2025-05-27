@@ -1,17 +1,16 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
 # Third-Party Imports
-from biom import Table
 import numpy as np
 import pandas as pd
+from biom import Table
 from scipy.spatial.distance import braycurtis, pdist, squareform
-from scipy import stats
 from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
-from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
@@ -20,19 +19,12 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from umap import UMAP
-import logging
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.stats.utils import table_to_dataframe, merge_table_with_metadata
+from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
 
 # ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_MIN_REL_ABUNDANCE = 1
-DEFAULT_MIN_SAMPLES = 10
-DEFAULT_MIN_COUNTS = 1000
-
-DEFAULT_PA_THRESHOLD = 0.99
 
 DEFAULT_N_CLUSTERS = 10
 DEFAULT_RANDOM_STATE = 0
@@ -40,9 +32,37 @@ DEFAULT_RANDOM_STATE = 0
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
+
+def k_means(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    group_column: str = DEFAULT_GROUP_COLUMN,
+    n_clusters: int = DEFAULT_N_CLUSTERS, 
+    random_state: int = DEFAULT_RANDOM_STATE
+) -> pd.Series:
+    """
+    Apply K-means clustering and return cluster labels.
+    """
+    table = table_to_dataframe(table)
+    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    
+    kmeans = KMeans(
+        n_clusters, 
+        random_state=random_state
+    ).fit(table_with_column.drop(group_column, axis=1))
+
+    results = pd.Series(
+        kmeans.labels_, 
+        index=table_with_column.index, 
+        name='kmeans_cluster'
+    )
+    return results
+    
 
 def ttest(
     table: Union[Dict, Table, pd.DataFrame], 
@@ -66,7 +86,7 @@ def ttest(
     """
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
-    logger.info(len(table_with_column.columns.drop(group_column)))
+    
     results = []
     for feature in table_with_column.columns.drop(group_column):
         # Subset groups
@@ -76,7 +96,7 @@ def ttest(
         group1_values = table_with_column.loc[mask_group1, feature].dropna()
         group2_values = table_with_column.loc[mask_group2, feature].dropna()
         
-        # Skip features with <2 samples in either group
+        # Skip features with < 2 samples in either group
         if len(group1_values) < 2 or len(group2_values) < 2:
             continue
             
@@ -94,9 +114,8 @@ def ttest(
         
         # Pooled standard deviation for Cohen's d
         pooled_std = np.sqrt(((n1-1)*std1**2 + (n2-1)*std2**2) / (n1 + n2 - 2))
-        print(pooled_std)
         cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
-        print(cohen_d)
+        
         results.append({
             'feature': feature,
             't_statistic': t_stat,
@@ -114,9 +133,10 @@ def ttest(
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    results_df = results_df[(results_df['p_value'] != 0) & (
+        results_df['p_value'].notna()
+    )]
     results_df = results_df.sort_values('p_value')
-    
     return results_df
     
 
@@ -143,7 +163,6 @@ def mwu_bonferroni(
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_column.columns.drop(group_column))
-    logger.info(total_features)
     threshold = 0.01 / total_features
     
     results = []
@@ -187,12 +206,14 @@ def mwu_bonferroni(
         )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
 
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    # Filter invalid p-values and sort
+    results_df = results_df[(results_df['p_value'] != 0) & (
+        results_df['p_value'].notna()
+    )]
     results_df = results_df.sort_values('p_value')
     
     # Apply Bonferroni threshold
     results_df_filtered = results_df[results_df['p_value'] <= threshold]
-    
     return results_df_filtered
 
 
@@ -217,13 +238,12 @@ def kruskal_bonferroni(
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
     
-    # Get unique groups if col_values not specified
+    # Get unique groups if group_column_values not specified
     if group_column_values is None:
         group_column_values = table_with_column[group_column].unique().tolist()
     
     # Pre-calculate Bonferroni threshold
     total_features = len(table_with_column.columns.drop(group_column))
-    logger.info(total_features)
     threshold = 0.01 / total_features
     
     results = []
@@ -236,7 +256,7 @@ def kruskal_bonferroni(
             if len(group_data) > 0:  # Skip empty groups
                 groups.append(group_data)
         
-        # Skip feature if <2 groups have data
+        # Skip feature if < 2 groups have data
         if len(groups) < 2:
             continue
         
@@ -265,7 +285,10 @@ def kruskal_bonferroni(
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    # Filter invalid p-values and sort
+    results_df = results_df[(results_df['p_value'] != 0) & (
+        results_df['p_value'].notna()
+    )]
     results_df = results_df.sort_values('p_value')
     
     # Apply Bonferroni correction
@@ -294,7 +317,7 @@ def anova(
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
     
-    # Get unique groups if col_values not specified
+    # Get unique groups if group_column_values not specified
     if group_column_values is None:
         group_column_values = table_with_column[group_column].unique().tolist()
     
@@ -305,10 +328,10 @@ def anova(
         for group_value in group_column_values:
             mask = (table_with_column[group_column] == group_value)
             group_data = table_with_column.loc[mask, feature].dropna()
-            if len(group_data) >= 2:  # Require ≥2 samples per group
+            if len(group_data) >= 2:  # Require ≥ 2 samples per group
                 groups.append(group_data.values)
         
-        # Skip feature if <2 groups have sufficient data
+        # Skip feature if < 2 groups have sufficient data
         if len(groups) < 2:
             continue
             
@@ -342,6 +365,8 @@ def anova(
         return pd.DataFrame(columns=['feature', 'f_statistic', 'p_value'])
 
     # Filter and sort results
-    results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
+    results_df = results_df[(results_df['p_value'] != 0) & (
+        results_df['p_value'].notna()
+    )]
     results_df = results_df.sort_values('p_value')
     return results_df
