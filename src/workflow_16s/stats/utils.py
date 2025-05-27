@@ -194,7 +194,7 @@ def clr_transform_table(
         columns=df.columns
     )
     logger.info(df.shape)
-    return 
+    return df
 
 def presence_absence(
     table: Union[Dict, Table, pd.DataFrame],
