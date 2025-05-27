@@ -94,8 +94,9 @@ def ttest(
         
         # Pooled standard deviation for Cohen's d
         pooled_std = np.sqrt(((n1-1)*std1**2 + (n2-1)*std2**2) / (n1 + n2 - 2))
+        print(pooled_std)
         cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
-        
+        print(cohen_d)
         results.append({
             'feature': feature,
             't_statistic': t_stat,
@@ -114,7 +115,7 @@ def ttest(
 
     # Filter invalid p-values and sort
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
+    results_df = results_df.sort_values('p_value')
     
     return results_df
     
@@ -187,7 +188,7 @@ def mwu_bonferroni(
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
 
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
+    results_df = results_df.sort_values('p_value')
     
     # Apply Bonferroni threshold
     results_df_filtered = results_df[results_df['p_value'] <= threshold]
@@ -265,7 +266,7 @@ def kruskal_bonferroni(
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
+    results_df = results_df.sort_values('p_value')
     
     # Apply Bonferroni correction
     results_df_filtered = results_df[results_df['p_value'] <= threshold]
@@ -342,5 +343,5 @@ def anova(
 
     # Filter and sort results
     results_df = results_df[(results_df['p_value'] != 0) & (results_df['p_value'].notna())]
-    results_df.sort_values('p_value', inplace=True)
+    results_df = results_df.sort_values('p_value')
     return results_df
