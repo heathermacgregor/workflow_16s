@@ -43,6 +43,7 @@ from workflow_16s.stats.utils import (
     normalize_table,
     clr_transform_table
 )
+from workflow_16s.stats.utils import table_to_dataframe
 from workflow_16s.stats.tests import ttest, mwu_bonferroni, kruskal_bonferroni
 #from workflow_16s.stats.parametric_tests import t_test
 from workflow_16s.figures.html_report import HTMLReport
@@ -483,7 +484,20 @@ class AmpliconData:
                         logger.info(table.shape)
                         progress.update(clr_task, advance=1)
 
-                
+        table_dir = Path(self.project_dir.tables) / 'merged' / table_type
+        table_dir.mkdir(parents=True, exist_ok=True)
+        
+        for table_type in self.tables:
+            type_dir = table_dir / table_type
+            type_dir.mkdir(exist_ok=True)
+            for level in self.tables[table_type]:
+                df = self.tables[table_type][level]
+                df = table_to_dataframe(df)
+                output_path = type_dir / f"feature-table_{level}.tsv"
+                df.to_csv(output_path, sep='\t', index=True)
+                logger.info(
+                    f"Saved {table_type} {level} table to {str(output_path)}"
+                )
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
 
