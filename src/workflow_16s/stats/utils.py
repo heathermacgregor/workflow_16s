@@ -1,108 +1,70 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# Third-Party Imports
 import numpy as np
 import pandas as pd
 from biom import Table
-from rich.progress import (
-    Progress, 
-    BarColumn, 
-    TextColumn, 
-    TimeRemainingColumn,
-    TimeElapsedColumn,
-    MofNCompleteColumn,
-    SpinnerColumn,
-    TaskID
-)
 from scipy import stats
-from scipy.spatial.distance import braycurtis, pdist, squareform
-from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.composition import clr
-from skbio.stats.distance import DistanceMatrix
-from skbio.stats.ordination import pcoa as PCoA
-from sklearn.base import BaseEstimator
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
-from sklearn.manifold import TSNE
-from sklearn.metrics import r2_score
-from sklearn.preprocessing import StandardScaler
-from umap import UMAP
-import logging
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-logger = logging.getLogger('workflow_16s')
-
-# ================================= PROGRESS SETUP =================================== #
-
-def create_progress() -> Progress:
-    """Create a pre-configured Rich Progress instance."""
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        expand=True
-    )
+logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_MIN_REL_ABUNDANCE = 1
 DEFAULT_MIN_SAMPLES = 10
 DEFAULT_MIN_COUNTS = 1000
-DEFAULT_PA_THRESHOLD = 0.99
-DEFAULT_N_CLUSTERS = 10
-DEFAULT_RANDOM_STATE = 0
-DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
-DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 DEFAULT_PSEUDOCOUNT = 1e-5
 
 # ================================ CORE FUNCTIONALITY ================================ #
 
+
 def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
-    """Convert BIOM Table/dict to samples × features DataFrame."""
-    if isinstance(table, pd.DataFrame):
+    """
+    Convert BIOM Table/dict to samples × features DataFrame.
+    """
+    if isinstance(table, pd.DataFrame):  # samples  × features
         return table
-    if isinstance(table, Table):
+    if isinstance(table, Table):  # features × samples
         return table.to_dataframe(dense=True).T
-    if isinstance(table, dict):
+    if isinstance(table, dict):  # samples  × features
         return pd.DataFrame(table)
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
 def merge_table_with_metadata(
-    table: pd.DataFrame,
-    metadata: pd.DataFrame, 
-    group_column: str
+    table: pd.DataFrame, metadata: pd.DataFrame, group_column: str
 ) -> pd.DataFrame:
-    """Merge abundance table with metadata column after index sanitization."""
+    """
+    Merge abundance table with metadata column after index sanitization.
+    """
     # Preserve original index names
-    table_index_name = table.index.name or 'index'
-    meta_index_name = metadata.index.name or 'index'
-    
+    table_index_name = table.index.name or "index"
+    meta_index_name = metadata.index.name or "index"
+
     # Reset indexes for merging
-    table = table.reset_index().rename(columns={table_index_name: 'temp_index'})
-    metadata = metadata.reset_index().rename(columns={meta_index_name: 'temp_index'})
-    
+    table = table.reset_index().rename(columns={table_index_name: "temp_index"})
+    metadata = metadata.reset_index().rename(columns={meta_index_name: "temp_index"})
+
     # Sanitize IDs
-    table['temp_index'] = table['temp_index'].astype(str).str.strip().str.lower()
-    metadata['temp_index'] = metadata['temp_index'].astype(str).str.strip().str.lower()
-    
+    table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
+    metadata["temp_index"] = metadata["temp_index"].astype(str).str.strip().str.lower()
+
     # Perform merge
     merged = pd.merge(
-        table,
-        metadata[[group_column, 'temp_index']],
-        on='temp_index',
-        how='inner'
-    ).set_index('temp_index')
-    
+        table, metadata[[group_column, "temp_index"]], on="temp_index", how="inner"
+    ).set_index("temp_index")
+
     # Restore original index name
     merged.index.name = table_index_name
-    
+
     # Validate merge
     if merged[group_column].isna().any():
         missing = merged[group_column].isna().sum()
@@ -110,290 +72,67 @@ def merge_table_with_metadata(
             f"{missing} samples have NaN in '{group_column}' after merge. "
             "Check metadata completeness."
         )
-        
-    return merged
-    
+
+    return merged  # samples × features
+
 
 def filter_table(
-    table: Union[Dict, Table, pd.DataFrame], 
+    table: Union[Dict, Table, pd.DataFrame],
     min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
     min_samples: int = DEFAULT_MIN_SAMPLES,
-    min_counts: int = DEFAULT_MIN_COUNTS
+    min_counts: int = DEFAULT_MIN_COUNTS,
 ) -> pd.DataFrame:
-    """Filter features and samples based on abundance thresholds."""
+    """
+    Filter features and samples based on abundance thresholds.
+
+    samples × features
+    """
     df = table_to_dataframe(table)
-    logger.info(df.shape)
     df = filter_features(df, min_rel_abundance, min_samples)
-    logger.info(df.shape)
     df = filter_samples(df, min_counts)
-    logger.info(df.shape)
     return df
-    
+
 
 def filter_features(
-    table: pd.DataFrame,
-    min_rel_abundance: float,
-    min_samples: int
+    table: pd.DataFrame, min_rel_abundance: float, min_samples: int
 ) -> pd.DataFrame:
-    """Filter features by relative abundance and sample presence."""
-    min_abs = min_rel_abundance / 100
-    feature_mask = (table.max(axis=0) >= min_abs) & (table.astype(bool).sum(axis=0) >= min_samples)
-    return table.loc[:, feature_mask]
-    
+    """
+    Filter features by relative abundance and sample presence.
+    """
+    min_abs_abundance = min_rel_abundance / 100
+    feature_mask = (table.max(axis=0) >= min_abs_abundance) & (
+        table.astype(bool).sum(axis=0) >= min_samples
+    )
+    table = table.loc[:, feature_mask]
+    return table
+
 
 def filter_samples(table: pd.DataFrame, min_counts: int) -> pd.DataFrame:
-    """Filter samples by total counts."""
+    """
+    Filter samples by total counts.
+    """
     sample_mask = table.sum(axis=1) >= min_counts
-    return table.loc[sample_mask]
-    
+    table = table.loc[sample_mask]
+    return table
 
-def preprocess_table(
-    table: Union[Dict, Table, pd.DataFrame], 
-    apply_filter: bool = False,
-    normalize: bool = True,
-    clr_transform: bool = True,
-    pseudocount: float = DEFAULT_PSEUDOCOUNT
-) -> pd.DataFrame:
-    """Preprocess table with filtering, normalization, and CLR."""
-    df = table_to_dataframe(table).T
-    logger.info(df.shape)
-    if apply_filter:
-        df = filter_table(df)
-        logger.info(df.shape)
-    if normalize:
-        df = normalize_table(df)
-        logger.info(df.shape)
-    if clr_transform:
-        df = clr_transform_table(df, pseudocount)
-        logger.info(df.shape)
-    return df
-    
 
 def normalize_table(
-    table: Union[Dict, Table, pd.DataFrame], 
-    axis: int = 1
-) -> pd.DataFrame:  # FIXED DEFAULT AXIS
-    """Convert to relative abundances along specified axis."""
+    table: Union[Dict, Table, pd.DataFrame], axis: int = 1
+) -> pd.DataFrame:
+    """
+    Convert to relative abundances along specified axis.
+    """
     df = table_to_dataframe(table)
-    logger.info(df.shape)
-    df = df.div(df.sum(axis=axis), axis=1-axis)
-    logger.info(df.shape)
+    df = df.div(df.sum(axis=axis), axis=1 - axis)
     return df
-    
+
 
 def clr_transform_table(
-    table: Union[Dict, Table, pd.DataFrame], 
-    pseudocount: float = DEFAULT_PSEUDOCOUNT
+    table: Union[Dict, Table, pd.DataFrame], pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> pd.DataFrame:
-    """Apply centered log-ratio transformation."""
+    """
+    Apply centered log-ratio transformation.
+    """
     df = table_to_dataframe(table)
-    logger.info(df.shape)
-    df = pd.DataFrame(
-        clr(df + pseudocount),
-        index=df.index,
-        columns=df.columns
-    )
-    logger.info(df.shape)
+    df = pd.DataFrame(clr(df + pseudocount), index=df.index, columns=df.columns)
     return df
-
-def presence_absence(
-    table: Union[Dict, Table, pd.DataFrame],
-    threshold: float = DEFAULT_PA_THRESHOLD
-) -> pd.DataFrame:
-    """Binarize table keeping features comprising threshold fraction of total abundance."""
-    df = table_to_dataframe(table).T  # Features × samples
-    sorted_features = df.sum(axis=1).sort_values(ascending=False)
-    cumulative = sorted_features.cumsum() / sorted_features.sum()
-    keep = cumulative[cumulative <= threshold].index
-    return df.reindex(keep).gt(0).astype(int).T
-    
-
-def k_means(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    n_clusters: int = DEFAULT_N_CLUSTERS, 
-    random_state: int = DEFAULT_RANDOM_STATE
-) -> pd.Series:
-    """Apply K-means clustering and return cluster labels."""
-    df = table_to_dataframe(table)
-    merged = merge_table_with_metadata(df, metadata, group_column)
-    
-    kmeans = KMeans(
-        n_clusters, 
-        random_state=random_state
-    ).fit(merged.drop(group_column, axis=1))
-    return pd.Series(
-        kmeans.labels_, 
-        index=merged.index, 
-        name='kmeans_cluster'
-    )
-    
-
-def _base_statistical_test(
-    table: pd.DataFrame,
-    metadata: pd.DataFrame,
-    group_column: str,
-    test_name: str,
-    test_func: callable,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None,
-    **test_kwargs
-) -> pd.DataFrame:
-    """Base function for statistical tests with Rich progress integration."""
-    merged = merge_table_with_metadata(table, metadata, group_column)
-    features = merged.columns.drop(group_column)
-    results = []
-    
-    # Progress management
-    auto_progress = False
-    if progress is None:
-        progress = create_progress()
-        auto_progress = True
-        progress.start()
-
-    task_desc = f"[bold cyan]{test_name}[/] ({level or 'all features'})"
-    task_id = progress.add_task(
-        description=task_desc,
-        total=len(features),
-        parent=parent_task_id
-    )
-
-    try:
-        for feature in features:
-            groups = [
-                g.dropna() for _, g in merged.groupby(group_column)[feature]
-            ]
-            if len(groups) < 2:
-                progress.advance(task_id)
-                continue
-
-            try:
-                stat, p = test_func(*groups, **test_kwargs)
-                results.append({
-                    'feature': feature,
-                    'statistic': stat,
-                    'p_value': max(p, 1e-10)  # Prevent log(0) in downstream analysis
-                })
-            except Exception as e:
-                logger.debug(f"Test failed for {feature}: {str(e)}")
-            
-            progress.advance(task_id)
-        
-        # Update style for completed task
-        progress.update(task_id, description=f"[dim]{task_desc}")
-    
-    finally:
-        if auto_progress:
-            progress.stop()
-
-    return pd.DataFrame(results).dropna(subset=['p_value'])
-
-# ============================== STATISTICAL INTERFACE =============================== #
-
-def t_test(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None
-) -> pd.DataFrame:
-    """Independent t-tests between groups with Rich progress."""
-    df = table_to_dataframe(table)
-    return _base_statistical_test(
-        df, metadata, group_column,
-        test_func=ttest_ind,
-        test_name="T-Test",  # Add test name
-        progress=progress,
-        parent_task_id=parent_task_id,
-        level=level,
-        equal_var=False
-    )
-
-
-def mwu_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None
-) -> pd.DataFrame:
-    """Mann-Whitney U tests with Bonferroni correction."""
-    results = _base_statistical_test(
-        table_to_dataframe(table), metadata, group_column,
-        test_name="Mann-Whitney U",
-        test_func=mannwhitneyu,
-        progress=progress,
-        parent_task_id=parent_task_id,
-        level=level,
-        alternative='two-sided'
-    )
-    threshold = 0.01 / len(results)
-    return results[results.p_value <= threshold].sort_values('p_value')
-
-
-def kruskal_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    **kwargs
-) -> pd.DataFrame:
-    """Kruskal-Wallis test with Bonferroni correction."""
-    df = table_to_dataframe(table)
-    results = _base_statistical_test(
-        df, metadata, group_column, 
-        test_name="Kruskal-Wallis",  # Add test name
-        test_func=kruskal,
-        **kwargs
-    )
-    threshold = 0.01 / len(results)
-    return results[results.p_value <= threshold].sort_values('p_value')
-    
-
-def variability_explained(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    progress: Optional[Progress] = None,
-    parent_task_id: Optional[TaskID] = None,
-    level: Optional[str] = None
-) -> pd.DataFrame:
-    """Calculate R² with Rich progress integration."""
-    merged = merge_table_with_metadata(table_to_dataframe(table), metadata, group_column)
-    X = merged[[group_column]]
-    features = merged.columns.drop(group_column)
-    r_squared = []
-    
-    auto_progress = False
-    if progress is None:
-        progress = create_progress()
-        auto_progress = True
-        progress.start()
-
-    task_desc = f"[bold cyan]R² Analysis[/] ({level or 'all features'})"
-    task_id = progress.add_task(
-        description=task_desc,
-        total=len(features),
-        parent=parent_task_id
-    )
-
-    try:
-        for feature in features:
-            y = merged[[feature]]
-            model = LinearRegression().fit(X, y)
-            r_squared.append({
-                'feature': feature,
-                'r_squared': model.score(X, y)
-            })
-            progress.advance(task_id)
-        
-        progress.update(task_id, description=f"[dim]{task_desc}")
-    
-    finally:
-        if auto_progress:
-            progress.stop()
-
-    return pd.DataFrame(r_squared).sort_values('r_squared', ascending=False)
