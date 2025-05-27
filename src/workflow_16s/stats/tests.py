@@ -140,7 +140,7 @@ def mwu_bonferroni(
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
     
     # Total features tested (for Bonferroni)
-    total_features = len(table_with_column.columns.drop(col))
+    total_features = len(table_with_column.columns.drop(group_column))
     threshold = 0.01 / total_features
     
     results = []
