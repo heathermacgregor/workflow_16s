@@ -419,7 +419,7 @@ class AmpliconData:
                         "[white]Converting to presence/absence...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
-                    for level in self.tables["raw"]:
+                    for level in tax_levels:
                         pa_table = presence_absence(
                             self.tables["raw"][level],
                             level,
@@ -436,7 +436,9 @@ class AmpliconData:
                         "[white]Filtering...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
-                    for level in self.tables["raw"]:
+                    for level in tax_levels:
+                        logger.info(level)
+                        logger.info('filtered')
                         table = preprocess_table(
                             table=self.tables["raw"][level],
                             apply_filter=True,
@@ -453,7 +455,9 @@ class AmpliconData:
                         "[white]Normalizing...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
-                    for level in self.tables["filtered"]:
+                    for level in tax_levels:
+                        logger.info(level)
+                        logger.info('normalized')
                         table = preprocess_table(
                             table=self.tables["filtered"][level],
                             apply_filter=False,
@@ -470,7 +474,9 @@ class AmpliconData:
                         "[white]Applying CLR transformation...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
-                    for level in self.tables["normalized"]:
+                    for level in tax_levels:
+                        logger.info(level)
+                        logger.info('clr')
                         table = preprocess_table(
                             table=self.tables["normalized"][level],
                             apply_filter=False,
