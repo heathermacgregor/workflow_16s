@@ -345,7 +345,7 @@ class AmpliconData:
                 self.tables["raw"][level] = biom_table
                 logger.info(f"Collapsed to {level} level")
     
-            if self.cfg['presence_absence']:
+            if self.cfg['features']['presence_absence']:
                 self.tables["presence_absence"] = {}
                 for level in self.tables["raw"]:
                     pa_table = presence_absence(
@@ -356,11 +356,8 @@ class AmpliconData:
                     )
                     self.tables["presence_absence"][level] = pa_table
                     logger.info(f"Converted {level} table to presence/absence")
-
-            filter_table = True
-            normalize_table = True
-            clr_table = True
-            if filter_table:
+            
+            if self.cfg['features']['filter']:
                 self.tables["filtered"] = {}
                 for level in tax_levels:
                     table = preprocess_table(
@@ -372,7 +369,7 @@ class AmpliconData:
                     self.tables["filtered"][level] = table
                     logger.info(f"Filtered {level} table")
 
-            if filter_table and normalize_table:
+            if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
                 self.tables["normalized"] = {}
                 for level in tax_levels:
                     table = preprocess_table(
@@ -384,7 +381,7 @@ class AmpliconData:
                     self.tables["normalized"][level] = table
                     logger.info(f"Normalized {level} table")
 
-            if filter_table and normalize_table and clr_table:
+            if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
                 self.tables["clr"] = {}
                 for level in tax_levels:
                     table = preprocess_table(
@@ -394,7 +391,7 @@ class AmpliconData:
                         clr_transform=True,
                     )
                     self.tables["clr"][level] = table
-                    logger.info(f"CLR-transformed {level} table")
+                    logger.info(f"Applied CLR transformation to {level} table")
         else:
             with create_progress() as progress:
                 collapse_task = progress.add_task(
@@ -412,10 +409,10 @@ class AmpliconData:
                     self.tables["raw"][level] = biom_table
                     progress.update(collapse_task, advance=1)
     
-                if self.cfg['presence_absence']:
+                if self.cfg['features']['presence_absence']:
                     self.tables["presence_absence"] = {}
                     pa_task = progress.add_task(
-                        "[white]Generating presence/absence tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        "[white]Converting to presence/absence...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
                     for level in self.tables["raw"]:
@@ -427,14 +424,11 @@ class AmpliconData:
                         )
                         self.tables["presence_absence"][level] = pa_table
                         progress.update(pa_task, advance=1)
-
-                filter_table = True
-                normalize_table = True
-                clr_table = True
-                if filter_table:
+                
+                if self.cfg['features']['filter']:
                     self.tables["filtered"] = {}
                     filter_task = progress.add_task(
-                        "[white]Filtering tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        "[white]Filtering...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
                     for level in self.tables["raw"]:
@@ -447,10 +441,10 @@ class AmpliconData:
                         self.tables["filtered"][level] = table
                         progress.update(filter_task, advance=1)
     
-                if filter_table and normalize_table:
+                if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
                     self.tables["normalized"] = {}
                     n_task = progress.add_task(
-                        "[white]Normalizing tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        "[white]Normalizing...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
                     for level in self.tables["filtered"]:
@@ -463,10 +457,10 @@ class AmpliconData:
                         self.tables["normalized"][level] = table
                         progress.update(n_task, advance=1)
     
-                if filter_table and normalize_table and clr_table:
+                if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
                     self.tables["clr"] = {}
                     clr_task = progress.add_task(
-                        "[white]CLR-transforming tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                        "[white]Applying CLR transformation...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                         total=len(tax_levels)
                     )
                     for level in self.tables["normalized"]:
@@ -482,21 +476,6 @@ class AmpliconData:
                 
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
-
-    def _fetch_tables(
-        self, 
-        table_type: str = 'presence_absence'
-    ):
-        if table_type == 'raw':
-            tables = self.tables['raw']
-        elif table_type == 'presence_absence':
-            tables = self.tables['presence_absence']
-        else:
-            logger.error(
-                f"Unknown table type '{table_type}.'"
-                f"Expected either 'raw' or 'presence_absence'."
-            )
-        return tables
 
     def _run_statistical_analyses(self, table_type: str = 'presence_absence'):
         self.stats[table_type] = {}
