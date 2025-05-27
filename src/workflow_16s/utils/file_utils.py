@@ -221,8 +221,6 @@ class AmpliconData:
         self.table, self.meta, self.taxa = None, None, None
 
         self.tables = {}
-        if self.cfg['presence_absence']:
-            self.presence_absence_tables = {} 
         
         self.figures = {}
         self.color_maps = {}
