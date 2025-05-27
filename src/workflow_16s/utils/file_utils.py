@@ -38,7 +38,10 @@ from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import (
-    preprocess_table
+    preprocess_table,
+    filter_table, 
+    normalize_table,
+    clr_transform_table
 )
 from workflow_16s.stats.tests import ttest, mwu_bonferroni, kruskal_bonferroni
 #from workflow_16s.stats.parametric_tests import t_test
@@ -247,6 +250,9 @@ class AmpliconData:
         self._get_meta_df()
         self._get_biom_table()
 
+        self.n_features = self.table.shape[1]
+        self.n_samples = self.table.shape[0]
+
         mode_funcs = {
             'asv': self._asv_mode,
             'genus': self._genus_mode,
@@ -363,11 +369,11 @@ class AmpliconData:
             if self.cfg['features']['filter']:
                 self.tables["filtered"] = {}
                 for level in tax_levels:
-                    table = preprocess_table(
+                    table = filter_table(
                         table=self.tables["raw"][level],
-                        apply_filter=True,
-                        normalize=False,
-                        clr_transform=False,
+                        #min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
+                        #min_samples: int = DEFAULT_MIN_SAMPLES,
+                        #min_counts: int = DEFAULT_MIN_COUNTS
                     )
                     self.tables["filtered"][level] = table
                     logger.info(f"Filtered {level} table")
@@ -375,11 +381,9 @@ class AmpliconData:
             if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
                 self.tables["normalized"] = {}
                 for level in tax_levels:
-                    table = preprocess_table(
+                    table = normalize_table(
                         table=self.tables["filtered"][level],
-                        apply_filter=False,
-                        normalize=True,
-                        clr_transform=False,
+                        axis=1
                     )
                     self.tables["normalized"][level] = table
                     logger.info(f"Normalized {level} table")
@@ -387,11 +391,8 @@ class AmpliconData:
             if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
                 self.tables["clr"] = {}
                 for level in tax_levels:
-                    table = preprocess_table(
+                    table = clr_transform_table(
                         table=self.tables["normalized"][level],
-                        apply_filter=False,
-                        normalize=False,
-                        clr_transform=True,
                     )
                     self.tables["clr"][level] = table
                     logger.info(f"Applied CLR transformation to {level} table")
