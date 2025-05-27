@@ -1,4 +1,5 @@
 # ===================================== IMPORTS ====================================== #
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -151,7 +152,7 @@ def preprocess_table(
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> pd.DataFrame:
     """Preprocess table with filtering, normalization, and CLR."""
-    df = table_to_dataframe(table)
+    df = table_to_dataframe(table).T
     
     if apply_filter:
         df = filter_table(df)
@@ -174,7 +175,6 @@ def clr_transform_table(table: pd.DataFrame, pseudocount: float) -> pd.DataFrame
         index=table.index,
         columns=table.columns
     )
-    
 
 def presence_absence(
     table: Union[Dict, Table, pd.DataFrame],
