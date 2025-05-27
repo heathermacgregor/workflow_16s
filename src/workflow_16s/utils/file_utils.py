@@ -38,9 +38,10 @@ from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import (
-    preprocess_table, mwu_bonferroni, kruskal_bonferroni
+    preprocess_table
 )
-from workflow_16s.stats.parametric_tests import t_test
+from workflow_16s.stats.tests import ttest, mwu_bonferroni, kruskal_bonferroni
+#from workflow_16s.stats.parametric_tests import t_test
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
     sample_map_categorical, pcoa, pca, mds
@@ -499,60 +500,80 @@ class AmpliconData:
 
     def _run_statistical_analyses(self, table_type: str = 'presence_absence'):
         self.stats[table_type] = {}
-        #tables = self._fetch_tables(table_type)
         tables = self.tables[table_type]
         enabled_tests = [
             test for test in [
-                't_test', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
+                'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
             ] if self.cfg['stats'][table_type].get(test, False)
         ]
+        logger.info(
+            f"Enabled tests for table_type '{table_type}': "
+            f"{enabled_tests}"
+        )
 
         with create_progress() as progress:
             main_task = progress.add_task(
-                f"[white]Running {table_type} analyses",
-                total=len(enabled_tests)*len(tables)
+                f"[white]Running analyses on {table_type} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(enabled_tests)
             )
             # T-Test
-            if 't_test' in enabled_tests:
-                self.stats[table_type]['t-test'] = {}
+            if 'ttest' in enabled_tests:
+                self.stats[table_type]['ttest'] = {}
                 ttest_task = progress.add_task(
-                    "[white]T-Test...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                    total=len(tables)
+                    "[white]t-test".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(self.tables[table_type])
                 )
                 for level in self.tables[table_type]:
-                    self.stats[table_type]['t-test'][level] = t_test(
-                        table=tables[level],
+                    self.stats[table_type]['ttest'][level] = t_test(
+                        table=self.tables[level],
                         metadata=self.meta,
-                        group_col='nuclear_contamination_status',
-                        #groups=[True, False],
-                        progress=progress,
-                        parent_task_id=main_task,
-                        level=level,
+                        group_column='nuclear_contamination_status',
+                        group_column_values=[True, False],
                     )
                     progress.update(ttest_task, advance=1)
                 progress.stop_task(ttest_task)
                 progress.update(ttest_task, visible=False)
-            """
+                progress.update(main_task, advance=1)
+            
             # Mann-Whitney U with Bonferroni
             if 'mwu_bonferroni' in enabled_tests:
-                self.stats[table_type]['mwu_bonferroni'] = self._run_test_for_all_levels(
-                    progress=progress,
-                    parent_task_id=main_task,
-                    test_name="Mann-Whitney U",
-                    test_func=mwu_bonferroni,
-                    tables=tables
+                self.stats[table_type]['mwub'] = {}
+                mwub_task = progress.add_task(
+                    "[white]Mann-Whitney U test (w/ Bonferroni)".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(self.tables[table_type])
                 )
+                for level in self.tables[table_type]:
+                    self.stats[table_type]['mwub'][level] = t_test(
+                        table=self.tables[level],
+                        metadata=self.meta,
+                        group_column='nuclear_contamination_status',
+                        group_column_values=[True, False],
+                    )
+                    progress.update(mwub_task, advance=1)
+                progress.stop_task(mwub_task)
+                progress.update(mwub_task, visible=False)
+                progress.update(main_task, advance=1)
 
             # Kruskal-Wallis with Bonferroni
             if 'kruskal_bonferroni' in enabled_tests:
-                self.stats[table_type]['kruskal_bonferroni'] = self._run_test_for_all_levels(
-                    progress=progress,
-                    parent_task_id=main_task,
-                    test_name="Kruskal-Wallis",
-                    test_func=kruskal_bonferroni,
-                    tables=tables
+                self.stats[table_type]['kwb'] = {}
+                kwb_task = progress.add_task(
+                    "[white]Kruskal-Wallis test (w/ Bonferroni)".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(self.tables[table_type])
                 )
-
+                for level in self.tables[table_type]:
+                    self.stats[table_type]['kwb'][level] = t_test(
+                        table=self.tables[level],
+                        metadata=self.meta,
+                        group_column='nuclear_contamination_status',
+                        group_column_values=[True, False],
+                    )
+                    progress.update(kwb_task, advance=1)
+                progress.stop_task(kwb_task)
+                progress.update(kwb_task, visible=False)
+                progress.update(main_task, advance=1)
+                
+            """
             # Visualization analyses (PCA/t-SNE)
             if 'pca' in enabled_tests or 'tsne' in enabled_tests:
                 self._run_visual_analyses(
@@ -655,7 +676,7 @@ class AmpliconData:
                 ), 
                 dfs
             )
-            #logger.info(df.head())
+            logger.info(df.head())
             
             """
                 if 'q_value' not in df.columns:
