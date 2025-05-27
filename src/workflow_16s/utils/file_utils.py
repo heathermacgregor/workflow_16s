@@ -484,7 +484,7 @@ class AmpliconData:
                         logger.info(table.shape)
                         progress.update(clr_task, advance=1)
 
-        table_dir = Path(self.project_dir.tables) / 'merged' / table_type
+        table_dir = Path(self.project_dir.tables) / 'merged' 
         table_dir.mkdir(parents=True, exist_ok=True)
         
         for table_type in self.tables:
