@@ -66,7 +66,7 @@ def ttest(
     """
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
-    
+    logger.info(len(table_with_column.columns.drop(group_column)))
     results = []
     for feature in table_with_column.columns.drop(group_column):
         # Subset groups
@@ -141,6 +141,7 @@ def mwu_bonferroni(
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_column.columns.drop(group_column))
+    logger.info(total_features)
     threshold = 0.01 / total_features
     
     results = []
@@ -179,7 +180,7 @@ def mwu_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-            f"No features passed the t-test for groups: {group_column_values} "
+            f"No features passed the mwu test for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
@@ -220,6 +221,7 @@ def kruskal_bonferroni(
     
     # Pre-calculate Bonferroni threshold
     total_features = len(table_with_column.columns.drop(group_column))
+    logger.info(total_features)
     threshold = 0.01 / total_features
     
     results = []
@@ -256,7 +258,7 @@ def kruskal_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-            f"No features passed the t-test for groups: {group_column_values} "
+            f"No features passed the kruskal-wallis for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
