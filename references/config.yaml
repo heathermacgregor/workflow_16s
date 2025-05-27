@@ -71,3 +71,16 @@ stats:
     ttest: True
     mwu_bonferroni: True
     kruskal_bonferroni: True
+  filtered:
+    ttest: True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
+  normalized:
+    ttest: True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
+  clr:
+    ttest: True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
+
