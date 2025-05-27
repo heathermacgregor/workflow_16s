@@ -1,17 +1,22 @@
 # Default configuration file
-ena_email: "macgregor@berkeley.edu"
 
+# Important directory and file paths
+manual_metadata_dir: "../../../manual_metadata"
+project_dir: "../../test"
 dataset_list: "./datasets.txt"
 dataset_info: "./datasets.tsv"
 
-manual_metadata_dir: "../../../manual_metadata"
-project_dir: "../../test"
+# Part I:
+ena_email: "macgregor@berkeley.edu"
 
+# Specify if PCR primers used are manually provided or predicted
 pcr_primers_mode: "manual"
+
+# Specify the target 16S subfragment
 target_subfragment_mode: "any"
 
-validate_16s: False
 blast_db_dir: "./blast/silva_16s/SILVA_16S_db"
+validate_16s: False
 validate_sequences:
   n_runs: 10
   run_targets:
@@ -19,9 +24,10 @@ validate_sequences:
     - 'unknown'
 
 run_fastqc: False
+
 run_seqkit: False
+
 run_cutadapt: False
-  
 cutadapt:
   start_trim: 0
   end_trim: 0
@@ -48,10 +54,13 @@ qiime2:
     
 clean_fastq: True
 
-normalize: True
-clr_transform: True
+# Part II. Merging datasets and downstream analyses
 
-presence_absence: True
+features:
+  filter: True
+  normalize: True
+  clr_transform: True
+  presence_absence: True
 
 stats:
   raw:
