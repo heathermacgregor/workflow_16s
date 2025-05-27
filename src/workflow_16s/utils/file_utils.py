@@ -410,7 +410,7 @@ class AmpliconData:
                         self.verbose
                     )
                     self.tables["raw"][level] = biom_table
-                    logger.info(biom_table)
+                    logger.info(biom_table.shape)
                     progress.update(collapse_task, advance=1)
     
                 if self.cfg['features']['presence_absence']:
@@ -427,7 +427,7 @@ class AmpliconData:
                             self.verbose
                         )
                         self.tables["presence_absence"][level] = pa_table
-                        logger.info(pa_table)
+                        logger.info(pa_table.shape)
                         progress.update(pa_task, advance=1)
                 
                 if self.cfg['features']['filter']:
@@ -444,7 +444,7 @@ class AmpliconData:
                             clr_transform=False,
                         )
                         self.tables["filtered"][level] = table
-                        logger.info(table)
+                        logger.info(table.shape)
                         progress.update(filter_task, advance=1)
     
                 if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
@@ -461,7 +461,7 @@ class AmpliconData:
                             clr_transform=False,
                         )
                         self.tables["normalized"][level] = table
-                        logger.info(table)
+                        logger.info(table.shape)
                         progress.update(n_task, advance=1)
     
                 if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
@@ -478,7 +478,7 @@ class AmpliconData:
                             clr_transform=True,
                         )
                         self.tables["clr"][level] = table
-                        logger.info(table)
+                        logger.info(table.shape)
                         progress.update(clr_task, advance=1)
 
                 
