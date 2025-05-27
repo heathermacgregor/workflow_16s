@@ -82,6 +82,7 @@ def ttest(
             
         try:
             t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=equal_var)
+            print(f"{feature} {t_stat} {p_val}")
         except ValueError:
             continue  # Handle cases with invalid variance calculations
             
