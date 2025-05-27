@@ -257,7 +257,9 @@ class AmpliconData:
             self._run_statistical_analyses(table_type)
             print(self.stats.keys())
             for key in self.stats.keys():
-                print(key.keys())
+                print(self.stats[key].keys())
+                for key_2 in self.stats[key].keys():
+                    print(self.stats[key][key_2].keys())
             #self._top_features(table_type)
         #if self.cfg['presence_absence']:   
         #    self._run_statistical_analyses('presence_absence') 
