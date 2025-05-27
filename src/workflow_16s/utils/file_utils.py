@@ -501,7 +501,7 @@ class AmpliconData:
                     total=len(self.tables[table_type])
                 )
                 for level in self.tables[table_type]:
-                    self.stats[table_type]['ttest'][level] = t_test(
+                    self.stats[table_type]['ttest'][level] = ttest(
                         table=self.tables[level],
                         metadata=self.meta,
                         group_column='nuclear_contamination_status',
@@ -520,7 +520,7 @@ class AmpliconData:
                     total=len(self.tables[table_type])
                 )
                 for level in self.tables[table_type]:
-                    self.stats[table_type]['mwub'][level] = t_test(
+                    self.stats[table_type]['mwub'][level] = mwu_bonferroni(
                         table=self.tables[level],
                         metadata=self.meta,
                         group_column='nuclear_contamination_status',
@@ -539,7 +539,7 @@ class AmpliconData:
                     total=len(self.tables[table_type])
                 )
                 for level in self.tables[table_type]:
-                    self.stats[table_type]['kwb'][level] = t_test(
+                    self.stats[table_type]['kwb'][level] = kruskal_bonferroni(
                         table=self.tables[level],
                         metadata=self.meta,
                         group_column='nuclear_contamination_status',
