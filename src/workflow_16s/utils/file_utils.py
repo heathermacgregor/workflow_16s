@@ -345,6 +345,7 @@ class AmpliconData:
                     table_dir,
                     self.verbose
                 )
+                logger.info(biom_table)
                 self.tables["raw"][level] = biom_table
                 logger.info(f"Collapsed to {level} level")
     
@@ -357,6 +358,7 @@ class AmpliconData:
                         table_dir,
                         self.verbose
                     )
+                    logger.info(table)
                     self.tables["presence_absence"][level] = pa_table
                     logger.info(f"Converted {level} table to presence/absence")
             
@@ -370,6 +372,7 @@ class AmpliconData:
                         clr_transform=False,
                     )
                     self.tables["filtered"][level] = table
+                    logger.info(table)
                     logger.info(f"Filtered {level} table")
 
             if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
@@ -382,6 +385,7 @@ class AmpliconData:
                         clr_transform=False,
                     )
                     self.tables["normalized"][level] = table
+                    logger.info(table)
                     logger.info(f"Normalized {level} table")
 
             if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
@@ -394,6 +398,7 @@ class AmpliconData:
                         clr_transform=True,
                     )
                     self.tables["clr"][level] = table
+                    logger.info(table)
                     logger.info(f"Applied CLR transformation to {level} table")
         else:
             with create_progress() as progress:
