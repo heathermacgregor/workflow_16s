@@ -255,7 +255,10 @@ class AmpliconData:
         # Run statistical analyses
         for table_type in ['raw', 'filtered', 'normalized', 'clr', 'presence_absence']:
             self._run_statistical_analyses(table_type)
-            self._top_features(table_type)
+            print(self.stats.keys())
+            for key in self.stats.keys()):
+                print(key.keys())
+            #self._top_features(table_type)
         #if self.cfg['presence_absence']:   
         #    self._run_statistical_analyses('presence_absence') 
         #    self._top_features('presence_absence') -
