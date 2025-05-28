@@ -522,35 +522,6 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
         print(f"Critical initialization error: {str(e)}")
 
 from workflow_16s.figures.html_report import HTMLReport
-from workflow_16s.figures.merged.merged import sample_map_categorical, pcoa, pca, mds
-from workflow_16s.stats import beta_diversity 
-from workflow_16s.stats.utils import preprocess_table
-
-def plot_sample_map(
-    meta: pd.DataFrame, 
-    figures: Dict, 
-    logger: logging.Logger, 
-    project_dir: dir_utils.SubDirs
-):
-    
-    logger.info("Creating sample map...")
-    color_maps = {}
-    for col in ['dataset_name', 'nuclear_contamination_status']:
-        fig, map = sample_map_categorical(
-            metadata=meta, 
-            show=False, 
-            output_dir=Path(project_dir.figures) / 'merged', 
-            color_col=col,
-        )
-        figures["sample_map"].append({
-            'title': f'Sample Map',
-            'color_col': col,
-            'figure': fig
-        })
-        print(type(fig))
-        color_maps[col] = map
-    return color_maps    
-    #print(color_maps)
 
 
 
