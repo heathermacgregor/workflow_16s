@@ -99,7 +99,7 @@ def filter_features(
     """
     Filter features by relative abundance and sample presence.
     """
-    min_abs_abundance = min_rel_abundance / 100
+    min_abs_abundance = float(min_rel_abundance) / 100
     feature_mask = (table.max(axis=0) >= min_abs_abundance) & (
         table.astype(bool).sum(axis=0) >= min_samples
     )
