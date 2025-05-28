@@ -38,17 +38,16 @@ from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import (
-    preprocess_table,
-    filter_table, 
-    normalize_table,
     clr_transform_table
+    filter_table, 
+    merge_table_with_metadata,
+    normalize_table,
+    table_to_dataframe
 )
-from workflow_16s.stats.utils import table_to_dataframe
-from workflow_16s.stats.tests import ttest, mwu_bonferroni, kruskal_bonferroni
-#from workflow_16s.stats.parametric_tests import t_test
+from workflow_16s.stats.tests import kruskal_bonferroni, mwu_bonferroni, ttest 
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
-    sample_map_categorical, pcoa, pca, mds
+    mds, pca, pcoa, sample_map_categorical
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -63,6 +62,18 @@ DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ==================================== FUNCTIONS ===================================== #
+
+def create_progress() -> Progress:
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        expand=False
+    )
+    
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
     """
@@ -197,23 +208,12 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     return [Path(file) for file in file_list if not Path(file).exists()]
 
 # ==================================== FUNCTIONS ===================================== #   
-
-def create_progress() -> Progress:
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=40),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        expand=False
-    )
     
 class AmpliconData:
     def __init__(
         self, 
-        cfg,
-        project_dir,
+        cfg: Dict,
+        project_dir: Union[str, Path],
         mode: str = 'genus',
         verbose: bool = False
     ):
@@ -221,24 +221,22 @@ class AmpliconData:
         self.project_dir = project_dir
         self.mode = mode
         self.verbose = verbose
-        
-        self.table, self.meta, self.taxa = None, None, None
 
-        self.tables = {}
-        
-        self.figures = {}
+        self.meta = None
+        self.table = None
+        self.taxa = None
+
         self.color_maps = {}
-
+        self.figures = {}
+        self.tables = {}
         self.stats = {}
         
         mode_map = {
             'asv': ('table', 'asv'),
             'genus': ('table_6', 'l6')
         }
-        
         self.table_dir, output_dir = mode_map.get(mode, (None, None))
 
-        
         self.table_output_path = (
             Path(self.project_dir.data) / 'merged' / output_dir / 
             'feature-table.biom'
@@ -251,26 +249,16 @@ class AmpliconData:
         self._get_meta_df()
         self._get_biom_table()
 
-        self.n_features = self.table.shape[1]
-        self.n_samples = self.table.shape[0]
-
         mode_funcs = {
             'asv': self._asv_mode,
             'genus': self._genus_mode,
         }
         mode_funcs[mode]()  
+        
         # Run statistical analyses
-        for table_type in ['raw', 'filtered', 'normalized', 'clr', 'presence_absence']:
+        for table_type in self.tables:
             self._run_statistical_analyses(table_type)
-            print(self.stats.keys())
-            for key in self.stats.keys():
-                print(self.stats[key].keys())
-                for key_2 in self.stats[key].keys():
-                    print(self.stats[key][key_2].keys())
             #self._top_features(table_type)
-        #if self.cfg['presence_absence']:   
-        #    self._run_statistical_analyses('presence_absence') 
-        #    self._top_features('presence_absence') -
 
     def _get_biom_paths(self) -> List:
         """Get feature table BIOM paths from a pattern."""
@@ -324,7 +312,7 @@ class AmpliconData:
             dataset_dir = p.parent if p.is_file() or p.suffix else p
         
             # grab the last 6→1 parts of that directory
-            tail_parts   = dataset_dir.parts[-6:-1]
+            tail_parts = dataset_dir.parts[-6:-1]
         
             # build the full metadata path and cast to str
             meta_file = (
@@ -343,161 +331,99 @@ class AmpliconData:
         tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
         table_dir = Path(self.project_dir.tables) / 'merged'
     
-        if self.verbose:
-            self.tables["raw"] = {}
-            for level in tax_levels:
-                biom_table = collapse_taxa(
-                    self.table,
-                    level,
-                    table_dir,
-                    self.verbose
-                )
-                self.tables["raw"][level] = biom_table
-                logger.info(f"Collapsed to {level} level")
+        # Collapse taxa to create raw tables
+        self.tables["raw"] = self._run_processing(
+            process_name="Collapsing taxonomy",
+            process_func=collapse_taxa,
+            levels=tax_levels,
+            func_args=(self.table, table_dir, self.verbose),
+            get_source=lambda _: self.table,
+            log_per_level="Collapsed to {level} level"
+        )
     
-            if self.cfg['features']['presence_absence']:
-                self.tables["presence_absence"] = {}
-                for level in self.tables["raw"]:
-                    pa_table = presence_absence(
-                        self.tables[level],
-                        level,
-                        table_dir,
-                        self.verbose
-                    )
-                    self.tables["presence_absence"][level] = pa_table
-                    logger.info(f"Converted {level} table to presence/absence")
-            
-            if self.cfg['features']['filter']:
-                self.tables["filtered"] = {}
-                for level in tax_levels:
-                    table = filter_table(
-                        table=self.tables["raw"][level],
-                        #min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
-                        #min_samples: int = DEFAULT_MIN_SAMPLES,
-                        #min_counts: int = DEFAULT_MIN_COUNTS
-                    )
-                    self.tables["filtered"][level] = table
-                    logger.info(f"Filtered {level} table")
-
-            if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
-                self.tables["normalized"] = {}
-                for level in tax_levels:
-                    table = normalize_table(
-                        table=self.tables["filtered"][level],
-                        axis=1
-                    )
-                    self.tables["normalized"][level] = table
-                    logger.info(f"Normalized {level} table")
-
-            if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
-                self.tables["clr"] = {}
-                for level in tax_levels:
-                    table = clr_transform_table(
-                        table=self.tables["normalized"][level],
-                    )
-                    self.tables["clr"][level] = table
-                    logger.info(f"Applied CLR transformation to {level} table")
+        # Generate presence/absence tables if enabled
+        if self.cfg['features']['presence_absence']:
+            self.tables["presence_absence"] = self._run_processing(
+                process_name="Converting to presence/absence",
+                process_func=presence_absence,
+                levels=tax_levels,
+                func_args=(table_dir, self.verbose),
+                get_source=lambda level: self.tables["raw"][level]
+            )
+    
+        # Filter tables if enabled
+        if self.cfg['features']['filter']:
+            self.tables["filtered"] = self._run_processing(
+                process_name="Filtering",
+                process_func=filter_table,
+                levels=tax_levels,
+                func_args=(),
+                get_source=lambda level: self.tables["raw"][level],
+                log_per_level=lambda level: [logger.info(level), logger.info('filtered')]
+            )
+    
+        # Normalize tables if enabled
+        if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
+            self.tables["normalized"] = self._run_processing(
+                process_name="Normalizing",
+                process_func=normalize_table,
+                levels=tax_levels,
+                func_args=(1,),  # axis=1
+                get_source=lambda level: self.tables["filtered"][level],
+                log_per_level=lambda level: [logger.info(level), logger.info('normalized')]
+            )
+    
+        # Apply CLR transform if enabled
+        if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
+            self.tables["clr"] = self._run_processing(
+                process_name="Applying CLR transformation",
+                process_func=clr_transform_table,
+                levels=tax_levels,
+                func_args=(),
+                get_source=lambda level: self.tables["normalized"][level],
+                log_per_level=lambda level: [logger.info(level), logger.info('clr')]
+            )
+    
+        # Save all generated tables
+        self._save_tables(table_dir)
+    
+    def _run_processing(self, process_name, process_func, levels, func_args, get_source, log_per_level=None):
+        """Generic helper to process taxonomic levels with progress/logging."""
+        processed_tables = {}
+        
+        if self.verbose:
+            logger.info(f"{process_name}...")
+            for level in levels:
+                source_table = get_source(level)
+                processed = process_func(source_table, level, *func_args)
+                processed_tables[level] = processed
+                if log_per_level:
+                    if callable(log_per_level):
+                        log_per_level(level)
+                    else:
+                        logger.info(log_per_level.format(level=level))
         else:
             with create_progress() as progress:
-                collapse_task = progress.add_task(
-                    "[white]Collapsing taxonomy...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                    total=len(tax_levels)
-                )
-                self.tables["raw"] = {}
-                for level in tax_levels:
-                    biom_table = collapse_taxa(
-                        self.table,
-                        level,
-                        table_dir,
-                        self.verbose
-                    )
-                    self.tables["raw"][level] = biom_table
-                    logger.info(biom_table.shape)
-                    progress.update(collapse_task, advance=1)
+                task = progress.add_task(f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), total=len(levels))
+                for level in levels:
+                    source_table = get_source(level)
+                    processed = process_func(source_table, level, *func_args)
+                    processed_tables[level] = processed
+                    progress.update(task, advance=1)
+        return processed_tables
     
-                if self.cfg['features']['presence_absence']:
-                    self.tables["presence_absence"] = {}
-                    pa_task = progress.add_task(
-                        "[white]Converting to presence/absence...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(tax_levels)
-                    )
-                    for level in tax_levels:
-                        pa_table = presence_absence(
-                            self.tables["raw"][level],
-                            level,
-                            table_dir,
-                            self.verbose
-                        )
-                        self.tables["presence_absence"][level] = pa_table
-                        logger.info(pa_table.shape)
-                        progress.update(pa_task, advance=1)
-                
-                if self.cfg['features']['filter']:
-                    self.tables["filtered"] = {}
-                    filter_task = progress.add_task(
-                        "[white]Filtering...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(tax_levels)
-                    )
-                    for level in tax_levels:
-                        logger.info(level)
-                        logger.info('filtered')
-                        table = filter_table(
-                            table=self.tables["raw"][level],
-                            #min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
-                            #min_samples: int = DEFAULT_MIN_SAMPLES,
-                            #min_counts: int = DEFAULT_MIN_COUNTS
-                        )
-                        self.tables["filtered"][level] = table
-                        logger.info(table.shape)
-                        progress.update(filter_task, advance=1)
-    
-                if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
-                    self.tables["normalized"] = {}
-                    n_task = progress.add_task(
-                        "[white]Normalizing...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(tax_levels)
-                    )
-                    for level in tax_levels:
-                        logger.info(level)
-                        logger.info('normalized')
-                        table = normalize_table(
-                            table=self.tables["filtered"][level],
-                            axis=1
-                        )
-                        self.tables["normalized"][level] = table
-                        logger.info(table.shape)
-                        progress.update(n_task, advance=1)
-    
-                if self.cfg['features']['filter'] and self.cfg['features']['normalize'] and self.cfg['features']['clr_transform']:
-                    self.tables["clr"] = {}
-                    clr_task = progress.add_task(
-                        "[white]Applying CLR transformation...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                        total=len(tax_levels)
-                    )
-                    for level in tax_levels:
-                        logger.info(level)
-                        logger.info('clr')
-                        table = clr_transform_table(
-                            table=self.tables["normalized"][level],
-                        )
-                        self.tables["clr"][level] = table
-                        logger.info(table.shape)
-                        progress.update(clr_task, advance=1)
-
-        table_dir = Path(self.project_dir.tables) / 'merged' 
+    def _save_tables(self, table_dir):
+        """Save all tables to disk."""
         table_dir.mkdir(parents=True, exist_ok=True)
-        
-        for table_type in self.tables:
+        for table_type, level_tables in self.tables.items():
             type_dir = table_dir / table_type
             type_dir.mkdir(exist_ok=True)
-            for level in self.tables[table_type]:
-                df = self.tables[table_type][level]
-                df = table_to_dataframe(df)
+            for level, table in level_tables.items():
+                df = table_to_dataframe(table)
                 output_path = type_dir / f"feature-table_{level}.tsv"
                 df.to_csv(output_path, sep='\t', index=True)
-                logger.info(
-                    f"Saved {table_type} {level} table to {str(output_path)}"
-                )
+                logger.info(f"Saved {table_type} {level} table to {output_path}")
+                
     def _asv_mode(self):
         logger.info("ASV mode is not yet supported!")
 
