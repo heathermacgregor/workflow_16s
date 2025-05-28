@@ -22,9 +22,6 @@ from biom.table import Table
 from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
-from workflow_16s.stats.utils import (
-    kruskal_bonferroni, mwu_bonferroni, t_test
-)
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
     mds, pca, pcoa, sample_map_categorical 
