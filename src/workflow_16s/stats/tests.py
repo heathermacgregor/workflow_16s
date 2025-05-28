@@ -85,6 +85,8 @@ def ttest(
         DataFrame with significant features (p < Bonferroni-corrected threshold).
     """
     table = table_to_dataframe(table)
+    print()
+    print(table_with_column.index)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
     
     results = []
@@ -128,6 +130,7 @@ def ttest(
     if results_df.empty:
         logger.error(
             f"{table.shape} {table_with_column.shape} "
+            f"{table.index} {table_with_column.index} "
             f"No features passed for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
@@ -203,6 +206,7 @@ def mwu_bonferroni(
     if results_df.empty:
         logger.error(
             f"{table.shape} {table_with_column.shape} "
+            f"{table.index} {table_with_column.index} "
             f"No features passed the for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
@@ -283,6 +287,7 @@ def kruskal_bonferroni(
     if results_df.empty:
         logger.error(
             f"{table.shape} {table_with_column.shape} "
+            f"{table.index} {table_with_column.index} "
             f"No features passed for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
