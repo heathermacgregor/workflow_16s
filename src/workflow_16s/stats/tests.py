@@ -127,7 +127,8 @@ def ttest(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-            f"No features passed the t-test for groups: {group_column_values} "
+            f"{table.shape} {table_with_column.shape} "
+            f"No features passed for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
@@ -201,7 +202,8 @@ def mwu_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-            f"No features passed the mwu test for groups: {group_column_values} "
+            f"{table.shape} {table_with_column.shape} "
+            f"No features passed the for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
@@ -280,7 +282,8 @@ def kruskal_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-            f"No features passed the kruskal-wallis for groups: {group_column_values} "
+            f"{table.shape} {table_with_column.shape} "
+            f"No features passed for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
