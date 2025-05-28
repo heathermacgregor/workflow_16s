@@ -38,7 +38,7 @@ from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
 from workflow_16s.stats.utils import (
-    clr_transform_table
+    clr_transform_table,
     filter_table, 
     merge_table_with_metadata,
     normalize_table,
