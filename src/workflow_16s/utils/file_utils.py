@@ -532,7 +532,7 @@ class AmpliconData:
             logger.info(f"{process_name}...")
             for level in levels:
                 source_table = get_source(level)
-                processed = process_func(source_table, level, *func_args)
+                processed = process_func(source_table, *func_args)
                 processed_tables[level] = processed
                 self._log_level_action(level, log_template, log_action)
         else:
@@ -544,7 +544,7 @@ class AmpliconData:
                 )
                 for level in levels:
                     source_table = get_source(level)
-                    processed = process_func(source_table, level, *func_args)
+                    processed = process_func(source_table, *func_args)
                     processed_tables[level] = processed
                     progress.update(task, advance=1)
                     
