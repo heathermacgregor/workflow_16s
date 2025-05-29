@@ -209,17 +209,6 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     return [Path(file) for file in file_list if not Path(file).exists()]
 
 # ==================================== FUNCTIONS ===================================== #   
-    
-import glob
-import logging
-from pathlib import Path
-from typing import Dict, List, Union, Callable, Optional
-import pandas as pd
-from rich.progress import Progress
-
-# Initialize logger
-logger = logging.getLogger(__name__)
-DEFAULT_PROGRESS_TEXT_N = 50  # Default progress bar width
 
 class AmpliconData:
     """
@@ -561,7 +550,7 @@ class AmpliconData:
                         f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
                     )
                 output_path = type_dir / f"feature-table_{level}.biom"
-                table = convert_to_biom(df.T)
+                table = convert_to_biom(df)
                 export_biom(table, output_path)
                 if self.verbose:
                     n_features, n_samples = table.shape
