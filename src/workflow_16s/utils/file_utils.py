@@ -553,15 +553,15 @@ class AmpliconData:
                     logger.info(
                         f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
                     )
-                #output_path = type_dir / f"feature-table_{level}.biom"
+                output_path = type_dir / f"feature-table_{level}.biom"
                 #table = convert_to_biom(df)
-                #export_biom(table, output_path)
-                #if self.verbose:
-                #    n_features, n_samples = table.shape
-                #    shape_str = f"[{n_features}, {n_samples}]"
-                #    logger.info(
-                #        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
-                #    )
+                export_biom(table, output_path)
+                if self.verbose:
+                    n_features, n_samples = table.shape
+                    shape_str = f"[{n_features}, {n_samples}]"
+                    logger.info(
+                        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
+                    )
                 
 
     def _run_all_statistical_analyses(self):
