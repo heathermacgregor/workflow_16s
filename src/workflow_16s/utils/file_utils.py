@@ -410,7 +410,7 @@ class AmpliconData:
             log_template="Collapsed to {level} level"
         )
 
-    def _process_presence_absence(self, levels: List[str])#, table_dir: Path):
+    def _process_presence_absence(self, levels: List[str]):#, table_dir: Path):
         """Generate presence/absence tables if enabled in config."""
         if not self.cfg['features']['presence_absence']:
             return
