@@ -32,7 +32,7 @@ from rich.progress import (
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.utils.biom_utils import (
-    collapse_taxa, presence_absence, filter_presence_absence
+    collapse_taxa, convert_to_biom, export_biom, presence_absence, filter_presence_absence
 )
 from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
@@ -296,7 +296,7 @@ class AmpliconData:
             raise ValueError(f"Invalid processing mode: {self.mode}")
         
         self.table_output_path = (
-            Path(self.project_dir.data) / 'merged' / output_dir / 
+            Path(self.project_dir.data) / 'merged' / 'table' / output_dir / 
             'feature-table.biom'
         )
         self.meta_output_path = (
@@ -323,14 +323,14 @@ class AmpliconData:
         """Load and merge BIOM feature tables."""
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            error_text = "No BIOM files found matching pattern"
+            error_text = "No BIOM files found matching pattern!"
             logger.error(error_text)
             raise FileNotFoundError(error_text)   
             
         self.table = import_merged_table_biom(
             biom_paths, 
             'dataframe',
-            self.table_output_path,
+            #self.table_output_path,
             self.verbose
         )
 
@@ -352,12 +352,7 @@ class AmpliconData:
         return [Path(p) for p in biom_paths]
 
     def _get_metadata_paths(self) -> List[Path]:
-        """
-        Get paths to metadata files corresponding to BIOM tables.
-        
-        Returns:
-            List of Path objects to metadata files
-        """
+        """Get paths to metadata files corresponding to BIOM tables."""
         meta_paths = []
         for biom_path in self._get_biom_paths():
             # Handle both file paths and directory paths
@@ -386,13 +381,13 @@ class AmpliconData:
         processor()
 
     def _process_asv_mode(self):
-        """Process data in ASV mode (stub implementation)."""
+        """Process data in ASV mode (not yet implemented)."""
         logger.info("ASV mode is not yet supported!")
 
     def _process_genus_mode(self):
         """Process data in genus mode through multiple processing steps."""
         tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
-        table_dir = Path(self.project_dir.tables) / 'merged'
+        table_dir = Path(self.project_dir.data) / 'merged' / 'table'
         
         # Execute processing steps
         self._process_raw_tables(tax_levels, table_dir)
@@ -404,31 +399,19 @@ class AmpliconData:
         # Save all generated tables
         self._save_all_tables(table_dir)
 
-    def _process_raw_tables(self, levels: List[str], table_dir: Path):
-        """
-        Generate raw tables by collapsing taxa at different levels.
-        
-        Args:
-            levels: Taxonomic levels to process
-            table_dir: Directory for storing output tables
-        """
+    def _process_raw_tables(self, levels: List[str])#, table_dir: Path):
+        """Generate raw tables by collapsing taxa at different levels."""
         self.tables["raw"] = self._run_processing_step(
             process_name="Collapsing taxonomy",
             process_func=collapse_taxa,
             levels=levels,
-            func_args=(table_dir, self.verbose),
+            func_args=(),#(table_dir, self.verbose),
             get_source=lambda _: self.table,
             log_template="Collapsed to {level} level"
         )
 
-    def _process_presence_absence(self, levels: List[str], table_dir: Path):
-        """
-        Generate presence/absence tables if enabled in config.
-        
-        Args:
-            levels: Taxonomic levels to process
-            table_dir: Directory for storing output tables
-        """
+    def _process_presence_absence(self, levels: List[str])#, table_dir: Path):
+        """Generate presence/absence tables if enabled in config."""
         if not self.cfg['features']['presence_absence']:
             return
             
@@ -436,17 +419,12 @@ class AmpliconData:
             process_name="Converting to presence/absence",
             process_func=presence_absence,
             levels=levels,
-            func_args=(table_dir, self.verbose),
+            func_args=(),#(table_dir, self.verbose),
             get_source=lambda level: self.tables["raw"][level]
         )
 
     def _process_filtered_tables(self, levels: List[str]):
-        """
-        Generate filtered tables if enabled in config.
-        
-        Args:
-            levels: Taxonomic levels to process
-        """
+        """Generate filtered tables if enabled in config."""
         if not self.cfg['features']['filter']:
             return
             
@@ -460,12 +438,7 @@ class AmpliconData:
         )
 
     def _process_normalized_tables(self, levels: List[str]):
-        """
-        Generate normalized tables if enabled in config.
-        
-        Args:
-            levels: Taxonomic levels to process
-        """
+        """Generate normalized tables if enabled in config."""
         if not (self.cfg['features']['filter'] and self.cfg['features']['normalize']):
             return
             
@@ -479,12 +452,7 @@ class AmpliconData:
         )
 
     def _process_clr_transformed_tables(self, levels: List[str]):
-        """
-        Generate CLR-transformed tables if enabled in config.
-        
-        Args:
-            levels: Taxonomic levels to process
-        """
+        """Generate CLR-transformed tables if enabled in config."""
         enabled = (self.cfg['features']['filter'] and 
                   self.cfg['features']['normalize'] and 
                   self.cfg['features']['clr_transform'])
@@ -586,7 +554,22 @@ class AmpliconData:
                 output_path = type_dir / f"feature-table_{level}.tsv"
                 df = table_to_dataframe(table)
                 df.to_csv(output_path, sep='\t', index=True)
-                logger.info(f"Saved {table_type} {level} table to {output_path}")
+                if self.verbose:
+                    n_features, n_samples = df.shape
+                    shape_str = f"[{n_features}, {n_samples}]"
+                    logger.info(
+                        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
+                    )
+                output_path = type_dir / f"feature-table_{level}.biom"
+                table = convert_to_biom(df.T)
+                export_biom(table, output_path)
+                if self.verbose:
+                    n_features, n_samples = table.shape
+                    shape_str = f"[{n_features}, {n_samples}]"
+                    logger.info(
+                        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
+                    )
+                
 
     def _run_all_statistical_analyses(self):
         """Run statistical analyses for all generated table types."""
@@ -1053,7 +1036,7 @@ def import_merged_meta_tsv(
         df_merged.to_csv(output_path, sep='\t', index=True)
         if verbose:
             n_samples, n_features = df_merged.shape
-            logger.info(f"Wrote merged metadata [{n_samples}, {n_features}] to {output_path}")
+            logger.info(f"Wrote merged metadata (samples × features) [{n_samples}, {n_features}] to {output_path}")
 
     return df_merged
 
@@ -1093,7 +1076,7 @@ def import_table_biom(
 def import_merged_table_biom(
     biom_paths: List[Union[str, Path]], 
     as_type: str = 'table',
-    output_path: Union[str, Path] = None,
+    #output_path: Union[str, Path] = None,
     verbose: bool = False
 ) -> Union[Table, pd.DataFrame]:
     """Merge multiple BIOM tables into one."""
@@ -1129,14 +1112,14 @@ def import_merged_table_biom(
     for table in tables[1:]:
         merged_table = merged_table.merge(table)
 
-    if output_path:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with h5py.File(output_path, 'w') as f:
-            merged_table.to_hdf5(f, generated_by="workflow_16s")
-        if verbose:
-            n_features, n_samples = merged_table.shape
-            logger.info(f"Wrote table [{n_features}, {n_samples}] to {output_path}")
+    #if output_path:
+    #    output_path = Path(output_path)
+    #    output_path.parent.mkdir(parents=True, exist_ok=True)
+    #    with h5py.File(output_path, 'w') as f:
+    #        merged_table.to_hdf5(f, generated_by="workflow_16s")
+    #    if verbose:
+    #        n_features, n_samples = merged_table.shape
+    #        logger.info(f"Wrote table [{n_features}, {n_samples}] to {output_path}")
 
     return merged_table if as_type == 'table' else merged_table.to_dataframe()
 
