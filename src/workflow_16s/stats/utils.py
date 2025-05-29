@@ -45,7 +45,7 @@ def merge_table_with_metadata(
     metadata: pd.DataFrame,
     group_column: str,
     metadata_id_column: Optional[str] = '#sampleid',
-    verbose: bool = False
+    verbose: bool = True
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column after index sanitization.
@@ -80,7 +80,7 @@ def merge_table_with_metadata(
         metadata_index_name = metadata.index.name or "index"
     
     metadata_for_merge = metadata.reset_index()[[metadata_index_name, group_column]].copy()
-        
+    logger.debug(metadata_for_merge.head())    
 
 
     # Reset indices
