@@ -44,36 +44,68 @@ def merge_table_with_metadata(
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column after index sanitization.
+    
+    Args:
+        table: Samples × features abundance table
+        metadata: Metadata table with sample information
+        group_column: Metadata column to merge
+        
+    Returns:
+        Merged DataFrame with samples × features
+        
+    Raises:
+        ValueError: If no common IDs found or missing group_column values
     """
-    # Preserve original index names
+    # Preserve original index names for restoration later
     table_index_name = table.index.name or "index"
     meta_index_name = metadata.index.name or "index"
 
-    # Reset indexes for merging
+    # Reset indexes to make indices mergeable
     table = table.reset_index().rename(columns={table_index_name: "temp_index"})
     metadata = metadata.reset_index().rename(columns={meta_index_name: "temp_index"})
 
-    # Sanitize IDs
+    # Sanitize indices by converting to string, stripping whitespace, and lowercasing
     table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
     metadata["temp_index"] = metadata["temp_index"].astype(str).str.strip().str.lower()
 
-    # Perform merge
-    merged = pd.merge(
-        table, metadata[[group_column, "temp_index"]], on="temp_index", how="inner"
-    ).set_index("temp_index")
-
-    # Restore original index name
-    merged.index.name = table_index_name
-
-    # Validate merge
-    if merged[group_column].isna().any():
-        missing = merged[group_column].isna().sum()
+    # --- CRITICAL DIAGNOSTIC CHECK ---
+    # Verify we have overlapping IDs after sanitization
+    common_ids = set(table["temp_index"]) & set(metadata["temp_index"])
+    if not common_ids:
+        # Get sample values for error message
+        table_samples = table["temp_index"].head(5).tolist()
+        meta_samples = metadata["temp_index"].head(5).tolist()
         raise ValueError(
-            f"{missing} samples have NaN in '{group_column}' after merge. "
-            "Check metadata completeness."
+            "No matching IDs after sanitization. Possible causes:\n"
+            "- Mismatched index values between table and metadata\n"
+            "- Different index types (e.g., numeric vs string)\n"
+            "- Missing metadata for table samples\n\n"
+            f"Table index sample: {table_samples}\n"
+            f"Metadata index sample: {meta_samples}"
         )
 
-    return merged  # samples × features
+    # Perform inner merge on sanitized indices
+    merged = pd.merge(
+        table,
+        metadata[["temp_index", group_column]],  # Select only needed columns
+        on="temp_index",
+        how="inner"
+    ).set_index("temp_index")  # Restore index
+
+    # Restore original index name from table
+    merged.index.name = table_index_name
+
+    # Validate group_column completeness
+    if merged[group_column].isna().any():
+        missing_count = merged[group_column].isna().sum()
+        missing_samples = merged[merged[group_column].isna()].index.tolist()[:5]
+        raise ValueError(
+            f"{missing_count} samples have missing '{group_column}' values. "
+            "Check metadata completeness. "
+            f"First 5 affected samples: {missing_samples}"
+        )
+
+    return merged
 
 
 def filter_table(
