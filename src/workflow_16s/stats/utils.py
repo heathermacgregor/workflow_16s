@@ -39,39 +39,41 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
-from typing import Optional
 
 def merge_table_with_metadata(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
     group_column: str,
-    metadata_id_column: Optional[str] = '#sampleid'  # NEW: Column containing sample IDs
+    metadata_id_column: Optional[str] = '#sampleid',
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column after index sanitization.
     
     Args:
-        table: Samples × features abundance table
-        metadata: Metadata table with sample information
-        group_column: Metadata column to merge
-        metadata_id_column: Optional column in metadata containing sample IDs
+        table:              Feature table (Samples × features).
+        metadata:           Metadata table with sample information.
+        group_column:       Metadata column to merge.
+        metadata_id_column: Optional column in metadata containing sample IDs.
+        verbose:
         
     Returns:
-        Merged DataFrame with samples × features
+        Merged DataFrame (samples × features).
         
     Raises:
-        ValueError: If no common IDs found or missing group_column values
+        ValueError: If no common IDs found or missing group_column values.
     """
     # Preserve original index names
     table_index_name = table.index.name or "index"
     
-    # NEW: Diagnostic logging
-    print(f"Table index type: {type(table.index[0]) if len(table.index) > 0 else 'empty'}")
-    print(f"Metadata index type: {type(metadata.index[0]) if len(metadata.index) > 0 else 'empty'}")
+    if verbose:
+        logger.debug(f"Table index type: {type(table.index[0]) if len(table.index) > 0 else 'empty'}")
+        logger.debug(f"Metadata index type: {type(metadata.index[0]) if len(metadata.index) > 0 else 'empty'}")
 
     # NEW: Handle metadata sample ID column
     if metadata_id_column:
-        print(f"Using metadata column '{metadata_id_column}' for sample IDs")
+        if verbose:
+            logger.debug(f"Using metadata column '{metadata_id_column}' for sample IDs")
         if metadata_id_column not in metadata.columns:
             raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
         
@@ -80,7 +82,8 @@ def merge_table_with_metadata(
         metadata_for_merge = metadata[[metadata_id_column, group_column]].copy()
         meta_index_name = metadata_id_column
     else:
-        print("Using metadata index for sample IDs")
+        if verbose:
+            logger.debug("Using metadata index for sample IDs")
         meta_index_name = metadata.index.name or "index"
         metadata_for_merge = metadata[[group_column]].copy()
         metadata_for_merge = metadata_for_merge.reset_index()
@@ -95,14 +98,16 @@ def merge_table_with_metadata(
     table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
     metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str).str.strip().str.lower()
 
-    # NEW: Print diagnostic samples
-    print("Table sample IDs:", table["temp_index"].head(5).tolist())
-    print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
+    if verbose:
+        logger.debug("Table sample IDs:", table["temp_index"].head(5).tolist())
+        logger.debug("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
     
-    # NEW: Check for duplicates
+    # Check for duplicates
     if metadata_for_merge["temp_index"].duplicated().any():
-        duplicates = metadata_for_merge["temp_index"].duplicated().sum()
-        raise ValueError(f"{duplicates} duplicate sample IDs found in metadata")
+        duplicates = metadata_for_merge["temp_index"].duplicated()
+        n_duplicates = metadata_for_merge["temp_index"].duplicated().sum()
+        raise ValueError(f"{n_duplicates} duplicate sample IDs found in metadata:\n"
+                        f"{duplicates}")
 
     # Perform merge
     merged = pd.merge(
@@ -135,7 +140,8 @@ def merge_table_with_metadata(
             f"First 5 affected samples: {missing_samples}"
         )
 
-    print(f"Successfully merged {len(merged)} samples")
+    if verbose:
+        logger.debug(f"Successfully merged {len(merged)} samples")
     return merged
 
 
