@@ -70,17 +70,17 @@ def merge_table_with_metadata(
     
     if metadata_id_column:
         if verbose:
-            logger.debug(f"Using metadata column '{metadata_id_column}' for sample IDs")
+            print(f"Using metadata column '{metadata_id_column}' for sample IDs")
         if metadata_id_column not in metadata.columns:
             raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
         metadata_index_name = metadata_id_column
     else:
         if verbose:
-            logger.debug("Using metadata index for sample IDs")
+            print("Using metadata index for sample IDs")
         metadata_index_name = metadata.index.name or "index"
     
     metadata_for_merge = metadata.reset_index()[[metadata_index_name, group_column]].copy()
-    logger.debug(metadata_for_merge.head())    
+    print(metadata_for_merge.head())    
 
 
     # Reset indices
@@ -92,8 +92,8 @@ def merge_table_with_metadata(
     metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str).str.strip().str.lower()
 
     if verbose:
-        logger.debug("Table sample IDs:", table["temp_index"].head(5).tolist())
-        logger.debug("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
+        print("Table sample IDs:", table["temp_index"].head(5).tolist())
+        print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
     
     # Check for duplicates
     if metadata_for_merge["temp_index"].duplicated().any():
