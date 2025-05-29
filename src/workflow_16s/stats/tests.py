@@ -126,15 +126,12 @@ def ttest(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        try:
-            logger.error(
+        logger.error(
                 f"{table.shape} {table_with_column.shape} "
                 f"{table.index} {table_with_column.index} "
                 f"No features passed for groups: {group_column_values} "
                 f"in column '{group_column}'"
-            )
-        except:
-            continue
+        )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
@@ -205,15 +202,12 @@ def mwu_bonferroni(
         
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        try:
-            logger.error(
+        logger.error(
                 f"{table.shape} {table_with_column.shape} "
                 f"{table.index} {table_with_column.index} "
                 f"No features passed for groups: {group_column_values} "
                 f"in column '{group_column}'"
-            )
-        except:
-            continue
+        )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
@@ -289,15 +283,12 @@ def kruskal_bonferroni(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        try:
-            logger.error(
+        logger.error(
                 f"{table.shape} {table_with_column.shape} "
                 f"{table.index} {table_with_column.index} "
                 f"No features passed for groups: {group_column_values} "
                 f"in column '{group_column}'"
-            )
-        except:
-            continue
+        )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
