@@ -399,7 +399,7 @@ class AmpliconData:
         # Save all generated tables
         self._save_all_tables(table_dir)
 
-    def _process_raw_tables(self, levels: List[str])#, table_dir: Path):
+    def _process_raw_tables(self, levels: List[str]):#, table_dir: Path):
         """Generate raw tables by collapsing taxa at different levels."""
         self.tables["raw"] = self._run_processing_step(
             process_name="Collapsing taxonomy",
