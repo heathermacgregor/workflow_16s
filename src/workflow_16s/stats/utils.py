@@ -39,8 +39,13 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
+from typing import Optional
+
 def merge_table_with_metadata(
-    table: pd.DataFrame, metadata: pd.DataFrame, group_column: str
+    table: pd.DataFrame,
+    metadata: pd.DataFrame,
+    group_column: str,
+    metadata_id_column: Optional[str] = None  # NEW: Column containing sample IDs
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column after index sanitization.
@@ -49,6 +54,7 @@ def merge_table_with_metadata(
         table: Samples × features abundance table
         metadata: Metadata table with sample information
         group_column: Metadata column to merge
+        metadata_id_column: Optional column in metadata containing sample IDs
         
     Returns:
         Merged DataFrame with samples × features
@@ -56,55 +62,80 @@ def merge_table_with_metadata(
     Raises:
         ValueError: If no common IDs found or missing group_column values
     """
-    # Preserve original index names for restoration later
+    # Preserve original index names
     table_index_name = table.index.name or "index"
-    meta_index_name = metadata.index.name or "index"
+    
+    # NEW: Diagnostic logging
+    print(f"Table index type: {type(table.index[0]) if len(table.index) > 0 else 'empty'}")
+    print(f"Metadata index type: {type(metadata.index[0]) if len(metadata.index) > 0 else 'empty'}")
 
-    # Reset indexes to make indices mergeable
+    # NEW: Handle metadata sample ID column
+    if metadata_id_column:
+        print(f"Using metadata column '{metadata_id_column}' for sample IDs")
+        if metadata_id_column not in metadata.columns:
+            raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
+        
+        # Create temp DF with sample IDs
+        metadata = metadata.reset_index()
+        metadata_for_merge = metadata[[metadata_id_column, group_column]].copy()
+        meta_index_name = metadata_id_column
+    else:
+        print("Using metadata index for sample IDs")
+        meta_index_name = metadata.index.name or "index"
+        metadata_for_merge = metadata[[group_column]].copy()
+        metadata_for_merge = metadata_for_merge.reset_index()
+
+    # Reset table index
     table = table.reset_index().rename(columns={table_index_name: "temp_index"})
-    metadata = metadata.reset_index().rename(columns={meta_index_name: "temp_index"})
+    
+    # Reset metadata index
+    metadata_for_merge = metadata_for_merge.rename(columns={meta_index_name: "temp_index"})
 
-    # Sanitize indices by converting to string, stripping whitespace, and lowercasing
+    # Sanitize IDs
     table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
-    metadata["temp_index"] = metadata["temp_index"].astype(str).str.strip().str.lower()
+    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str).str.strip().str.lower()
 
-    # --- CRITICAL DIAGNOSTIC CHECK ---
-    # Verify we have overlapping IDs after sanitization
-    common_ids = set(table["temp_index"]) & set(metadata["temp_index"])
-    if not common_ids:
-        # Get sample values for error message
-        table_samples = table["temp_index"].head(5).tolist()
-        meta_samples = metadata["temp_index"].head(5).tolist()
-        raise ValueError(
-            "No matching IDs after sanitization. Possible causes:\n"
-            "- Mismatched index values between table and metadata\n"
-            "- Different index types (e.g., numeric vs string)\n"
-            "- Missing metadata for table samples\n\n"
-            f"Table index sample: {table_samples}\n"
-            f"Metadata index sample: {meta_samples}"
-        )
+    # NEW: Print diagnostic samples
+    print("Table sample IDs:", table["temp_index"].head(5).tolist())
+    print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
+    
+    # NEW: Check for duplicates
+    if metadata_for_merge["temp_index"].duplicated().any():
+        duplicates = metadata_for_merge["temp_index"].duplicated().sum()
+        raise ValueError(f"{duplicates} duplicate sample IDs found in metadata")
 
-    # Perform inner merge on sanitized indices
+    # Perform merge
     merged = pd.merge(
         table,
-        metadata[["temp_index", group_column]],  # Select only needed columns
+        metadata_for_merge,
         on="temp_index",
         how="inner"
-    ).set_index("temp_index")  # Restore index
+    ).set_index("temp_index")
 
-    # Restore original index name from table
+    # Restore original index name
     merged.index.name = table_index_name
 
-    # Validate group_column completeness
+    # Validate merge
+    if merged.empty:
+        table_samples = table["temp_index"].unique()[:5]
+        meta_samples = metadata_for_merge["temp_index"].unique()[:5]
+        raise ValueError(
+            "No samples remaining after merge. Possible causes:\n"
+            "- Metadata doesn't contain sample IDs from table\n"
+            "- Sample ID column not properly specified\n\n"
+            f"Table sample IDs: {table_samples}\n"
+            f"Metadata sample IDs: {meta_samples}"
+        )
+
     if merged[group_column].isna().any():
-        missing_count = merged[group_column].isna().sum()
+        missing = merged[group_column].isna().sum()
         missing_samples = merged[merged[group_column].isna()].index.tolist()[:5]
         raise ValueError(
-            f"{missing_count} samples have missing '{group_column}' values. "
-            "Check metadata completeness. "
+            f"{missing} samples have NaN in '{group_column}' after merge. "
             f"First 5 affected samples: {missing_samples}"
         )
 
+    print(f"Successfully merged {len(merged)} samples")
     return merged
 
 
