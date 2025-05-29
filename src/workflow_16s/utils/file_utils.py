@@ -555,7 +555,7 @@ class AmpliconData:
                     )
                 output_path = type_dir / f"feature-table_{level}.biom"
                 if not isinstance(table, Table):
-                    table = convert_to_biom(df)
+                    table = convert_to_biom(df.T)
                     print(table.shape)
                 export_biom(table, output_path)
                 if self.verbose:
