@@ -26,7 +26,19 @@ logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
-def convert_to_biom(table: pd.DataFrame) -> Table:
+def export_biom(
+    table: Table,
+    output_biom_path: Union[str, Path]
+):
+    """"""
+    Path(output_biom_path).parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(output_biom_path, 'w') as f:
+        table.to_hdf5(f, generated_by=f"Table")
+        
+
+def convert_to_biom(
+    table: Union[pd.DataFrame, Table]
+) -> Table:
     """
     Convert pandas DataFrame to BIOM Table.
     
@@ -36,7 +48,7 @@ def convert_to_biom(table: pd.DataFrame) -> Table:
     Returns:
         BIOM Table representation of the DataFrame.
     """
-    if not isinstance(table, pd.DataFrame):
+    if isinstance(table, Table):
         return table
     
     observation_ids = table.index.astype(str).tolist()
@@ -72,8 +84,7 @@ def collapse_taxa(
         ValueError: For invalid target_level.
     """
     table = table.copy()
-    if not isinstance(table, Table):
-        table = convert_to_biom(table)
+    table = convert_to_biom(table)
         
     levels = {
         'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5
@@ -104,19 +115,19 @@ def collapse_taxa(
     ).remove_empty()
 
     # Save output
-    output_biom_path = (
-        Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
-    )
-    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(output_biom_path, 'w') as f:
-        collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+    #output_biom_path = (
+    #    Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
+    #)
+    #output_biom_path.parent.mkdir(parents=True, exist_ok=True)
+    #with h5py.File(output_biom_path, 'w') as f:
+    #    collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
         
-    if verbose:
-        n_features, n_samples = collapsed_table.shape
-        shape_str = f"[{n_features}, {n_samples}]"
-        logger.info(
-            f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
-        )
+    #if verbose:
+    #    n_features, n_samples = collapsed_table.shape
+    #    shape_str = f"[{n_features}, {n_samples}]"
+    #    logger.info(
+    #        f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
+    #    )
     
     return collapsed_table
   
@@ -124,8 +135,8 @@ def collapse_taxa(
 def presence_absence(
     table: Union[Table, pd.DataFrame], 
     target_level: str, 
-    output_dir: Union[str, Path],
-    verbose: bool = True
+    #output_dir: Union[str, Path],
+    #verbose: bool = True
 ) -> Table:
     """
     Convert table to presence/absence format and filter by abundance.
@@ -138,9 +149,9 @@ def presence_absence(
     Returns:
         Presence/absence BIOM Table filtered by abundance.
     """
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    if not isinstance(table, Table):
-        table = convert_to_biom(table)
+    #Path(output_dir).mkdir(parents=True, exist_ok=True)
+    table = table.copy()
+    table = convert_to_biom(table)
 
     levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
     
@@ -163,19 +174,19 @@ def presence_absence(
         pa_df_filtered.columns,
         table_id='Presence Absence BIOM Table'
     )
-    output_biom_path = (
-        Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
-    )
-    output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(output_biom_path, 'w') as f:
-        pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
+    #output_biom_path = (
+    #    Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
+    #)
+    #output_biom_path.parent.mkdir(parents=True, exist_ok=True)
+    #with h5py.File(output_biom_path, 'w') as f:
+    #    pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
         
-    if verbose:
-        n_features, n_samples = pa_table.shape
-        shape_str = f"[{n_features}, {n_samples}]"
-        logger.info(
-            f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
-        )
+    #if verbose:
+    #    n_features, n_samples = pa_table.shape
+    #    shape_str = f"[{n_features}, {n_samples}]"
+    #    logger.info(
+    #        f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
+    #    )
     
     return pa_table
 
