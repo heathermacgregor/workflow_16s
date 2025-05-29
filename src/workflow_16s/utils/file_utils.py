@@ -390,8 +390,8 @@ class AmpliconData:
         table_dir = Path(self.project_dir.data) / 'merged' / 'table'
         
         # Execute processing steps
-        self._process_raw_tables(tax_levels, table_dir)
-        self._process_presence_absence(tax_levels, table_dir)
+        self._process_raw_tables(tax_levels)#, table_dir)
+        self._process_presence_absence(tax_levels)#, table_dir)
         self._process_filtered_tables(tax_levels)
         self._process_normalized_tables(tax_levels)
         self._process_clr_transformed_tables(tax_levels)
