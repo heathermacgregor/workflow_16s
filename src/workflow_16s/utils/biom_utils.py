@@ -66,7 +66,7 @@ def convert_to_biom(
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
-    output_dir: Union[str, Path],
+    #output_dir: Union[str, Path],
     verbose: bool = True
 ) -> Table:
     """
