@@ -543,7 +543,9 @@ class AmpliconData:
                 output_path = type_dir / f"feature-table_{level}.tsv"
                 print(output_path)
                 print(type(table))
+                print(table.shape)
                 df = table_to_dataframe(table)
+                print(df.shape)
                 df.to_csv(output_path, sep='\t', index=True)
                 if self.verbose:
                     n_features, n_samples = df.shape
