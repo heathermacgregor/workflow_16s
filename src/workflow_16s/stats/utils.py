@@ -45,7 +45,7 @@ def merge_table_with_metadata(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
     group_column: str,
-    metadata_id_column: Optional[str] = None  # NEW: Column containing sample IDs
+    metadata_id_column: Optional[str] = '#sampleid'  # NEW: Column containing sample IDs
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column after index sanitization.
