@@ -63,36 +63,29 @@ def merge_table_with_metadata(
     Raises:
         ValueError: If no common IDs found or missing group_column values.
     """
-    # Preserve original index names
+    if group_column not in metadata.columns:
+        raise ValueError(f"Column '{group_column}' not found in metadata")
+        
     table_index_name = table.index.name or "index"
     
-    if verbose:
-        logger.debug(f"Table index type: {type(table.index[0]) if len(table.index) > 0 else 'empty'}")
-        logger.debug(f"Metadata index type: {type(metadata.index[0]) if len(metadata.index) > 0 else 'empty'}")
-
-    # NEW: Handle metadata sample ID column
     if metadata_id_column:
         if verbose:
             logger.debug(f"Using metadata column '{metadata_id_column}' for sample IDs")
         if metadata_id_column not in metadata.columns:
             raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
-        
-        # Create temp DF with sample IDs
-        metadata = metadata.reset_index()
-        metadata_for_merge = metadata[[metadata_id_column, group_column]].copy()
-        meta_index_name = metadata_id_column
+        metadata_index_name = metadata_id_column
     else:
         if verbose:
             logger.debug("Using metadata index for sample IDs")
-        meta_index_name = metadata.index.name or "index"
-        metadata_for_merge = metadata[[group_column]].copy()
-        metadata_for_merge = metadata_for_merge.reset_index()
-
-    # Reset table index
-    table = table.reset_index().rename(columns={table_index_name: "temp_index"})
+        metadata_index_name = metadata.index.name or "index"
     
-    # Reset metadata index
-    metadata_for_merge = metadata_for_merge.rename(columns={meta_index_name: "temp_index"})
+    metadata_for_merge = metadata.reset_index()[[metadata_index_name, group_column]].copy()
+        
+
+
+    # Reset indices
+    table = table.reset_index().rename(columns={table_index_name: "temp_index"})
+    metadata_for_merge = metadata_for_merge.rename(columns={metadata_index_name: "temp_index"})
 
     # Sanitize IDs
     table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
