@@ -85,8 +85,6 @@ def ttest(
         DataFrame with significant features (p < Bonferroni-corrected threshold).
     """
     table = table_to_dataframe(table)
-    print()
-    print(table_with_column.index)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
     
     results = []
@@ -128,6 +126,7 @@ def ttest(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
+        try:
         logger.error(
             f"{table.shape} {table_with_column.shape} "
             f"{table.index} {table_with_column.index} "
