@@ -541,6 +541,8 @@ class AmpliconData:
             type_dir.mkdir(exist_ok=True)
             for level, table in level_tables.items():
                 output_path = type_dir / f"feature-table_{level}.tsv"
+                print(output_path)
+                print(type(table))
                 df = table_to_dataframe(table)
                 df.to_csv(output_path, sep='\t', index=True)
                 if self.verbose:
@@ -549,15 +551,15 @@ class AmpliconData:
                     logger.info(
                         f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
                     )
-                output_path = type_dir / f"feature-table_{level}.biom"
-                table = convert_to_biom(df)
-                export_biom(table, output_path)
-                if self.verbose:
-                    n_features, n_samples = table.shape
-                    shape_str = f"[{n_features}, {n_samples}]"
-                    logger.info(
-                        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
-                    )
+                #output_path = type_dir / f"feature-table_{level}.biom"
+                #table = convert_to_biom(df)
+                #export_biom(table, output_path)
+                #if self.verbose:
+                #    n_features, n_samples = table.shape
+                #    shape_str = f"[{n_features}, {n_samples}]"
+                #    logger.info(
+                #        f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
+                #    )
                 
 
     def _run_all_statistical_analyses(self):
