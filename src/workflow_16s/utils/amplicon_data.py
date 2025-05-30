@@ -204,23 +204,28 @@ class AmpliconData:
         )
 
     def _filter_table_by_metadata(self):
-        # Get list of sample IDs from metadata in order
-        metadata_sample_ids = self.meta['#sampleid'].tolist()
+        metadata_df['#sampleid'] = metadata_df['#sampleid'].str.lower()
         
-        # Filter the BIOM table to include only samples present in metadata
-        table_filtered = self.table.filter(
-            metadata_sample_ids, axis='sample', inplace=False
-        )
+        # Get list of lowercase sample IDs from metadata (in order)
+        metadata_sample_ids = metadata_df['#sampleid'].tolist()
         
-        # Reorder the BIOM table to match the order in metadata
-        # BIOM's reorder method does not raise error if all samples are not found,
-        # so we must ensure all metadata_sample_ids are in the filtered table
-        existing_ids = [
-            sid for sid in metadata_sample_ids if sid in table_filtered.ids(axis='sample')
-        ]
+        # Lowercase the sample IDs in the BIOM table
+        # First, map lowercase sample IDs to their original form
+        original_sample_ids = table.ids(axis='sample')
+        lowercase_mapping = {sid.lower(): sid for sid in original_sample_ids}
         
-        # Reorder the table
-        table_reordered = table_filtered.sort(order=existing_ids, axis='sample')
+        # Find intersection of lowercase metadata sample IDs and table sample IDs
+        valid_lowercase_ids = [sid for sid in metadata_sample_ids if sid in lowercase_mapping]
+        
+        # Map back to original case IDs for filtering
+        matching_original_ids = [lowercase_mapping[sid] for sid in valid_lowercase_ids]
+        
+        # Filter table to include only samples in metadata (case-insensitive match)
+        table_filtered = table.filter(matching_original_ids, axis='sample', inplace=False)
+        
+        # Reorder filtered table to match metadata order (still using original case IDs)
+        ordered_original_ids = [lowercase_mapping[sid] for sid in metadata_sample_ids if sid in lowercase_mapping]
+        table_reordered = table_filtered.sort(order=ordered_original_ids, axis='sample')
         self.table = table_reordered
 
     def _get_biom_paths(self) -> List[Path]:
