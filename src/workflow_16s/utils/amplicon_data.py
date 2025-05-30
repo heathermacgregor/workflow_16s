@@ -146,7 +146,7 @@ class AmpliconData:
         # Run statistical analyses
         #self._run_all_statistical_analyses()
 
-  def _set_output_paths(self):
+    def _set_output_paths(self):
         """Set output paths for tables and metadata based on processing mode."""
         table_dir, output_dir = self._mode_config.get(self.mode, (None, None))
         if table_dir is None:
