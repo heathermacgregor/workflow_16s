@@ -668,65 +668,71 @@ class AmpliconData:
         statistical results from multiple tests. Features are ranked by effect size
         and significance, with separate lists for contaminated and pristine associations.
         
+        Steps:
+        1. Collect statistical results from all tests for each taxonomic level
+        2. For each feature, find the most significant result across tests
+        3. Classify features as contaminated-associated (positive effect) or pristine-associated (negative effect)
+        4. Sort features by effect size magnitude and then by significance (p-value)
+        5. Save the top features to class attributes
+        
         Args:
             table_type: Type of table to analyze (e.g., 'raw', 'presence_absence')
         """
+        # Initialize lists to store classified features
         contaminated_features = []
         pristine_features = []
         
         # Check if statistical results exist for this table type
         if table_type not in self.stats:
-            logger.warning(
-                f"No statistical results found for table type: {table_type}"
-            )
+            logger.warning(f"No statistical results found for table type: {table_type}")
             return
             
         # Define column mappings for different statistical tests
         TEST_COLUMN_MAP = {
             'ttest': {
-                'test_statistic': 't_statistic',
-                'p_value': 'p_value',
-                'effect': 'mean_difference',
-                'cohens_d': 'cohens_d',
-                'effect': 'mean_diff',
+                'effect': 'mean_difference',  # Primary effect size measure
+                'alt_effect': 'cohens_d',     # Alternative effect size measure
+                'p_value': 'p_value'          # Significance value
             },
-            'mwub': {  # Mann-Whitney U with Bonferroni
-                'test_statistic': 'u_statistic',
-                'p_value': 'p_value',
-                'effect': 'median_difference',
-                'effect': 'effect_size_r' 
+            'mwub': {
+                'effect': 'effect_size_r',    # Rank-biserial correlation effect size
+                'alt_effect': 'median_difference',  # Alternative effect measure
+                'p_value': 'p_value'
             },
-            'kwb': {   # Kruskal-Wallis with Bonferroni
-                'test_statistic': 'h_statistic',
-                'p_value': 'p_value',
-                'epsilon_squared': 'epsilon_squared',
-                'groups_tested': 'groups_tested'
+            'kwb': {
+                'effect': 'epsilon_squared',  # Variance explained effect size
+                'p_value': 'p_value'
+            },
+            'fisher': {
+                'effect': 'proportion_diff',  # Difference in proportion
+                'alt_effect': 'odds_ratio',   # Alternative effect measure
+                'p_value': 'p_value'
             }
         }
         
-        # Process each taxonomic level
+        # Process each taxonomic level (from phylum to genus)
         for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            # Collect all DataFrames for this level across tests
+            # Collect all DataFrames for this level across different tests
             result_dfs = []
             for test_name, level_results in self.stats[table_type].items():
                 # Skip visualization results (PCA/t-SNE)
                 if test_name in ['pca', 'tsne']:
                     continue
                     
-                # Get results for this level if available
+                # Get results for this taxonomic level if available
                 if level in level_results:
                     df = level_results[level].copy()
                     
-                    # Add test name identifier to columns
+                    # Add test name prefix to columns (except 'feature')
                     df.columns = [f"{test_name}_{col}" if col != 'feature' else col 
                                  for col in df.columns]
                     result_dfs.append(df)
             
-            # Skip if no results for this level
+            # Skip level if no statistical results found
             if not result_dfs:
                 continue
                 
-            # Merge results from different tests
+            # Merge results from different tests on feature names
             merged_df = reduce(
                 lambda left, right: pd.merge(left, right, on='feature', how='outer'),
                 result_dfs
@@ -734,51 +740,82 @@ class AmpliconData:
             
             # Process each feature in the merged results
             for _, row in merged_df.iterrows():
-                best_effect = 0
-                best_q_value = 1.0
-                best_test = None
+                best_effect = 0          # Track largest effect size
+                best_p_value = 1.0       # Track smallest p-value
+                best_test = None          # Track which test gave best result
                 
-                # Find the most significant result across tests
+                # Evaluate results from each test type
                 for test_name in TEST_COLUMN_MAP:
-                    # Construct column names for this test
-                    effect_col = f"{test_name}_{TEST_COLUMN_MAP[test_name]['effect']}"
-                    q_value_col = f"{test_name}_{TEST_COLUMN_MAP[test_name]['q_value']}"
+                    # Get column names for this test
+                    config = TEST_COLUMN_MAP[test_name]
+                    effect_col = f"{test_name}_{config['effect']}"
+                    p_value_col = f"{test_name}_{config['p_value']}"
                     
                     # Skip if test results not available for this feature
-                    if effect_col not in row or q_value_col not in row:
+                    if p_value_col not in row:
                         continue
                         
-                    effect = row[effect_col]
-                    q_value = row[q_value_col]
+                    p_value = row[p_value_col]
                     
                     # Skip non-significant or missing results
-                    if pd.isna(effect) or pd.isna(q_value) or q_value >= 0.05:
+                    if pd.isna(p_value) or p_value > 0.05:
                         continue
                     
-                    # Track the most significant result
-                    if abs(effect) > abs(best_effect) or \
-                       (abs(effect) == abs(best_effect) and q_value < best_q_value):
+                    # Get effect size - try primary then alternative
+                    effect = None
+                    if effect_col in row:
+                        effect = row[effect_col]
+                    elif 'alt_effect' in config:
+                        alt_col = f"{test_name}_{config['alt_effect']}"
+                        if alt_col in row:
+                            effect = row[alt_col]
+                    
+                    # Skip if no effect size found
+                    if effect is None:
+                        continue
+                    
+                    # Update best result if:
+                    # - More significant (lower p-value) OR
+                    # - Same significance but larger absolute effect size
+                    if (p_value < best_p_value or 
+                        (p_value == best_p_value and abs(effect) > abs(best_effect))):
                         best_effect = effect
-                        best_q_value = q_value
+                        best_p_value = p_value
                         best_test = test_name
                 
-                # If no significant result found, skip feature
+                # Skip feature if no significant result found
                 if best_test is None:
                     continue
                     
-                # Classify as contaminated or pristine association
+                # Package feature data for classification
                 feature_data = {
                     'feature': row['feature'],
                     'level': level,
                     'test': best_test,
                     'effect': best_effect,
-                    'q_value': best_q_value
+                    'p_value': best_p_value
                 }
                 
+                # Classify based on effect direction
                 if best_effect > 0:
                     contaminated_features.append(feature_data)
                 else:
                     pristine_features.append(feature_data)
         
-        # Save top features
-        self._save_top_features(contaminated_features, pristine_features)
+        # Sort features by effect size magnitude (absolute value) then by significance
+        # Priority: 1. Strongest effects (large |effect|) 2. Most significant (low p-value)
+        key_func = lambda x: (-abs(x['effect']), x['p_value'])
+        
+        contaminated_features = sorted(contaminated_features, key=key_func)
+        pristine_features = sorted(pristine_features, key=key_func)
+        
+        # Store sorted results as class attributes
+        self.top_contaminated_features = contaminated_features
+        self.top_pristine_features = pristine_features
+        
+        # Log summary of findings
+        logger.info(f"Identified {len(contaminated_features)} contaminated-associated features")
+        logger.info(f"Identified {len(pristine_features)} pristine-associated features")
+        
+        # Optionally save to files
+        #self._save_top_features(contaminated_features, pristine_features)
