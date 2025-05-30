@@ -32,6 +32,8 @@ DEFAULT_RANDOM_STATE = 0
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+debug_mode = Truue
+
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
@@ -102,7 +104,6 @@ def ttest(
             
         try:
             t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=equal_var)
-            print(f"{feature} {t_stat} {p_val}")
         except ValueError:
             continue  # Handle cases with invalid variance calculations
             
@@ -115,7 +116,10 @@ def ttest(
         # Pooled standard deviation for Cohen's d
         pooled_std = np.sqrt(((n1-1)*std1**2 + (n2-1)*std2**2) / (n1 + n2 - 2))
         cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
-        
+
+        if debug_mode:
+            print(f"{feature} {t_stat} {p_val} {mean_diff} {cohen_d}")
+            
         results.append({
             'feature': feature,
             't_statistic': t_stat,
@@ -191,7 +195,10 @@ def mwu_bonferroni(
         n1, n2 = len(group1_values), len(group2_values)
         r = 1 - (2 * u_stat) / (n1 * n2)
         median_diff = group1_values.median() - group2_values.median()
-        
+
+        if debug_mode:
+            print(f"{feature} {u_stat} {p_val} {median_diff} {r}")
+            
         results.append({
             'feature': feature,
             'u_statistic': u_stat,
@@ -203,10 +210,8 @@ def mwu_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-                f"{table.shape} {table_with_column.shape} "
-                f"{table.index} {table_with_column.index} "
-                f"No features passed for groups: {group_column_values} "
-                f"in column '{group_column}'"
+            f"No features passed for groups: {group_column_values} "
+            f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
 
@@ -273,6 +278,9 @@ def kruskal_bonferroni(
         n_total = sum(len(g) for g in groups)
         epsilon_sq = h_stat / (n_total - 1)
         
+        if debug_mode:
+            print(f"{feature} {h_stat} {p_val} {epsilon_sq}")
+            
         results.append({
             'feature': feature,
             'h_statistic': h_stat,
@@ -284,10 +292,8 @@ def kruskal_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         logger.error(
-                f"{table.shape} {table_with_column.shape} "
-                f"{table.index} {table_with_column.index} "
-                f"No features passed for groups: {group_column_values} "
-                f"in column '{group_column}'"
+            f"No features passed for groups: {group_column_values} "
+            f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
