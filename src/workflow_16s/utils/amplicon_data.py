@@ -509,10 +509,10 @@ class AmpliconData:
             base_dir.mkdir(parents=True, exist_ok=True)
             for table_type, level_tables in self.tables.items():
                 type_dir = base_dir / table_type
-                type_dir.mkdir(exist_ok=True)
+                type_dir.mkdir(parents=True, exist_ok=True)
                 for level, table in level_tables.items():
                     level_dir = type_dir / level
-                    level_dir.mkdir(exist_ok=True)
+                    level_dir.mkdir(parents=True, exist_ok=True)
                     output_path = level_dir / f"feature-table.biom"
                     # Save table
                     export_h5py(table, output_path)
@@ -633,14 +633,14 @@ class AmpliconData:
                 "[white]Saving statistical results...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=total_files
             )
-                
+            base_dir.mkdir(parents=True, exist_ok=True) 
             for table_type, tests in self.stats.items():
                 type_dir = base_dir / table_type
-                type_dir.mkdir(exist_ok=True)
+                type_dir.mkdir(parents=True, exist_ok=True)
                 for test_key, levels in tests.items():
                     for level, result_df in levels.items():
                         level_dir = type_dir / level
-                        level_dir.mkdir(exist_ok=True)
+                        level_dir.mkdir(parents=True, exist_ok=True)
                         output_path = level_dir / f"{test_key}.csv"
                             
                         # Save DataFrame to CSV
