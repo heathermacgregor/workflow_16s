@@ -502,7 +502,9 @@ class AmpliconData:
                 type_dir = base_dir / table_type
                 type_dir.mkdir(exist_ok=True)
                 for level, table in level_tables.items():
-                    output_path = type_dir / f"feature-table_{level}.biom"
+                    level_dir = type_dir / level
+                    level_dir.mkdir(exist_ok=True)
+                    output_path = level_dir / f"feature-table.biom"
                     # Save table
                     export_h5py(table, output_path)
                     if self.verbose:
