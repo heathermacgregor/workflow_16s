@@ -220,7 +220,7 @@ def mwu_bonferroni(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df[results_df['p_value'] <= 0.05]
     results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni threshold
@@ -303,7 +303,7 @@ def kruskal_bonferroni(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df[results_df['p_value'] <= 0.05]
     results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni correction
@@ -383,7 +383,7 @@ def anova(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df[results_df['p_value'] <= 0.05]
     results_df = results_df.sort_values('p_value', ascending=True)
     return results_df
 
