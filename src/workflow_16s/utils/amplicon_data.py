@@ -94,44 +94,45 @@ def filter_and_reorder_biom_and_metadata(
     Returns:
         tuple: (filtered biom.Table, filtered metadata DataFrame)
     """
-    # Copy to avoid modifying original DataFrame
+    # Lowercase and deduplicate sample IDs in metadata
     metadata_df = metadata_df.copy()
-
-    # Lowercase sample IDs in metadata
     metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
+    metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
 
-    # Lowercase sample IDs in biom table
+    # Lowercase biom sample IDs, mapping to original IDs
     original_sample_ids = table.ids(axis='sample')
-    lowercase_to_original = {sid.lower(): sid for sid in original_sample_ids}
+    lowercase_to_original = {}
+    for sid in original_sample_ids:
+        key = sid.lower()
+        if key in lowercase_to_original:
+            raise ValueError(f"Duplicate lowercase sample ID found in BIOM table: '{key}' from '{sid}' and '{lowercase_to_original[key]}'")
+        lowercase_to_original[key] = sid
 
-    # Identify shared sample IDs
+    # Get shared sample IDs (in lowercase)
     metadata_ids = metadata_df[sample_column].tolist()
     shared_ids = [sid for sid in metadata_ids if sid in lowercase_to_original]
 
-    # Deduplicate metadata
-    metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
+    # Filter metadata by shared IDs
     metadata_df = metadata_df.set_index(sample_column).loc[shared_ids].reset_index()
 
-    # Get ordered original-case IDs for biom
-    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in shared_ids]
+    # Map back to original-case sample IDs for biom
+    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in metadata_df[sample_column]]
 
-    # Filter biom table
+    # Filter and reorder BIOM table
     table_filtered = table.filter(ordered_biom_sample_ids, axis='sample', inplace=False)
-
-    # Reorder biom table data
+    sample_index = {sid: i for i, sid in enumerate(table_filtered.ids(axis='sample'))}
+    reordered_indices = [sample_index[sid] for sid in ordered_biom_sample_ids]
     data = table_filtered.matrix_data.toarray()
-    obs_ids = table_filtered.ids(axis='observation')
-    current_sample_ids = table_filtered.ids(axis='sample')
-    sample_index = {sid: i for i, sid in enumerate(current_sample_ids)}
-    ordered_indices = [sample_index[sid] for sid in ordered_biom_sample_ids]
-    reordered_data = data[:, ordered_indices]
+    reordered_data = data[:, reordered_indices]
 
-    table_reordered = Table(reordered_data, observation_ids=obs_ids, sample_ids=ordered_biom_sample_ids)
-
-    # Final check
-    assert list(table_reordered.ids(axis='sample')) == [lowercase_to_original[sid] for sid in metadata_df[sample_column].tolist()]
+    table_reordered = Table(
+        reordered_data,
+        observation_ids=table_filtered.ids(axis='observation'),
+        sample_ids=ordered_biom_sample_ids
+    )
 
     return table_reordered, metadata_df
+
 
 
 class AmpliconData:
