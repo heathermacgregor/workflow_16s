@@ -298,6 +298,7 @@ class AmpliconData:
                 if self.verbose:
                     logger.info("Applying filtering to table...")
                 filtered_table = filter_table(table)
+                print(filtered_table.shape)
                 self.tables["filtered"] = {}
                 self.tables["filtered"][self.mode] = filtered_table
                 progress.update(main_task, advance=1)
@@ -307,6 +308,7 @@ class AmpliconData:
                 if self.verbose:
                     logger.info("Applying normalization to table...")
                 normalized_table = normalize_table(filtered_table, axis=1)
+                print(normalized_table.shape)
                 self.tables["normalized"] = {}
                 self.tables["normalized"][self.mode] = normalized_table
                 progress.update(main_task, advance=1)
