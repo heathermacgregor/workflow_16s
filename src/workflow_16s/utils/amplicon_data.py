@@ -53,7 +53,7 @@ from workflow_16s.stats.utils import (
     normalize_table,
     table_to_dataframe
 )
-from workflow_16s.stats.tests import kruskal_bonferroni, mwu_bonferroni, ttest 
+from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest 
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
     mds, pca, pcoa, sample_map_categorical
@@ -551,6 +551,11 @@ class AmpliconData:
         
         # Test execution configuration
         test_config = {
+            'fisher': {
+                'key': 'fisher',
+                'func': fisher_exact_bonferroni,
+                'name': 'Fisher test (w/ Bonferroni)'
+            },
             'ttest': {
                 'key': 'ttest',
                 'func': ttest,
