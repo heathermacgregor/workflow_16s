@@ -48,7 +48,7 @@ def merge_table_with_metadata(
 ) -> pd.DataFrame:
     """
     Merge abundance table with metadata column using direct ID matching.
-    Automatically handles orientation and ID matching.
+    Automatically handles orientation, ID matching, and duplicate detection.
     
     Args:
         table: Feature table (Samples × features) or (features × Samples)
@@ -81,7 +81,32 @@ def merge_table_with_metadata(
         meta_ids = metadata.index.astype(str).str.strip().str.lower()
 
     # =====================================================================
-    # 2. Identify sample IDs in table
+    # 2. Check for duplicate IDs in metadata
+    # =====================================================================
+    # Check for duplicates in normalized metadata IDs
+    duplicate_mask = meta_ids.duplicated(keep=False)
+    if duplicate_mask.any():
+        duplicates = meta_ids[duplicate_mask].unique()
+        n_duplicates = len(duplicates)
+        example_duplicates = duplicates[:5]
+        
+        # Find original values for duplicates
+        if metadata_id_column:
+            original_values = metadata.loc[duplicate_mask, metadata_id_column].unique()
+        else:
+            original_values = metadata.index[duplicate_mask].unique()
+        
+        example_originals = original_values[:5]
+        
+        raise ValueError(
+            f"Found {n_duplicates} duplicate sample IDs in metadata after normalization\n"
+            f"Duplicate normalized IDs: {example_duplicates}\n"
+            f"Original values: {example_originals}\n"
+            "Please resolve duplicate entries in metadata"
+        )
+    
+    # =====================================================================
+    # 3. Identify sample IDs in table
     # =====================================================================
     # First try: assume samples are rows (standard orientation)
     table_ids = table.index.astype(str).str.strip().str.lower()
@@ -111,7 +136,7 @@ def merge_table_with_metadata(
         print(f"Found {len(shared_ids)} shared sample IDs")
     
     # =====================================================================
-    # 3. Prepare metadata mapping
+    # 4. Prepare metadata mapping
     # =====================================================================
     # Create normalized ID to group mapping
     if metadata_id_column:
@@ -126,7 +151,7 @@ def merge_table_with_metadata(
         group_map = metadata.set_index(meta_ids)[group_column]
     
     # =====================================================================
-    # 4. Merge group column into table
+    # 5. Merge group column into table
     # =====================================================================
     # Create normalized table index
     table_normalized_index = table.index.astype(str).str.strip().str.lower()
