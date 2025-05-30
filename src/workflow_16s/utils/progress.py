@@ -35,9 +35,9 @@ def create_progress() -> Progress:
         MofNCompleteColumn(),#style="cyan"),
         
         # Magenta elapsed time
-        TimeElapsedColumn(style="magenta"),
+        TimeElapsedColumn(),#style="magenta"),
         
         # Red remaining time estimate
-        TimeRemainingColumn(style="red"),
+        TimeRemainingColumn(),#style="red"),
         expand=False
     )
