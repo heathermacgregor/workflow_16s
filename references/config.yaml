@@ -79,7 +79,7 @@ stats:
     ttest: True
     mwu_bonferroni: True
     kruskal_bonferroni: True
-  clr:
+  clr_transformed:
     ttest: True
     mwu_bonferroni: True
     kruskal_bonferroni: True
