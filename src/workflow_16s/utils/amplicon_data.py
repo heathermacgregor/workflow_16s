@@ -84,51 +84,54 @@ def filter_and_reorder_biom_and_metadata(
     sample_column: str = '#sampleid'
 ) -> tuple[Table, pd.DataFrame]:
     """
-    Filters and reorders a BIOM table and metadata DataFrame so that their sample IDs match exactly and are in the same order.
+    Filters and reorders a BIOM table and metadata DataFrame so that sample IDs match exactly and are aligned.
 
     Args:
         table (biom.Table): The BIOM table (features x samples).
         metadata_df (pd.DataFrame): Metadata DataFrame with a sample ID column.
-        sample_column (str): Name of the column in metadata_df containing sample IDs.
+        sample_column (str): Column name in metadata_df with sample IDs.
 
     Returns:
-        tuple: (filtered and reordered biom.Table, filtered and reordered metadata DataFrame)
+        tuple: (filtered biom.Table, filtered metadata DataFrame)
     """
-    # Normalize sample IDs in metadata
+    # Copy to avoid modifying original DataFrame
     metadata_df = metadata_df.copy()
-    metadata_df[sample_column] = metadata_df[sample_column].str.lower()
 
-    # Get mapping from lowercase sample ID to original BIOM sample ID
-    biom_sample_ids = table.ids(axis='sample')
-    lowercase_to_original = {sid.lower(): sid for sid in biom_sample_ids}
+    # Lowercase sample IDs in metadata
+    metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
 
-    # Deduplicate metadata sample IDs (preserve order)
-    seen = set()
-    ordered_lowercase_ids = []
-    for sid in metadata_df[sample_column]:
-        if sid in lowercase_to_original and sid not in seen:
-            seen.add(sid)
-            ordered_lowercase_ids.append(sid)
+    # Lowercase sample IDs in biom table
+    original_sample_ids = table.ids(axis='sample')
+    lowercase_to_original = {sid.lower(): sid for sid in original_sample_ids}
 
-    # Map back to original-case sample IDs for BIOM
-    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in ordered_lowercase_ids]
+    # Identify shared sample IDs
+    metadata_ids = metadata_df[sample_column].tolist()
+    shared_ids = [sid for sid in metadata_ids if sid in lowercase_to_original]
 
-    # Filter BIOM table
+    # Deduplicate metadata
+    metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
+    metadata_df = metadata_df.set_index(sample_column).loc[shared_ids].reset_index()
+
+    # Get ordered original-case IDs for biom
+    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in shared_ids]
+
+    # Filter biom table
     table_filtered = table.filter(ordered_biom_sample_ids, axis='sample', inplace=False)
 
-    # Reorder BIOM data matrix
+    # Reorder biom table data
     data = table_filtered.matrix_data.toarray()
     obs_ids = table_filtered.ids(axis='observation')
     current_sample_ids = table_filtered.ids(axis='sample')
     sample_index = {sid: i for i, sid in enumerate(current_sample_ids)}
     ordered_indices = [sample_index[sid] for sid in ordered_biom_sample_ids]
     reordered_data = data[:, ordered_indices]
+
     table_reordered = Table(reordered_data, observation_ids=obs_ids, sample_ids=ordered_biom_sample_ids)
 
-    # Filter and reorder metadata
-    metadata_filtered = metadata_df.set_index(sample_column).loc[ordered_lowercase_ids].reset_index()
+    # Final check
+    assert list(table_reordered.ids(axis='sample')) == [lowercase_to_original[sid] for sid in metadata_df[sample_column].tolist()]
 
-    return table_reordered, metadata_filtered
+    return table_reordered, metadata_df
 
 
 class AmpliconData:
