@@ -89,8 +89,8 @@ def merge_table_with_metadata(
     metadata_for_merge = metadata_for_merge.rename(columns={metadata_index_name: "temp_index"})
 
     # Sanitize IDs
-    table["temp_index"] = table["temp_index"].astype(str).str.strip().str.lower()
-    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str).str.strip().str.lower()
+    table["temp_index"] = table["temp_index"].astype(str)#.str.strip().str.lower()
+    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str)#.str.strip().str.lower()
 
     if verbose:
         print("Table sample IDs:", table["temp_index"].head(5).tolist())
