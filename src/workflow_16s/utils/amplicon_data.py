@@ -227,7 +227,8 @@ class AmpliconData:
         
         # Reorder filtered table to match metadata order (still using original case IDs)
         ordered_original_ids = [lowercase_mapping[sid] for sid in metadata_sample_ids if sid in lowercase_mapping]
-        table_reordered = table_filtered.sort(order=ordered_original_ids, axis='sample')
+        table_reordered = table_filtered.reorder(ordered_original_ids, axis='sample')
+
         self.table = table_reordered
 
     def _get_biom_paths(self) -> List[Path]:
