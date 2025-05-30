@@ -252,4 +252,35 @@ def normalize_table(
     """Normalize with strict type enforcement"""
     biom_table = to_biom_table(table)
     
-    if
+    if axis == 1:  # Sample-wise normalization
+        return biom_table.norm(axis='sample')
+    elif axis == 0:  # Feature-wise normalization
+        return biom_table.norm(axis='observation')
+    else:
+        raise ValueError("axis must be 0 (features) or 1 (samples)")
+
+def clr_transform_table(
+    table: Union[dict, BiomTable, pd.DataFrame], 
+    pseudocount: float = DEFAULT_PSEUDOCOUNT
+) -> BiomTable:
+    """CLR transformation with strict type enforcement"""
+    from skbio.stats.composition import clr
+    biom_table = to_biom_table(table)
+    
+    # Convert to dense array (samples x features)
+    dense_data = biom_table.matrix_data.toarray().T
+    
+    # Apply CLR transformation
+    clr_data = clr(dense_data + pseudocount)
+    
+    # Transpose back to features x samples
+    clr_data = clr_data.T
+    
+    # Create new BIOM Table with original metadata
+    return BiomTable(
+        data=clr_data,
+        observation_ids=biom_table.ids(axis='observation'),
+        sample_ids=biom_table.ids(axis='sample'),
+        observation_metadata=biom_table.metadata(axis='observation'),
+        sample_metadata=biom_table.metadata(axis='sample')
+    )
