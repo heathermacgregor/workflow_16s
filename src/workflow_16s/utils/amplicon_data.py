@@ -1,0 +1,238 @@
+# ===================================== IMPORTS ====================================== #
+
+# Standard Library Imports
+import glob
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from functools import reduce
+
+# Third-Party Imports
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from Bio import SeqIO
+from biom import load_table
+from biom.table import Table
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    track,
+    TaskID
+)
+
+# ================================== LOCAL IMPORTS =================================== #
+
+from workflow_16s.utils.biom import (
+    collapse_taxa, 
+    convert_to_biom, 
+    export_h5py, 
+    presence_absence, 
+    filter_presence_absence
+)
+from workflow_16s.utils.progress import create_progress
+from workflow_16s.utils.file_utils import (
+    import_merged_table_biom,
+    import_merged_meta_tsv
+)
+from workflow_16s.utils import df_utils
+from workflow_16s.utils.dir_utils import SubDirs
+from workflow_16s.stats import beta_diversity 
+from workflow_16s.stats.utils import (
+    clr_transform_table,
+    filter_table, 
+    merge_table_with_metadata,
+    normalize_table,
+    table_to_dataframe
+)
+from workflow_16s.stats.tests import kruskal_bonferroni, mwu_bonferroni, ttest 
+from workflow_16s.figures.html_report import HTMLReport
+from workflow_16s.figures.merged.merged import (
+    mds, pca, pcoa, sample_map_categorical
+)
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger('workflow_16s')
+
+# ================================= DEFAULT VALUES =================================== #
+
+DEFAULT_PROGRESS_TEXT_N = 50
+
+DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+
+# ANSI color codes
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
+
+# ==================================== FUNCTIONS ===================================== #    
+
+class AmpliconData:
+    """
+    A class for processing and analyzing amplicon sequencing data.
+    
+    This class handles data loading, processing at various taxonomic levels,
+    statistical analysis, and visualization based on configuration settings.
+    
+    Attributes:
+        cfg:         Configuration settings
+        project_dir: Project directory structure
+        mode:        Processing mode ('asv' or 'genus')
+        verbose:     Verbosity flag
+        meta:        Sample metadata
+        table:       Feature table
+        color_maps:  Color mappings for visualization
+        figures:     Generated figures
+        tables:      Processed tables at different taxonomic levels
+        stats:       Statistical analysis results
+    """
+    
+    def __init__(
+        self, 
+        cfg: Dict,
+        project_dir: Union[str, Path],
+        mode: str = 'genus',
+        verbose: bool = False
+    ):
+        """
+        Initialize AmpliconData instance.
+        
+        Args:
+            cfg:         Configuration dictionary
+            project_dir: Project directory structure
+            mode:        Processing mode ('asv' or 'genus')
+            verbose:     Verbosity flag
+        """
+        self.cfg = cfg
+        self.project_dir = project_dir
+        self.mode = mode
+        self.verbose = verbose
+
+        # Initialize data storage attributes
+        self.meta = None
+        self.table = None
+        self.taxa = None
+        self.color_maps = {}
+        self.figures = {}
+        self.tables = {}
+        self.stats = {}
+        
+        # Mode configuration mapping
+        self._mode_config = {
+            'asv': ('table', 'asv'),
+            'genus': ('table_6', 'l6')
+        }
+        
+        # Set output paths
+        self._set_output_paths()
+        
+        # Load data
+        self._load_data()
+        
+        # Execute processing pipeline
+        #self._execute_processing_pipeline()
+        
+        # Run statistical analyses
+        #self._run_all_statistical_analyses()
+
+  def _set_output_paths(self):
+        """Set output paths for tables and metadata based on processing mode."""
+        table_dir, output_dir = self._mode_config.get(self.mode, (None, None))
+        if table_dir is None:
+            raise ValueError(f"Invalid processing mode: {self.mode}")
+        
+        self.table_output_path = (
+            Path(self.project_dir.data) / 'merged' / 'table' / output_dir / 
+            'feature-table.biom'
+        )
+        self.meta_output_path = (
+            Path(self.project_dir.data) / 'merged' / 'metadata' / 
+            'sample-metadata.tsv'
+        )
+
+    def _load_data(self):
+        """Load metadata and BIOM table data."""
+        self._load_metadata()
+        logger.info(
+            f"Loaded metadata table with {RED}{self.meta.shape[0]}{RESET} samples "
+            f"and {RED}{self.meta.shape[1]}{RESET} features"
+        )
+        self._load_biom_table()
+        logger.info(
+            f"Loaded feature table with {RED}{self.table.shape[1]}{RESET} samples "
+            f"and {RED}{self.table.shape[0]}{RESET} features"
+        )
+
+    def _load_metadata(self):
+        """Load and merge metadata from multiple sources."""
+        meta_paths = self._get_metadata_paths()
+        self.meta = import_merged_meta_tsv(
+            meta_paths, 
+            self.meta_output_path, 
+            None,
+            self.verbose
+        )
+
+    def _load_biom_table(self):
+        """Load and merge BIOM feature tables."""
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
+            error_text = "No BIOM files found matching pattern"
+            logger.error(error_text)
+            raise FileNotFoundError(error_text)   
+            
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'dataframe',
+            self.verbose
+        )
+
+    def _get_biom_paths(self) -> List[Path]:
+        """
+        Get paths to BIOM feature tables using a glob pattern.
+        
+        Returns:
+            List of Path objects to BIOM files
+        """
+        pattern = '/'.join(
+          ['*', '*', '*', '*', 'FWD_*_REV_*', self._mode_config[self.mode][0], 
+           'feature-table.biom']
+        )
+        biom_paths = glob.glob(
+            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+            recursive=True
+        )
+        if self.verbose:
+            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
+        return [Path(p) for p in biom_paths]
+
+    def _get_metadata_paths(self) -> List[Path]:
+        """Get paths to metadata files corresponding to BIOM tables."""
+        meta_paths = []
+        for biom_path in self._get_biom_paths():
+            # Handle both file paths and directory paths
+            dataset_dir = biom_path.parent if biom_path.is_file() else biom_path
+            
+            # Extract relevant path components
+            tail_parts = dataset_dir.parts[-6:-1]
+            
+            # Construct metadata path
+            meta_path = Path(self.project_dir.metadata_per_dataset).joinpath(
+                *tail_parts, "sample-metadata.tsv"
+            )
+            meta_paths.append(meta_path)
+            
+        if self.verbose:
+            logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
+        return meta_paths
