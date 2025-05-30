@@ -226,8 +226,8 @@ def mwu_bonferroni(
     results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni threshold
-    results_df_filtered = results_df[results_df['p_value'] <= threshold]
-    return results_df_filtered
+    results_df = results_df[results_df['p_value'] <= threshold]
+    return results_df
 
 
 def kruskal_bonferroni(
@@ -310,8 +310,8 @@ def kruskal_bonferroni(
     results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni correction
-    results_df_filtered = results_df[results_df['p_value'] <= threshold]
-    return results_df_filtered
+    results_df = results_df[results_df['p_value'] <= threshold]
+    return results_df
 
 
 def anova(
@@ -500,8 +500,8 @@ def fisher_exact_bonferroni(
     results_df['p_adj'] = results_df['p_adj'].clip(upper=1.0)  # Cap at 1.0
     
     # Filter significant results
-    significant = results_df[results_df['p_value'] <= threshold]
-    return significant
+    results_df = results_df[results_df['p_value'] <= threshold]
+    return results_df
 
 
 def spearman_correlation(
@@ -544,8 +544,8 @@ def spearman_correlation(
     
     result_df = pd.DataFrame(results)
     result_df['p_adj'] = result_df['p_value'] * len(result_df)
-    return result_df[result_df['p_adj'] <= alpha].sort_values('rho', key=abs, ascending=False)
-
+    results_df = result_df[result_df['p_adj'] <= alpha].sort_values('rho', key=abs, ascending=False)
+    return results_df
 
 def calculate_distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
