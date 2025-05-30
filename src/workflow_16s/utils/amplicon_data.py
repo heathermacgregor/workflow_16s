@@ -331,7 +331,7 @@ class AmpliconData:
         print(self.tables)
         
         # Save all generated tables
-        #self._save_all_tables(table_dir)
+        self._save_all_tables(table_dir)
 
     def _apply_preprocessing_steps(self):
         """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
