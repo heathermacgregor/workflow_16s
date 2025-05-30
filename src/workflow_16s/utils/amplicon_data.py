@@ -261,7 +261,8 @@ class AmpliconData:
         self._apply_preprocessing_steps()
         
         # Execute processing steps
-        self._collapse_taxa(tax_levels)
+        for table_type in self.tables.keys():
+            self._collapse_taxa(table_type, tax_levels)
         self._presence_absence(tax_levels)
         print(self.tables)
         
@@ -320,15 +321,15 @@ class AmpliconData:
                 self.tables["clr_transformed"][self.mode] = clr_transformed_table
                 progress.update(main_task, advance=1)
 
-    def _collapse_taxa(self, levels: List[str]):
+    def _collapse_taxa(self, table_type: str, levels: List[str]):
         """Generate raw tables by collapsing taxa at different levels."""
-        self.tables["raw"] = self._run_processing_step(
-            process_name="Collapsing taxonomy",
+        self.tables[table_type] = self._run_processing_step(
+            process_name="Collapsing {table_type} taxonomy",
             process_func=collapse_taxa,
             levels=levels,
             func_args=(),
             get_source=lambda _: self.table,
-            log_template="Collapsed to {level} level"
+            log_template="Collapsed {table_type} to {level} level"
         )
 
     def _presence_absence(self, levels: List[str]):
@@ -360,11 +361,11 @@ class AmpliconData:
         Args:
             process_name: Name of the processing step for logging
             process_func: Function to execute for each level
-            levels: Taxonomic levels to process
-            func_args: Additional arguments for process_func
-            get_source: Function to get input table for a level
+            levels:       Taxonomic levels to process
+            func_args:    Additional arguments for process_func
+            get_source:   Function to get input table for a level
             log_template: Template for logging messages
-            log_action: Action name for simple logging
+            log_action:   Action name for simple logging
             
         Returns:
             Dictionary of processed tables keyed by taxonomic level
@@ -406,9 +407,9 @@ class AmpliconData:
         Log action for a specific taxonomic level.
         
         Args:
-            level: Taxonomic level being processed
+            level:    Taxonomic level being processed
             template: String template for logging (uses {level} placeholder)
-            action: Simple action description
+            action:   Simple action description
         """
         if template:
             logger.info(template.format(level=level))
