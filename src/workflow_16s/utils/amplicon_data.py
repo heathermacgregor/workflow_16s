@@ -141,7 +141,7 @@ class AmpliconData:
         self._load_data()
         
         # Execute processing pipeline
-        #self._execute_processing_pipeline()
+        self._execute_processing_pipeline()
         
         # Run statistical analyses
         #self._run_all_statistical_analyses()
@@ -166,12 +166,13 @@ class AmpliconData:
         self._load_metadata()
         logger.info(
             f"Loaded metadata table with {RED}{self.meta.shape[0]}{RESET} samples "
-            f"and {RED}{self.meta.shape[1]}{RESET} features"
+            f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
         self._load_biom_table()
+        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
             f"Loaded feature table with {RED}{self.table.shape[1]}{RESET} samples "
-            f"and {RED}{self.table.shape[0]}{RESET} features"
+            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
         )
 
     def _load_metadata(self):
