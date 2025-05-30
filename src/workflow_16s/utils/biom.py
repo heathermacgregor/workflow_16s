@@ -19,6 +19,15 @@ from biom.table import Table
 
 # ================================== LOCAL IMPORTS =================================== #
 
+# ================================= DEFAULT VALUES =================================== #
+
+levels = {
+    'phylum': 1, 
+    'class': 2, 
+    'order': 3, 
+    'family': 4, 
+    'genus': 5
+}
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -26,13 +35,13 @@ logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
-def export_biom(
+def export_h5py(
     table: Table,
-    output_biom_path: Union[str, Path]
+    output_path: Union[str, Path]
 ):
     """"""
-    Path(output_biom_path).parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(output_biom_path, 'w') as f:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(output_path, 'w') as f:
         table.to_hdf5(f, generated_by=f"Table")
         
 
@@ -66,7 +75,6 @@ def convert_to_biom(
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
-    #output_dir: Union[str, Path],
     verbose: bool = True
 ) -> Table:
     """
@@ -86,10 +94,6 @@ def collapse_taxa(
     table = table.copy()
     table = convert_to_biom(table)
         
-    levels = {
-        'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5
-    }
-
     if target_level not in levels:
         raise ValueError(
             f"Invalid `target_level`: {target_level}. "
@@ -113,21 +117,6 @@ def collapse_taxa(
         axis='observation',
         include_collapsed_metadata=False
     ).remove_empty()
-
-    # Save output
-    #output_biom_path = (
-    #    Path(output_dir) / f'l{level_idx + 1}' / "feature-table.biom"
-    #)
-    #output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    #with h5py.File(output_biom_path, 'w') as f:
-    #    collapsed_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-        
-    #if verbose:
-    #    n_features, n_samples = collapsed_table.shape
-    #    shape_str = f"[{n_features}, {n_samples}]"
-    #    logger.info(
-    #        f"Wrote table {shape_str} collapsed to {target_level} to '{output_biom_path}'"
-    #    )
     
     return collapsed_table
   
@@ -135,8 +124,6 @@ def collapse_taxa(
 def presence_absence(
     table: Union[Table, pd.DataFrame], 
     target_level: str, 
-    #output_dir: Union[str, Path],
-    #verbose: bool = True
 ) -> Table:
     """
     Convert table to presence/absence format and filter by abundance.
@@ -149,11 +136,8 @@ def presence_absence(
     Returns:
         Presence/absence BIOM Table filtered by abundance.
     """
-    #Path(output_dir).mkdir(parents=True, exist_ok=True)
     table = table.copy()
     table = convert_to_biom(table)
-
-    levels = {'phylum': 1, 'class': 2, 'order': 3, 'family': 4, 'genus': 5}
     
     # Filter by abundance
     feature_sums = np.array(table.sum(axis='observation')).flatten()
@@ -174,19 +158,6 @@ def presence_absence(
         pa_df_filtered.columns,
         table_id='Presence Absence BIOM Table'
     )
-    #output_biom_path = (
-    #    Path(output_dir) / f'l{levels[target_level]+1}' / "feature-table_pa.biom"
-    #)
-    #output_biom_path.parent.mkdir(parents=True, exist_ok=True)
-    #with h5py.File(output_biom_path, 'w') as f:
-    #    pa_table.to_hdf5(f, generated_by=f"Collapsed to {target_level}")
-        
-    #if verbose:
-    #    n_features, n_samples = pa_table.shape
-    #    shape_str = f"[{n_features}, {n_samples}]"
-    #    logger.info(
-    #        f"Wrote presence-absence table {shape_str} to '{output_biom_path}'"
-    #    )
     
     return pa_table
 
