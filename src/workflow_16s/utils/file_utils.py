@@ -535,7 +535,7 @@ class AmpliconData:
                 output_path = type_dir / f"feature-table_{level}.biom"
                 print(output_path)
                 print(table.shape)
-                export_biom(table, output_path)
+                export_h5py(table, output_path)
                 if self.verbose:
                     n_features, n_samples = table.shape
                     shape_str = f"[{n_features}, {n_samples}]"
