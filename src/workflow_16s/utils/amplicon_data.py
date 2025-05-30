@@ -78,6 +78,48 @@ RESET = "\033[0m"
 
 # ==================================== FUNCTIONS ===================================== #    
 
+def reorder_biom_table_by_metadata(table: Table, metadata_df: pd.DataFrame, sample_column: str = '#sampleid') -> Table:
+    """
+    Filters and reorders a BIOM table so that its sample IDs match and are ordered like the metadata.
+
+    Args:
+        table (biom.Table): The BIOM table (features x samples).
+        metadata_df (pd.DataFrame): Metadata DataFrame with a sample ID column.
+        sample_column (str): Name of the column in metadata_df containing sample IDs.
+
+    Returns:
+        biom.Table: A filtered and reordered BIOM table.
+    """
+    # Lowercase sample IDs in metadata
+    metadata_df = metadata_df.copy()
+    metadata_df[sample_column] = metadata_df[sample_column].str.lower()
+    metadata_sample_ids = metadata_df[sample_column].tolist()
+
+    # Lowercase sample IDs in the BIOM table
+    original_sample_ids = table.ids(axis='sample')
+    lowercase_mapping = {sid.lower(): sid for sid in original_sample_ids}
+
+    # Intersect metadata sample IDs with BIOM table sample IDs
+    valid_lowercase_ids = [sid for sid in metadata_sample_ids if sid in lowercase_mapping]
+    matching_original_ids = [lowercase_mapping[sid] for sid in valid_lowercase_ids]
+
+    # Filter table
+    table_filtered = table.filter(matching_original_ids, axis='sample', inplace=False)
+
+    # Manual reorder using NumPy (compatible with all versions)
+    data = table_filtered.matrix_data.toarray()
+    obs_ids = table_filtered.ids(axis='observation')
+    sample_ids = table_filtered.ids(axis='sample')
+    sample_index = {sid: i for i, sid in enumerate(sample_ids)}
+
+    ordered_ids_filtered = [sid for sid in matching_original_ids if sid in sample_index]
+    ordered_indices = [sample_index[sid] for sid in ordered_ids_filtered]
+    reordered_data = data[:, ordered_indices]
+
+    # Rebuild table
+    table_reordered = Table(reordered_data, observation_ids=obs_ids, sample_ids=ordered_ids_filtered)
+    return table_reordered
+
 class AmpliconData:
     """
     A class for processing and analyzing amplicon sequencing data.
@@ -171,7 +213,7 @@ class AmpliconData:
         )
         self._load_biom_table()
         original_n_samples = self.table.shape[1]
-        self._filter_table_by_metadata()
+        self.table = reorder_biom_table_by_metadata(table=self.table, metadata_df=self.meta, sample_column='#sampleid')
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
             f"Loaded (features x samples) feature table with "
@@ -202,34 +244,6 @@ class AmpliconData:
             'table',
             self.verbose
         )
-
-    def _filter_table_by_metadata(self):
-        metadata_df = self.meta
-        table = self.table
-        metadata_df['#sampleid'] = metadata_df['#sampleid'].str.lower()
-        
-        # Get list of lowercase sample IDs from metadata (in order)
-        metadata_sample_ids = metadata_df['#sampleid'].tolist()
-        
-        # Lowercase the sample IDs in the BIOM table
-        # First, map lowercase sample IDs to their original form
-        original_sample_ids = table.ids(axis='sample')
-        lowercase_mapping = {sid.lower(): sid for sid in original_sample_ids}
-        
-        # Find intersection of lowercase metadata sample IDs and table sample IDs
-        valid_lowercase_ids = [sid for sid in metadata_sample_ids if sid in lowercase_mapping]
-        
-        # Map back to original case IDs for filtering
-        matching_original_ids = [lowercase_mapping[sid] for sid in valid_lowercase_ids]
-        
-        # Filter table to include only samples in metadata (case-insensitive match)
-        table_filtered = table.filter(matching_original_ids, axis='sample', inplace=False)
-        
-        # Reorder filtered table to match metadata order (still using original case IDs)
-        ordered_original_ids = [lowercase_mapping[sid] for sid in metadata_sample_ids if sid in lowercase_mapping]
-        table_reordered = table_filtered.reorder(ordered_original_ids, axis='sample')
-
-        self.table = table_reordered
 
     def _get_biom_paths(self) -> List[Path]:
         """
