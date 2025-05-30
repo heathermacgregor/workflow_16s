@@ -290,7 +290,7 @@ class AmpliconData:
     def _load_data(self):
         """Load metadata and BIOM table data."""
         self._load_metadata()
-        logger.info(f"Loaded metadata with shape [{self.metadata.shape[0]}, {self.metadata.shape[1]}]")
+        logger.info(f"Loaded metadata with shape [{self.meta.shape[0]}, {self.meta.shape[1]}]")
         self._load_biom_table()
 
     def _load_metadata(self):
