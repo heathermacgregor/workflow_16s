@@ -165,13 +165,15 @@ class AmpliconData:
         """Load metadata and BIOM table data."""
         self._load_metadata()
         logger.info(
-            f"Loaded metadata table with {RED}{self.meta.shape[0]}{RESET} samples "
+            f"Loaded (samples x features) metadata table with "
+            f"{RED}{self.meta.shape[0]}{RESET} samples "
             f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
         self._load_biom_table()
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
-            f"Loaded feature table with {RED}{self.table.shape[1]}{RESET} samples "
+            f"Loaded (features x samples) feature table with "
+            f"{RED}{self.table.shape[1]}{RESET} samples "
             f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
         )
 
@@ -195,7 +197,7 @@ class AmpliconData:
             
         self.table = import_merged_table_biom(
             biom_paths, 
-            'dataframe',
+            'table',
             self.verbose
         )
 
