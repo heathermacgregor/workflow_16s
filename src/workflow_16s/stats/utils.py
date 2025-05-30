@@ -171,63 +171,111 @@ def merge_table_with_metadata(
     return table
 
 
+
+def to_biom_table(table: Union[Dict, Table, pd.DataFrame]) -> Table:
+    """Convert input to BIOM Table if needed."""
+    if isinstance(table, Table):
+        return table
+    elif isinstance(table, dict):
+        return Table.from_json(table)
+    elif isinstance(table, pd.DataFrame):
+        return BiomTable(table.values.T, 
+                         observation_ids=table.columns.tolist(),
+                         sample_ids=table.index.tolist())
+    else:
+        raise ValueError("Unsupported table type")
+
 def filter_table(
-    table: Union[Dict, Table, pd.DataFrame],
+    table: Table,
     min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS,
-) -> pd.DataFrame:
+) -> Table:
     """
     Filter features and samples based on abundance thresholds.
-
-    samples × features
+    Operates on features x samples BIOM table.
     """
-    df = table_to_dataframe(table)
-    df = filter_features(df, min_rel_abundance, min_samples)
-    df = filter_samples(df, min_counts)
-    return df
-
+    table = filter_features(table, min_rel_abundance, min_samples)
+    table = filter_samples(table, min_counts)
+    return table
 
 def filter_features(
-    table: pd.DataFrame, min_rel_abundance: float, min_samples: int
-) -> pd.DataFrame:
+    table: Table, 
+    min_rel_abundance: float, 
+    min_samples: int
+) -> Table:
     """
     Filter features by relative abundance and sample presence.
+    Features x samples BIOM table.
     """
     min_abs_abundance = min_rel_abundance / 100
-    feature_mask = (table.max(axis=0) >= min_abs_abundance) & (
-        table.astype(bool).sum(axis=0) >= min_samples
-    )
-    table = table.loc[:, feature_mask]
-    return table
+    
+    # Calculate max abundance per feature
+    max_per_feature = table.max(axis='observation')
+    
+    # Calculate presence count per feature
+    pa_table = table.pa()
+    presence_per_feature = pa_table.sum(axis='sample')
+    
+    # Create feature mask
+    feature_mask = [
+        (max_val >= min_abs_abundance) and (presence_count >= min_samples)
+        for max_val, presence_count in zip(max_per_feature, presence_per_feature)
+    ]
+    
+    # Apply filtering
+    feature_ids = table.ids(axis='observation')
+    ids_to_keep = [fid for fid, keep in zip(feature_ids, feature_mask) if keep]
+    
+    return table.filter(ids_to_keep, axis='observation')
 
-
-def filter_samples(table: pd.DataFrame, min_counts: int) -> pd.DataFrame:
+def filter_samples(table: Table, min_counts: int) -> Table:
     """
     Filter samples by total counts.
+    Features x samples BIOM table.
     """
-    sample_mask = table.sum(axis=1) >= min_counts
-    table = table.loc[sample_mask]
-    return table
-
+    # Calculate total counts per sample
+    total_per_sample = table.sum(axis='observation')
+    
+    # Create sample mask
+    sample_mask = [total >= min_counts for total in total_per_sample]
+    
+    # Apply filtering
+    sample_ids = table.ids(axis='sample')
+    ids_to_keep = [sid for sid, keep in zip(sample_ids, sample_mask) if keep]
+    
+    return table.filter(ids_to_keep, axis='sample')
 
 def normalize_table(
-    table: Union[Dict, Table, pd.DataFrame], axis: int = 1
-) -> pd.DataFrame:
+    table: Table, 
+    axis: int = 1
+) -> Table:
     """
     Convert to relative abundances along specified axis.
-    """
-    df = table_to_dataframe(table)
-    df = df.div(df.sum(axis=axis), axis=1 - axis)
-    return df
-
+    Features x samples BIOM table.
+    axis: 0 for feature-wise, 1 for sample-wise normalization
+    """    
+    if axis == 1:  # Sample-wise normalization (each sample sums to 1)
+        return table.norm(axis='sample')
+    elif axis == 0:  # Feature-wise normalization (each feature sums to 1)
+        return table.norm(axis='observation')
+    else:
+        raise ValueError("axis must be 0 (features) or 1 (samples)")
 
 def clr_transform_table(
-    table: Union[Dict, Table, pd.DataFrame], pseudocount: float = DEFAULT_PSEUDOCOUNT
-) -> pd.DataFrame:
+    table: Table, 
+    pseudocount: float = DEFAULT_PSEUDOCOUNT
+) -> Table:
     """
     Apply centered log-ratio transformation.
+    Features x samples BIOM table.
     """
-    df = table_to_dataframe(table)
-    df = pd.DataFrame(clr(df + pseudocount), index=df.index, columns=df.columns)
-    return df
+    def clr_sample(values, sample_id, metadata):
+        """CLR transformation for a single sample"""
+        vals = values + pseudocount
+        log_vals = np.log(vals)
+        mean_log = log_vals.mean()
+        return log_vals - mean_log
+    
+    # Apply CLR per sample (axis='sample')
+    return table.transform(clr_sample, axis='sample', dense=True)
