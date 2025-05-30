@@ -170,12 +170,15 @@ class AmpliconData:
             f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
         self._load_biom_table()
+        original_n_samples = self.table.shape[1]
+        self._filter_table_by_metadsata(self)
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
             f"Loaded (features x samples) feature table with "
-            f"{RED}{self.table.shape[1]}{RESET} samples "
+            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
             f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
         )
+    
 
     def _load_metadata(self):
         """Load and merge metadata from multiple sources."""
@@ -199,6 +202,22 @@ class AmpliconData:
             'table',
             self.verbose
         )
+
+    def _filter_table_by_metadsata(self):
+        # Get list of sample IDs from metadata in order
+        metadata_sample_ids = self.meta['#sampleid'].tolist()
+        
+        # Filter the BIOM table to include only samples present in metadata
+        table_filtered = self.table.filter(metadata_sample_ids, axis='sample', inplace=False)
+        
+        # Reorder the BIOM table to match the order in metadata
+        # BIOM's reorder method does not raise error if all samples are not found,
+        # so we must ensure all metadata_sample_ids are in the filtered table
+        existing_ids = [sid for sid in metadata_sample_ids if sid in table_filtered.ids(axis='sample')]
+        
+        # Reorder the table
+        table_reordered = table_filtered.sort(order=existing_ids, axis='sample')
+        self.table = table_reordered
 
     def _get_biom_paths(self) -> List[Path]:
         """
@@ -238,6 +257,8 @@ class AmpliconData:
         if self.verbose:
             logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
         return meta_paths
+
+    
 
     def _execute_processing_pipeline(self):
         """Execute the appropriate processing pipeline based on mode."""
@@ -324,12 +345,12 @@ class AmpliconData:
     def _collapse_taxa(self, table_type: str, levels: List[str]):
         """Generate raw tables by collapsing taxa at different levels."""
         self.tables[table_type] = self._run_processing_step(
-            process_name="Collapsing {table_type} taxonomy",
+            process_name=f"Collapsing {table_type} taxonomy",
             process_func=collapse_taxa,
             levels=levels,
             func_args=(),
             get_source=lambda _: self.table,
-            log_template="Collapsed {table_type} to {level} level"
+            log_template=f"Collapsed {table_type} to {level} level"
         )
 
     def _presence_absence(self, levels: List[str]):
