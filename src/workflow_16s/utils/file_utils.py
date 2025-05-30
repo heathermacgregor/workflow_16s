@@ -31,9 +31,15 @@ from rich.progress import (
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.biom_utils import (
-    collapse_taxa, convert_to_biom, export_biom, presence_absence, filter_presence_absence
+from workflow_16s.utils.biom import (
+    collapse_taxa, 
+    convert_to_biom, 
+    export_h5py, 
+    presence_absence, 
+    filter_presence_absence
 )
+from workflow_16s.utils.progress import create_progress
+
 from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.stats import beta_diversity 
@@ -61,19 +67,7 @@ DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-# ==================================== FUNCTIONS ===================================== #
-
-def create_progress() -> Progress:
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=40),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        expand=False
-    )
-    
+# ==================================== FUNCTIONS ===================================== #    
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
     """
@@ -296,6 +290,7 @@ class AmpliconData:
     def _load_data(self):
         """Load metadata and BIOM table data."""
         self._load_metadata()
+        logger.info(f"Loaded metadata with shape [{self.metadata.shape[0]}, {self.metadata.shape[1]}]")
         self._load_biom_table()
 
     def _load_metadata(self):
@@ -378,28 +373,57 @@ class AmpliconData:
         tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
         table_dir = Path(self.project_dir.data) / 'merged' / 'table'
         
+        # Apply filtering, normalization, and CLR before collapsing
+        self._apply_preprocessing_steps()
+        
         # Execute processing steps
-        self._process_raw_tables(tax_levels)#, table_dir)
-        self._process_presence_absence(tax_levels)#, table_dir)
-        self._process_filtered_tables(tax_levels)
-        self._process_normalized_tables(tax_levels)
-        self._process_clr_transformed_tables(tax_levels)
+        self._process_raw_tables(tax_levels)
+        self._process_presence_absence(tax_levels)
         
         # Save all generated tables
         self._save_all_tables(table_dir)
 
-    def _process_raw_tables(self, levels: List[str]):#, table_dir: Path):
+    def _apply_preprocessing_steps(self):
+        """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
+        # Start with the original table
+        processed_table = self.table
+        
+        # Apply filtering if enabled
+        if self.cfg['features']['filter']:
+            if self.verbose:
+                logger.info("Applying filtering to table...")
+            processed_table = filter_table(processed_table)
+        
+        # Apply normalization if enabled (requires prior filtering)
+        if self.cfg['features']['filter'] and self.cfg['features']['normalize']:
+            if self.verbose:
+                logger.info("Applying normalization to table...")
+            processed_table = normalize_table(processed_table, axis=1)
+        
+        # Apply CLR transformation if enabled (requires prior normalization)
+        enabled = (self.cfg['features']['filter'] and 
+                  self.cfg['features']['normalize'] and 
+                  self.cfg['features']['clr_transform'])
+        if enabled:
+            if self.verbose:
+                logger.info("Applying CLR transformation to table...")
+            processed_table = clr_transform_table(processed_table)
+        
+        # Update the table with processed version
+        self.table = processed_table
+
+    def _process_raw_tables(self, levels: List[str]):
         """Generate raw tables by collapsing taxa at different levels."""
         self.tables["raw"] = self._run_processing_step(
             process_name="Collapsing taxonomy",
             process_func=collapse_taxa,
             levels=levels,
-            func_args=(),#(table_dir, self.verbose),
+            func_args=(),
             get_source=lambda _: self.table,
             log_template="Collapsed to {level} level"
         )
 
-    def _process_presence_absence(self, levels: List[str]):#, table_dir: Path):
+    def _process_presence_absence(self, levels: List[str]):
         """Generate presence/absence tables if enabled in config."""
         if not self.cfg['features']['presence_absence']:
             return
@@ -408,53 +432,8 @@ class AmpliconData:
             process_name="Converting to presence/absence",
             process_func=presence_absence,
             levels=levels,
-            func_args=(),#(table_dir, self.verbose),
+            func_args=(),
             get_source=lambda level: self.tables["raw"][level]
-        )
-
-    def _process_filtered_tables(self, levels: List[str]):
-        """Generate filtered tables if enabled in config."""
-        if not self.cfg['features']['filter']:
-            return
-            
-        self.tables["filtered"] = self._run_processing_step(
-            process_name="Filtering",
-            process_func=filter_table,
-            levels=levels,
-            func_args=(),
-            get_source=lambda level: self.tables["raw"][level],
-            log_action="filtered"
-        )
-
-    def _process_normalized_tables(self, levels: List[str]):
-        """Generate normalized tables if enabled in config."""
-        if not (self.cfg['features']['filter'] and self.cfg['features']['normalize']):
-            return
-            
-        self.tables["normalized"] = self._run_processing_step(
-            process_name="Normalizing",
-            process_func=normalize_table,
-            levels=levels,
-            func_args=(1,),  # axis=1
-            get_source=lambda level: self.tables["filtered"][level],
-            log_action="normalized"
-        )
-
-    def _process_clr_transformed_tables(self, levels: List[str]):
-        """Generate CLR-transformed tables if enabled in config."""
-        enabled = (self.cfg['features']['filter'] and 
-                  self.cfg['features']['normalize'] and 
-                  self.cfg['features']['clr_transform'])
-        if not enabled:
-            return
-            
-        self.tables["clr"] = self._run_processing_step(
-            process_name="Applying CLR transformation",
-            process_func=clr_transform_table,
-            levels=levels,
-            func_args=(),
-            get_source=lambda level: self.tables["normalized"][level],
-            log_action="clr"
         )
 
     def _run_processing_step(
@@ -562,7 +541,7 @@ class AmpliconData:
         Run configured statistical analyses for a specific table type.
         
         Args:
-            table_type: Type of table to analyze ('raw', 'filtered', etc.)
+            table_type: Type of table to analyze ('raw', 'presence_absence', etc.)
         """
         self.stats[table_type] = {}
         tables = self.tables[table_type]
@@ -661,8 +640,7 @@ class AmpliconData:
         vis_task = progress.add_task(
             f"[bold magenta]Visual Analyses: {test_type.upper()}",
             parent=parent_task_id,
-            total=len(tables)
-        )
+            total=len(tables))
         
         for level in tables:
             progress.update(vis_task, description=f"[white]{test_type.upper()} {level}")
@@ -695,7 +673,7 @@ class AmpliconData:
         and significance, with separate lists for contaminated and pristine associations.
         
         Args:
-            table_type: Type of table to analyze (e.g., 'raw', 'filtered')
+            table_type: Type of table to analyze (e.g., 'raw', 'presence_absence')
         """
         contaminated_features = []
         pristine_features = []
