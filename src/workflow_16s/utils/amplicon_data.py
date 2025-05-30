@@ -530,6 +530,7 @@ class AmpliconData:
         for table_type in self.tables:
             self._run_statistical_analyses(table_type)
         self._save_statistical_results(Path(self.project_dir.tables) / 'stats' / 'tests')
+        self._top_features()
 
     def _run_statistical_analyses(self, table_type: str):
         """
@@ -662,31 +663,26 @@ class AmpliconData:
                         # Update progress
                         progress.update(task, advance=1)
 
-    def _top_features(self, table_type: str = 'presence_absence'):
+    def _top_features(self):
         """
         Identify top features associated with contamination status by analyzing
-        statistical results from multiple tests. Features are ranked by effect size
-        and significance, with separate lists for contaminated and pristine associations.
+        statistical results from ALL table types (raw, normalized, etc.) for each
+        taxonomic level. Features are ranked by effect size and significance, with
+        separate lists for contaminated and pristine associations.
         
         Steps:
-        1. Collect statistical results from all tests for each taxonomic level
-        2. For each feature, find the most significant result across tests
+        1. For each taxonomic level, collect results from all table types and tests
+        2. For each feature, find its most significant association across all table types
         3. Classify features as contaminated-associated (positive effect) or pristine-associated (negative effect)
         4. Sort features by effect size magnitude and then by significance (p-value)
         5. Save the top features to class attributes
         
-        Args:
-            table_type: Type of table to analyze (e.g., 'raw', 'presence_absence')
+        Note: Each feature is represented only once (by its most significant association)
         """
         # Initialize lists to store classified features
         contaminated_features = []
         pristine_features = []
         
-        # Check if statistical results exist for this table type
-        if table_type not in self.stats:
-            logger.warning(f"No statistical results found for table type: {table_type}")
-            return
-            
         # Define column mappings for different statistical tests
         TEST_COLUMN_MAP = {
             'ttest': {
@@ -712,92 +708,75 @@ class AmpliconData:
         
         # Process each taxonomic level (from phylum to genus)
         for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            # Collect all DataFrames for this level across different tests
-            result_dfs = []
-            for test_name, level_results in self.stats[table_type].items():
-                # Skip visualization results (PCA/t-SNE)
-                if test_name in ['pca', 'tsne']:
+            # Dictionary to store best result per feature at this level
+            # Format: {feature: {'p_value': float, 'effect': float, 'table_type': str, 'test': str}}
+            level_features = {}
+            
+            # Collect results from all table types for this level
+            for table_type in self.stats:
+                # Skip if no results for this table type
+                if table_type not in self.stats:
                     continue
                     
-                # Get results for this taxonomic level if available
-                if level in level_results:
-                    df = level_results[level].copy()
-                    
-                    # Add test name prefix to columns (except 'feature')
-                    df.columns = [f"{test_name}_{col}" if col != 'feature' else col 
-                                 for col in df.columns]
-                    result_dfs.append(df)
-            
-            # Skip level if no statistical results found
-            if not result_dfs:
-                continue
-                
-            # Merge results from different tests on feature names
-            merged_df = reduce(
-                lambda left, right: pd.merge(left, right, on='feature', how='outer'),
-                result_dfs
-            )
-            
-            # Process each feature in the merged results
-            for _, row in merged_df.iterrows():
-                best_effect = 0          # Track largest effect size
-                best_p_value = 1.0       # Track smallest p-value
-                best_test = None          # Track which test gave best result
-                
-                # Evaluate results from each test type
-                for test_name in TEST_COLUMN_MAP:
-                    # Get column names for this test
-                    config = TEST_COLUMN_MAP[test_name]
-                    effect_col = f"{test_name}_{config['effect']}"
-                    p_value_col = f"{test_name}_{config['p_value']}"
-                    
-                    # Skip if test results not available for this feature
-                    if p_value_col not in row:
+                for test_name, test_results in self.stats[table_type].items():
+                    # Skip visualization results (PCA/t-SNE)
+                    if test_name in ['pca', 'tsne']:
                         continue
                         
-                    p_value = row[p_value_col]
-                    
-                    # Skip non-significant or missing results
-                    if pd.isna(p_value) or p_value > 0.05:
+                    # Skip if no results for this level
+                    if level not in test_results:
                         continue
+                        
+                    # Get results DataFrame for this test and level
+                    df = test_results[level]
                     
-                    # Get effect size - try primary then alternative
-                    effect = None
-                    if effect_col in row:
-                        effect = row[effect_col]
-                    elif 'alt_effect' in config:
-                        alt_col = f"{test_name}_{config['alt_effect']}"
-                        if alt_col in row:
-                            effect = row[alt_col]
-                    
-                    # Skip if no effect size found
-                    if effect is None:
-                        continue
-                    
-                    # Update best result if:
-                    # - More significant (lower p-value) OR
-                    # - Same significance but larger absolute effect size
-                    if (p_value < best_p_value or 
-                        (p_value == best_p_value and abs(effect) > abs(best_effect))):
-                        best_effect = effect
-                        best_p_value = p_value
-                        best_test = test_name
-                
-                # Skip feature if no significant result found
-                if best_test is None:
-                    continue
-                    
-                # Package feature data for classification
+                    # Process each feature in the results
+                    for _, row in df.iterrows():
+                        feature = row['feature']
+                        p_value = row['p_value']
+                        
+                        # Skip non-significant results (p > 0.05)
+                        if pd.isna(p_value) or p_value > 0.05:
+                            continue
+                            
+                        # Get test configuration
+                        if test_name not in TEST_COLUMN_MAP:
+                            continue
+                        config = TEST_COLUMN_MAP[test_name]
+                        
+                        # Get effect size - try primary then alternative
+                        effect = None
+                        if config['effect'] in row:
+                            effect = row[config['effect']]
+                        elif 'alt_effect' in config and config['alt_effect'] in row:
+                            effect = row[config['alt_effect']]
+                        
+                        # Skip if no effect size found
+                        if effect is None:
+                            continue
+                        
+                        # Check if this is the best result for this feature
+                        current_best = level_features.get(feature, None)
+                        if current_best is None or p_value < current_best['p_value']:
+                            level_features[feature] = {
+                                'p_value': p_value,
+                                'effect': effect,
+                                'table_type': table_type,
+                                'test': test_name
+                            }
+            
+            # Classify features for this level
+            for feature, result in level_features.items():
                 feature_data = {
-                    'feature': row['feature'],
+                    'feature': feature,
                     'level': level,
-                    'test': best_test,
-                    'effect': best_effect,
-                    'p_value': best_p_value
+                    'table_type': result['table_type'],
+                    'test': result['test'],
+                    'effect': result['effect'],
+                    'p_value': result['p_value']
                 }
                 
-                # Classify based on effect direction
-                if best_effect > 0:
+                if result['effect'] > 0:
                     contaminated_features.append(feature_data)
                 else:
                     pristine_features.append(feature_data)
@@ -814,8 +793,8 @@ class AmpliconData:
         self.top_pristine_features = pristine_features
         
         # Log summary of findings
-        logger.info(f"Identified {len(contaminated_features)} contaminated-associated features")
-        logger.info(f"Identified {len(pristine_features)} pristine-associated features")
+        logger.info(f"Identified {len(contaminated_features)} contaminated-associated features across all table types")
+        logger.info(f"Identified {len(pristine_features)} pristine-associated features across all table types")
         
         # Optionally save to files
         #self._save_top_features(contaminated_features, pristine_features)
