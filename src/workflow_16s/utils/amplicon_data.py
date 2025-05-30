@@ -529,6 +529,7 @@ class AmpliconData:
         """Run statistical analyses for all generated table types."""
         for table_type in self.tables:
             self._run_statistical_analyses(table_type)
+        self._save_statistical_results(Path(self.project_dir.tables) / 'stats' / 'tests')
 
     def _run_statistical_analyses(self, table_type: str):
         """
@@ -610,3 +611,167 @@ class AmpliconData:
                 # Update main progress
                 progress.update(main_task, advance=1)
                 progress.remove_task(test_task)
+
+    def _save_statistical_results(self, base_dir: Path):
+        """
+        Save statistical analysis results to CSV files.
+            
+        Results are organized in the directory structure:
+            {output_dir}/{table_type}/{test_key}/{taxonomic_level}.csv
+                
+        Args:
+            output_dir: Base directory for saving results (defaults to project_dir/stats)
+        """            
+        total_files = 0
+        # Count total files to save for progress tracking
+        for table_type, tests in self.stats.items():
+            for test_key, levels in tests.items():
+                total_files += len(levels)
+            
+        with create_progress() as progress:
+            task = progress.add_task(
+                "[white]Saving statistical results...".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=total_files
+            )
+                
+            for table_type, tests in self.stats.items():
+                type_dir = base_dir / table_type
+                type_dir.mkdir(exist_ok=True)
+                for test_key, levels in tests.items():
+                    for level, result_df in levels.items():
+                        level_dir = type_dir / level
+                        level_dir.mkdir(exist_ok=True)
+                        output_path = level_dir / f"{test_key}.csv"
+                            
+                        # Save DataFrame to CSV
+                        result_df.to_csv(output_path, index=True)
+                            
+                        if self.verbose:
+                            logger.info(
+                                f"Saved {table_type}/{test_key}/{level} stats "
+                                f"to {output_path}"
+                            )
+                                
+                        # Update progress
+                        progress.update(task, advance=1)
+
+    def _top_features(self, table_type: str = 'presence_absence'):
+        """
+        Identify top features associated with contamination status by analyzing
+        statistical results from multiple tests. Features are ranked by effect size
+        and significance, with separate lists for contaminated and pristine associations.
+        
+        Args:
+            table_type: Type of table to analyze (e.g., 'raw', 'presence_absence')
+        """
+        contaminated_features = []
+        pristine_features = []
+        
+        # Check if statistical results exist for this table type
+        if table_type not in self.stats:
+            logger.warning(
+                f"No statistical results found for table type: {table_type}"
+            )
+            return
+            
+        # Define column mappings for different statistical tests
+        TEST_COLUMN_MAP = {
+            'ttest': {
+                'test_statistic': 't_statistic',
+                'p_value': 'p_value',
+                'effect': 'mean_difference',
+                'cohens_d': 'cohens_d',
+                'effect': 'mean_diff',
+            },
+            'mwub': {  # Mann-Whitney U with Bonferroni
+                'test_statistic': 'u_statistic',
+                'p_value': 'p_value',
+                'effect': 'median_difference',
+                'effect': 'effect_size_r': 
+            },
+            'kwb': {   # Kruskal-Wallis with Bonferroni
+                'test_statistic': 'h_statistic',
+                'p_value': 'p_value',
+                'epsilon_squared': 'epsilon_squared',
+                'groups_tested': 'groups_tested'
+            }
+        }
+        
+        # Process each taxonomic level
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            # Collect all DataFrames for this level across tests
+            result_dfs = []
+            for test_name, level_results in self.stats[table_type].items():
+                # Skip visualization results (PCA/t-SNE)
+                if test_name in ['pca', 'tsne']:
+                    continue
+                    
+                # Get results for this level if available
+                if level in level_results:
+                    df = level_results[level].copy()
+                    
+                    # Add test name identifier to columns
+                    df.columns = [f"{test_name}_{col}" if col != 'feature' else col 
+                                 for col in df.columns]
+                    result_dfs.append(df)
+            
+            # Skip if no results for this level
+            if not result_dfs:
+                continue
+                
+            # Merge results from different tests
+            merged_df = reduce(
+                lambda left, right: pd.merge(left, right, on='feature', how='outer'),
+                result_dfs
+            )
+            
+            # Process each feature in the merged results
+            for _, row in merged_df.iterrows():
+                best_effect = 0
+                best_q_value = 1.0
+                best_test = None
+                
+                # Find the most significant result across tests
+                for test_name in TEST_COLUMN_MAP:
+                    # Construct column names for this test
+                    effect_col = f"{test_name}_{TEST_COLUMN_MAP[test_name]['effect']}"
+                    q_value_col = f"{test_name}_{TEST_COLUMN_MAP[test_name]['q_value']}"
+                    
+                    # Skip if test results not available for this feature
+                    if effect_col not in row or q_value_col not in row:
+                        continue
+                        
+                    effect = row[effect_col]
+                    q_value = row[q_value_col]
+                    
+                    # Skip non-significant or missing results
+                    if pd.isna(effect) or pd.isna(q_value) or q_value >= 0.05:
+                        continue
+                    
+                    # Track the most significant result
+                    if abs(effect) > abs(best_effect) or \
+                       (abs(effect) == abs(best_effect) and q_value < best_q_value):
+                        best_effect = effect
+                        best_q_value = q_value
+                        best_test = test_name
+                
+                # If no significant result found, skip feature
+                if best_test is None:
+                    continue
+                    
+                # Classify as contaminated or pristine association
+                feature_data = {
+                    'feature': row['feature'],
+                    'level': level,
+                    'test': best_test,
+                    'effect': best_effect,
+                    'q_value': best_q_value
+                }
+                
+                if best_effect > 0:
+                    contaminated_features.append(feature_data)
+                else:
+                    pristine_features.append(feature_data)
+        
+        # Save top features
+        self._save_top_features(contaminated_features, pristine_features)
