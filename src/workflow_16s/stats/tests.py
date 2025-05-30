@@ -3,14 +3,16 @@
 # Standard Library Imports
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import numpy as np
 import pandas as pd
 from biom import Table
 from scipy.spatial.distance import braycurtis, pdist, squareform
-from scipy.stats import fisher_exact, kruskal, mannwhitneyu, spearmanr, ttest_ind
+from scipy.stats import (
+    fisher_exact, f_oneway, kruskal, mannwhitneyu, spearmanr, ttest_ind
+)
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
@@ -118,7 +120,7 @@ def ttest(
         cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
 
         if debug_mode:
-            print(f"{feature} {t_stat} {p_val} {mean_diff} {cohen_d}")
+            print(f"{feature}: {t_stat}, {p_val}, {mean_diff}, {cohen_d}")
             
         results.append({
             'feature': feature,
@@ -198,7 +200,7 @@ def mwu_bonferroni(
         median_diff = group1_values.median() - group2_values.median()
 
         if debug_mode:
-            print(f"{feature} {u_stat} {p_val} {median_diff} {r}")
+            print(f"{feature}: {u_stat}, {p_val}, {median_diff}, {r}")
             
         results.append({
             'feature': feature,
@@ -241,7 +243,8 @@ def kruskal_bonferroni(
         table:               Input abundance table (samples x features).
         metadata:            Sample metadata DataFrame.
         group_column:        Metadata column containing group labels.
-        group_column_values: List of group identifiers to compare (None = use all groups).
+        group_column_values: List of group identifiers to compare 
+                             (None = use all groups).
         
     Returns:
         DataFrame with significant features after Bonferroni correction.
@@ -281,7 +284,7 @@ def kruskal_bonferroni(
         epsilon_sq = h_stat / (n_total - 1)
         
         if debug_mode:
-            print(f"{feature} {h_stat} {p_val} {epsilon_sq}")
+            print(f"{feature}: {h_stat}, {p_val}, {epsilon_sq}")
             
         results.append({
             'feature': feature,
@@ -324,10 +327,16 @@ def anova(
         table:               Input abundance table (samples x features).
         metadata:            Sample metadata DataFrame.
         group_column:        Metadata column containing group labels.
-        group_column_values: List of group identifiers to compare (None = use all groups).
+        group_column_values: List of group identifiers to compare 
+                             (None = use all groups).
         
     Returns:
         DataFrame with significant features after Bonferroni correction.
+    
+    Note: Effect size (eta squared) represents the proportion of variance 
+    explained by groups.
+    Values range from 0 to 1, with higher values indicating stronger group 
+    separation.
     """
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
@@ -356,7 +365,8 @@ def anova(
             
             # Calculate effect size (eta squared)
             all_data = np.concatenate(groups)
-            ss_between = sum([len(g) * (np.mean(g) - np.mean(all_data))**2 for g in groups])
+            ss_between = sum([len(g) * (np.mean(g) - np.mean(all_data))**2 
+                              for g in groups])
             ss_total = sum((x - np.mean(all_data))**2 for x in all_data)
             eta_sq = ss_between / ss_total if ss_total != 0 else 0.0
             
@@ -398,7 +408,8 @@ def fisher_exact_bonferroni(
     debug_mode: bool = False
 ) -> pd.DataFrame:
     """
-    Performs Fisher's Exact Tests with Bonferroni correction for presence-absence data.
+    Performs Fisher's Exact Tests with Bonferroni correction for 
+    presence-absence data.
     
     Args:
         table: Input presence-absence table (samples x features, binary 0/1)
@@ -410,7 +421,8 @@ def fisher_exact_bonferroni(
         debug_mode: Print debug information if True
         
     Returns:
-        DataFrame with significant results (p-value ≤ Bonferroni-corrected threshold)
+        DataFrame with significant results (p-value ≤ Bonferroni-
+        corrected threshold)
     """
     # Convert to DataFrame and merge with metadata
     table_df = table_to_dataframe(table)
@@ -445,7 +457,9 @@ def fisher_exact_bonferroni(
             
         # Perform Fisher's Exact Test
         try:
-            odds_ratio, p_val = fisher_exact([[a, b], [c, d]], alternative='two-sided')
+            odds_ratio, p_val = fisher_exact(
+                [[a, b], [c, d]], alternative='two-sided'
+            )
         except ValueError:
             continue  # Skip invalid tables
             
@@ -468,7 +482,11 @@ def fisher_exact_bonferroni(
         })
         
         if debug_mode:
-            print(f"{feature}: OR={odds_ratio:.3f}, p={p_val:.4f}, diff={prop_diff:.2f}")
+            print(
+                f"{feature}: OR={odds_ratio:.3f}, "
+                f"p={p_val:.4f}, "
+                f"diff={prop_diff:.2f}"
+            )
             
     # Create results DataFrame
     results_df = pd.DataFrame(results)
@@ -484,3 +502,105 @@ def fisher_exact_bonferroni(
     # Filter significant results
     significant = results_df[results_df['p_value'] <= threshold]
     return significant
+
+
+def spearman_correlation(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    continuous_column: str,
+    alpha: float = 0.01
+) -> pd.DataFrame:
+    """
+    Calculate Spearman correlations between features and a continuous metadata variable.
+    
+    Args:
+        table: Input abundance table
+        metadata: Sample metadata
+        continuous_column: Metadata column with continuous values
+        alpha: Significance threshold
+        
+    Returns:
+        DataFrame with correlation results
+    """
+    df = table_to_dataframe(table)
+    merged = merge_table_with_metadata(df, metadata, continuous_column)
+    
+    results = []
+    for feature in tqdm(merged.columns.drop(continuous_column), desc="Calculating correlations"):
+        # Remove NA values pairwise
+        valid_idx = merged[[feature, continuous_column]].dropna().index
+        if len(valid_idx) < 3:
+            continue
+            
+        subset = merged.loc[valid_idx]
+        rho, p_val = spearmanr(subset[feature], subset[continuous_column])
+        
+        results.append({
+            'feature': feature,
+            'rho': rho,
+            'p_value': p_val,
+            'n_samples': len(valid_idx)
+        })
+    
+    result_df = pd.DataFrame(results)
+    result_df['p_adj'] = result_df['p_value'] * len(result_df)
+    return result_df[result_df['p_adj'] <= alpha].sort_values('rho', key=abs, ascending=False)
+
+
+def calculate_distance_matrix(
+    table: Union[Dict, Table, pd.DataFrame],
+    metric: str = 'braycurtis'
+) -> DistanceMatrix:
+    """
+    Calculate distance matrix from abundance table.
+    
+    Args:
+        table: Input abundance table
+        metric: Distance metric (default: braycurtis)
+        
+    Returns:
+        skbio DistanceMatrix object
+    """
+    df = table_to_dataframe(table)
+    ids = df.index.tolist()
+    dist_array = pdist(df.values, metric=metric)
+    return DistanceMatrix(squareform(dist_array), ids)
+    
+
+def run_ordination(
+    table: Union[Dict, Table, pd.DataFrame],
+    method: str = 'pca',
+    n_components: int = 2,
+    random_state: int = DEFAULT_RANDOM_STATE
+) -> pd.DataFrame:
+    """
+    Perform dimensionality reduction.
+    
+    Args:
+        table: Input abundance table
+        method: 'pca', 'pcoa', 'tsne', or 'umap'
+        n_components: Number of dimensions to keep
+        random_state: Random seed
+        
+    Returns:
+        DataFrame with ordination coordinates
+    """
+    df = table_to_dataframe(table)
+    scaled = StandardScaler().fit_transform(df)
+    
+    if method == 'pca':
+        model = PCA(n_components=n_components, random_state=random_state)
+        results = model.fit_transform(scaled)
+    elif method == 'pcoa':
+        dm = calculate_distance_matrix(df)
+        results = PCoA(dm).scores(scores_df).samples.values[:, :n_components]
+    elif method == 'tsne':
+        model = TSNE(n_components=n_components, random_state=random_state)
+        results = model.fit_transform(scaled)
+    elif method == 'umap':
+        model = UMAP(n_components=n_components, random_state=random_state)
+        results = model.fit_transform(scaled)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    return pd.DataFrame(results, index=df.index, columns=[f"{method.upper()}{i+1}" for i in range(n_components)])
