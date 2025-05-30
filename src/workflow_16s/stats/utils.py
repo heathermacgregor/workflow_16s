@@ -39,129 +39,109 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
-
 def merge_table_with_metadata(
     table: pd.DataFrame,
     metadata: pd.DataFrame,
     group_column: str,
     metadata_id_column: Optional[str] = '#sampleid',
-    verbose: bool = True
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
-    Merge abundance table with metadata column after index sanitization.
+    Merge abundance table with metadata column using direct ID matching.
+    Automatically handles orientation and ID matching.
     
     Args:
-        table:              Feature table (Samples × features).
-        metadata:           Metadata table with sample information.
-        group_column:       Metadata column to merge.
-        metadata_id_column: Optional column in metadata containing sample IDs.
-        verbose:
+        table: Feature table (Samples × features) or (features × Samples)
+        metadata: Metadata table
+        group_column: Metadata column to add
+        metadata_id_column: Column in metadata containing sample IDs
+        verbose: Enable debug output
         
     Returns:
-        Merged DataFrame (samples × features).
+        Table with added group_column (Samples × features+1)
         
     Raises:
-        ValueError: If no common IDs found or missing group_column values.
+        ValueError for common data issues
     """
-    if group_column not in metadata.columns:
-        raise ValueError(f"Column '{group_column}' not found in metadata")
-        
-    table_index_name = table.index.name or "index"
-    
+    # =====================================================================
+    # 1. Identify sample IDs in metadata
+    # =====================================================================
     if metadata_id_column:
         if verbose:
             print(f"Using metadata column '{metadata_id_column}' for sample IDs")
+        
         if metadata_id_column not in metadata.columns:
             raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
-        metadata_index_name = metadata_id_column
+        
+        # Extract metadata sample IDs
+        meta_ids = metadata[metadata_id_column].astype(str).str.strip().str.lower()
     else:
         if verbose:
             print("Using metadata index for sample IDs")
-        metadata_index_name = metadata.index.name or "index"
-    
-    metadata_for_merge = metadata.reset_index()[[metadata_index_name, group_column]].copy()
-    print(metadata_for_merge.head())    
-    print(metadata_for_merge.shape)
-    print(table.shape)
+        meta_ids = metadata.index.astype(str).str.strip().str.lower()
 
-    # Reset indices
-    table = table.reset_index().rename(columns={table_index_name: "temp_index"})
-    metadata_for_merge = metadata_for_merge.rename(columns={metadata_index_name: "temp_index"})
-
-    # Sanitize IDs
-    table["temp_index"] = table["temp_index"].astype(str)#.str.strip().str.lower()
-    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].astype(str)#.str.strip().str.lower()
-
-    if verbose:
-        print("Table sample IDs:", table["temp_index"].head(5).tolist())
-        print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
-
-    # Add deduplication
-    metadata_for_merge = metadata_for_merge.drop_duplicates(
-        subset=[metadata_id_column if metadata_id_column else group_column],
-        keep='first'
-    )
+    # =====================================================================
+    # 2. Identify sample IDs in table
+    # =====================================================================
+    # First try: assume samples are rows (standard orientation)
+    table_ids = table.index.astype(str).str.strip().str.lower()
     
-    # Add ID prefix alignment
-    table["temp_index"] = "DRR" + table["temp_index"].astype(str)
+    # Check intersection
+    shared_ids = set(table_ids) & set(meta_ids)
     
-    # Use case-insensitive matching
-    table["temp_index"] = table["temp_index"].str.strip().str.lower()
-    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].str.strip().str.lower()
-    
-    # Check for duplicates
-    # Replace the duplicate check section with:
-    if metadata_for_merge["temp_index"].duplicated().any():
-        dup_series = metadata_for_merge["temp_index"]
-        dup_counts = dup_series.value_counts()
-        dup_counts = dup_counts[dup_counts > 1]  # Only show duplicates
+    # Second try: if no overlap, transpose table (features as rows)
+    if not shared_ids:
+        if verbose:
+            print("No shared IDs found - transposing table")
+        table = table.T
+        table_ids = table.index.astype(str).str.strip().str.lower()
+        shared_ids = set(table_ids) & set(meta_ids)
         
-        # Format duplicate examples
-        dup_examples = "\n".join(
-            [f"{id} ({count}x)" for id, count in dup_counts.head(10).items()]
-        )
-        raise ValueError(
-            f"{len(dup_counts)} duplicate sample IDs found after sanitization. "
-            f"Examples:\n{dup_examples}\n"
-            "Possible causes:\n"
-            "- Case differences (e.g., 'DRR166389' vs 'drr166389')\n"
-            "- Accidental duplicate entries in metadata"
-        )
-
-    # Perform merge
-    merged = pd.merge(
-        table,
-        metadata_for_merge,
-        on="temp_index",
-        how="inner"
-    ).set_index("temp_index")
-
-    # Restore original index name
-    merged.index.name = table_index_name
-
-    # Validate merge
-    if merged.empty:
-        table_samples = table["temp_index"].unique()[:5]
-        meta_samples = metadata_for_merge["temp_index"].unique()[:5]
-        raise ValueError(
-            "No samples remaining after merge. Possible causes:\n"
-            "- Metadata doesn't contain sample IDs from table\n"
-            "- Sample ID column not properly specified\n\n"
-            f"Table sample IDs: {table_samples}\n"
-            f"Metadata sample IDs: {meta_samples}"
-        )
-
-    if merged[group_column].isna().any():
-        missing = merged[group_column].isna().sum()
-        missing_samples = merged[merged[group_column].isna()].index.tolist()[:5]
-        raise ValueError(
-            f"{missing} samples have NaN in '{group_column}' after merge. "
-            f"First 5 affected samples: {missing_samples}"
-        )
-
+        # If still no matches, raise error
+        if not shared_ids:
+            table_examples = sorted(table_ids)[:5]
+            meta_examples = sorted(meta_ids)[:5]
+            raise ValueError(
+                "No common sample IDs found after transposition\n"
+                f"Table IDs: {table_examples}\n"
+                f"Metadata IDs: {meta_examples}"
+            )
+    
     if verbose:
-        logger.debug(f"Successfully merged {len(merged)} samples")
-    return merged
+        print(f"Found {len(shared_ids)} shared sample IDs")
+    
+    # =====================================================================
+    # 3. Prepare metadata mapping
+    # =====================================================================
+    # Create normalized ID to group mapping
+    if metadata_id_column:
+        # Use actual values from metadata column
+        meta_map = metadata.set_index(metadata[metadata_id_column].astype(str).str.strip().str.lower())
+    else:
+        meta_map = metadata
+    
+    # Extract group values using normalized IDs
+    group_map = meta_map[group_column].str.strip()
+    
+    # =====================================================================
+    # 4. Merge group column into table
+    # =====================================================================
+    # Create normalized table index
+    table_normalized_index = table.index.astype(str).str.strip().str.lower()
+    
+    # Map group values using normalized IDs
+    table[group_column] = table_normalized_index.map(group_map)
+    
+    # Validate mapping
+    if table[group_column].isna().any():
+        missing_count = table[group_column].isna().sum()
+        missing_samples = table.index[table[group_column].isna()][:5].tolist()
+        raise ValueError(
+            f"{missing_count} samples missing '{group_column}' values\n"
+            f"First 5: {missing_samples}"
+        )
+    
+    return table
 
 
 def filter_table(
