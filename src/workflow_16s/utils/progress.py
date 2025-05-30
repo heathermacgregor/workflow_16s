@@ -32,7 +32,7 @@ def create_progress() -> Progress:
         ),
         
         # Cyan "M/N" counter
-        MofNCompleteColumn(style="cyan"),
+        MofNCompleteColumn(),#style="cyan"),
         
         # Magenta elapsed time
         TimeElapsedColumn(style="magenta"),
