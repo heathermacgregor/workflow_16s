@@ -253,7 +253,7 @@ def clr_transform_table(
     clr_data = clr_data.T
     
     # Create new BIOM Table with original metadata
-    return BiomTable(
+    return Table(
         data=clr_data,
         observation_ids=table.ids(axis='observation'),
         sample_ids=table.ids(axis='sample'),
