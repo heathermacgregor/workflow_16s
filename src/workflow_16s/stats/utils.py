@@ -115,13 +115,15 @@ def merge_table_with_metadata(
     # =====================================================================
     # Create normalized ID to group mapping
     if metadata_id_column:
-        # Use actual values from metadata column
-        meta_map = metadata.set_index(metadata[metadata_id_column].astype(str).str.strip().str.lower())
+        # Create mapping from normalized IDs to group values
+        group_map = (
+            metadata
+            .assign(norm_id=meta_ids)
+            .set_index("norm_id")[group_column]
+        )
     else:
-        meta_map = metadata
-    
-    # Extract group values using normalized IDs
-    group_map = meta_map[group_column].str.strip()
+        # Use normalized index directly
+        group_map = metadata.set_index(meta_ids)[group_column]
     
     # =====================================================================
     # 4. Merge group column into table
