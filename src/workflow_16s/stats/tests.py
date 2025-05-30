@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from biom import Table
 from scipy.spatial.distance import braycurtis, pdist, squareform
-from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
+from scipy.stats import fisher_exact, kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
@@ -142,7 +142,8 @@ def ttest(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df.sort_values('p_value')
+    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df.sort_values('p_value', ascending=True)
     return results_df
     
 
@@ -219,7 +220,8 @@ def mwu_bonferroni(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df.sort_values('p_value')
+    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni threshold
     results_df_filtered = results_df[results_df['p_value'] <= threshold]
@@ -301,7 +303,8 @@ def kruskal_bonferroni(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df.sort_values('p_value')
+    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df.sort_values('p_value', ascending=True)
     
     # Apply Bonferroni correction
     results_df_filtered = results_df[results_df['p_value'] <= threshold]
@@ -380,5 +383,104 @@ def anova(
     results_df = results_df[(results_df['p_value'] != 0) & (
         results_df['p_value'].notna()
     )]
-    results_df = results_df.sort_values('p_value')
+    results_df = results_df[results_df['p_value'] <= 0.05]]
+    results_df = results_df.sort_values('p_value', ascending=True)
     return results_df
+
+
+def fisher_exact_bonferroni(
+    table: Union[Dict, Table, pd.DataFrame], 
+    metadata: pd.DataFrame,
+    group_column: str,
+    group_column_values: List[Union[bool, int, str]],
+    alpha: float = 0.01,
+    min_samples: int = 5,
+    debug_mode: bool = False
+) -> pd.DataFrame:
+    """
+    Performs Fisher's Exact Tests with Bonferroni correction for presence-absence data.
+    
+    Args:
+        table: Input presence-absence table (samples x features, binary 0/1)
+        metadata: Sample metadata DataFrame
+        group_column: Metadata column containing group labels
+        group_column_values: Two group identifiers to compare
+        alpha: Significance level before correction (default: 0.01)
+        min_samples: Minimum samples required per group (default: 5)
+        debug_mode: Print debug information if True
+        
+    Returns:
+        DataFrame with significant results (p-value ≤ Bonferroni-corrected threshold)
+    """
+    # Convert to DataFrame and merge with metadata
+    table_df = table_to_dataframe(table)
+    merged_df = merge_table_with_metadata(table_df, metadata, group_column)
+    
+    # Total features for Bonferroni correction
+    total_features = len(merged_df.columns) - 1  # Exclude group column
+    threshold = alpha / total_features
+    
+    results = []
+    for feature in merged_df.columns.drop(group_column):
+        # Subset groups
+        mask_group1 = (merged_df[group_column] == group_column_values[0])
+        mask_group2 = (merged_df[group_column] == group_column_values[1])
+        
+        group1 = merged_df.loc[mask_group1, feature].dropna()
+        group2 = merged_df.loc[mask_group2, feature].dropna()
+        
+        # Skip small groups
+        if len(group1) < min_samples or len(group2) < min_samples:
+            continue
+            
+        # Build 2x2 contingency table
+        a = (group1 == 1).sum()  # Group1 present
+        b = (group2 == 1).sum()  # Group2 present
+        c = (group1 == 0).sum()  # Group1 absent
+        d = (group2 == 0).sum()  # Group2 absent
+        
+        # Skip invariant features
+        if (a + b == 0) or (c + d == 0):
+            continue
+            
+        # Perform Fisher's Exact Test
+        try:
+            odds_ratio, p_val = fisher_exact([[a, b], [c, d]], alternative='two-sided')
+        except ValueError:
+            continue  # Skip invalid tables
+            
+        # Calculate proportions
+        prop1 = a / (a + c) if (a + c) > 0 else 0
+        prop2 = b / (b + d) if (b + d) > 0 else 0
+        prop_diff = prop1 - prop2
+
+        results.append({
+            'feature': feature,
+            'p_value': max(p_val, 1e-10),
+            'odds_ratio': odds_ratio,
+            'proportion_diff': prop_diff,
+            f'prop_{group_column_values[0]}': prop1,
+            f'prop_{group_column_values[1]}': prop2,
+            f'present_{group_column_values[0]}': a,
+            f'absent_{group_column_values[0]}': c,
+            f'present_{group_column_values[1]}': b,
+            f'absent_{group_column_values[1]}': d
+        })
+        
+        if debug_mode:
+            print(f"{feature}: OR={odds_ratio:.3f}, p={p_val:.4f}, diff={prop_diff:.2f}")
+            
+    # Create results DataFrame
+    results_df = pd.DataFrame(results)
+    if results_df.empty:
+        logger.warning("No significant features found after testing")
+        return pd.DataFrame()
+    
+    # Apply Bonferroni correction
+    results_df = results_df.sort_values('p_value', ascending=True)
+    results_df['p_adj'] = results_df['p_value'] * total_features
+    results_df['p_adj'] = results_df['p_adj'].clip(upper=1.0)  # Cap at 1.0
+    
+    # Filter significant results
+    significant = results_df[results_df['p_value'] <= threshold]
+    return significant
