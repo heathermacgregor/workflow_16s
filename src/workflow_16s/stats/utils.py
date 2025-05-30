@@ -174,14 +174,16 @@ def merge_table_with_metadata(
 
 def to_biom_table(table: Union[Dict, Table, pd.DataFrame]) -> Table:
     """Convert input to BIOM Table if needed."""
-    if isinstance(table, Table):
+    if isinstance(table, Table:
         return table
     elif isinstance(table, dict):
-        return Table.from_json(table)
+        return BiomTable.from_json(table)
     elif isinstance(table, pd.DataFrame):
-        return BiomTable(table.values.T, 
-                         observation_ids=table.columns.tolist(),
-                         sample_ids=table.index.tolist())
+        return Table(
+            table.values,
+            observation_ids=table.index.tolist(),
+            sample_ids=table.columns.tolist()
+        )
     else:
         raise ValueError("Unsupported table type")
 
@@ -191,10 +193,7 @@ def filter_table(
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS,
 ) -> Table:
-    """
-    Filter features and samples based on abundance thresholds.
-    Operates on features x samples BIOM table.
-    """
+    """Filter features and samples based on abundance thresholds."""
     table = filter_features(table, min_rel_abundance, min_samples)
     table = filter_samples(table, min_counts)
     return table
@@ -204,60 +203,37 @@ def filter_features(
     min_rel_abundance: float, 
     min_samples: int
 ) -> Table:
-    """
-    Filter features by relative abundance and sample presence.
-    Features x samples BIOM table.
-    """
+    """Filter features by relative abundance and sample presence."""
     min_abs_abundance = min_rel_abundance / 100
-    
-    # Calculate max abundance per feature
     max_per_feature = table.max(axis='observation')
+    presence_per_feature = table.pa().sum(axis='sample')
     
-    # Calculate presence count per feature
-    pa_table = table.pa()
-    presence_per_feature = pa_table.sum(axis='sample')
-    
-    # Create feature mask
     feature_mask = [
         (max_val >= min_abs_abundance) and (presence_count >= min_samples)
         for max_val, presence_count in zip(max_per_feature, presence_per_feature)
     ]
     
-    # Apply filtering
     feature_ids = table.ids(axis='observation')
     ids_to_keep = [fid for fid, keep in zip(feature_ids, feature_mask) if keep]
     
     return table.filter(ids_to_keep, axis='observation')
 
 def filter_samples(table: Table, min_counts: int) -> Table:
-    """
-    Filter samples by total counts.
-    Features x samples BIOM table.
-    """
-    # Calculate total counts per sample
+    """Filter samples by total counts."""
     total_per_sample = table.sum(axis='observation')
-    
-    # Create sample mask
     sample_mask = [total >= min_counts for total in total_per_sample]
-    
-    # Apply filtering
     sample_ids = table.ids(axis='sample')
     ids_to_keep = [sid for sid, keep in zip(sample_ids, sample_mask) if keep]
-    
     return table.filter(ids_to_keep, axis='sample')
 
 def normalize_table(
     table: Table, 
     axis: int = 1
 ) -> Table:
-    """
-    Convert to relative abundances along specified axis.
-    Features x samples BIOM table.
-    axis: 0 for feature-wise, 1 for sample-wise normalization
-    """    
-    if axis == 1:  # Sample-wise normalization (each sample sums to 1)
+    """Convert to relative abundances along specified axis."""
+    if axis == 1:  # Sample-wise normalization
         return table.norm(axis='sample')
-    elif axis == 0:  # Feature-wise normalization (each feature sums to 1)
+    elif axis == 0:  # Feature-wise normalization
         return table.norm(axis='observation')
     else:
         raise ValueError("axis must be 0 (features) or 1 (samples)")
@@ -266,16 +242,21 @@ def clr_transform_table(
     table: Table, 
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> Table:
-    """
-    Apply centered log-ratio transformation.
-    Features x samples BIOM table.
-    """
-    def clr_sample(values, sample_id, metadata):
-        """CLR transformation for a single sample"""
-        vals = values + pseudocount
-        log_vals = np.log(vals)
-        mean_log = log_vals.mean()
-        return log_vals - mean_log
+    """Apply centered log-ratio transformation."""
+    # Convert to dense array (samples x features orientation)
+    dense_data = table.matrix_data.toarray().T
     
-    # Apply CLR per sample (axis='sample')
-    return table.transform(clr_sample, axis='sample', dense=True)
+    # Apply CLR transformation
+    clr_data = clr(dense_data + pseudocount)
+    
+    # Transpose back to features x samples
+    clr_data = clr_data.T
+    
+    # Create new BIOM Table with original metadata
+    return BiomTable(
+        data=clr_data,
+        observation_ids=table.ids(axis='observation'),
+        sample_ids=table.ids(axis='sample'),
+        observation_metadata=table.metadata(axis='observation'),
+        sample_metadata=table.metadata(axis='sample')
+    )
