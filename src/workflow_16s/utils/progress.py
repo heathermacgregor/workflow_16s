@@ -17,28 +17,27 @@ from rich.progress import (
 
 def create_progress() -> Progress:
     return Progress(
-        # Spinner with default style (we'll customize through markup)
-        SpinnerColumn(),
+        # Green spinner (turns bold green when finished)
+        SpinnerColumn(style="green"),
         
-        # Blue task description using markup instead of style parameter
-        TextColumn("[blue][progress.description]{task.description}"),
+        # White task description text
+        TextColumn("[progress.description]{task.description}", style="white"),
         
-        # Bar with color customization through markup
-        BarColumn(bar_width=40),
+        # Bar: yellow filling, green when complete, black background
+        BarColumn(
+            bar_width=40,
+            complete_style="yellow",
+            finished_style="green",
+            style="black"  # Background color
+        ),
         
-        # M/N complete column using markup
-        TextColumn("[cyan]{task.completed}/{task.total}"),
+        # Cyan "M/N" counter
+        MofNCompleteColumn(),#style="cyan"),
         
-        # Time columns using markup
-        TextColumn("[magenta]⏱ {task.elapsed:.0f}s"),
-        TextColumn("[red]⏳ {task.time_remaining:.0f}s"),
-        expand=False,
+        # Magenta elapsed time
+        TimeElapsedColumn(),#style="magenta"),
         
-        # Customize bar colors through the Progress styles parameter
-        styles={
-            "bar.complete": "yellow",
-            "bar.finished": "green",
-            "bar.pulse": "yellow",
-            "bar.back": "black"
-        }
+        # Red remaining time estimate
+        TimeRemainingColumn(),#style="red"),
+        expand=False
     )
