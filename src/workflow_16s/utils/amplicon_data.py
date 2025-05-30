@@ -236,3 +236,82 @@ class AmpliconData:
         if self.verbose:
             logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
         return meta_paths
+
+    def _execute_processing_pipeline(self):
+        """Execute the appropriate processing pipeline based on mode."""
+        processor = {
+            'asv': self._process_asv_mode,
+            'genus': self._process_genus_mode
+        }.get(self.mode, self._process_asv_mode)
+        
+        processor()
+
+    def _process_asv_mode(self):
+        """Process data in ASV mode (not yet implemented)."""
+        logger.info("ASV mode is not yet supported!")
+
+    def _process_genus_mode(self):
+        """Process data in genus mode through multiple processing steps."""
+        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
+        table_dir = Path(self.project_dir.data) / 'merged' / 'table'
+        
+        # Apply filtering, normalization, and CLR before collapsing
+        self._apply_preprocessing_steps()
+        print(self.tables)
+        # Execute processing steps
+        #self._process_raw_tables(tax_levels)
+        #self._process_presence_absence(tax_levels)
+        
+        # Save all generated tables
+        #self._save_all_tables(table_dir)
+
+    def _apply_preprocessing_steps(self):
+        """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
+        # Start with the original table
+        table = self.table
+
+        filtering_enabled = self.cfg['features']['filter']
+        normalization_enabled = (
+            self.cfg['features']['filter'] and 
+            self.cfg['features']['normalize']
+        )
+        clr_transformation_enabled = (
+            self.cfg['features']['filter'] and 
+            self.cfg['features']['normalize'] and 
+             self.cfg['features']['clr_transform']
+        )
+        enabled_steps = [filtering_enabled, normalization_enabled, clr_transformation_enabled]
+        n_enabled_steps = sum(enabled_steps)
+
+        with create_progress() as progress:
+            main_task = progress.add_task(
+                f"[white]Preprocessing {self.mode} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=n_enabled_steps
+            )
+            # Apply filtering if enabled
+            if filtering_enabled:
+                if self.verbose:
+                    logger.info("Applying filtering to table...")
+                filtered_table = filter_table(table)
+                self.tables["filtered"] = {}
+                self.tables["filtered"][self.mode] = filtered_table
+                progress.update(main_task, advance=1)
+            
+            # Apply normalization if enabled (requires prior filtering)
+            if normalization_enabled:
+                if self.verbose:
+                    logger.info("Applying normalization to table...")
+                normalized_table = normalize_table(filtered_table, axis=1)
+                self.tables["normalized"] = {}
+                self.tables["normalized"][self.mode] = normalized_table
+                progress.update(main_task, advance=1)
+            
+            # Apply CLR transformation if enabled (requires prior normalization)
+            if clr_transformation_enabled:
+                if self.verbose:
+                    logger.info("Applying CLR transformation to table...")
+                clr_transformed_table = clr_transform_table(normalized_table)
+                self.tables["clr_transformed"] = {}
+                self.tables["clr_transformed"][self.mode] = clr_transformed_table
+                progress.update(main_task, advance=1)
+            
