@@ -68,9 +68,10 @@ stats:
     mwu_bonferroni: True
     kruskal_bonferroni: True
   presence_absence:
-    ttest: True
-    mwu_bonferroni: True
-    kruskal_bonferroni: True
+    fisher: True
+    ttest: False
+    mwu_bonferroni: False
+    kruskal_bonferroni: False
   filtered:
     ttest: True
     mwu_bonferroni: True
