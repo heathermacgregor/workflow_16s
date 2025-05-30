@@ -81,7 +81,8 @@ def merge_table_with_metadata(
     
     metadata_for_merge = metadata.reset_index()[[metadata_index_name, group_column]].copy()
     print(metadata_for_merge.head())    
-
+    print(metadata_for_merge.shape)
+    print(table.shape)
 
     # Reset indices
     table = table.reset_index().rename(columns={table_index_name: "temp_index"})
