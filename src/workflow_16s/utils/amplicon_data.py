@@ -182,7 +182,6 @@ class AmpliconData:
         meta_paths = self._get_metadata_paths()
         self.meta = import_merged_meta_tsv(
             meta_paths, 
-            self.meta_output_path, 
             None,
             self.verbose
         )
@@ -272,6 +271,7 @@ class AmpliconData:
         """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
         # Start with the original table
         table = self.table
+        print(table)
         self.tables["raw"] = {}
         self.tables["raw"][self.mode] = table
         
@@ -283,7 +283,7 @@ class AmpliconData:
         clr_transformation_enabled = (
             self.cfg['features']['filter'] and 
             self.cfg['features']['normalize'] and 
-             self.cfg['features']['clr_transform']
+            self.cfg['features']['clr_transform']
         )
         enabled_steps = [filtering_enabled, normalization_enabled, clr_transformation_enabled]
         n_enabled_steps = sum(enabled_steps)
