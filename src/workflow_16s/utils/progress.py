@@ -17,7 +17,7 @@ from rich.progress import (
 
 def create_progress() -> Progress:
     return Progress(
-        SpinnerColumn(style="green", finished_style="green bold"),
+        SpinnerColumn(style="green"),
         TextColumn("[blue]{task.description}"),
         BarColumn(
             bar_width=40,
