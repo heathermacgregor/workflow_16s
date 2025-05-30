@@ -962,7 +962,7 @@ def import_meta_tsv(
 
 def import_merged_meta_tsv(
     meta_paths: List[Union[str, Path]],
-    output_path: Union[str, Path] = None,
+    #output_path: Union[str, Path] = None,
     column_renames: Optional[List[Tuple[str, str]]] = None,
     verbose: bool = False
 ) -> pd.DataFrame:
@@ -1002,13 +1002,13 @@ def import_merged_meta_tsv(
 
     df_merged = pd.concat(dfs, ignore_index=True)
 
-    if output_path:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df_merged.to_csv(output_path, sep='\t', index=True)
-        if verbose:
-            n_samples, n_features = df_merged.shape
-            logger.info(f"Wrote merged metadata (samples × features) [{n_samples}, {n_features}] to {output_path}")
+    #if output_path:
+    #    output_path = Path(output_path)
+    #    output_path.parent.mkdir(parents=True, exist_ok=True)
+    #    df_merged.to_csv(output_path, sep='\t', index=True)
+    #    if verbose:
+    #        n_samples, n_features = df_merged.shape
+    #        logger.info(f"Wrote merged metadata (samples × features) [{n_samples}, {n_features}] to {output_path}")
 
     return df_merged
 
