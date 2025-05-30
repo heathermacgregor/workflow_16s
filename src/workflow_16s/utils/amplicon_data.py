@@ -171,7 +171,7 @@ class AmpliconData:
         )
         self._load_biom_table()
         original_n_samples = self.table.shape[1]
-        self._filter_table_by_metadsata(self)
+        self._filter_table_by_metadata()
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
             f"Loaded (features x samples) feature table with "
@@ -203,17 +203,21 @@ class AmpliconData:
             self.verbose
         )
 
-    def _filter_table_by_metadsata(self):
+    def _filter_table_by_metadata(self):
         # Get list of sample IDs from metadata in order
         metadata_sample_ids = self.meta['#sampleid'].tolist()
         
         # Filter the BIOM table to include only samples present in metadata
-        table_filtered = self.table.filter(metadata_sample_ids, axis='sample', inplace=False)
+        table_filtered = self.table.filter(
+            metadata_sample_ids, axis='sample', inplace=False
+        )
         
         # Reorder the BIOM table to match the order in metadata
         # BIOM's reorder method does not raise error if all samples are not found,
         # so we must ensure all metadata_sample_ids are in the filtered table
-        existing_ids = [sid for sid in metadata_sample_ids if sid in table_filtered.ids(axis='sample')]
+        existing_ids = [
+            sid for sid in metadata_sample_ids if sid in table_filtered.ids(axis='sample')
+        ]
         
         # Reorder the table
         table_reordered = table_filtered.sort(order=existing_ids, axis='sample')
@@ -344,13 +348,15 @@ class AmpliconData:
 
     def _collapse_taxa(self, table_type: str, levels: List[str]):
         """Generate raw tables by collapsing taxa at different levels."""
+        process_name = f"Collapsing {table_type} taxonomy"
+        log_template_0 = f"Collapsed {table_type} to"
         self.tables[table_type] = self._run_processing_step(
-            process_name=f"Collapsing {table_type} taxonomy",
+            process_name=process_name,
             process_func=collapse_taxa,
             levels=levels,
             func_args=(),
             get_source=lambda _: self.table,
-            log_template=f"Collapsed {table_type} to {level} level"
+            log_template=log_template_0 + " {level} level"
         )
 
     def _presence_absence(self, levels: List[str]):
