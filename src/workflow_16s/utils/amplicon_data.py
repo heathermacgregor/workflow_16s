@@ -259,10 +259,11 @@ class AmpliconData:
         
         # Apply filtering, normalization, and CLR before collapsing
         self._apply_preprocessing_steps()
-        print(self.tables)
+        
         # Execute processing steps
-        #self._process_raw_tables(tax_levels)
-        #self._process_presence_absence(tax_levels)
+        self._collapse_taxa(tax_levels)
+        self._presence_absence(tax_levels)
+        print(self.tables)
         
         # Save all generated tables
         #self._save_all_tables(table_dir)
@@ -271,7 +272,6 @@ class AmpliconData:
         """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
         # Start with the original table
         table = self.table
-        print(table.shape)
         self.tables["raw"] = {}
         self.tables["raw"][self.mode] = table
         
@@ -298,7 +298,6 @@ class AmpliconData:
                 if self.verbose:
                     logger.info("Applying filtering to table...")
                 filtered_table = filter_table(table)
-                print(filtered_table.shape)
                 self.tables["filtered"] = {}
                 self.tables["filtered"][self.mode] = filtered_table
                 progress.update(main_task, advance=1)
@@ -308,7 +307,6 @@ class AmpliconData:
                 if self.verbose:
                     logger.info("Applying normalization to table...")
                 normalized_table = normalize_table(filtered_table, axis=1)
-                print(normalized_table.shape)
                 self.tables["normalized"] = {}
                 self.tables["normalized"][self.mode] = normalized_table
                 progress.update(main_task, advance=1)
@@ -321,4 +319,99 @@ class AmpliconData:
                 self.tables["clr_transformed"] = {}
                 self.tables["clr_transformed"][self.mode] = clr_transformed_table
                 progress.update(main_task, advance=1)
+
+    def _collapse_taxa(self, levels: List[str]):
+        """Generate raw tables by collapsing taxa at different levels."""
+        self.tables["raw"] = self._run_processing_step(
+            process_name="Collapsing taxonomy",
+            process_func=collapse_taxa,
+            levels=levels,
+            func_args=(),
+            get_source=lambda _: self.table,
+            log_template="Collapsed to {level} level"
+        )
+
+    def _presence_absence(self, levels: List[str]):
+        """Generate presence/absence tables if enabled in config."""
+        if not self.cfg['features']['presence_absence']:
+            return
+            
+        self.tables["presence_absence"] = self._run_processing_step(
+            process_name="Converting to presence/absence",
+            process_func=presence_absence,
+            levels=levels,
+            func_args=(),
+            get_source=lambda level: self.tables["raw"][level]
+        )
+
+    def _run_processing_step(
+        self,
+        process_name: str,
+        process_func: Callable,
+        levels: List[str],
+        func_args: tuple,
+        get_source: Callable,
+        log_template: Optional[str] = None,
+        log_action: Optional[str] = None
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Execute a processing step across multiple taxonomic levels.
+        
+        Args:
+            process_name: Name of the processing step for logging
+            process_func: Function to execute for each level
+            levels: Taxonomic levels to process
+            func_args: Additional arguments for process_func
+            get_source: Function to get input table for a level
+            log_template: Template for logging messages
+            log_action: Action name for simple logging
+            
+        Returns:
+            Dictionary of processed tables keyed by taxonomic level
+        """
+        processed_tables = {}
+        
+        if self.verbose:
+            # Verbose mode: Use logging
+            logger.info(f"{process_name}...")
+            for level in levels:
+                source_table = get_source(level)
+                try:
+                    processed = process_func(source_table, *func_args)
+                except:
+                    processed = process_func(source_table, level, *func_args)
+                processed_tables[level] = processed
+                self._log_level_action(level, log_template, log_action)
+        else:
+            # Non-verbose mode: Use progress bars
+            with create_progress() as progress:
+                task = progress.add_task(
+                    f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(levels)
+                )
+                for level in levels:
+                    source_table = get_source(level)
+                    try:
+                        processed = process_func(source_table, *func_args)
+                    except:
+                        processed = process_func(source_table, level, *func_args)
+                    processed_tables[level] = processed
+                    progress.update(task, advance=1)
+                    
+        return processed_tables
+
+    def _log_level_action(self, level: str, template: Optional[str] = None, 
+                         action: Optional[str] = None):
+        """
+        Log action for a specific taxonomic level.
+        
+        Args:
+            level: Taxonomic level being processed
+            template: String template for logging (uses {level} placeholder)
+            action: Simple action description
+        """
+        if template:
+            logger.info(template.format(level=level))
+        elif action:
+            logger.info(f"{level} {action}")
             
