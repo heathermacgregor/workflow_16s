@@ -67,6 +67,12 @@ DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+# ANSI color codes
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
+
 # ==================================== FUNCTIONS ===================================== #    
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
@@ -290,8 +296,15 @@ class AmpliconData:
     def _load_data(self):
         """Load metadata and BIOM table data."""
         self._load_metadata()
-        logger.info(f"Loaded metadata with shape [{self.meta.shape[0]}, {self.meta.shape[1]}]")
+        logger.info(
+            f"Loaded metadata table with {RED}{self.meta.shape[0]}{RESET} samples "
+            f"and {RED}{self.meta.shape[1]}{RESET} features"
+        )
         self._load_biom_table()
+        logger.info(
+            f"Loaded feature table with {RED}{self.table.shape[1]}{RESET} samples "
+            f"and {RED}{self.table.shape[0]}{RESET} features"
+        )
 
     def _load_metadata(self):
         """Load and merge metadata from multiple sources."""
@@ -307,7 +320,7 @@ class AmpliconData:
         """Load and merge BIOM feature tables."""
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            error_text = "No BIOM files found matching pattern!"
+            error_text = "No BIOM files found matching pattern"
             logger.error(error_text)
             raise FileNotFoundError(error_text)   
             
