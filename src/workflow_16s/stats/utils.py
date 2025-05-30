@@ -95,6 +95,19 @@ def merge_table_with_metadata(
     if verbose:
         print("Table sample IDs:", table["temp_index"].head(5).tolist())
         print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
+
+    # Add deduplication
+    metadata_for_merge = metadata_for_merge.drop_duplicates(
+        subset=[metadata_id_column if metadata_id_column else group_column],
+        keep='first'
+    )
+    
+    # Add ID prefix alignment
+    table["temp_index"] = "DRR" + table["temp_index"].astype(str)
+    
+    # Use case-insensitive matching
+    table["temp_index"] = table["temp_index"].str.strip().str.lower()
+    metadata_for_merge["temp_index"] = metadata_for_merge["temp_index"].str.strip().str.lower()
     
     # Check for duplicates
     # Replace the duplicate check section with:
