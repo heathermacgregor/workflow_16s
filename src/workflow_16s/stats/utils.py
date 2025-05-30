@@ -172,91 +172,84 @@ def merge_table_with_metadata(
 
 
 
-def to_biom_table(table: Union[Dict, Table, pd.DataFrame]) -> Table:
-    """Convert input to BIOM Table if needed."""
-    if isinstance(table, Table):
+from biom import Table as BiomTable
+
+def to_biom_table(table: Union[dict, BiomTable, pd.DataFrame]) -> BiomTable:
+    """Robust conversion to BIOM Table with orientation handling"""
+    if isinstance(table, BiomTable):
         return table
     elif isinstance(table, dict):
         return BiomTable.from_json(table)
     elif isinstance(table, pd.DataFrame):
-        return Table(
+        # Ensure features x samples orientation
+        return BiomTable(
             table.values,
             observation_ids=table.index.tolist(),
-            sample_ids=table.columns.tolist()
+            sample_ids=table.columns.tolist(),
+            observation_metadata=None,
+            sample_metadata=None
         )
     else:
-        raise ValueError("Unsupported table type")
+        raise ValueError(f"Unsupported table type: {type(table)}")
 
 def filter_table(
-    table: Table,
+    table: Union[dict, BiomTable, pd.DataFrame],
     min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS,
-) -> Table:
-    """Filter features and samples based on abundance thresholds."""
-    table = filter_features(table, min_rel_abundance, min_samples)
-    table = filter_samples(table, min_counts)
-    return table
+) -> BiomTable:
+    """Filter features and samples with strict type enforcement"""
+    biom_table = to_biom_table(table)
+    biom_table = filter_features(biom_table, min_rel_abundance, min_samples)
+    biom_table = filter_samples(biom_table, min_counts)
+    return biom_table
 
 def filter_features(
-    table: Table, 
+    table: BiomTable, 
     min_rel_abundance: float, 
     min_samples: int
-) -> Table:
-    """Filter features by relative abundance and sample presence."""
+) -> BiomTable:
+    """Filter features using BIOM-native methods"""
     min_abs_abundance = min_rel_abundance / 100
-    max_per_feature = table.max(axis='observation')
-    presence_per_feature = table.pa().sum(axis='sample')
     
-    feature_mask = [
-        (max_val >= min_abs_abundance) and (presence_count >= min_samples)
-        for max_val, presence_count in zip(max_per_feature, presence_per_feature)
-    ]
+    # Convert to DataFrame for vectorized operations
+    df = table.to_dataframe().astype(float)
     
+    # Calculate filtering criteria
+    max_per_feature = df.max(axis=1)
+    non_zero_per_feature = (df > 0).sum(axis=1)
+    
+    # Create feature mask
+    feature_mask = (max_per_feature >= min_abs_abundance) & (non_zero_per_feature >= min_samples)
+    
+    # Apply filtering
     feature_ids = table.ids(axis='observation')
     ids_to_keep = [fid for fid, keep in zip(feature_ids, feature_mask) if keep]
     
     return table.filter(ids_to_keep, axis='observation')
 
-def filter_samples(table: Table, min_counts: int) -> Table:
-    """Filter samples by total counts."""
-    total_per_sample = table.sum(axis='observation')
-    sample_mask = [total >= min_counts for total in total_per_sample]
+def filter_samples(table: BiomTable, min_counts: int) -> BiomTable:
+    """Filter samples using BIOM-native methods"""
+    # Convert to DataFrame for vectorized operations
+    df = table.to_dataframe().astype(float)
+    
+    # Calculate total counts per sample
+    total_per_sample = df.sum(axis=0)
+    
+    # Create sample mask
+    sample_mask = total_per_sample >= min_counts
+    
+    # Apply filtering
     sample_ids = table.ids(axis='sample')
     ids_to_keep = [sid for sid, keep in zip(sample_ids, sample_mask) if keep]
+    
     return table.filter(ids_to_keep, axis='sample')
 
 def normalize_table(
-    table: Table, 
+    table: Union[dict, BiomTable, pd.DataFrame], 
     axis: int = 1
-) -> Table:
-    """Convert to relative abundances along specified axis."""
-    if axis == 1:  # Sample-wise normalization
-        return table.norm(axis='sample')
-    elif axis == 0:  # Feature-wise normalization
-        return table.norm(axis='observation')
-    else:
-        raise ValueError("axis must be 0 (features) or 1 (samples)")
-
-def clr_transform_table(
-    table: Table, 
-    pseudocount: float = DEFAULT_PSEUDOCOUNT
-) -> Table:
-    """Apply centered log-ratio transformation."""
-    # Convert to dense array (samples x features orientation)
-    dense_data = table.matrix_data.toarray().T
+) -> BiomTable:
+    """Normalize with strict type enforcement"""
+    biom_table = to_biom_table(table)
     
-    # Apply CLR transformation
-    clr_data = clr(dense_data + pseudocount)
-    
-    # Transpose back to features x samples
-    clr_data = clr_data.T
-    
-    # Create new BIOM Table with original metadata
-    return Table(
-        data=clr_data,
-        observation_ids=table.ids(axis='observation'),
-        sample_ids=table.ids(axis='sample'),
-        observation_metadata=table.metadata(axis='observation'),
-        sample_metadata=table.metadata(axis='sample')
-    )
+    if
