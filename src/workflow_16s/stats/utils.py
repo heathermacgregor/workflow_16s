@@ -174,7 +174,7 @@ def merge_table_with_metadata(
 
 def to_biom_table(table: Union[Dict, Table, pd.DataFrame]) -> Table:
     """Convert input to BIOM Table if needed."""
-    if isinstance(table, Table:
+    if isinstance(table, Table):
         return table
     elif isinstance(table, dict):
         return BiomTable.from_json(table)
