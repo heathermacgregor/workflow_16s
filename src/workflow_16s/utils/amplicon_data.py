@@ -78,9 +78,13 @@ RESET = "\033[0m"
 
 # ==================================== FUNCTIONS ===================================== #    
 
-def reorder_biom_table_by_metadata(table: Table, metadata_df: pd.DataFrame, sample_column: str = '#sampleid') -> Table:
+def filter_and_reorder_biom_and_metadata(
+    table: Table,
+    metadata_df: pd.DataFrame,
+    sample_column: str = '#sampleid'
+) -> tuple[Table, pd.DataFrame]:
     """
-    Filters and reorders a BIOM table so that its sample IDs match and are ordered like the metadata.
+    Filters and reorders a BIOM table and metadata DataFrame so that their sample IDs match exactly and are in the same order.
 
     Args:
         table (biom.Table): The BIOM table (features x samples).
@@ -88,37 +92,44 @@ def reorder_biom_table_by_metadata(table: Table, metadata_df: pd.DataFrame, samp
         sample_column (str): Name of the column in metadata_df containing sample IDs.
 
     Returns:
-        biom.Table: A filtered and reordered BIOM table.
+        tuple: (filtered and reordered biom.Table, filtered and reordered metadata DataFrame)
     """
-    # Lowercase sample IDs in metadata
+    # Normalize sample IDs in metadata
     metadata_df = metadata_df.copy()
     metadata_df[sample_column] = metadata_df[sample_column].str.lower()
-    metadata_sample_ids = metadata_df[sample_column].tolist()
 
-    # Lowercase sample IDs in the BIOM table
-    original_sample_ids = table.ids(axis='sample')
-    lowercase_mapping = {sid.lower(): sid for sid in original_sample_ids}
+    # Get mapping from lowercase sample ID to original BIOM sample ID
+    biom_sample_ids = table.ids(axis='sample')
+    lowercase_to_original = {sid.lower(): sid for sid in biom_sample_ids}
 
-    # Intersect metadata sample IDs with BIOM table sample IDs
-    valid_lowercase_ids = [sid for sid in metadata_sample_ids if sid in lowercase_mapping]
-    matching_original_ids = [lowercase_mapping[sid] for sid in valid_lowercase_ids]
+    # Deduplicate metadata sample IDs (preserve order)
+    seen = set()
+    ordered_lowercase_ids = []
+    for sid in metadata_df[sample_column]:
+        if sid in lowercase_to_original and sid not in seen:
+            seen.add(sid)
+            ordered_lowercase_ids.append(sid)
 
-    # Filter table
-    table_filtered = table.filter(matching_original_ids, axis='sample', inplace=False)
+    # Map back to original-case sample IDs for BIOM
+    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in ordered_lowercase_ids]
 
-    # Manual reorder using NumPy (compatible with all versions)
+    # Filter BIOM table
+    table_filtered = table.filter(ordered_biom_sample_ids, axis='sample', inplace=False)
+
+    # Reorder BIOM data matrix
     data = table_filtered.matrix_data.toarray()
     obs_ids = table_filtered.ids(axis='observation')
-    sample_ids = table_filtered.ids(axis='sample')
-    sample_index = {sid: i for i, sid in enumerate(sample_ids)}
-
-    ordered_ids_filtered = [sid for sid in matching_original_ids if sid in sample_index]
-    ordered_indices = [sample_index[sid] for sid in ordered_ids_filtered]
+    current_sample_ids = table_filtered.ids(axis='sample')
+    sample_index = {sid: i for i, sid in enumerate(current_sample_ids)}
+    ordered_indices = [sample_index[sid] for sid in ordered_biom_sample_ids]
     reordered_data = data[:, ordered_indices]
+    table_reordered = Table(reordered_data, observation_ids=obs_ids, sample_ids=ordered_biom_sample_ids)
 
-    # Rebuild table
-    table_reordered = Table(reordered_data, observation_ids=obs_ids, sample_ids=ordered_ids_filtered)
-    return table_reordered
+    # Filter and reorder metadata
+    metadata_filtered = metadata_df.set_index(sample_column).loc[ordered_lowercase_ids].reset_index()
+
+    return table_reordered, metadata_filtered
+
 
 class AmpliconData:
     """
@@ -206,14 +217,16 @@ class AmpliconData:
     def _load_data(self):
         """Load metadata and BIOM table data."""
         self._load_metadata()
+        self._load_biom_table()
+        original_n_samples = self.table.shape[1]
+        self.table, self.meta = filter_and_reorder_biom_and_metadata(table=self.table, metadata_df=self.meta, sample_column='#sampleid')
+        
         logger.info(
             f"Loaded (samples x features) metadata table with "
             f"{RED}{self.meta.shape[0]}{RESET} samples "
             f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
-        self._load_biom_table()
-        original_n_samples = self.table.shape[1]
-        self.table = reorder_biom_table_by_metadata(table=self.table, metadata_df=self.meta, sample_column='#sampleid')
+        
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
             f"Loaded (features x samples) feature table with "
