@@ -652,7 +652,7 @@ class AmpliconData:
                         if 'p_value' in result_df.columns:
                             result_df = result_df.sort_values(by='p_value', ascending=True)
                         # Save DataFrame to CSV
-                        result_df.to_csv(output_path, index=True)
+                        result_df.set_index('feature').to_csv(output_path, index=True)
                             
                         if self.verbose:
                             logger.info(
@@ -797,4 +797,61 @@ class AmpliconData:
         logger.info(f"Identified {len(pristine_features)} pristine-associated features across all table types")
         
         # Optionally save to files
-        #self._save_top_features(contaminated_features, pristine_features)
+        self._save_top_features(contaminated_features, pristine_features, Path(self.project_dir.tables) / 'stats' / 'top_features')
+
+    def _save_top_features(self, contaminated_features: List[dict], pristine_features: List[dict], base_dir: Path):
+        """
+        Save top feature associations to CSV files.
+        
+        Creates three files:
+        1. Contaminated-associated features
+        2. Pristine-associated features
+        3. Combined report with all significant associations
+        
+        Files are saved in: {project_dir}/tables/top_features/
+        
+        Args:
+            contaminated_features: List of dictionaries for contamination-associated features
+            pristine_features: List of dictionaries for pristine-associated features
+        """
+        # Create output directory
+        output_dir = Path(self.project_dir.tables) / "top_features"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Current timestamp for filename
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Create DataFrames from feature lists
+        contam_df = pd.DataFrame(contaminated_features)
+        pristine_df = pd.DataFrame(pristine_features)
+        
+        # Add direction column
+        if not contam_df.empty:
+            contam_df['direction'] = 'contaminated'
+        if not pristine_df.empty:
+            pristine_df['direction'] = 'pristine'
+        
+        # Save separate files
+        if not contam_df.empty:
+            contam_path = output_dir / f"contaminated_features_{timestamp}.csv"
+            contam_df.to_csv(contam_path, index=False)
+            logger.info(f"Saved {len(contam_df)} contaminated features to {contam_path}")
+        
+        if not pristine_df.empty:
+            pristine_path = output_dir / f"pristine_features_{timestamp}.csv"
+            pristine_df.to_csv(pristine_path, index=False)
+            logger.info(f"Saved {len(pristine_df)} pristine features to {pristine_path}")
+        
+        # Create and save combined report
+        if not contam_df.empty or not pristine_df.empty:
+            combined_df = pd.concat([contam_df, pristine_df], ignore_index=True)
+            combined_path = output_dir / f"all_significant_features_{timestamp}.csv"
+            combined_df.to_csv(combined_path, index=False)
+            logger.info(f"Saved {len(combined_df)} total features to {combined_path}")
+            
+            # Also save a version without timestamp for easy access
+            latest_path = output_dir / "latest_significant_features.csv"
+            combined_df.to_csv(latest_path, index=False)
+            logger.info(f"Saved latest features to {latest_path}")
+        else:
+            logger.warning("No significant features found to save")
