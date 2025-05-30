@@ -647,7 +647,9 @@ class AmpliconData:
                         level_dir = type_dir / level
                         level_dir.mkdir(parents=True, exist_ok=True)
                         output_path = level_dir / f"{test_key}.csv"
-                            
+                        # Sort by p-value before saving
+                        if 'p_value' in result_df.columns:
+                            result_df = result_df.sort_values(by='p_value', ascending=True)
                         # Save DataFrame to CSV
                         result_df.to_csv(output_path, index=True)
                             
