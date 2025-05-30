@@ -271,7 +271,7 @@ class AmpliconData:
         """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
         # Start with the original table
         table = self.table
-        print(table)
+        print(table.shape)
         self.tables["raw"] = {}
         self.tables["raw"][self.mode] = table
         
