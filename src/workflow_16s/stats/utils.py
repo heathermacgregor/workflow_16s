@@ -96,11 +96,23 @@ def merge_table_with_metadata(
         print("Metadata sample IDs:", metadata_for_merge["temp_index"].head(5).tolist())
     
     # Check for duplicates
+    # Replace the duplicate check section with:
     if metadata_for_merge["temp_index"].duplicated().any():
-        duplicates = metadata_for_merge["temp_index"].duplicated()
-        n_duplicates = metadata_for_merge["temp_index"].duplicated().sum()
-        raise ValueError(f"{n_duplicates} duplicate sample IDs found in metadata:\n"
-                        f"{duplicates}")
+        dup_series = metadata_for_merge["temp_index"]
+        dup_counts = dup_series.value_counts()
+        dup_counts = dup_counts[dup_counts > 1]  # Only show duplicates
+        
+        # Format duplicate examples
+        dup_examples = "\n".join(
+            [f"{id} ({count}x)" for id, count in dup_counts.head(10).items()]
+        )
+        raise ValueError(
+            f"{len(dup_counts)} duplicate sample IDs found after sanitization. "
+            f"Examples:\n{dup_examples}\n"
+            "Possible causes:\n"
+            "- Case differences (e.g., 'DRR166389' vs 'drr166389')\n"
+            "- Accidental duplicate entries in metadata"
+        )
 
     # Perform merge
     merged = pd.merge(
