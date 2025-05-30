@@ -42,6 +42,7 @@ from workflow_16s.logger import setup_logging
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
 from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
+from workflow_16s.utils.amplicon_data import AmpliconData
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
@@ -535,7 +536,7 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
 
     figures = {}
         
-    data = file_utils.AmpliconData(
+    data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
