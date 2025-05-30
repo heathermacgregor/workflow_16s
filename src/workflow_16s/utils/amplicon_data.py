@@ -482,3 +482,34 @@ class AmpliconData:
         elif action:
             logger.info(f"{level} {action}")
             
+    def _save_all_tables(self, base_dir: Path):
+        """
+        Save all generated tables to appropriate directories.
+        
+        Args:
+            base_dir: Base directory for table storage
+        """
+        # Calculate total tables to save
+        total_tables = sum(len(level_tables) for level_tables in self.tables.values())
+        
+        with create_progress() as progress:
+            task = progress.add_task(
+                "[white]Saving tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                total=total_tables
+            )
+            base_dir.mkdir(parents=True, exist_ok=True)
+            for table_type, level_tables in self.tables.items():
+                type_dir = base_dir / table_type
+                type_dir.mkdir(exist_ok=True)
+                for level, table in level_tables.items():
+                    output_path = type_dir / f"feature-table_{level}.biom"
+                    # Save table
+                    export_h5py(table, output_path)
+                    if self.verbose:
+                        n_features, n_samples = table.shape
+                        shape_str = f"[{n_features}, {n_samples}]"
+                        logger.info(
+                            f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
+                        )
+                    # Update progress after each table save
+                    progress.update(task, advance=1)
