@@ -687,7 +687,7 @@ class AmpliconData:
                 'test_statistic': 'u_statistic',
                 'p_value': 'p_value',
                 'effect': 'median_difference',
-                'effect': 'effect_size_r': 
+                'effect': 'effect_size_r' 
             },
             'kwb': {   # Kruskal-Wallis with Bonferroni
                 'test_statistic': 'h_statistic',
