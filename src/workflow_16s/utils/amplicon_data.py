@@ -204,6 +204,8 @@ class AmpliconData:
         )
 
     def _filter_table_by_metadata(self):
+        metadata_df = self.meta
+        table = self.table
         metadata_df['#sampleid'] = metadata_df['#sampleid'].str.lower()
         
         # Get list of lowercase sample IDs from metadata (in order)
