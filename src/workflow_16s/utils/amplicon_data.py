@@ -84,15 +84,16 @@ def filter_and_reorder_biom_and_metadata(
     sample_column: str = '#sampleid'
 ) -> tuple[Table, pd.DataFrame]:
     """
-    Filters and reorders a BIOM table and metadata DataFrame so that sample IDs match exactly and are aligned.
+    Filters and reorders a BIOM table and metadata DataFrame so that sample IDs 
+    match exactly and are aligned.
 
     Args:
-        table (biom.Table): The BIOM table (features x samples).
-        metadata_df (pd.DataFrame): Metadata DataFrame with a sample ID column.
-        sample_column (str): Column name in metadata_df with sample IDs.
+        table:         The BIOM table (features x samples).
+        metadata_df:   Metadata DataFrame with a sample ID column.
+        sample_column: Column name in metadata_df with sample IDs.
 
     Returns:
-        tuple: (filtered biom.Table, filtered metadata DataFrame)
+        Tuple containing the filtered table and metadata_df.
     """
     # Lowercase and deduplicate sample IDs in metadata
     metadata_df = metadata_df.copy()
@@ -105,7 +106,10 @@ def filter_and_reorder_biom_and_metadata(
     for sid in original_sample_ids:
         key = sid.lower()
         if key in lowercase_to_original:
-            raise ValueError(f"Duplicate lowercase sample ID found in BIOM table: '{key}' from '{sid}' and '{lowercase_to_original[key]}'")
+            raise ValueError(
+                f"Duplicate lowercase sample ID found in BIOM table: "
+                f"'{key}' from '{sid}' and '{lowercase_to_original[key]}'"
+            )
         lowercase_to_original[key] = sid
 
     # Get shared sample IDs (in lowercase)
@@ -116,12 +120,17 @@ def filter_and_reorder_biom_and_metadata(
     metadata_df = metadata_df.set_index(sample_column).loc[shared_ids].reset_index()
 
     # Map back to original-case sample IDs for biom
-    ordered_biom_sample_ids = [lowercase_to_original[sid] for sid in metadata_df[sample_column]]
+    ordered_biom_sample_ids = [lowercase_to_original[sid] 
+                               for sid in metadata_df[sample_column]]
 
     # Filter and reorder BIOM table
-    table_filtered = table.filter(ordered_biom_sample_ids, axis='sample', inplace=False)
-    sample_index = {sid: i for i, sid in enumerate(table_filtered.ids(axis='sample'))}
-    reordered_indices = [sample_index[sid] for sid in ordered_biom_sample_ids]
+    table_filtered = table.filter(
+        ordered_biom_sample_ids, axis='sample', inplace=False
+    )
+    sample_index = {sid: i 
+                    for i, sid in enumerate(table_filtered.ids(axis='sample'))}
+    reordered_indices = [sample_index[sid] 
+                         for sid in ordered_biom_sample_ids]
     data = table_filtered.matrix_data.toarray()
     reordered_data = data[:, reordered_indices]
 
@@ -201,7 +210,7 @@ class AmpliconData:
         self._execute_processing_pipeline()
         
         # Run statistical analyses
-        #self._run_all_statistical_analyses()
+        self._run_all_statistical_analyses()
 
     def _set_output_paths(self):
         """Set output paths for tables and metadata based on processing mode."""
@@ -515,3 +524,89 @@ class AmpliconData:
                         )
                     # Update progress after each table save
                     progress.update(task, advance=1)
+
+    def _run_all_statistical_analyses(self):
+        """Run statistical analyses for all generated table types."""
+        for table_type in self.tables:
+            self._run_statistical_analyses(table_type)
+
+    def _run_statistical_analyses(self, table_type: str):
+        """
+        Run configured statistical analyses for a specific table type.
+        
+        Args:
+            table_type: Type of table to analyze ('raw', 'presence_absence', etc.)
+        """
+        self.stats[table_type] = {}
+        tables = self.tables[table_type]
+        
+        # Get enabled tests from configuration
+        enabled_tests = [
+            test for test in [
+                'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
+            ] if self.cfg['stats'][table_type].get(test, False)
+        ]
+        logger.info(f"Enabled tests for {table_type}: {enabled_tests}")
+        
+        # Test execution configuration
+        test_config = {
+            'ttest': {
+                'key': 'ttest',
+                'func': ttest,
+                'name': 't-test'
+            },
+            'mwu_bonferroni': {
+                'key': 'mwub',
+                'func': mwu_bonferroni,
+                'name': 'Mann-Whitney U test (w/ Bonferroni)'
+            },
+            'kruskal_bonferroni': {
+                'key': 'kwb',
+                'func': kruskal_bonferroni,
+                'name': 'Kruskal-Wallis test (w/ Bonferroni)'
+            }
+        }
+        
+        # Execute configured tests
+        with create_progress() as progress:
+            main_task = progress.add_task(
+                f"[white]Analyzing {table_type} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(enabled_tests)
+            )
+            
+            for test in enabled_tests:
+                if test not in test_config:
+                    # Handle visualization tests separately
+                    if test in ['pca', 'tsne']:
+                        self._run_visual_analyses(
+                            table_type=table_type,
+                            test_type=test,
+                            progress=progress,
+                            parent_task_id=main_task
+                        )
+                    continue
+                    
+                config = test_config[test]
+                test_key = config['key']
+                test_name = config['name']
+                
+                # Create progress task for this test
+                test_task = progress.add_task(
+                    f"[white]{test_name}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                    total=len(tables)
+                )
+                
+                # Run test for all levels
+                self.stats[table_type][test_key] = {}
+                for level in tables:
+                    self.stats[table_type][test_key][level] = config['func'](
+                        table=tables[level],
+                        metadata=self.meta,
+                        group_column='nuclear_contamination_status',
+                        group_column_values=[True, False],
+                    )
+                    progress.update(test_task, advance=1)
+                
+                # Update main progress
+                progress.update(main_task, advance=1)
+                progress.remove_task(test_task)
