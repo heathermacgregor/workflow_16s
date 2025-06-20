@@ -38,6 +38,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s import ena
 from workflow_16s.config import get_config
+from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
@@ -52,7 +53,7 @@ import workflow_16s.custom_tmp_config
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
-
+# Set Pandas options
 pd.set_option('display.max_colwidth', None)
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -356,11 +357,7 @@ def process_sequences(
 
 # =================================== MAIN WORKFLOW ================================== #
 
-
-
-# =================================== MAIN WORKFLOW ================================== #
-
-def main(config_path: Path = DEFAULT_CONFIG) -> None:
+def upstream(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""    
     try:
         cfg = get_config(config_path)
@@ -522,11 +519,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     except Exception as e:
         print(f"Critical initialization error: {str(e)}")
 
-from workflow_16s.figures.html_report import HTMLReport
 
-
-
-def main (config_path: Path = DEFAULT_CONFIG) -> None:
+def downstream(config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
     per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
@@ -584,6 +578,17 @@ def main (config_path: Path = DEFAULT_CONFIG) -> None:
     #print(figures)
     #writer = HTMLReport(figures)
     #writer.write_report()
+
+def main(config_path: Path = DEFAULT_CONFIG) -> None:
+    """Orchestrate entire analysis workflow."""    
+    try:
+        cfg = get_config(config_path)
+        upstream = cfg["upstream"]
+        downstream = cfg["downstream"]
+        if upstream:
+            upstream(config_path=config_path)
+        if downstream:
+            downstream(config_path=config_path)
         
 if __name__ == "__main__":
     main()
