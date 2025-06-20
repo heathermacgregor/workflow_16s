@@ -341,7 +341,7 @@ class AmpliconData:
         for table_type in self.tables.keys():
             self._collapse_taxa(table_type, tax_levels)
         self._presence_absence(tax_levels)
-        print(self.tables)
+        logger.debug(self.tables)
         
         # Save all generated tables
         self._save_all_tables(table_dir)
