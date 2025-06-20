@@ -357,15 +357,13 @@ def process_sequences(
 
 # =================================== MAIN WORKFLOW ================================== #
 
-def upstream(config_path: Path = DEFAULT_CONFIG) -> None:
+def upstream(cfg, logger) -> None:
     """Orchestrate entire analysis workflow."""    
     try:
-        cfg = get_config(config_path)
         per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
         classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
         
         project_dir = dir_utils.SubDirs(cfg["project_dir"])
-        logger = setup_logging(project_dir.logs)
         
         datasets = file_utils.load_datasets_list(cfg["dataset_list"])
         datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
@@ -520,13 +518,8 @@ def upstream(config_path: Path = DEFAULT_CONFIG) -> None:
         print(f"Critical initialization error: {str(e)}")
 
 
-def downstream(config_path: Path = DEFAULT_CONFIG) -> None:
-    cfg = get_config(config_path)
-    per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
-        
+def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    logger = setup_logging(project_dir.logs)
 
     figures = {}
         
@@ -582,13 +575,15 @@ def downstream(config_path: Path = DEFAULT_CONFIG) -> None:
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""    
     cfg = get_config(config_path)
+    project_dir = dir_utils.SubDirs(cfg["project_dir"])
+    logger = setup_logging(project_dir.logs)
         
     upstream = cfg["upstream"]
     downstream = cfg["downstream"]
     if upstream:
-        upstream(config_path=config_path)
+        upstream(cfg, logger)
     if downstream:
-        downstream(config_path=config_path)
+        downstream(cfg, logger)
         
 if __name__ == "__main__":
     main()
