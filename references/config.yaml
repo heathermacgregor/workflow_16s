@@ -88,3 +88,6 @@ stats:
     mwu_bonferroni: True
     kruskal_bonferroni: True
 
+
+figures:
+  map: True
