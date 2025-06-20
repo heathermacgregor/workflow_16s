@@ -247,7 +247,7 @@ class AmpliconData:
             f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
 
-        if cfg["figures"]["map"]:
+        if self.cfg["figures"]["map"]:
             sample_map_fig, sample_map_color_dict = sample_map_categorical(
                 metadata=self.meta, 
                 show=False,
