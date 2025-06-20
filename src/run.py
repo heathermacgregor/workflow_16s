@@ -581,14 +581,14 @@ def downstream(config_path: Path = DEFAULT_CONFIG) -> None:
 
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""    
-    try:
-        cfg = get_config(config_path)
-        upstream = cfg["upstream"]
-        downstream = cfg["downstream"]
-        if upstream:
-            upstream(config_path=config_path)
-        if downstream:
-            downstream(config_path=config_path)
+    cfg = get_config(config_path)
+        
+    upstream = cfg["upstream"]
+    downstream = cfg["downstream"]
+    if upstream:
+        upstream(config_path=config_path)
+    if downstream:
+        downstream(config_path=config_path)
         
 if __name__ == "__main__":
     main()
