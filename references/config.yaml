@@ -6,7 +6,9 @@ project_dir: "../../test"
 dataset_list: "./datasets.txt"
 dataset_info: "./datasets.tsv"
 
-# Part I:
+# Part I: Upstream
+upstream: False
+
 ena_email: "macgregor@berkeley.edu"
 
 # Specify if PCR primers used are manually provided or predicted
@@ -55,6 +57,7 @@ qiime2:
 clean_fastq: True
 
 # Part II. Merging datasets and downstream analyses
+downstream: True
 
 features:
   filter: True
