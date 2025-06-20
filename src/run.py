@@ -578,11 +578,11 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     logger = setup_logging(project_dir.logs)
         
-    upstream = cfg["upstream"]
-    downstream = cfg["downstream"]
-    if upstream:
+    upstream_enabled = cfg["upstream"]
+    downstream_enabled = cfg["downstream"]
+    if upstream_enabled:
         upstream(cfg, logger)
-    if downstream:
+    if downstream_enabled:
         downstream(cfg, logger)
         
 if __name__ == "__main__":
