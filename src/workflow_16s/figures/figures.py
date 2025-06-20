@@ -75,13 +75,13 @@ def plotly_show_and_save(
 ):
     if show:
         fig.update_layout(
-          plot_bgcolor='#fff', 
-          paper_bgcolor='#fff', 
-          height=1000
+            plot_bgcolor='#fff', 
+            paper_bgcolor='#fff', 
+            height=1000
         )
         fig.show()
         fig.update_layout(
-          paper_bgcolor='rgba(0,0,0,0)'
+            paper_bgcolor='rgba(0,0,0,0)'
         )   
     
     if output_path:
@@ -90,20 +90,28 @@ def plotly_show_and_save(
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         if 'png' in save_as:
-            fig.write_image(
-              f'{output_path}.png', 
-              format='png', 
-              scale=3
-            )
-            if verbose:
-                logger.info(f"Saved figure to '{output_path}.png'.")
+            try:
+                fig.write_image(
+                    str(output_path.with_suffix('.png')),  # Better path handling
+                    format='png', 
+                    scale=3,
+                    engine='kaleido'  # Explicitly specify engine
+                )
+                if verbose:
+                    logger.info(f"Saved figure to '{output_path.with_suffix('.png')}'.")
+            except Exception as e:
+                logger.error(f"Failed to save PNG: {str(e)}")
+                if verbose:
+                    logger.info("You may need to install kaleido: pip install -U kaleido")
+        
         if 'html' in save_as:
-            fig.write_html(
-              f'{output_path}.html'
-            )
-            if verbose:
-                logger.info(f"Saved figure to '{output_path}.html'.")
-      
+            try:
+                fig.write_html(str(output_path.with_suffix('.html')))
+                if verbose:
+                    logger.info(f"Saved figure to '{output_path.with_suffix('.html')}'.")
+            except Exception as e:
+                logger.error(f"Failed to save HTML: {str(e)}")
+              
 
 class PlotlyFigure:
     def __init__(
