@@ -248,20 +248,25 @@ class AmpliconData:
         )
 
         if self.cfg["figures"]["map"]:
-            sample_map_fig, sample_map_color_dict = sample_map_categorical(
-                metadata=self.meta, 
-                show=False,
-                output_dir=self.figure_output_dir, 
-                projection_type='natural earth', 
-                height=800, 
-                size=5, 
-                opacity=0.3,
-                lat='latitude_deg', 
-                lon='longitude_deg',
-                color_col='dataset_name',
-                limit_axes=False,
-                verbose=False
-            )
+            self.figures["map"] = {}
+            for color_col in ['dataset_name', 'nuclear_contamination_status']:
+                sample_map_fig, sample_map_color_dict = sample_map_categorical(
+                    metadata=self.meta, 
+                    show=False,
+                    output_dir=self.figure_output_dir, 
+                    projection_type='natural earth', 
+                    height=800, 
+                    size=5, 
+                    opacity=0.3,
+                    lat='latitude_deg', 
+                    lon='longitude_deg',
+                    color_col=color_col,
+                    limit_axes=False,
+                    verbose=False
+                )
+                self.figures["map"][color_col] = sample_map_fig
+            
+            
         
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
