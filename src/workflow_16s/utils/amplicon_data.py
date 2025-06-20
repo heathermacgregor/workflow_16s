@@ -221,7 +221,8 @@ class AmpliconData:
         table_dir, output_dir = self._mode_config.get(self.mode, (None, None))
         if table_dir is None:
             raise ValueError(f"Invalid processing mode: {self.mode}")
-        
+
+        self.figure_output_dir = Path(self.project_dir.figures)
         self.table_output_path = (
             Path(self.project_dir.data) / 'merged' / 'table' / output_dir / 
             'feature-table.biom'
@@ -245,6 +246,22 @@ class AmpliconData:
             f"{RED}{self.meta.shape[0]}{RESET} samples "
             f"and {RED}{self.meta.shape[1]}{RESET} columns"
         )
+
+        if cfg["figures"]["map"]:
+            sample_map_fig, sample_map_color_dict = sample_map_categorical(
+                metadata=self.meta, 
+                show=False,
+                output_dir=self.figure_output_dir, 
+                projection_type='natural earth', 
+                height=800, 
+                size=5, 
+                opacity=0.3,
+                lat='latitude_deg', 
+                lon='longitude_deg',
+                color_col='dataset_name',
+                limit_axes=False,
+                verbose=False
+            )
         
         feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
         logger.info(
@@ -869,3 +886,5 @@ class AmpliconData:
             logger.info(f"Saved latest features to {latest_path}")
         else:
             logger.warning("No significant features found to save")
+
+   
