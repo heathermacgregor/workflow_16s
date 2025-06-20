@@ -53,7 +53,12 @@ from workflow_16s.stats.utils import (
     normalize_table,
     table_to_dataframe
 )
-from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest 
+from workflow_16s.stats.tests import (
+    fisher_exact_bonferroni, 
+    kruskal_bonferroni, 
+    mwu_bonferroni, 
+    ttest 
+)
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
     mds, pca, pcoa, sample_map_categorical
@@ -65,16 +70,16 @@ logger = logging.getLogger('workflow_16s')
 
 # ================================= DEFAULT VALUES =================================== #
 
-DEFAULT_PROGRESS_TEXT_N = 50
-
-DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
-DEFAULT_GROUP_COLUMN_VALUES = [True, False]
-
 # ANSI color codes
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
+
+DEFAULT_PROGRESS_TEXT_N = 50
+
+DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ==================================== FUNCTIONS ===================================== #    
 
@@ -141,7 +146,6 @@ def filter_and_reorder_biom_and_metadata(
     )
 
     return table_reordered, metadata_df
-
 
 
 class AmpliconData:
@@ -232,7 +236,9 @@ class AmpliconData:
         self._load_metadata()
         self._load_biom_table()
         original_n_samples = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(table=self.table, metadata_df=self.meta, sample_column='#sampleid')
+        self.table, self.meta = filter_and_reorder_biom_and_metadata(
+            table=self.table, metadata_df=self.meta, sample_column="#sampleid"
+        )
         
         logger.info(
             f"Loaded (samples x features) metadata table with "
@@ -247,7 +253,6 @@ class AmpliconData:
             f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
         )
     
-
     def _load_metadata(self):
         """Load and merge metadata from multiple sources."""
         meta_paths = self._get_metadata_paths()
@@ -310,7 +315,6 @@ class AmpliconData:
             logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
         return meta_paths
 
-    
 
     def _execute_processing_pipeline(self):
         """Execute the appropriate processing pipeline based on mode."""
@@ -343,7 +347,10 @@ class AmpliconData:
         self._save_all_tables(table_dir)
 
     def _apply_preprocessing_steps(self):
-        """Apply filtering, normalization, and CLR transformation to the table before collapsing."""
+        """
+        Apply filtering, normalization, and CLR transformation to the table before 
+        collapsing.
+        """
         # Start with the original table
         table = self.table
         self.tables["raw"] = {}
@@ -359,7 +366,9 @@ class AmpliconData:
             self.cfg['features']['normalize'] and 
             self.cfg['features']['clr_transform']
         )
-        enabled_steps = [filtering_enabled, normalization_enabled, clr_transformation_enabled]
+        enabled_steps = [
+            filtering_enabled, normalization_enabled, clr_transformation_enabled
+        ]
         n_enabled_steps = sum(enabled_steps)
 
         with create_progress() as progress:
@@ -671,13 +680,18 @@ class AmpliconData:
         separate lists for contaminated and pristine associations.
         
         Steps:
-        1. For each taxonomic level, collect results from all table types and tests
-        2. For each feature, find its most significant association across all table types
-        3. Classify features as contaminated-associated (positive effect) or pristine-associated (negative effect)
-        4. Sort features by effect size magnitude and then by significance (p-value)
-        5. Save the top features to class attributes
+            1. For each taxonomic level, collect results from all table types 
+               and tests
+            2. For each feature, find its most significant association across 
+               all table types
+            3. Classify features as contaminated-associated (positive effect) or 
+               pristine-associated (negative effect)
+            4. Sort features by effect size magnitude and then by significance 
+               (p-value)
+            5. Save the top features to class attributes
         
-        Note: Each feature is represented only once (by its most significant association)
+        Note: Each feature is represented only once (by its most significant 
+              association)
         """
         # Initialize lists to store classified features
         contaminated_features = []
