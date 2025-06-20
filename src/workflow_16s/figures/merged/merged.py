@@ -118,7 +118,9 @@ def _configure_axes(
         mirror=mirror,
         automargin=True
     )
+    
 # ==================================== FUNCTIONS ===================================== #
+
 def sample_map_categorical(
     metadata: pd.DataFrame, 
     show: bool = False,
