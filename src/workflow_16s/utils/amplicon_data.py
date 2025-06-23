@@ -5,6 +5,7 @@ import glob
 import logging
 import os
 import re
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from functools import reduce
@@ -28,6 +29,15 @@ from rich.progress import (
     track,
     TaskID
 )
+from scipy.spatial.distance import pdist, squareform
+from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
+from skbio.stats.composition import clr as CLR
+from skbio.stats.distance import DistanceMatrix
+from skbio.stats.ordination import pcoa as PCoA
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
+from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -60,13 +70,12 @@ from workflow_16s.stats.tests import (
     ttest 
 )
 from workflow_16s.figures.html_report import HTMLReport
-from workflow_16s.figures.merged.merged import (
-    mds, pca, pcoa, sample_map_categorical
-)
+from workflow_16s.figures.merged.merged import sample_map_categorical
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
+warnings.filterwarnings("ignore")  # Suppress warnings
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -81,7 +90,445 @@ DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-# ==================================== FUNCTIONS ===================================== #    
+# Ordination constants
+DEFAULT_METRIC = 'braycurtis'
+DEFAULT_N_PCA = 20
+DEFAULT_N_PCOA = None
+DEFAULT_N_TSNE = 3
+DEFAULT_N_UMAP = 3
+DEFAULT_RANDOM_STATE = 0
+
+# ============================= STATISTICAL ANALYZER CLASS ============================ #
+class StatisticalAnalyzer:
+    """Handles all statistical analyses for amplicon data"""
+    
+    TEST_CONFIG = {
+        'fisher': {
+            'key': 'fisher',
+            'func': fisher_exact_bonferroni,
+            'name': 'Fisher test (w/ Bonferroni)',
+            'effect_col': 'proportion_diff',
+            'alt_effect_col': 'odds_ratio'
+        },
+        'ttest': {
+            'key': 'ttest',
+            'func': ttest,
+            'name': 't-test',
+            'effect_col': 'mean_difference',
+            'alt_effect_col': 'cohens_d'
+        },
+        'mwu_bonferroni': {
+            'key': 'mwub',
+            'func': mwu_bonferroni,
+            'name': 'Mann-Whitney U test (w/ Bonferroni)',
+            'effect_col': 'effect_size_r',
+            'alt_effect_col': 'median_difference'
+        },
+        'kruskal_bonferroni': {
+            'key': 'kwb',
+            'func': kruskal_bonferroni,
+            'name': 'Kruskal-Wallis test (w/ Bonferroni)',
+            'effect_col': 'epsilon_squared',
+            'alt_effect_col': None
+        }
+    }
+    
+    def __init__(self, cfg: Dict, verbose: bool = False):
+        self.cfg = cfg
+        self.verbose = verbose
+    
+    def run_tests(
+        self,
+        table: Table,
+        metadata: pd.DataFrame,
+        group_column: str,
+        group_values: List[Any],
+        enabled_tests: List[str],
+        progress: Optional[Progress] = None,
+        task_id: Optional[TaskID] = None
+    ) -> Dict[str, Any]:
+        """
+        Run statistical tests on a feature table
+        
+        Args:
+            table:         BIOM feature table
+            metadata:      Sample metadata
+            group_column:  Column in metadata to group by
+            group_values:  Values to compare in group_column
+            enabled_tests: List of tests to run
+            progress:      Rich progress object
+            task_id:       Parent task ID
+            
+        Returns:
+            Dictionary of test results keyed by test name
+        """
+        results = {}
+        total_tests = len(enabled_tests)
+        
+        if progress and task_id:
+            main_task = progress.add_task(
+                f"[white]Running statistical tests", 
+                total=total_tests,
+                parent=task_id
+            )
+        
+        for test_name in enabled_tests:
+            if test_name not in self.TEST_CONFIG:
+                continue
+                
+            config = self.TEST_CONFIG[test_name]
+            test_key = config['key']
+            
+            if self.verbose:
+                logger.info(f"Running {config['name']}...")
+                
+            results[test_key] = config['func'](
+                table=table,
+                metadata=metadata,
+                group_column=group_column,
+                group_column_values=group_values,
+            )
+            
+            if progress and task_id:
+                progress.update(main_task, advance=1)
+                
+        return results
+
+    def get_effect_size(self, test_name: str, result_row: pd.Series) -> Optional[float]:
+        """
+        Extract effect size from statistical test results
+        
+        Args:
+            test_name:  Name of statistical test
+            result_row: Row from results DataFrame
+            
+        Returns:
+            Effect size value or None if not found
+        """
+        if test_name not in self.TEST_CONFIG:
+            return None
+            
+        config = self.TEST_CONFIG[test_name]
+        effect_col = config['effect_col']
+        alt_effect_col = config['alt_effect_col']
+        
+        if effect_col in result_row:
+            return result_row[effect_col]
+        elif alt_effect_col and alt_effect_col in result_row:
+            return result_row[alt_effect_col]
+        return None
+
+
+# ================================= PLOTTER CLASS ================================== #
+class Plotter:
+    """Handles all visualization tasks for amplicon data"""
+    
+    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
+        self.cfg = cfg
+        self.output_dir = output_dir
+        self.verbose = verbose
+        self.figures = {}
+        self.ordination_results = {}
+    
+    def generate_sample_map(
+        self, 
+        metadata: pd.DataFrame,
+        color_columns: List[str] = ['dataset_name', 'nuclear_contamination_status'],
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Generate sample location maps
+        
+        Args:
+            metadata:      Sample metadata with location data
+            color_columns: Columns to use for coloring points
+            **kwargs:      Additional plot arguments
+            
+        Returns:
+            Dictionary of generated figures keyed by color column
+        """
+        self.figures["map"] = {}
+        for color_col in color_columns:
+            fig, _ = sample_map_categorical(
+                metadata=metadata,
+                output_dir=self.output_dir,
+                color_col=color_col,
+                **kwargs
+            )
+            self.figures["map"][color_col] = fig
+        return self.figures["map"]
+    
+    def compute_pca(
+        self,
+        table: Table,
+        n_components: int = DEFAULT_N_PCA
+    ) -> Dict[str, Any]:
+        """
+        Compute Principal Component Analysis (PCA) on a feature table.
+        
+        Args:
+            table:        Input BIOM table
+            n_components: Number of principal components to compute
+            
+        Returns:
+            Dictionary containing PCA results
+        """
+        df = table_to_dataframe(table).T
+        return pca(df, n_components)
+    
+    def compute_pcoa(
+        self,
+        table: Table,
+        metric: str = DEFAULT_METRIC,
+        n_dimensions: Optional[int] = DEFAULT_N_PCOA
+    ) -> PCoA:
+        """
+        Compute Principal Coordinates Analysis (PCoA) on a feature table.
+        
+        Args:
+            table:        Input BIOM table
+            metric:       Distance metric
+            n_dimensions: Number of dimensions to return
+            
+        Returns:
+            PCoA results object
+        """
+        df = table_to_dataframe(table).T
+        return pcoa(df, metric, n_dimensions)
+    
+    def compute_tsne(
+        self,
+        table: Table,
+        n_components: int = DEFAULT_N_TSNE,
+        random_state: int = DEFAULT_RANDOM_STATE
+    ) -> pd.DataFrame:
+        """
+        Compute t-SNE on a feature table.
+        
+        Args:
+            table:        Input BIOM table
+            n_components: Dimension of the embedded space
+            random_state: Random seed
+            
+        Returns:
+            DataFrame with t-SNE coordinates
+        """
+        df = table_to_dataframe(table).T
+        return tsne(df, n_components, random_state)
+    
+    def compute_umap(
+        self,
+        table: Table,
+        n_components: int = DEFAULT_N_UMAP,
+        random_state: int = DEFAULT_RANDOM_STATE
+    ) -> pd.DataFrame:
+        """
+        Compute UMAP on a feature table.
+        
+        Args:
+            table:        Input BIOM table
+            n_components: Dimension of the embedded space
+            random_state: Random seed
+            
+        Returns:
+            DataFrame with UMAP coordinates
+        """
+        df = table_to_dataframe(table).T
+        return umap(df, n_components, random_state)
+    
+    def generate_ordination_plot(
+        self,
+        method: str,
+        table: Table,
+        metadata: pd.DataFrame,
+        color_column: str = 'nuclear_contamination_status',
+        **kwargs
+    ) -> plt.Figure:
+        """
+        Generate ordination plot (PCA, PCoA, MDS)
+        
+        Args:
+            method:       Ordination method ('pca', 'pcoa', 'tsne', 'umap')
+            table:        BIOM feature table
+            metadata:     Sample metadata
+            color_column: Column to use for coloring points
+            **kwargs:     Additional plot arguments
+            
+        Returns:
+            Matplotlib figure object
+        """
+        method_funcs = {
+            'pca': self.compute_pca,
+            'pcoa': self.compute_pcoa,
+            'tsne': self.compute_tsne,
+            'umap': self.compute_umap
+        }
+        
+        if method not in method_funcs:
+            raise ValueError(f"Unsupported ordination method: {method}")
+        
+        # Compute ordination
+        ordination_result = method_funcs[method](table)
+        self.ordination_results[method] = ordination_result
+        
+        # Generate plot
+        fig = self._create_ordination_plot(ordination_result, method, metadata, color_column)
+        self.figures[method] = fig
+        return fig
+    
+    def _create_ordination_plot(
+        self,
+        ordination_result: Union[Dict, PCoA, pd.DataFrame],
+        method: str,
+        metadata: pd.DataFrame,
+        color_column: str
+    ) -> plt.Figure:
+        """
+        Create an ordination plot from computed results.
+        
+        Args:
+            ordination_result: Computed ordination results
+            method:            Ordination method used
+            metadata:          Sample metadata
+            color_column:      Column to use for coloring points
+            
+        Returns:
+            Matplotlib figure object
+        """
+        # Extract coordinates
+        if method == 'pca':
+            coordinates = ordination_result['components']
+            x_label = 'PC1'
+            y_label = 'PC2'
+        elif method == 'pcoa':
+            coordinates = ordination_result.samples
+            x_label = 'PCoA1'
+            y_label = 'PCoA2'
+        else:  # t-SNE or UMAP
+            coordinates = ordination_result
+            x_label = f'{method.upper()}1'
+            y_label = f'{method.upper()}2'
+        
+        # Prepare plot data
+        plot_data = coordinates.iloc[:, :2].reset_index()
+        plot_data = plot_data.rename(columns={'index': 'sample_id'})
+        plot_data = plot_data.merge(
+            metadata, left_on='sample_id', right_on='#sampleid', how='left'
+        )
+        
+        # Create plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        groups = plot_data[color_column].unique()
+        
+        for group in groups:
+            group_data = plot_data[plot_data[color_column] == group]
+            ax.scatter(
+                group_data.iloc[:, 1], 
+                group_data.iloc[:, 2], 
+                label=group, 
+                alpha=0.7
+            )
+        
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.set_title(f'{method.upper()} Plot')
+        ax.legend(title=color_column)
+        ax.grid(True)
+        
+        # Save figure
+        output_path = self.output_dir / f"{method}_plot.png"
+        plt.savefig(output_path)
+        plt.close()
+        
+        return fig
+
+
+# ================================== TOP FEATURES ANALYZER ================================== #
+class TopFeaturesAnalyzer:
+    """Identifies top features associated with experimental groups"""
+    
+    def __init__(self, cfg: Dict, verbose: bool = False):
+        self.cfg = cfg
+        self.verbose = verbose
+    
+    def analyze(
+        self, 
+        stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
+        group_column: str
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """
+        Identify top features associated with group differences
+        
+        Args:
+            stats_results: Nested dictionary of statistical results
+            group_column:  Metadata column defining groups
+            
+        Returns:
+            Tuple of (contaminated_features, pristine_features)
+        """
+        contaminated_features = []
+        pristine_features = []
+        analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
+        
+        # Process each taxonomic level
+        for level in ['phylum', 'class', 'order', 'family', 'genus']:
+            level_features = {}
+            
+            # Collect results across all table types and tests
+            for table_type, tests in stats_results.items():
+                for test_name, test_results in tests.items():
+                    if level not in test_results:
+                        continue
+                    
+                    # Process each feature in results
+                    for _, row in test_results[level].iterrows():
+                        feature = row['feature']
+                        p_value = row['p_value']
+                        
+                        # Skip non-significant results
+                        if pd.isna(p_value) or p_value > 0.05:
+                            continue
+                            
+                        # Get effect size
+                        effect = analyzer.get_effect_size(test_name, row)
+                        if effect is None:
+                            continue
+                            
+                        # Track best result per feature
+                        current = level_features.get(feature)
+                        if not current or p_value < current['p_value']:
+                            level_features[feature] = {
+                                'p_value': p_value,
+                                'effect': effect,
+                                'table_type': table_type,
+                                'test': test_name
+                            }
+            
+            # Classify features by effect direction
+            for feature, result in level_features.items():
+                feature_data = {
+                    'feature': feature,
+                    'level': level,
+                    'table_type': result['table_type'],
+                    'test': result['test'],
+                    'effect': result['effect'],
+                    'p_value': result['p_value']
+                }
+                
+                if result['effect'] > 0:
+                    contaminated_features.append(feature_data)
+                else:
+                    pristine_features.append(feature_data)
+        
+        # Sort by effect size magnitude and significance
+        key_func = lambda x: (-abs(x['effect']), x['p_value'])
+        contaminated_features.sort(key=key_func)
+        pristine_features.sort(key=key_func)
+        
+        return contaminated_features, pristine_features
+
+
+# ================================== UTILITY FUNCTIONS ================================== #    
 
 def filter_and_reorder_biom_and_metadata(
     table: Table,
@@ -147,178 +594,255 @@ def filter_and_reorder_biom_and_metadata(
 
     return table_reordered, metadata_df
 
+def table_to_dataframe(
+    table: Union[Dict[Any, Any], Table]
+) -> pd.DataFrame:
+    """
+    Convert a BIOM Table or a mapping to a pandas DataFrame.
 
+    Args:
+        table: Input feature table, either a BIOM Table or a dict-like
+               object where keys are sample identifiers and values are feature
+               counts or abundances.
+
+    Returns:
+        df:    A pandas DataFrame of shape (n_samples, n_features).
+    """
+    if isinstance(table, Table):
+        # Convert BIOM Table to DataFrame (features x samples), then transpose
+        df = table.to_dataframe(dense=True).T
+    else:
+        # Construct DataFrame directly from dict-like mapping
+        df = pd.DataFrame(table)
+    return df
+
+def distance_matrix(
+    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    metric: str = DEFAULT_METRIC
+) -> np.ndarray:
+    """
+    Compute a pairwise distance matrix from a feature table.
+
+    Args:
+        table:  Input feature table as a dict-like, BIOM Table, or DataFrame
+                (samples x features or features x samples).
+        metric: Distance metric name accepted by scipy.spatial.distance.pdist.
+
+    Returns:
+        dm:     A 2D numpy array representing the pairwise distance matrix.
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+    # Compute condensed distance vector and convert to square form
+    dm = squareform(pdist(table.values, metric=metric))
+    return dm
+
+def pcoa(
+    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    metric: str = DEFAULT_METRIC,
+    n_dimensions: Optional[int] = DEFAULT_N_PCOA
+) -> PCoA:
+    """
+    Perform Principal Coordinates Analysis (PCoA) on a feature table.
+
+    Args:
+        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
+                      (samples x features or features x samples).
+        metric:       Distance metric name for computing the distance matrix.
+        n_dimensions: Number of dimensions to return; if None, returns all.
+
+    Returns:
+        A PCoAResults object containing eigenvalues, coordinates, and
+        proportion of variance explained.
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+    # Compute distance matrix
+    dm = distance_matrix(table, metric=metric)
+    dm_df = pd.DataFrame(dm, index=table.index, columns=table.index)
+    # Run PCoA
+    if n_dimensions:
+        return PCoA(dm_df, number_of_dimensions=n_dimensions)
+    return PCoA(dm_df)
+
+def pca(
+    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    n_components: int = DEFAULT_N_PCA
+) -> Dict[str, Any]:
+    """
+    Perform Principal Component Analysis (PCA) on a feature table.
+
+    Args:
+        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
+                      (samples x features or features x samples).
+        n_components: Number of principal components to compute.
+
+    Returns:
+        A dictionary with the following keys:
+            - 'components': DataFrame of component scores (samples x components).
+            - 'exp_var_ratio': Array of explained variance ratios per component.
+            - 'exp_var_cumul': Cumulative explained variance ratios.
+            - 'loadings': Array of PCA loadings (features x components).
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+    # Standardize features
+    scaled = StandardScaler().fit_transform(table.values)
+    scaled_df = pd.DataFrame(scaled, index=table.index, columns=table.columns)
+
+    # Fit PCA
+    pca_model = PCA(n_components=n_components)
+    scores = pca_model.fit_transform(scaled_df.values)
+
+    # Prepare results
+    components_df = pd.DataFrame(
+        scores,
+        index=table.index,
+        columns=[f"PC{i+1}" for i in range(n_components)]
+    )
+    exp_var_ratio = pca_model.explained_variance_ratio_
+    exp_var_cumul = np.cumsum(exp_var_ratio)
+    loadings = pca_model.components_.T * np.sqrt(pca_model.explained_variance_)
+
+    return {
+        'components': components_df,
+        'exp_var_ratio': exp_var_ratio,
+        'exp_var_cumul': exp_var_cumul,
+        'loadings': loadings
+    }
+
+def tsne(
+    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    n_components: int = DEFAULT_N_TSNE,
+    random_state: int = DEFAULT_RANDOM_STATE
+) -> pd.DataFrame:
+    """
+    Compute t-distributed Stochastic Neighbor Embedding (t-SNE) reduction.
+
+    Args:
+        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
+                      (samples x features or features x samples).
+        n_components: Dimension of the embedded space.
+        random_state: Random seed for reproducibility.
+
+    Returns:
+        tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
+                      coordinates.
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+
+    tsne_arr = TSNE(
+        n_components=n_components, 
+        random_state=random_state
+    ).fit_transform(
+        table.values
+    )
+    tsne_df = pd.DataFrame(
+        tsne_arr,
+        index=table.index,
+        columns=[f"TSNE{i+1}" for i in range(n_components)]
+    )
+    return tsne_df
+
+def umap(
+    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    n_components: int = DEFAULT_N_UMAP,
+    random_state: int = DEFAULT_RANDOM_STATE
+) -> pd.DataFrame:
+    """
+    Compute Uniform Manifold Approximation and Projection (UMAP) reduction.
+
+    Args:
+        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
+                      (samples x features or features x samples).
+        n_components: Dimension of the embedded space.
+        random_state: Random seed for reproducibility.
+
+    Returns:
+        umap_df:       DataFrame of shape (n_samples, n_components) with UMAP 
+                       coordinates.
+    """
+    if not isinstance(table, pd.DataFrame):
+        table = table_to_dataframe(table)
+
+    umap_arr = UMAP(
+        n_components=n_components,
+        init='random',
+        random_state=random_state
+    ).fit_transform(table.values)
+    umap_df = pd.DataFrame(
+        umap_arr,
+        index=table.index,
+        columns=[f"UMAP{i+1}" for i in range(n_components)]
+    )
+    return umap_df
+
+
+# ================================== AMPLICON DATA CLASS ================================== #
 class AmpliconData:
-    """
-    A class for processing and analyzing amplicon sequencing data.
+    """Main class for processing amplicon sequencing data"""
     
-    This class handles data loading, processing at various taxonomic levels,
-    statistical analysis, and visualization based on configuration settings.
+    MODE_CONFIG = {
+        'asv': ('table', 'asv'),
+        'genus': ('table_6', 'l6')
+    }
     
-    Attributes:
-        cfg:         Configuration settings
-        project_dir: Project directory structure
-        mode:        Processing mode ('asv' or 'genus')
-        verbose:     Verbosity flag
-        meta:        Sample metadata
-        table:       Feature table
-        color_maps:  Color mappings for visualization
-        figures:     Generated figures
-        tables:      Processed tables at different taxonomic levels
-        stats:       Statistical analysis results
-    """
-    
-    def __init__(
-        self, 
-        cfg: Dict,
-        project_dir: Union[str, Path],
-        mode: str = 'genus',
-        verbose: bool = False
-    ):
-        """
-        Initialize AmpliconData instance.
-        
-        Args:
-            cfg:         Configuration dictionary
-            project_dir: Project directory structure
-            mode:        Processing mode ('asv' or 'genus')
-            verbose:     Verbosity flag
-        """
+    def __init__(self, cfg, project_dir, mode='genus', verbose=False):
         self.cfg = cfg
         self.project_dir = project_dir
         self.mode = mode
         self.verbose = verbose
-
-        # Initialize data storage attributes
         self.meta = None
         self.table = None
-        self.taxa = None
-        self.color_maps = {}
-        self.figures = {}
         self.tables = {}
         self.stats = {}
+        self.figures = {}
+        self.ordination_results = {}
+        self.top_contaminated_features = []
+        self.top_pristine_features = []
         
-        # Mode configuration mapping
-        self._mode_config = {
-            'asv': ('table', 'asv'),
-            'genus': ('table_6', 'l6')
-        }
-        
-        # Set output paths
+        self._validate_mode()
         self._set_output_paths()
-        
-        # Load data
         self._load_data()
-        
-        # Execute processing pipeline
-        self._execute_processing_pipeline()
-        
-        # Run statistical analyses
-        self._run_all_statistical_analyses()
-
-    def _set_output_paths(self):
-        """Set output paths for tables and metadata based on processing mode."""
-        table_dir, output_dir = self._mode_config.get(self.mode, (None, None))
-        if table_dir is None:
+        self._process_data()
+        self._run_analyses()
+    
+    def _validate_mode(self):
+        """Validate processing mode"""
+        if self.mode not in self.MODE_CONFIG:
             raise ValueError(f"Invalid processing mode: {self.mode}")
-
+    
+    def _set_output_paths(self):
+        """Set output paths for processed data"""
+        table_dir, output_dir = self.MODE_CONFIG[self.mode]
         self.figure_output_dir = Path(self.project_dir.figures)
         self.table_output_path = (
-            Path(self.project_dir.data) / 'merged' / 'table' / output_dir / 
-            'feature-table.biom'
+            Path(self.project_dir.data) / 'merged' / 'table' / 
+            output_dir / 'feature-table.biom'
         )
         self.meta_output_path = (
             Path(self.project_dir.data) / 'merged' / 'metadata' / 
             'sample-metadata.tsv'
         )
-
+    
     def _load_data(self):
-        """Load metadata and BIOM table data."""
+        """Load metadata and feature tables"""
         self._load_metadata()
         self._load_biom_table()
-        original_n_samples = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(
-            table=self.table, metadata_df=self.meta, sample_column="#sampleid"
-        )
-        
-        logger.info(
-            f"Loaded (samples x features) metadata table with "
-            f"{RED}{self.meta.shape[0]}{RESET} samples "
-            f"and {RED}{self.meta.shape[1]}{RESET} columns"
-        )
-
-        if self.cfg["figures"]["map"]:
-            self.figures["map"] = {}
-            for color_col in ['dataset_name', 'nuclear_contamination_status']:
-                sample_map_fig, sample_map_color_dict = sample_map_categorical(
-                    metadata=self.meta, 
-                    show=False,
-                    output_dir=self.figure_output_dir, 
-                    projection_type='natural earth', 
-                    height=800, 
-                    size=5, 
-                    opacity=0.3,
-                    lat='latitude_deg', 
-                    lon='longitude_deg',
-                    color_col=color_col,
-                    limit_axes=False,
-                    verbose=False
-                )
-                self.figures["map"][color_col] = sample_map_fig
-            
-            
-        
-        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
-        logger.info(
-            f"Loaded (features x samples) feature table with "
-            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
-            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
-        )
+        self._filter_and_align_data()
     
     def _load_metadata(self):
-        """Load and merge metadata from multiple sources."""
+        """Load and merge metadata from multiple sources"""
         meta_paths = self._get_metadata_paths()
         self.meta = import_merged_meta_tsv(
             meta_paths, 
             None,
             self.verbose
         )
-
-    def _load_biom_table(self):
-        """Load and merge BIOM feature tables."""
-        biom_paths = self._get_biom_paths()
-        if not biom_paths:
-            error_text = "No BIOM files found matching pattern"
-            logger.error(error_text)
-            raise FileNotFoundError(error_text)   
-            
-        self.table = import_merged_table_biom(
-            biom_paths, 
-            'table',
-            self.verbose
-        )
-
-    def _get_biom_paths(self) -> List[Path]:
-        """
-        Get paths to BIOM feature tables using a glob pattern.
-        
-        Returns:
-            List of Path objects to BIOM files
-        """
-        pattern = '/'.join(
-          ['*', '*', '*', '*', 'FWD_*_REV_*', self._mode_config[self.mode][0], 
-           'feature-table.biom']
-        )
-        biom_paths = glob.glob(
-            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
-            recursive=True
-        )
-        if self.verbose:
-            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
-        return [Path(p) for p in biom_paths]
-
+    
     def _get_metadata_paths(self) -> List[Path]:
-        """Get paths to metadata files corresponding to BIOM tables."""
+        """Get paths to metadata files corresponding to BIOM tables"""
         meta_paths = []
         for biom_path in self._get_biom_paths():
             # Handle both file paths and directory paths
@@ -336,39 +860,72 @@ class AmpliconData:
         if self.verbose:
             logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
         return meta_paths
-
-
-    def _execute_processing_pipeline(self):
-        """Execute the appropriate processing pipeline based on mode."""
-        processor = {
-            'asv': self._process_asv_mode,
-            'genus': self._process_genus_mode
-        }.get(self.mode, self._process_asv_mode)
+    
+    def _load_biom_table(self):
+        """Load and merge BIOM feature tables"""
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
+            error_text = "No BIOM files found matching pattern"
+            logger.error(error_text)
+            raise FileNotFoundError(error_text)   
+            
+        self.table = import_merged_table_biom(
+            biom_paths, 
+            'table',
+            self.verbose
+        )
+    
+    def _get_biom_paths(self) -> List[Path]:
+        """
+        Get paths to BIOM feature tables using a glob pattern.
         
-        processor()
-
-    def _process_asv_mode(self):
-        """Process data in ASV mode (not yet implemented)."""
-        logger.info("ASV mode is not yet supported!")
-
-    def _process_genus_mode(self):
-        """Process data in genus mode through multiple processing steps."""
-        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
-        table_dir = Path(self.project_dir.data) / 'merged' / 'table'
+        Returns:
+            List of Path objects to BIOM files
+        """
+        pattern = '/'.join(
+          ['*', '*', '*', '*', 'FWD_*_REV_*', self.MODE_CONFIG[self.mode][0], 
+           'feature-table.biom']
+        )
+        biom_paths = glob.glob(
+            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+            recursive=True
+        )
+        if self.verbose:
+            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
+        return [Path(p) for p in biom_paths]
+    
+    def _filter_and_align_data(self):
+        """Filter and align BIOM table with metadata"""
+        original_n_samples = self.table.shape[1]
+        self.table, self.meta = filter_and_reorder_biom_and_metadata(
+            table=self.table, metadata_df=self.meta, sample_column="#sampleid"
+        )
         
-        # Apply filtering, normalization, and CLR before collapsing
-        self._apply_preprocessing_steps()
-        
-        # Execute processing steps
-        for table_type in self.tables.keys():
-            self._collapse_taxa(table_type, tax_levels)
-        self._presence_absence(tax_levels)
-        logger.debug(self.tables)
-        
-        # Save all generated tables
-        self._save_all_tables(table_dir)
+        logger.info(
+            f"Loaded (samples x features) metadata table with "
+            f"{RED}{self.meta.shape[0]}{RESET} samples "
+            f"and {RED}{self.meta.shape[1]}{RESET} columns"
+        )
 
-    def _apply_preprocessing_steps(self):
+        if self.cfg["figures"]["map"]:
+            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
+            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
+            
+        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
+        logger.info(
+            f"Loaded (features x samples) feature table with "
+            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
+            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
+        )
+    
+    def _process_data(self):
+        """Process data through filtering and transformation pipeline"""
+        self._apply_preprocessing()
+        self._collapse_taxa()
+        self._create_presence_absence()
+        self._save_tables()
+    
+    def _apply_preprocessing(self):
         """
         Apply filtering, normalization, and CLR transformation to the table before 
         collapsing.
@@ -424,33 +981,38 @@ class AmpliconData:
                 self.tables["clr_transformed"] = {}
                 self.tables["clr_transformed"][self.mode] = clr_transformed_table
                 progress.update(main_task, advance=1)
-
-    def _collapse_taxa(self, table_type: str, levels: List[str]):
-        """Generate raw tables by collapsing taxa at different levels."""
-        process_name = f"Collapsing {table_type} taxonomy"
-        log_template_0 = f"Collapsed {table_type} to"
-        self.tables[table_type] = self._run_processing_step(
-            process_name=process_name,
-            process_func=collapse_taxa,
-            levels=levels,
-            func_args=(),
-            get_source=lambda _: self.table,
-            log_template=log_template_0 + " {level} level"
-        )
-
-    def _presence_absence(self, levels: List[str]):
-        """Generate presence/absence tables if enabled in config."""
+    
+    def _collapse_taxa(self):
+        """Generate tables by collapsing taxa at different levels"""
+        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
+        
+        # Process all table types
+        for table_type in list(self.tables.keys()):
+            if table_type not in self.tables:
+                continue
+                
+            self.tables[table_type] = self._run_processing_step(
+                process_name=f"Collapsing {table_type} taxonomy",
+                process_func=collapse_taxa,
+                levels=tax_levels,
+                func_args=(),
+                get_source=lambda level: self.tables[table_type][self.mode],
+                log_template=f"Collapsed {table_type} to {{level}} level"
+            )
+    
+    def _create_presence_absence(self):
+        """Generate presence/absence tables if enabled in config"""
         if not self.cfg['features']['presence_absence']:
             return
             
         self.tables["presence_absence"] = self._run_processing_step(
             process_name="Converting to presence/absence",
             process_func=presence_absence,
-            levels=levels,
+            levels=['phylum', 'class', 'order', 'family', 'genus'],
             func_args=(),
             get_source=lambda level: self.tables["raw"][level]
         )
-
+    
     def _run_processing_step(
         self,
         process_name: str,
@@ -495,7 +1057,6 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
-                )
                 for level in levels:
                     source_table = get_source(level)
                     try:
@@ -521,14 +1082,9 @@ class AmpliconData:
             logger.info(template.format(level=level))
         elif action:
             logger.info(f"{level} {action}")
-            
-    def _save_all_tables(self, base_dir: Path):
-        """
-        Save all generated tables to appropriate directories.
-        
-        Args:
-            base_dir: Base directory for table storage
-        """
+    
+    def _save_tables(self):
+        """Save all generated tables to appropriate directories"""
         # Calculate total tables to save
         total_tables = sum(len(level_tables) for level_tables in self.tables.values())
         
@@ -537,6 +1093,7 @@ class AmpliconData:
                 "[white]Saving tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=total_tables
             )
+            base_dir = Path(self.project_dir.data) / 'merged' / 'table'
             base_dir.mkdir(parents=True, exist_ok=True)
             for table_type, level_tables in self.tables.items():
                 type_dir = base_dir / table_type
@@ -555,130 +1112,99 @@ class AmpliconData:
                         )
                     # Update progress after each table save
                     progress.update(task, advance=1)
-
-    def _run_all_statistical_analyses(self):
-        """Run statistical analyses for all generated table types."""
-        for table_type in self.tables:
-            self._run_statistical_analyses(table_type)
-        self._save_statistical_results(Path(self.project_dir.tables) / 'stats' / 'tests')
-        self._top_features()
-
-    def _run_statistical_analyses(self, table_type: str):
-        """
-        Run configured statistical analyses for a specific table type.
+    
+    def _run_analyses(self):
+        """Run statistical analyses and visualizations"""
+        self._run_statistical_analyses()
+        self._identify_top_features()
+    
+    def _run_statistical_analyses(self):
+        """Run all configured statistical analyses"""
+        self.stats_analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
+        self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
         
-        Args:
-            table_type: Type of table to analyze ('raw', 'presence_absence', etc.)
-        """
-        self.stats[table_type] = {}
-        tables = self.tables[table_type]
-        
-        # Get enabled tests from configuration
-        enabled_tests = [
-            test for test in [
-                'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 'pca', 'tsne'
-            ] if self.cfg['stats'][table_type].get(test, False)
-        ]
-        logger.info(f"Enabled tests for {table_type}: {enabled_tests}")
-        
-        # Test execution configuration
-        test_config = {
-            'fisher': {
-                'key': 'fisher',
-                'func': fisher_exact_bonferroni,
-                'name': 'Fisher test (w/ Bonferroni)'
-            },
-            'ttest': {
-                'key': 'ttest',
-                'func': ttest,
-                'name': 't-test'
-            },
-            'mwu_bonferroni': {
-                'key': 'mwub',
-                'func': mwu_bonferroni,
-                'name': 'Mann-Whitney U test (w/ Bonferroni)'
-            },
-            'kruskal_bonferroni': {
-                'key': 'kwb',
-                'func': kruskal_bonferroni,
-                'name': 'Kruskal-Wallis test (w/ Bonferroni)'
-            }
-        }
-        
-        # Execute configured tests
-        with create_progress() as progress:
-            main_task = progress.add_task(
-                f"[white]Analyzing {table_type} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(enabled_tests)
-            )
+        for table_type, tables in self.tables.items():
+            self.stats[table_type] = {}
+            enabled_tests = self._get_enabled_tests(table_type)
             
-            for test in enabled_tests:
-                if test not in test_config:
-                    # Handle visualization tests separately
-                    if test in ['pca', 'tsne']:
-                        self._run_visual_analyses(
-                            table_type=table_type,
-                            test_type=test,
-                            progress=progress,
-                            parent_task_id=main_task
-                        )
-                    continue
-                    
-                config = test_config[test]
-                test_key = config['key']
-                test_name = config['name']
-                
-                # Create progress task for this test
-                test_task = progress.add_task(
-                    f"[white]{test_name}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            with create_progress() as progress:
+                task_id = progress.add_task(
+                    f"[white]Analyzing {table_type} tables", 
                     total=len(tables)
                 )
                 
-                # Run test for all levels
-                self.stats[table_type][test_key] = {}
-                for level in tables:
-                    self.stats[table_type][test_key][level] = config['func'](
-                        table=tables[level],
+                for level, table in tables.items():
+                    # Run statistical tests
+                    test_results = self.stats_analyzer.run_tests(
+                        table=table,
                         metadata=self.meta,
-                        group_column='nuclear_contamination_status',
-                        group_column_values=[True, False],
+                        group_column=DEFAULT_GROUP_COLUMN,
+                        group_values=DEFAULT_GROUP_COLUMN_VALUES,
+                        enabled_tests=enabled_tests,
+                        progress=progress,
+                        task_id=task_id
                     )
-                    progress.update(test_task, advance=1)
-                
-                # Update main progress
-                progress.update(main_task, advance=1)
-                progress.remove_task(test_task)
-
-    def _save_statistical_results(self, base_dir: Path):
-        """
-        Save statistical analysis results to CSV files.
+                    self.stats[table_type][level] = test_results
+                    
+                    # Generate ordination plots
+                    if 'pca' in enabled_tests:
+                        fig = self.plotter.generate_ordination_plot(
+                            'pca', table, self.meta
+                        )
+                        self.figures[f"pca_{table_type}_{level}"] = fig
+                    if 'pcoa' in enabled_tests:
+                        fig = self.plotter.generate_ordination_plot(
+                            'pcoa', table, self.meta
+                        )
+                        self.figures[f"pcoa_{table_type}_{level}"] = fig
+                    if 'tsne' in enabled_tests:
+                        fig = self.plotter.generate_ordination_plot(
+                            'tsne', table, self.meta
+                        )
+                        self.figures[f"tsne_{table_type}_{level}"] = fig
+                    if 'umap' in enabled_tests:
+                        fig = self.plotter.generate_ordination_plot(
+                            'umap', table, self.meta
+                        )
+                        self.figures[f"umap_{table_type}_{level}"] = fig
+                    
+                    progress.advance(task_id)
             
-        Results are organized in the directory structure:
-            {output_dir}/{table_type}/{test_key}/{taxonomic_level}.csv
-                
-        Args:
-            output_dir: Base directory for saving results (defaults to project_dir/stats)
-        """            
+            # Save statistical results
+            self._save_statistical_results()
+    
+    def _get_enabled_tests(self, table_type: str) -> List[str]:
+        """Get enabled tests for a table type from config"""
+        return [
+            test for test in [
+                'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 
+                'pca', 'pcoa', 'tsne', 'umap'
+            ] if self.cfg['stats'][table_type].get(test, False)
+        ]
+    
+    def _save_statistical_results(self):
+        """Save statistical analysis results to CSV files"""
         total_files = 0
         # Count total files to save for progress tracking
-        for table_type, tests in self.stats.items():
-            for test_key, levels in tests.items():
-                total_files += len(levels)
-            
+        for table_type, levels in self.stats.items():
+            for level, tests in levels.items():
+                total_files += len(tests)
+        
         with create_progress() as progress:
             task = progress.add_task(
                 "[white]Saving statistical results...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=total_files
             )
+            base_dir = Path(self.project_dir.tables) / 'stats' / 'tests'
             base_dir.mkdir(parents=True, exist_ok=True) 
-            for table_type, tests in self.stats.items():
+            for table_type, levels in self.stats.items():
                 type_dir = base_dir / table_type
                 type_dir.mkdir(parents=True, exist_ok=True)
-                for test_key, levels in tests.items():
-                    for level, result_df in levels.items():
-                        level_dir = type_dir / level
-                        level_dir.mkdir(parents=True, exist_ok=True)
-                        output_path = level_dir / f"{test_key}.csv"
+                for level, tests in levels.items():
+                    level_dir = type_dir / level
+                    level_dir.mkdir(parents=True, exist_ok=True)
+                    for test_name, result_df in tests.items():
+                        output_path = level_dir / f"{test_name}.csv"
                         # Sort by p-value before saving
                         if 'p_value' in result_df.columns:
                             result_df = result_df.sort_values(by='p_value', ascending=True)
@@ -687,169 +1213,23 @@ class AmpliconData:
                             
                         if self.verbose:
                             logger.info(
-                                f"Saved {table_type}/{test_key}/{level} stats "
+                                f"Saved {table_type}/{level}/{test_name} stats "
                                 f"to {output_path}"
                             )
                                 
                         # Update progress
                         progress.update(task, advance=1)
-
-    def _top_features(self):
-        """
-        Identify top features associated with contamination status by analyzing
-        statistical results from ALL table types (raw, normalized, etc.) for each
-        taxonomic level. Features are ranked by effect size and significance, with
-        separate lists for contaminated and pristine associations.
-        
-        Steps:
-            1. For each taxonomic level, collect results from all table types 
-               and tests
-            2. For each feature, find its most significant association across 
-               all table types
-            3. Classify features as contaminated-associated (positive effect) or 
-               pristine-associated (negative effect)
-            4. Sort features by effect size magnitude and then by significance 
-               (p-value)
-            5. Save the top features to class attributes
-        
-        Note: Each feature is represented only once (by its most significant 
-              association)
-        """
-        # Initialize lists to store classified features
-        contaminated_features = []
-        pristine_features = []
-        
-        # Define column mappings for different statistical tests
-        TEST_COLUMN_MAP = {
-            'ttest': {
-                'effect': 'mean_difference',  # Primary effect size measure
-                'alt_effect': 'cohens_d',     # Alternative effect size measure
-                'p_value': 'p_value'          # Significance value
-            },
-            'mwub': {
-                'effect': 'effect_size_r',    # Rank-biserial correlation effect size
-                'alt_effect': 'median_difference',  # Alternative effect measure
-                'p_value': 'p_value'
-            },
-            'kwb': {
-                'effect': 'epsilon_squared',  # Variance explained effect size
-                'p_value': 'p_value'
-            },
-            'fisher': {
-                'effect': 'proportion_diff',  # Difference in proportion
-                'alt_effect': 'odds_ratio',   # Alternative effect measure
-                'p_value': 'p_value'
-            }
-        }
-        
-        # Process each taxonomic level (from phylum to genus)
-        for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            # Dictionary to store best result per feature at this level
-            # Format: {feature: {'p_value': float, 'effect': float, 'table_type': str, 'test': str}}
-            level_features = {}
-            
-            # Collect results from all table types for this level
-            for table_type in self.stats:
-                # Skip if no results for this table type
-                if table_type not in self.stats:
-                    continue
-                    
-                for test_name, test_results in self.stats[table_type].items():
-                    # Skip visualization results (PCA/t-SNE)
-                    if test_name in ['pca', 'tsne']:
-                        continue
-                        
-                    # Skip if no results for this level
-                    if level not in test_results:
-                        continue
-                        
-                    # Get results DataFrame for this test and level
-                    df = test_results[level]
-                    
-                    # Process each feature in the results
-                    for _, row in df.iterrows():
-                        feature = row['feature']
-                        p_value = row['p_value']
-                        
-                        # Skip non-significant results (p > 0.05)
-                        if pd.isna(p_value) or p_value > 0.05:
-                            continue
-                            
-                        # Get test configuration
-                        if test_name not in TEST_COLUMN_MAP:
-                            continue
-                        config = TEST_COLUMN_MAP[test_name]
-                        
-                        # Get effect size - try primary then alternative
-                        effect = None
-                        if config['effect'] in row:
-                            effect = row[config['effect']]
-                        elif 'alt_effect' in config and config['alt_effect'] in row:
-                            effect = row[config['alt_effect']]
-                        
-                        # Skip if no effect size found
-                        if effect is None:
-                            continue
-                        
-                        # Check if this is the best result for this feature
-                        current_best = level_features.get(feature, None)
-                        if current_best is None or p_value < current_best['p_value']:
-                            level_features[feature] = {
-                                'p_value': p_value,
-                                'effect': effect,
-                                'table_type': table_type,
-                                'test': test_name
-                            }
-            
-            # Classify features for this level
-            for feature, result in level_features.items():
-                feature_data = {
-                    'feature': feature,
-                    'level': level,
-                    'table_type': result['table_type'],
-                    'test': result['test'],
-                    'effect': result['effect'],
-                    'p_value': result['p_value']
-                }
-                
-                if result['effect'] > 0:
-                    contaminated_features.append(feature_data)
-                else:
-                    pristine_features.append(feature_data)
-        
-        # Sort features by effect size magnitude (absolute value) then by significance
-        # Priority: 1. Strongest effects (large |effect|) 2. Most significant (low p-value)
-        key_func = lambda x: (-abs(x['effect']), x['p_value'])
-        
-        contaminated_features = sorted(contaminated_features, key=key_func)
-        pristine_features = sorted(pristine_features, key=key_func)
-        
-        # Store sorted results as class attributes
-        self.top_contaminated_features = contaminated_features
-        self.top_pristine_features = pristine_features
-        
-        # Log summary of findings
-        logger.info(f"Identified {len(contaminated_features)} contaminated-associated features across all table types")
-        logger.info(f"Identified {len(pristine_features)} pristine-associated features across all table types")
-        
-        # Optionally save to files
-        self._save_top_features(contaminated_features, pristine_features, Path(self.project_dir.tables) / 'stats' / 'top_features')
-
-    def _save_top_features(self, contaminated_features: List[dict], pristine_features: List[dict], base_dir: Path):
-        """
-        Save top feature associations to CSV files.
-        
-        Creates three files:
-        1. Contaminated-associated features
-        2. Pristine-associated features
-        3. Combined report with all significant associations
-        
-        Files are saved in: {project_dir}/tables/top_features/
-        
-        Args:
-            contaminated_features: List of dictionaries for contamination-associated features
-            pristine_features: List of dictionaries for pristine-associated features
-        """
+    
+    def _identify_top_features(self):
+        """Identify top differentiating features"""
+        analyzer = TopFeaturesAnalyzer(self.cfg, self.verbose)
+        self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
+            self.stats, DEFAULT_GROUP_COLUMN
+        )
+        self._save_top_features()
+    
+    def _save_top_features(self):
+        """Save top feature associations to CSV files"""
         # Create output directory
         output_dir = Path(self.project_dir.tables) / "top_features"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -858,8 +1238,8 @@ class AmpliconData:
         timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
         
         # Create DataFrames from feature lists
-        contam_df = pd.DataFrame(contaminated_features)
-        pristine_df = pd.DataFrame(pristine_features)
+        contam_df = pd.DataFrame(self.top_contaminated_features)
+        pristine_df = pd.DataFrame(self.top_pristine_features)
         
         # Add direction column
         if not contam_df.empty:
@@ -891,5 +1271,3 @@ class AmpliconData:
             logger.info(f"Saved latest features to {latest_path}")
         else:
             logger.warning("No significant features found to save")
-
-   
