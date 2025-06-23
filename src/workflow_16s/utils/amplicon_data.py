@@ -262,8 +262,8 @@ class Plotter:
             )
             # Save figure and store path
             fig_path = self.output_dir / f"sample_map_{color_col}.png"
-            fig.savefig(fig_path, bbox_inches='tight')
-            plt.close(fig)
+            #fig.savefig(fig_path, bbox_inches='tight')
+            #plt.close(fig)
             figure_paths[color_col] = fig_path
             if self.verbose:
                 logger.info(f"Saved sample map to {fig_path}")
@@ -391,8 +391,8 @@ class Plotter:
         
         # Save figure
         fig_path = self.output_dir / f"pcoa_{transformation or 'raw'}_{x}_{y}.png"
-        fig.savefig(fig_path, bbox_inches='tight')
-        plt.close(fig)
+        #fig.savefig(fig_path, bbox_inches='tight')
+        #plt.close(fig)
         
         if self.verbose:
             logger.info(f"Saved PCoA plot to {fig_path}")
@@ -443,8 +443,8 @@ class Plotter:
         
         # Save figure
         fig_path = self.output_dir / f"pca_{transformation or 'raw'}_{x}_{y}.png"
-        fig.savefig(fig_path, bbox_inches='tight')
-        plt.close(fig)
+        #fig.savefig(fig_path, bbox_inches='tight')
+        #plt.close(fig)
         
         if self.verbose:
             logger.info(f"Saved PCA plot to {fig_path}")
@@ -494,8 +494,8 @@ class Plotter:
         
         # Save figure
         fig_path = self.output_dir / f"{mode.lower()}_{transformation or 'raw'}_{x}_{y}.png"
-        fig.savefig(fig_path, bbox_inches='tight')
-        plt.close(fig)
+        #fig.savefig(fig_path, bbox_inches='tight')
+        #plt.close(fig)
         
         if self.verbose:
             logger.info(f"Saved {mode} plot to {fig_path}")
