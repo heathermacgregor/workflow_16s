@@ -70,7 +70,12 @@ from workflow_16s.stats.tests import (
     ttest 
 )
 from workflow_16s.figures.html_report import HTMLReport
-from workflow_16s.figures.merged.merged import sample_map_categorical
+from workflow_16s.figures.merged.merged import (
+    mds as plot_mds, 
+    pca as plot_pca, 
+    pcoa as plot_pcoa, 
+    sample_map_categorical
+)
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -336,110 +341,187 @@ class Plotter:
         df = table_to_dataframe(table).T
         return umap(df, n_components, random_state)
     
+    def generate_pcoa_plot(
+        self,
+        pcoa_result: PCoA,
+        metadata: pd.DataFrame,
+        color_col: str = 'dataset_name',
+        symbol_col: str = 'nuclear_contamination_status',
+        transformation: Optional[str] = None,
+        x: int = 1,
+        y: int = 2,
+        **kwargs
+    ) -> Tuple[Any, Any]:
+        """
+        Generate PCoA plot from precomputed results
+        
+        Args:
+            pcoa_result:     PCoA results object
+            metadata:        Sample metadata
+            color_col:        Column for coloring points
+            symbol_col:       Column for point symbols
+            transformation:  Data transformation applied
+            x:               Component for x-axis
+            y:               Component for y-axis
+            
+        Returns:
+            Tuple of figure and color dictionary
+        """
+        components = pcoa_result.samples
+        proportion_explained = pcoa_result.proportion_explained
+        
+        fig, colordict = plot_pcoa(
+            components=components,
+            proportion_explained=proportion_explained,
+            metadata=metadata,
+            color_col=color_col,
+            symbol_col=symbol_col,
+            output_dir=self.output_dir,
+            transformation=transformation,
+            x=x,
+            y=y,
+            **kwargs
+        )
+        return fig, colordict
+    
+    def generate_pca_plot(
+        self,
+        pca_result: Dict[str, Any],
+        metadata: pd.DataFrame,
+        color_col: str = 'dataset_name',
+        symbol_col: str = 'nuclear_contamination_status',
+        transformation: Optional[str] = None,
+        x: int = 1,
+        y: int = 2,
+        **kwargs
+    ) -> Tuple[Any, Any]:
+        """
+        Generate PCA plot from precomputed results
+        
+        Args:
+            pca_result:      PCA results dictionary
+            metadata:        Sample metadata
+            color_col:        Column for coloring points
+            symbol_col:       Column for point symbols
+            transformation:  Data transformation applied
+            x:               Component for x-axis
+            y:               Component for y-axis
+            
+        Returns:
+            Tuple of figure and color dictionary
+        """
+        components = pca_result['components']
+        proportion_explained = pca_result['exp_var_ratio']
+        
+        fig, colordict = plot_pca(
+            components=components,
+            proportion_explained=proportion_explained,
+            metadata=metadata,
+            color_col=color_col,
+            symbol_col=symbol_col,
+            output_dir=self.output_dir,
+            transformation=transformation,
+            x=x,
+            y=y,
+            **kwargs
+        )
+        return fig, colordict
+    
+    def generate_mds_plot(
+        self,
+        coordinates: pd.DataFrame,
+        metadata: pd.DataFrame,
+        mode: str = 'UMAP',
+        group_col: str = 'dataset_name',
+        symbol_col: str = 'nuclear_contamination_status',
+        transformation: Optional[str] = None,
+        x: int = 1,
+        y: int = 2,
+        **kwargs
+    ) -> Tuple[Any, Any]:
+        """
+        Generate MDS plot (t-SNE or UMAP) from precomputed coordinates
+        
+        Args:
+            coordinates:     Coordinates DataFrame
+            metadata:        Sample metadata
+            mode:            Reduction method ('UMAP' or 't-SNE')
+            group_col:        Column for grouping points
+            symbol_col:       Column for point symbols
+            transformation:  Data transformation applied
+            x:               Dimension for x-axis
+            y:               Dimension for y-axis
+            
+        Returns:
+            Tuple of figure and color dictionary
+        """
+        fig, colordict = plot_mds(
+            df=coordinates,
+            metadata=metadata,
+            group_col=group_col,
+            symbol_col=symbol_col,
+            output_dir=self.output_dir,
+            transformation=transformation,
+            mode=mode,
+            x=x,
+            y=y,
+            **kwargs
+        )
+        return fig, colordict
+    
     def generate_ordination_plot(
         self,
         method: str,
         table: Table,
         metadata: pd.DataFrame,
-        color_column: str = 'nuclear_contamination_status',
+        color_col: str = 'dataset_name',
+        symbol_col: str = 'nuclear_contamination_status',
+        transformation: Optional[str] = None,
         **kwargs
-    ) -> plt.Figure:
+    ) -> Any:
         """
-        Generate ordination plot (PCA, PCoA, MDS)
+        Generate ordination plot (PCA, PCoA, t-SNE, UMAP) with proper calculation and plotting separation
         
         Args:
-            method:       Ordination method ('pca', 'pcoa', 'tsne', 'umap')
-            table:        BIOM feature table
-            metadata:     Sample metadata
-            color_column: Column to use for coloring points
-            **kwargs:     Additional plot arguments
+            method:         Ordination method ('pca', 'pcoa', 'tsne', 'umap')
+            table:          BIOM feature table
+            metadata:       Sample metadata
+            color_col:      Column for coloring points
+            symbol_col:     Column for point symbols
+            transformation: Data transformation applied
             
         Returns:
-            Matplotlib figure object
+            Generated figure
         """
-        method_funcs = {
-            'pca': self.compute_pca,
-            'pcoa': self.compute_pcoa,
-            'tsne': self.compute_tsne,
-            'umap': self.compute_umap
-        }
-        
-        if method not in method_funcs:
+        # Compute ordination
+        if method == 'pcoa':
+            pcoa_result = self.compute_pcoa(table)
+            self.ordination_results['pcoa'] = pcoa_result
+            fig, _ = self.generate_pcoa_plot(
+                pcoa_result, metadata, color_col, symbol_col, transformation, **kwargs
+            )
+        elif method == 'pca':
+            pca_result = self.compute_pca(table)
+            self.ordination_results['pca'] = pca_result
+            fig, _ = self.generate_pca_plot(
+                pca_result, metadata, color_col, symbol_col, transformation, **kwargs
+            )
+        elif method == 'tsne':
+            coordinates = self.compute_tsne(table)
+            self.ordination_results['tsne'] = coordinates
+            fig, _ = self.generate_mds_plot(
+                coordinates, metadata, 't-SNE', color_col, symbol_col, transformation, **kwargs
+            )
+        elif method == 'umap':
+            coordinates = self.compute_umap(table)
+            self.ordination_results['umap'] = coordinates
+            fig, _ = self.generate_mds_plot(
+                coordinates, metadata, 'UMAP', color_col, symbol_col, transformation, **kwargs
+            )
+        else:
             raise ValueError(f"Unsupported ordination method: {method}")
         
-        # Compute ordination
-        ordination_result = method_funcs[method](table)
-        self.ordination_results[method] = ordination_result
-        
-        # Generate plot
-        fig = self._create_ordination_plot(ordination_result, method, metadata, color_column)
         self.figures[method] = fig
-        return fig
-    
-    def _create_ordination_plot(
-        self,
-        ordination_result: Union[Dict, PCoA, pd.DataFrame],
-        method: str,
-        metadata: pd.DataFrame,
-        color_column: str
-    ) -> plt.Figure:
-        """
-        Create an ordination plot from computed results.
-        
-        Args:
-            ordination_result: Computed ordination results
-            method:            Ordination method used
-            metadata:          Sample metadata
-            color_column:      Column to use for coloring points
-            
-        Returns:
-            Matplotlib figure object
-        """
-        # Extract coordinates
-        if method == 'pca':
-            coordinates = ordination_result['components']
-            x_label = 'PC1'
-            y_label = 'PC2'
-        elif method == 'pcoa':
-            coordinates = ordination_result.samples
-            x_label = 'PCoA1'
-            y_label = 'PCoA2'
-        else:  # t-SNE or UMAP
-            coordinates = ordination_result
-            x_label = f'{method.upper()}1'
-            y_label = f'{method.upper()}2'
-        
-        # Prepare plot data
-        plot_data = coordinates.iloc[:, :2].reset_index()
-        plot_data = plot_data.rename(columns={'index': 'sample_id'})
-        plot_data = plot_data.merge(
-            metadata, left_on='sample_id', right_on='#sampleid', how='left'
-        )
-        
-        # Create plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        groups = plot_data[color_column].unique()
-        
-        for group in groups:
-            group_data = plot_data[plot_data[color_column] == group]
-            ax.scatter(
-                group_data.iloc[:, 1], 
-                group_data.iloc[:, 2], 
-                label=group, 
-                alpha=0.7
-            )
-        
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
-        ax.set_title(f'{method.upper()} Plot')
-        ax.legend(title=color_column)
-        ax.grid(True)
-        
-        # Save figure
-        output_path = self.output_dir / f"{method}_plot.png"
-        plt.savefig(output_path)
-        plt.close()
-        
         return fig
 
 
@@ -1057,7 +1139,6 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
-                )
                 for level in levels:
                     source_table = get_source(level)
                     try:
