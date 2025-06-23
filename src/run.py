@@ -529,7 +529,7 @@ def downstream(cfg, logger) -> None:
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=False
     )
-    print(data.figures)
+    print(data.figures.keys())
     #print(data.meta['nuclear_contamination_status'].value_counts())
     #print(data.stats)
     #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
