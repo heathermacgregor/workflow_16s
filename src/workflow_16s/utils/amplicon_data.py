@@ -937,7 +937,8 @@ class AmpliconData:
             meta_path = Path(self.project_dir.metadata_per_dataset).joinpath(
                 *tail_parts, "sample-metadata.tsv"
             )
-            meta_paths.append(meta_path)
+            if meta_path.exists():
+                meta_paths.append(meta_path)
             
         if self.verbose:
             logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
@@ -1045,21 +1046,23 @@ class AmpliconData:
                 self.tables["filtered"] = {}
                 self.tables["filtered"][self.mode] = filtered_table
                 progress.update(main_task, advance=1)
+                table = filtered_table  # Use filtered table for next steps
             
             # Apply normalization if enabled (requires prior filtering)
             if normalization_enabled:
                 if self.verbose:
                     logger.info("Applying normalization to table...")
-                normalized_table = normalize_table(filtered_table, axis=1)
+                normalized_table = normalize_table(table, axis=1)
                 self.tables["normalized"] = {}
                 self.tables["normalized"][self.mode] = normalized_table
                 progress.update(main_task, advance=1)
+                table = normalized_table  # Use normalized table for next step
             
             # Apply CLR transformation if enabled (requires prior normalization)
             if clr_transformation_enabled:
                 if self.verbose:
                     logger.info("Applying CLR transformation to table...")
-                clr_transformed_table = clr_transform_table(normalized_table)
+                clr_transformed_table = clr_transform_table(table)
                 self.tables["clr_transformed"] = {}
                 self.tables["clr_transformed"][self.mode] = clr_transformed_table
                 progress.update(main_task, advance=1)
@@ -1073,12 +1076,13 @@ class AmpliconData:
             if table_type not in self.tables:
                 continue
                 
+            current_table = self.tables[table_type][self.mode]
             self.tables[table_type] = self._run_processing_step(
                 process_name=f"Collapsing {table_type} taxonomy",
                 process_func=collapse_taxa,
                 levels=tax_levels,
                 func_args=(),
-                get_source=lambda level: self.tables[table_type][self.mode],
+                get_source=lambda level: current_table,
                 log_template=f"Collapsed {table_type} to {{level}} level"
             )
     
@@ -1087,6 +1091,7 @@ class AmpliconData:
         if not self.cfg['features']['presence_absence']:
             return
             
+        # Only create presence/absence for raw tables
         self.tables["presence_absence"] = self._run_processing_step(
             process_name="Converting to presence/absence",
             process_func=presence_absence,
@@ -1127,10 +1132,7 @@ class AmpliconData:
             logger.info(f"{process_name}...")
             for level in levels:
                 source_table = get_source(level)
-                try:
-                    processed = process_func(source_table, *func_args)
-                except:
-                    processed = process_func(source_table, level, *func_args)
+                processed = process_func(source_table, level, *func_args)
                 processed_tables[level] = processed
                 self._log_level_action(level, log_template, log_action)
         else:
@@ -1139,13 +1141,9 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
-                )
                 for level in levels:
                     source_table = get_source(level)
-                    try:
-                        processed = process_func(source_table, *func_args)
-                    except:
-                        processed = process_func(source_table, level, *func_args)
+                    processed = process_func(source_table, level, *func_args)
                     processed_tables[level] = processed
                     progress.update(task, advance=1)
                     
@@ -1184,7 +1182,7 @@ class AmpliconData:
                 for level, table in level_tables.items():
                     level_dir = type_dir / level
                     level_dir.mkdir(parents=True, exist_ok=True)
-                    output_path = level_dir / f"feature-table.biom"
+                    output_path = level_dir / "feature-table.biom"
                     # Save table
                     export_h5py(table, output_path)
                     if self.verbose:
@@ -1210,6 +1208,10 @@ class AmpliconData:
             self.stats[table_type] = {}
             enabled_tests = self._get_enabled_tests(table_type)
             
+            # Skip if no tests enabled for this table type
+            if not enabled_tests:
+                continue
+                
             with create_progress() as progress:
                 task_id = progress.add_task(
                     f"[white]Analyzing {table_type} tables", 
@@ -1231,25 +1233,37 @@ class AmpliconData:
                     
                     # Generate ordination plots
                     if 'pca' in enabled_tests:
-                        fig = self.plotter.generate_ordination_plot(
-                            'pca', table, self.meta
-                        )
-                        self.figures[f"pca_{table_type}_{level}"] = fig
+                        try:
+                            fig = self.plotter.generate_ordination_plot(
+                                'pca', table, self.meta
+                            )
+                            self.figures[f"pca_{table_type}_{level}"] = fig
+                        except Exception as e:
+                            logger.error(f"PCA failed for {table_type}/{level}: {str(e)}")
                     if 'pcoa' in enabled_tests:
-                        fig = self.plotter.generate_ordination_plot(
-                            'pcoa', table, self.meta
-                        )
-                        self.figures[f"pcoa_{table_type}_{level}"] = fig
+                        try:
+                            fig = self.plotter.generate_ordination_plot(
+                                'pcoa', table, self.meta
+                            )
+                            self.figures[f"pcoa_{table_type}_{level}"] = fig
+                        except Exception as e:
+                            logger.error(f"PCoA failed for {table_type}/{level}: {str(e)}")
                     if 'tsne' in enabled_tests:
-                        fig = self.plotter.generate_ordination_plot(
-                            'tsne', table, self.meta
-                        )
-                        self.figures[f"tsne_{table_type}_{level}"] = fig
+                        try:
+                            fig = self.plotter.generate_ordination_plot(
+                                'tsne', table, self.meta
+                            )
+                            self.figures[f"tsne_{table_type}_{level}"] = fig
+                        except Exception as e:
+                            logger.error(f"t-SNE failed for {table_type}/{level}: {str(e)}")
                     if 'umap' in enabled_tests:
-                        fig = self.plotter.generate_ordination_plot(
-                            'umap', table, self.meta
-                        )
-                        self.figures[f"umap_{table_type}_{level}"] = fig
+                        try:
+                            fig = self.plotter.generate_ordination_plot(
+                                'umap', table, self.meta
+                            )
+                            self.figures[f"umap_{table_type}_{level}"] = fig
+                        except Exception as e:
+                            logger.error(f"UMAP failed for {table_type}/{level}: {str(e)}")
                     
                     progress.advance(task_id)
             
@@ -1258,6 +1272,10 @@ class AmpliconData:
     
     def _get_enabled_tests(self, table_type: str) -> List[str]:
         """Get enabled tests for a table type from config"""
+        # Ensure config exists for this table type
+        if table_type not in self.cfg['stats']:
+            return []
+            
         return [
             test for test in [
                 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 
@@ -1292,7 +1310,7 @@ class AmpliconData:
                         if 'p_value' in result_df.columns:
                             result_df = result_df.sort_values(by='p_value', ascending=True)
                         # Save DataFrame to CSV
-                        result_df.set_index('feature').to_csv(output_path, index=True)
+                        result_df.to_csv(output_path, index=False)
                             
                         if self.verbose:
                             logger.info(
@@ -1327,16 +1345,12 @@ class AmpliconData:
         # Add direction column
         if not contam_df.empty:
             contam_df['direction'] = 'contaminated'
-        if not pristine_df.empty:
-            pristine_df['direction'] = 'pristine'
-        
-        # Save separate files
-        if not contam_df.empty:
             contam_path = output_dir / f"contaminated_features_{timestamp}.csv"
             contam_df.to_csv(contam_path, index=False)
             logger.info(f"Saved {len(contam_df)} contaminated features to {contam_path}")
         
         if not pristine_df.empty:
+            pristine_df['direction'] = 'pristine'
             pristine_path = output_dir / f"pristine_features_{timestamp}.csv"
             pristine_df.to_csv(pristine_path, index=False)
             logger.info(f"Saved {len(pristine_df)} pristine features to {pristine_path}")
@@ -1354,3 +1368,85 @@ class AmpliconData:
             logger.info(f"Saved latest features to {latest_path}")
         else:
             logger.warning("No significant features found to save")
+
+
+# ================================= MAIN EXECUTION ================================== #
+if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger('workflow_16s')
+    
+    # Sample configuration - should be replaced with real configuration
+    cfg = {
+        'features': {
+            'filter': True,
+            'normalize': True,
+            'clr_transform': True,
+            'presence_absence': True
+        },
+        'stats': {
+            'raw': {
+                'ttest': True,
+                'mwu_bonferroni': True,
+                'kruskal_bonferroni': True,
+                'pca': True,
+                'pcoa': True,
+                'tsne': True,
+                'umap': True
+            },
+            'filtered': {
+                'ttest': True,
+                'mwu_bonferroni': True,
+                'kruskal_bonferroni': True,
+                'pca': True,
+                'pcoa': True
+            },
+            'normalized': {
+                'ttest': True,
+                'pca': True
+            },
+            'clr_transformed': {
+                'ttest': True,
+                'pca': True
+            },
+            'presence_absence': {
+                'fisher': True
+            }
+        },
+        'figures': {
+            'map': True
+        }
+    }
+    
+    # Sample project directory structure
+    class ProjectDirs:
+        def __init__(self, base_path):
+            self.base = Path(base_path)
+            self.data = self.base / "data"
+            self.figures = self.base / "figures"
+            self.tables = self.base / "tables"
+            self.qiime_data_per_dataset = self.base / "qiime_data_per_dataset"
+            self.metadata_per_dataset = self.base / "metadata_per_dataset"
+    
+    # Create project directories
+    base_path = Path.cwd() / "amplicon_analysis"
+    project_dir = ProjectDirs(base_path)
+    
+    # Ensure directories exist
+    project_dir.data.mkdir(parents=True, exist_ok=True)
+    project_dir.figures.mkdir(parents=True, exist_ok=True)
+    project_dir.tables.mkdir(parents=True, exist_ok=True)
+    project_dir.qiime_data_per_dataset.mkdir(parents=True, exist_ok=True)
+    project_dir.metadata_per_dataset.mkdir(parents=True, exist_ok=True)
+    
+    # Run the analysis
+    try:
+        logger.info("Starting amplicon data analysis")
+        amplicon_data = AmpliconData(cfg, project_dir, mode='genus', verbose=True)
+        logger.info("Analysis completed successfully")
+    except Exception as e:
+        logger.error(f"Analysis failed: {str(e)}")
+        raise
