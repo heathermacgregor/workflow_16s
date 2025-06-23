@@ -240,9 +240,9 @@ class Plotter:
         metadata: pd.DataFrame,
         color_columns: List[str] = ['dataset_name', 'nuclear_contamination_status'],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, Path]:
         """
-        Generate sample location maps
+        Generate sample location maps and save them
         
         Args:
             metadata:      Sample metadata with location data
@@ -250,9 +250,9 @@ class Plotter:
             **kwargs:      Additional plot arguments
             
         Returns:
-            Dictionary of generated figures keyed by color column
+            Dictionary of generated figure paths keyed by color column
         """
-        self.figures["map"] = {}
+        figure_paths = {}
         for color_col in color_columns:
             fig, _ = sample_map_categorical(
                 metadata=metadata,
@@ -260,8 +260,14 @@ class Plotter:
                 color_col=color_col,
                 **kwargs
             )
-            self.figures["map"][color_col] = fig
-        return self.figures["map"]
+            # Save figure and store path
+            fig_path = self.output_dir / f"sample_map_{color_col}.png"
+            fig.savefig(fig_path, bbox_inches='tight')
+            plt.close(fig)
+            figure_paths[color_col] = fig_path
+            if self.verbose:
+                logger.info(f"Saved sample map to {fig_path}")
+        return figure_paths
     
     def compute_pca(
         self,
@@ -351,9 +357,9 @@ class Plotter:
         x: int = 1,
         y: int = 2,
         **kwargs
-    ) -> Tuple[Any, Any]:
+    ) -> Path:
         """
-        Generate PCoA plot from precomputed results
+        Generate PCoA plot from precomputed results and save it
         
         Args:
             pcoa_result:     PCoA results object
@@ -365,7 +371,7 @@ class Plotter:
             y:               Component for y-axis
             
         Returns:
-            Tuple of figure and color dictionary
+            Path to saved figure
         """
         components = pcoa_result.samples
         proportion_explained = pcoa_result.proportion_explained
@@ -382,7 +388,16 @@ class Plotter:
             y=y,
             **kwargs
         )
-        return fig, colordict
+        
+        # Save figure
+        fig_path = self.output_dir / f"pcoa_{transformation or 'raw'}_{x}_{y}.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        plt.close(fig)
+        
+        if self.verbose:
+            logger.info(f"Saved PCoA plot to {fig_path}")
+            
+        return fig_path
     
     def generate_pca_plot(
         self,
@@ -394,9 +409,9 @@ class Plotter:
         x: int = 1,
         y: int = 2,
         **kwargs
-    ) -> Tuple[Any, Any]:
+    ) -> Path:
         """
-        Generate PCA plot from precomputed results
+        Generate PCA plot from precomputed results and save it
         
         Args:
             pca_result:      PCA results dictionary
@@ -408,7 +423,7 @@ class Plotter:
             y:               Component for y-axis
             
         Returns:
-            Tuple of figure and color dictionary
+            Path to saved figure
         """
         components = pca_result['components']
         proportion_explained = pca_result['exp_var_ratio']
@@ -425,7 +440,16 @@ class Plotter:
             y=y,
             **kwargs
         )
-        return fig, colordict
+        
+        # Save figure
+        fig_path = self.output_dir / f"pca_{transformation or 'raw'}_{x}_{y}.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        plt.close(fig)
+        
+        if self.verbose:
+            logger.info(f"Saved PCA plot to {fig_path}")
+            
+        return fig_path
     
     def generate_mds_plot(
         self,
@@ -438,9 +462,9 @@ class Plotter:
         x: int = 1,
         y: int = 2,
         **kwargs
-    ) -> Tuple[Any, Any]:
+    ) -> Path:
         """
-        Generate MDS plot (t-SNE or UMAP) from precomputed coordinates
+        Generate MDS plot (t-SNE or UMAP) from precomputed coordinates and save it
         
         Args:
             coordinates:     Coordinates DataFrame
@@ -453,7 +477,7 @@ class Plotter:
             y:               Dimension for y-axis
             
         Returns:
-            Tuple of figure and color dictionary
+            Path to saved figure
         """
         fig, colordict = plot_mds(
             df=coordinates,
@@ -467,7 +491,16 @@ class Plotter:
             y=y,
             **kwargs
         )
-        return fig, colordict
+        
+        # Save figure
+        fig_path = self.output_dir / f"{mode.lower()}_{transformation or 'raw'}_{x}_{y}.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        plt.close(fig)
+        
+        if self.verbose:
+            logger.info(f"Saved {mode} plot to {fig_path}")
+            
+        return fig_path
     
     def generate_ordination_plot(
         self,
@@ -478,9 +511,9 @@ class Plotter:
         symbol_col: str = 'nuclear_contamination_status',
         transformation: Optional[str] = None,
         **kwargs
-    ) -> Any:
+    ) -> Path:
         """
-        Generate ordination plot (PCA, PCoA, t-SNE, UMAP) with proper calculation and plotting separation
+        Generate ordination plot (PCA, PCoA, t-SNE, UMAP) and save it
         
         Args:
             method:         Ordination method ('pca', 'pcoa', 'tsne', 'umap')
@@ -491,38 +524,40 @@ class Plotter:
             transformation: Data transformation applied
             
         Returns:
-            Generated figure
+            Path to saved figure
         """
+        fig_path = None
+        
         # Compute ordination
         if method == 'pcoa':
             pcoa_result = self.compute_pcoa(table)
             self.ordination_results['pcoa'] = pcoa_result
-            fig, _ = self.generate_pcoa_plot(
+            fig_path = self.generate_pcoa_plot(
                 pcoa_result, metadata, color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'pca':
             pca_result = self.compute_pca(table)
             self.ordination_results['pca'] = pca_result
-            fig, _ = self.generate_pca_plot(
+            fig_path = self.generate_pca_plot(
                 pca_result, metadata, color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'tsne':
             coordinates = self.compute_tsne(table)
             self.ordination_results['tsne'] = coordinates
-            fig, _ = self.generate_mds_plot(
+            fig_path = self.generate_mds_plot(
                 coordinates, metadata, 't-SNE', color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'umap':
             coordinates = self.compute_umap(table)
             self.ordination_results['umap'] = coordinates
-            fig, _ = self.generate_mds_plot(
+            fig_path = self.generate_mds_plot(
                 coordinates, metadata, 'UMAP', color_col, symbol_col, transformation, **kwargs
             )
         else:
             raise ValueError(f"Unsupported ordination method: {method}")
         
-        self.figures[method] = fig
-        return fig
+        self.figures[method] = fig_path
+        return fig_path
 
 
 # ================================== TOP FEATURES ANALYZER ================================== #
@@ -1141,7 +1176,6 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
-                )
                 for level in levels:
                     source_table = get_source(level)
                     processed = process_func(source_table, level, *func_args)
@@ -1203,70 +1237,75 @@ class AmpliconData:
     def _run_statistical_analyses(self):
         """Run all configured statistical analyses"""
         self.stats_analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
-        self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
         
+        # Create plotter if not already created
+        if not hasattr(self, 'plotter'):
+            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
+        
+        total_plots = 0
+        # First count total plots to create for progress tracking
         for table_type, tables in self.tables.items():
-            self.stats[table_type] = {}
             enabled_tests = self._get_enabled_tests(table_type)
-            
-            # Skip if no tests enabled for this table type
             if not enabled_tests:
                 continue
+            for level in tables:
+                for test_name in enabled_tests:
+                    if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
+                        total_plots += 1
+        
+        with create_progress() as progress:
+            plot_task = progress.add_task(
+                "[cyan]Generating ordination plots", total=total_plots
+            )
+            
+            for table_type, tables in self.tables.items():
+                self.stats[table_type] = {}
+                enabled_tests = self._get_enabled_tests(table_type)
                 
-            with create_progress() as progress:
-                task_id = progress.add_task(
-                    f"[white]Analyzing {table_type} tables", 
-                    total=len(tables)
-                )
-                
-                for level, table in tables.items():
-                    # Run statistical tests
-                    test_results = self.stats_analyzer.run_tests(
-                        table=table,
-                        metadata=self.meta,
-                        group_column=DEFAULT_GROUP_COLUMN,
-                        group_values=DEFAULT_GROUP_COLUMN_VALUES,
-                        enabled_tests=enabled_tests,
-                        progress=progress,
-                        task_id=task_id
+                # Skip if no tests enabled for this table type
+                if not enabled_tests:
+                    continue
+                    
+                with create_progress() as inner_progress:
+                    task_id = inner_progress.add_task(
+                        f"[white]Analyzing {table_type} tables", 
+                        total=len(tables)
                     )
-                    self.stats[table_type][level] = test_results
                     
-                    # Generate ordination plots
-                    if 'pca' in enabled_tests:
-                        try:
-                            fig = self.plotter.generate_ordination_plot(
-                                'pca', table, self.meta
-                            )
-                            self.figures[f"pca_{table_type}_{level}"] = fig
-                        except Exception as e:
-                            logger.error(f"PCA failed for {table_type}/{level}: {str(e)}")
-                    if 'pcoa' in enabled_tests:
-                        try:
-                            fig = self.plotter.generate_ordination_plot(
-                                'pcoa', table, self.meta
-                            )
-                            self.figures[f"pcoa_{table_type}_{level}"] = fig
-                        except Exception as e:
-                            logger.error(f"PCoA failed for {table_type}/{level}: {str(e)}")
-                    if 'tsne' in enabled_tests:
-                        try:
-                            fig = self.plotter.generate_ordination_plot(
-                                'tsne', table, self.meta
-                            )
-                            self.figures[f"tsne_{table_type}_{level}"] = fig
-                        except Exception as e:
-                            logger.error(f"t-SNE failed for {table_type}/{level}: {str(e)}")
-                    if 'umap' in enabled_tests:
-                        try:
-                            fig = self.plotter.generate_ordination_plot(
-                                'umap', table, self.meta
-                            )
-                            self.figures[f"umap_{table_type}_{level}"] = fig
-                        except Exception as e:
-                            logger.error(f"UMAP failed for {table_type}/{level}: {str(e)}")
-                    
-                    progress.advance(task_id)
+                    for level, table in tables.items():
+                        # Run statistical tests
+                        test_results = self.stats_analyzer.run_tests(
+                            table=table,
+                            metadata=self.meta,
+                            group_column=DEFAULT_GROUP_COLUMN,
+                            group_values=DEFAULT_GROUP_COLUMN_VALUES,
+                            enabled_tests=enabled_tests,
+                            progress=inner_progress,
+                            task_id=task_id
+                        )
+                        self.stats[table_type][level] = test_results
+                        
+                        # Generate ordination plots
+                        for test_name in enabled_tests:
+                            if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
+                                try:
+                                    fig_path = self.plotter.generate_ordination_plot(
+                                        test_name, table, self.meta,
+                                        transformation=table_type
+                                    )
+                                    key = f"{test_name}_{table_type}_{level}"
+                                    self.figures[key] = fig_path
+                                    if self.verbose:
+                                        logger.info(f"Generated {key} plot: {fig_path}")
+                                    
+                                    # Update plot progress
+                                    progress.update(plot_task, advance=1)
+                                except Exception as e:
+                                    logger.error(f"{test_name} failed for {table_type}/{level}: {str(e)}")
+                                    # Still advance progress on error
+                                    progress.update(plot_task, advance=1)
+                        
+                        inner_progress.advance(task_id)
             
             # Save statistical results
             self._save_statistical_results()
