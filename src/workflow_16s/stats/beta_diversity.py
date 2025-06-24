@@ -89,7 +89,7 @@ def pcoa(table: Table, metric: str = DEFAULT_METRIC, n_dimensions: Optional[int]
     sample_ids = df.index.tolist()
     
     # Compute distance matrix
-    dist_matrix = DistanceMatrix(squareform(pdist(df, metric=metric), ids=sample_ids)
+    dist_matrix = DistanceMatrix(squareform(pdist(df, metric=metric), ids=sample_ids))
     
     # Perform PCoA
     pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
