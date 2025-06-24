@@ -301,7 +301,8 @@ def pcoa(
         plot_bgcolor='#fff',
         font_size=18,
         xaxis_title=x_title,
-        yaxis_title=y_title
+        yaxis_title=y_title,
+        showlegend=False
     )
     
     # Save output if requested
@@ -404,7 +405,7 @@ def pca(
             template='heather',
             height=800,
             width=800,
-            showlegend=True,
+            showlegend=False,
             font_family="Helvetica",
             font_color="black",
             font_size=18,
@@ -484,7 +485,8 @@ def mds(
         title_text=mode,
         title_x=0.5,
         xaxis_title=f'{mode}{x}',
-        yaxis_title=f'{mode}{y}'
+        yaxis_title=f'{mode}{y}',
+        showlegend=False
     )
     
     # Save output if requested
