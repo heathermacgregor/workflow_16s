@@ -230,8 +230,9 @@ class StatisticalAnalyzer:
         return None
 
 # ============================= STATISTICAL ANALYZER CLASS ============================ #
+# ============================= ORDINATION CLASS ============================ #
 class Ordination:
-    """Handles all statistical analyses for amplicon data"""
+    """Handles ordination analyses and plotting for amplicon data"""
     
     TEST_CONFIG = {
         'pca': {
@@ -250,21 +251,23 @@ class Ordination:
             'key': 'tsne',
             'func': calculate_tsne,
             'plot_func': plot_mds,
-            'name': 't-SNE'
+            'name': 't-SNE',
+            'plot_kwargs': {'mode': 't-SNE'}
         },
         'umap': {
             'key': 'umap',
             'func': calculate_umap,
             'plot_func': plot_mds,
-            'name': 'UMAP'
+            'name': 'UMAP',
+            'plot_kwargs': {'mode': 'UMAP'}
         }
     }
     
     def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
         self.cfg = cfg
         self.verbose = verbose
-        self.figure_output_dir = output_dir
-        
+        self.figure_output_dir = Path(output_dir)
+    
     def run_tests(
         self,
         table: Table,
@@ -274,22 +277,25 @@ class Ordination:
         transformation: str,
         enabled_tests: List[str],
         progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
+        task_id: Optional[TaskID] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
-        Run statistical tests on a feature table
+        Run ordination analyses and generate plots
         
         Args:
             table:         BIOM feature table
             metadata:      Sample metadata
-            group_column:  Column in metadata to group by
-            group_values:  Values to compare in group_column
-            enabled_tests: List of tests to run
+            color_col:     Column for coloring points
+            symbol_col:    Column for point symbols
+            transformation: Data transformation applied
+            enabled_tests: List of ordination methods to run
             progress:      Rich progress object
             task_id:       Parent task ID
+            **kwargs:      Additional plot arguments (x, y, etc.)
             
         Returns:
-            Dictionary of test results keyed by test name
+            Dictionary of ordination results keyed by method name
         """
         results = {}
         total_tests = len(enabled_tests)
@@ -301,6 +307,9 @@ class Ordination:
                 parent=task_id
             )
         
+        # Filter and align table with metadata
+        table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
+        
         for test_name in enabled_tests:
             if test_name not in self.TEST_CONFIG:
                 continue
@@ -310,37 +319,38 @@ class Ordination:
             
             if self.verbose:
                 logger.info(f"Running {config['name']}...")
-            table, _ = filter_and_reorder_biom_and_metadata(
-                table,
-                metadata
-            )
-            results = config['func'](
-                table=table
-            )
-            results[test_key] = results
+                
+            # Compute ordination
+            ordination_result = config['func'](table=table)
+            results[test_key] = ordination_result
+            
+            # Prepare plot arguments
+            plot_kwargs = config.get('plot_kwargs', {})
+            plot_kwargs.update({
+                'metadata': metadata,
+                'color_col': color_col,
+                'symbol_col': symbol_col,
+                'transformation': transformation,
+                'output_dir': self.figure_output_dir / test_key,
+                **kwargs
+            })
+            
+            # Handle different result types
             if test_key == 'pca':
-                components = results['components']
-                proportion_explained = results['exp_var_ratio']
-                
-                # Create output directory
-                output_dir = self.figure_output_dir / 'pca'
-                output_dir.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Saving PCA plots to: {output_dir}")
-                
-                fig, colordict = plot_pca(
-                    components=components,
-                    proportion_explained=proportion_explained,
-                    metadata=metadata,
-                    color_col=color_col,
-                    symbol_col=symbol_col,
-                    output_dir=self.figure_output_dir,
-                    transformation=transformation,
-                    x=1,
-                    y=2,
-                    **kwargs
-                )
-                print(f"[DEBUG] PCA plot generated successfully")
-                return fig, colordict
+                plot_kwargs.update({
+                    'components': ordination_result['components'],
+                    'proportion_explained': ordination_result['exp_var_ratio']
+                })
+            elif test_key == 'pcoa':
+                plot_kwargs.update({
+                    'components': ordination_result.samples,
+                    'proportion_explained': ordination_result.proportion_explained
+                })
+            else:  # t-SNE or UMAP
+                plot_kwargs['df'] = ordination_result
+            
+            # Generate plot
+            config['plot_func'](**plot_kwargs)
             
             if progress and task_id:
                 progress.update(main_task, advance=1)
