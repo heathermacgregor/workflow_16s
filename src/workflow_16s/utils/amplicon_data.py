@@ -237,35 +237,41 @@ class Ordination:
         'pca': {
             'key': 'pca',
             'func': calculate_pca,
+            'plot_func': plot_pca,
             'name': 'Principal Components Analysis'
         },
         'pcoa': {
             'key': 'pcoa',
             'func': calculate_pcoa,
+            'plot_func': plot_pcoa,
             'name': 'Principal Coordinates Analysis',
         },
         'tsne': {
             'key': 'tsne',
             'func': calculate_tsne,
+            'plot_func': plot_mds,
             'name': 't-SNE'
         },
         'umap': {
             'key': 'umap',
             'func': calculate_umap,
+            'plot_func': plot_mds,
             'name': 'UMAP'
         }
     }
     
-    def __init__(self, cfg: Dict, verbose: bool = False):
+    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
         self.cfg = cfg
         self.verbose = verbose
-    
+        self.figure_output_dir = output_dir
+        
     def run_tests(
         self,
         table: Table,
         metadata: pd.DataFrame,
-        group_column: str,
-        group_values: List[Any],
+        color_col: str,
+        symbol_col: str,
+        transformation: str,
         enabled_tests: List[str],
         progress: Optional[Progress] = None,
         task_id: Optional[TaskID] = None
@@ -308,9 +314,33 @@ class Ordination:
                 table,
                 metadata
             )
-            results[test_key] = config['func'](
+            results = config['func'](
                 table=table
             )
+            results[test_key] = results
+            if test_key == 'pca':
+                components = results['components']
+                proportion_explained = results['exp_var_ratio']
+                
+                # Create output directory
+                output_dir = self.figure_output_dir / 'pca'
+                output_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Saving PCA plots to: {output_dir}")
+                
+                fig, colordict = plot_pca(
+                    components=components,
+                    proportion_explained=proportion_explained,
+                    metadata=metadata,
+                    color_col=color_col,
+                    symbol_col=symbol_col,
+                    output_dir=self.figure_output_dir,
+                    transformation=transformation,
+                    x=x,
+                    y=y,
+                    **kwargs
+                )
+                print(f"[DEBUG] PCA plot generated successfully")
+                return fig, colordict
             
             if progress and task_id:
                 progress.update(main_task, advance=1)
@@ -1173,12 +1203,14 @@ class AmpliconData:
                 self.ordination[table_type] = {}
                 for level, table in level_tables.items():
                     ordination_result = Ordination(
-                        cfg=self.cfg
+                        cfg=self.cfg,
+                        output_dir=self.figure_output_dir
                     ).run_tests(
                         table=table,
                         metadata=self.meta,
-                        group_column='nuclear_contamination_status',
-                        group_values=[True, False],
+                        color_col='dataset_name',
+                        symbol_col='nuclear_contamination_status',
+                        transformation=table_type,
                         enabled_tests=ordination_methods
                     )
                     self.ordination[table_type][level] = ordination_result
