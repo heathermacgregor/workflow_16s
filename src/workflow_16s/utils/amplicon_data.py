@@ -69,6 +69,12 @@ from workflow_16s.stats.tests import (
     mwu_bonferroni, 
     ttest 
 )
+from workflow_16s.stats.beta_diversity import (
+    pcoa as calculate_pcoa,
+    pca as calculate_pca,
+    tsne as calculate_tsne,
+    umap as calculate_umap
+)
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
     mds as plot_mds, 
@@ -222,6 +228,97 @@ class StatisticalAnalyzer:
         elif alt_effect_col and alt_effect_col in result_row:
             return result_row[alt_effect_col]
         return None
+
+# ============================= STATISTICAL ANALYZER CLASS ============================ #
+class Ordination:
+    """Handles all statistical analyses for amplicon data"""
+    
+    TEST_CONFIG = {
+        'pca': {
+            'key': 'pca',
+            'func': calculate_pca,
+            'name': 'Principal Components Analysis'
+        },
+        'pcoa': {
+            'key': 'pcoa',
+            'func': calculate_pcoa,
+            'name': 'Principal Coordinates Analysis',
+        },
+        'tsne': {
+            'key': 'tsne',
+            'func': calculate_tsne,
+            'name': 't-SNE'
+        },
+        'umap': {
+            'key': 'umap',
+            'func': calculate_umap,
+            'name': 'UMAP'
+        }
+    }
+    
+    def __init__(self, cfg: Dict, verbose: bool = False):
+        self.cfg = cfg
+        self.verbose = verbose
+    
+    def run_tests(
+        self,
+        table: Table,
+        metadata: pd.DataFrame,
+        group_column: str,
+        group_values: List[Any],
+        enabled_tests: List[str],
+        progress: Optional[Progress] = None,
+        task_id: Optional[TaskID] = None
+    ) -> Dict[str, Any]:
+        """
+        Run statistical tests on a feature table
+        
+        Args:
+            table:         BIOM feature table
+            metadata:      Sample metadata
+            group_column:  Column in metadata to group by
+            group_values:  Values to compare in group_column
+            enabled_tests: List of tests to run
+            progress:      Rich progress object
+            task_id:       Parent task ID
+            
+        Returns:
+            Dictionary of test results keyed by test name
+        """
+        results = {}
+        total_tests = len(enabled_tests)
+        
+        if progress and task_id:
+            main_task = progress.add_task(
+                f"[white]Running ordination calculations", 
+                total=total_tests,
+                parent=task_id
+            )
+        
+        for test_name in enabled_tests:
+            if test_name not in self.TEST_CONFIG:
+                continue
+                
+            config = self.TEST_CONFIG[test_name]
+            test_key = config['key']
+            
+            if self.verbose:
+                logger.info(f"Running {config['name']}...")
+            table, _ = filter_and_reorder_biom_and_metadata(
+                table,
+                metadata
+            )
+            results[test_key] = config['func'](
+                table=table,
+                metadata=metadata,
+                group_column=group_column,
+                group_column_values=group_values,
+            )
+            
+            if progress and task_id:
+                progress.update(main_task, advance=1)
+                
+        return results
 
 
 # ================================= PLOTTER CLASS ================================== #
@@ -710,190 +807,6 @@ def filter_and_reorder_biom_and_metadata(
 
     return table_reordered, metadata_df
 
-def table_to_dataframe(
-    table: Union[Dict[Any, Any], Table]
-) -> pd.DataFrame:
-    """
-    Convert a BIOM Table or a mapping to a pandas DataFrame.
-
-    Args:
-        table: Input feature table, either a BIOM Table or a dict-like
-               object where keys are sample identifiers and values are feature
-               counts or abundances.
-
-    Returns:
-        df:    A pandas DataFrame of shape (n_samples, n_features).
-    """
-    if isinstance(table, Table):
-        # Convert BIOM Table to DataFrame (features x samples), then transpose
-        df = table.to_dataframe(dense=True).T
-    else:
-        # Construct DataFrame directly from dict-like mapping
-        df = pd.DataFrame(table)
-    return df
-
-def distance_matrix(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = DEFAULT_METRIC
-) -> np.ndarray:
-    """
-    Compute a pairwise distance matrix from a feature table.
-
-    Args:
-        table:  Input feature table as a dict-like, BIOM Table, or DataFrame
-                (samples x features or features x samples).
-        metric: Distance metric name accepted by scipy.spatial.distance.pdist.
-
-    Returns:
-        dm:     A 2D numpy array representing the pairwise distance matrix.
-    """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-    # Compute condensed distance vector and convert to square form
-    dm = squareform(pdist(table.values, metric=metric))
-    return dm
-
-def pcoa(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = DEFAULT_METRIC,
-    n_dimensions: Optional[int] = DEFAULT_N_PCOA
-) -> PCoA:
-    """
-    Perform Principal Coordinates Analysis (PCoA) on a feature table.
-
-    Args:
-        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples).
-        metric:       Distance metric name for computing the distance matrix.
-        n_dimensions: Number of dimensions to return; if None, returns all.
-
-    Returns:
-        A PCoAResults object containing eigenvalues, coordinates, and
-        proportion of variance explained.
-    """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-    # Compute distance matrix
-    dm = distance_matrix(table, metric=metric)
-    dm_df = pd.DataFrame(dm, index=table.index, columns=table.index)
-    # Run PCoA
-    if n_dimensions:
-        return PCoA(dm_df, number_of_dimensions=n_dimensions)
-    return PCoA(dm_df)
-
-def pca(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = DEFAULT_N_PCA
-) -> Dict[str, Any]:
-    """
-    Perform Principal Component Analysis (PCA) on a feature table.
-
-    Args:
-        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples).
-        n_components: Number of principal components to compute.
-
-    Returns:
-        A dictionary with the following keys:
-            - 'components': DataFrame of component scores (samples x components).
-            - 'exp_var_ratio': Array of explained variance ratios per component.
-            - 'exp_var_cumul': Cumulative explained variance ratios.
-            - 'loadings': Array of PCA loadings (features x components).
-    """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-    # Standardize features
-    scaled = StandardScaler().fit_transform(table.values)
-    scaled_df = pd.DataFrame(scaled, index=table.index, columns=table.columns)
-
-    # Fit PCA
-    pca_model = PCA(n_components=n_components)
-    scores = pca_model.fit_transform(scaled_df.values)
-
-    # Prepare results
-    components_df = pd.DataFrame(
-        scores,
-        index=table.index,
-        columns=[f"PC{i+1}" for i in range(n_components)]
-    )
-    exp_var_ratio = pca_model.explained_variance_ratio_
-    exp_var_cumul = np.cumsum(exp_var_ratio)
-    loadings = pca_model.components_.T * np.sqrt(pca_model.explained_variance_)
-
-    return {
-        'components': components_df,
-        'exp_var_ratio': exp_var_ratio,
-        'exp_var_cumul': exp_var_cumul,
-        'loadings': loadings
-    }
-
-def tsne(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = DEFAULT_N_TSNE,
-    random_state: int = DEFAULT_RANDOM_STATE
-) -> pd.DataFrame:
-    """
-    Compute t-distributed Stochastic Neighbor Embedding (t-SNE) reduction.
-
-    Args:
-        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples).
-        n_components: Dimension of the embedded space.
-        random_state: Random seed for reproducibility.
-
-    Returns:
-        tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
-                      coordinates.
-    """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-
-    tsne_arr = TSNE(
-        n_components=n_components, 
-        random_state=random_state
-    ).fit_transform(
-        table.values
-    )
-    tsne_df = pd.DataFrame(
-        tsne_arr,
-        index=table.index,
-        columns=[f"TSNE{i+1}" for i in range(n_components)]
-    )
-    return tsne_df
-
-def umap(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    n_components: int = DEFAULT_N_UMAP,
-    random_state: int = DEFAULT_RANDOM_STATE
-) -> pd.DataFrame:
-    """
-    Compute Uniform Manifold Approximation and Projection (UMAP) reduction.
-
-    Args:
-        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples).
-        n_components: Dimension of the embedded space.
-        random_state: Random seed for reproducibility.
-
-    Returns:
-        umap_df:       DataFrame of shape (n_samples, n_components) with UMAP 
-                       coordinates.
-    """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-
-    umap_arr = UMAP(
-        n_components=n_components,
-        init='random',
-        random_state=random_state
-    ).fit_transform(table.values)
-    umap_df = pd.DataFrame(
-        umap_arr,
-        index=table.index,
-        columns=[f"UMAP{i+1}" for i in range(n_components)]
-    )
-    return umap_df
-
 
 # ================================== AMPLICON DATA CLASS ================================== #
 class AmpliconData:
@@ -913,6 +826,7 @@ class AmpliconData:
         self.table = None
         self.tables = {}
         self.stats = {}
+        self.ordination = {}
         self.figures = {}
         self.ordination_results = {}
         self.top_contaminated_features = []
@@ -1234,27 +1148,18 @@ class AmpliconData:
         # Temporarily skip statistical tests
         print("[DEBUG] Skipping statistical tests for debugging")
         # self._run_statistical_analyses()
-        self._run_ordination_only()
+        self._run_ordination()
         # self._identify_top_features()
     
-    def _run_ordination_only(self):
+    def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
-        print("[DEBUG] Starting ordination analyses for all tables")
-        
-        # Create plotter if needed
-        if not hasattr(self, 'plotter'):
-            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
-        
-        # Define ordination methods to run
-        ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
-        
         # Calculate total plots: (table_types * levels * methods)
         total_plots = 0
         for table_type in self.tables:
             for level in self.tables[table_type]:
                 total_plots += len(ordination_methods)
         
-        print(f"[DEBUG] Total ordination plots to generate: {total_plots}")
+        logger.debug(f"Total ordination plots to generate: {total_plots}")
         
         with create_progress() as progress:
             main_task = progress.add_task(
@@ -1262,28 +1167,20 @@ class AmpliconData:
                 total=total_plots
             ) if total_plots > 0 else None
             
-            # Process all table types and levels
+            # Define ordination methods to run
+            ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
+            
             for table_type, level_tables in self.tables.items():
+                self.ordination[table_type] = {}
                 for level, table in level_tables.items():
-                    print(f"[DEBUG] Processing table type: {table_type}, level: {level}")
-                    
-                    # Run all ordination methods
-                    for method in ordination_methods:
-                        try:
-                            print(f"[DEBUG] Generating {method} for {table_type}/{level}")
-                            fig = self.plotter.generate_ordination_plot(
-                                method, table, self.meta,
-                                transformation=f"{table_type}_{level}"
-                            )
-                            key = f"{method}_{table_type}_{level}"
-                            self.figures[key] = fig
-                            if self.verbose:
-                                logger.info(f"Generated {key} plot")
-                        except Exception as e:
-                            logger.error(f"{method} failed for {table_type}/{level}: {str(e)}")
-                        finally:
-                            if main_task:
-                                progress.update(main_task, advance=1)
+                    ordination_result = Ordination(cfg).run_tests(
+                        table=table,
+                        metadata=self.metadata,
+                        group_column='nuclear_contamination_status',
+                        group_values: List[Any],
+                        enabled_tests=ordination_methods
+                    )
+                    self.ordination[table_type][level] = ordination_result
     
     def _identify_top_features(self):
         """Identify top features associated with contamination status"""
@@ -1291,77 +1188,3 @@ class AmpliconData:
         self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
             self.stats, DEFAULT_GROUP_COLUMN
         )
-
-
-# ================================= MAIN EXECUTION ================================== #
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger('workflow_16s')
-    
-    # Updated configuration with proper ordination settings
-    cfg = {
-        'features': {
-            'filter': True,
-            'normalize': True,
-            'clr_transform': True,
-            'presence_absence': True
-        },
-        'stats': {
-            'raw': {
-                'pca': True,
-                'pcoa': True,
-                'tsne': True,
-                'umap': True
-            },
-            'filtered': {
-                'pca': True,
-                'pcoa': True
-            },
-            'normalized': {
-                'pca': True
-            },
-            'clr_transformed': {
-                'pca': True
-            }
-        },
-        'figures': {
-            'map': True
-        }
-    }
-    
-    # Sample project directory structure
-    class ProjectDirs:
-        def __init__(self, base_path):
-            self.base = Path(base_path)
-            self.data = self.base / "data"
-            self.figures = self.base / "figures"
-            self.tables = self.base / "tables"
-            self.qiime_data_per_dataset = self.base / "qiime_data_per_dataset"
-            self.metadata_per_dataset = self.base / "metadata_per_dataset"
-    
-    # Create project directories
-    base_path = Path.cwd() / "amplicon_analysis"
-    project_dir = ProjectDirs(base_path)
-    
-    # Ensure directories exist
-    project_dir.data.mkdir(parents=True, exist_ok=True)
-    project_dir.figures.mkdir(parents=True, exist_ok=True)
-    project_dir.tables.mkdir(parents=True, exist_ok=True)
-    project_dir.qiime_data_per_dataset.mkdir(parents=True, exist_ok=True)
-    project_dir.metadata_per_dataset.mkdir(parents=True, exist_ok=True)
-    
-    # Run the analysis
-    try:
-        logger.info("Starting amplicon data analysis")
-        amplicon_data = AmpliconData(cfg, project_dir, mode='genus', verbose=True)
-        logger.info("Analysis completed successfully")
-    except Exception as e:
-        logger.error(f"Analysis failed: {str(e)}")
-        # Print detailed traceback
-        import traceback
-        traceback.print_exc()
-        raise
