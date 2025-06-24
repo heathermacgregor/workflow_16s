@@ -385,78 +385,75 @@ def pca(
     x: int = 1, 
     y: int = 2
 ) -> Tuple[go.Figure, Any]:
-    """
-    Generate a PCA plot with metadata annotations and variance explained percentages.
-    
-    Args:
-        components:           PCA coordinates matrix with samples as rows and 
-                              components as columns.
-        proportion_explained: Array of variance explained percentages for each 
-                              component.
-        metadata:             Metadata DataFrame containing color and symbol columns.
-        color_col:            Metadata column name for point colors. Defaults 
-                              to 'dataset_name'.
-        symbol_col:           Metadata column name for point markers. Defaults 
-                              to 'nuclear_contamination_status'.
-        show:                 Whether to display the figure immediately. Defaults 
-                              to False.
-        output_dir:           Directory path to save outputs. Defaults to None.
-        transformation:       Data transformation applied prior to PCA. Defaults 
-                              to None.
-        x:                    Component number for x-axis. Defaults to 1.
-        y:                    Component number for y-axis. Defaults to 2.
-
-    Returns:
-        Tuple containing Plotly figure object and legend figure.
-    """
+    # Validate inputs first
     _validate_metadata(metadata, [color_col, symbol_col])
     
-    data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
-    colordict, _ = marker_color_map(data, color_col, continuous_color_set=False)
+    # DEBUG: Log column names
+    logger.debug(f"PCA components columns: {components.columns.tolist()}")
     
+    # Ensure consistent index types
+    components.index = components.index.astype(str)
+    metadata.index = metadata.index.astype(str)
+    
+    # Prepare visualization data
+    data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
+    logger.info(f"Visualization data shape: {data.shape}")
+    
+    # Check for valid columns
     x_col = f'PC{x}'
     y_col = f'PC{y}'
-    x_title = f"PC{x} ({round(100 * proportion_explained[x-1], 2)}%)"
-    y_title = f"PC{y} ({round(100 * proportion_explained[y-1], 2)}%)"
-
-    data['index'] = data.index
-
-    fig = _create_scatter_figure(
-        data=data,
-        x_col=x_col,
-        y_col=y_col,
-        color_col=color_col,
-        symbol_col=symbol_col,
-        #color_map=colordict,
-        color_map=color_map,
-        hover_data=['index', color_col]
+    
+    if x_col not in data.columns:
+        logger.error(f"Missing x-axis column: {x_col}. Available columns: {data.columns.tolist()}")
+        raise ValueError(f"Column {x_col} not found in PCA components")
+    
+    if y_col not in data.columns:
+        logger.error(f"Missing y-axis column: {y_col}. Available columns: {data.columns.tolist()}")
+        raise ValueError(f"Column {y_col} not found in PCA components")
+    
+    # Create plot
+    fig = px.scatter(
+        data,
+        x=x_col,
+        y=y_col,
+        color=color_col,
+        symbol=symbol_col,
+        hover_data=['index', color_col],
+        opacity=0.8,  # Ensure points are visible
+        size_max=10   # Ensure points are reasonably sized
     )
+    
+    # TEMPORARY DEBUG: Add text labels
+    fig.add_trace(go.Scatter(
+        x=data[x_col],
+        y=data[y_col],
+        text=data.index,
+        mode='text',
+        name='Samples',
+        textposition='top center',
+        visible='legendonly'  # Hide by default but showable in legend
+    ))
     
     fig.update_layout(
         template='heather',
         height=800,
         width=800,
-        showlegend=False,
+        showlegend=True,  # ENABLED FOR DEBUGGING
         font_family="Helvetica",
         font_color="black",
         font_size=15,
         title_text='PCA',
         title_x=0.5
     )
-    _configure_axes(fig, x_title, y_title)
-
-    if output_dir:
-        file_stem = (
-            f"pca.{f'{transformation}.' if transformation else ''}"
-            f"{x}-{y}.{color_col}.{symbol_col}"
-        )
-        plotly_show_and_save(
-            fig, show, Path(output_dir) / 'pca' / file_stem
-        )
-        legend_path = Path(output_dir) / 'pca' / f'legend_{color_col}.png'
-        plot_legend(colordict, color_col, legend_path)
     
-    return fig, colordict
+    # Save output if requested
+    if output_dir:
+        output_path = Path(output_dir) / 'pca'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
+    
+    return fig, None  # Temporarily return None for colordict
 
 
 def mds(
