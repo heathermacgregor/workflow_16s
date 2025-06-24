@@ -1238,82 +1238,59 @@ class AmpliconData:
         # self._identify_top_features()
     
     def _run_ordination_only(self):
-        """Run only ordination analyses with debug logging"""
-        print("[DEBUG] Starting ordination analyses")
+        """Run ordination analyses for all table types and levels"""
+        print("[DEBUG] Starting ordination analyses for all tables")
         
-        # Create plotter if not already created
+        # Create plotter if needed
         if not hasattr(self, 'plotter'):
             self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
         
-        # Calculate total plots
+        # Define ordination methods to run
+        ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
+        
+        # Calculate total plots: (table_types * levels * methods)
         total_plots = 0
-        for table_type, tables in self.tables.items():
-            enabled_tests = self._get_enabled_tests(table_type)
-            print(f"[DEBUG] Table type: {table_type}, enabled tests: {enabled_tests}")
-            if not enabled_tests:
-                continue
-            for level in tables:
-                # Count plots for this level
-                for test_name in enabled_tests:
-                    if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
-                        total_plots += 1
+        for table_type in self.tables:
+            for level in self.tables[table_type]:
+                total_plots += len(ordination_methods)
         
         print(f"[DEBUG] Total ordination plots to generate: {total_plots}")
         
         with create_progress() as progress:
-            # Create main task for ordination
             main_task = progress.add_task(
                 "[white]Running ordination analyses".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=total_plots
             ) if total_plots > 0 else None
             
-            for table_type, tables in self.tables.items():
-                enabled_tests = self._get_enabled_tests(table_type)
-                print(f"[DEBUG] Processing table type: {table_type}, tests: {enabled_tests}")
-                if not enabled_tests:
-                    continue
-                
-                for level, table in tables.items():
-                    print(f"[DEBUG] Processing level: {level}")
-                    # Generate ordination plots
-                    for test_name in enabled_tests:
-                        if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
-                            try:
-                                print(f"[DEBUG] Generating {test_name} for {table_type}/{level}")
-                                fig = self.plotter.generate_ordination_plot(
-                                    test_name, table, self.meta,
-                                    transformation=table_type
-                                )
-                                key = f"{test_name}_{table_type}_{level}"
-                                self.figures[key] = fig
-                                if self.verbose:
-                                    logger.info(f"Generated {key} plot")
-                            except Exception as e:
-                                logger.error(f"{test_name} failed for {table_type}/{level}: {str(e)}")
-                                import traceback
-                                traceback.print_exc()
-                            finally:
-                                if main_task:
-                                    progress.update(main_task, advance=1)
+            # Process all table types and levels
+            for table_type, level_tables in self.tables.items():
+                for level, table in level_tables.items():
+                    print(f"[DEBUG] Processing table type: {table_type}, level: {level}")
+                    
+                    # Run all ordination methods
+                    for method in ordination_methods:
+                        try:
+                            print(f"[DEBUG] Generating {method} for {table_type}/{level}")
+                            fig = self.plotter.generate_ordination_plot(
+                                method, table, self.meta,
+                                transformation=f"{table_type}_{level}"
+                            )
+                            key = f"{method}_{table_type}_{level}"
+                            self.figures[key] = fig
+                            if self.verbose:
+                                logger.info(f"Generated {key} plot")
+                        except Exception as e:
+                            logger.error(f"{method} failed for {table_type}/{level}: {str(e)}")
+                        finally:
+                            if main_task:
+                                progress.update(main_task, advance=1)
     
-    def _get_enabled_tests(self, table_type: str) -> List[str]:
-        """Get enabled tests for a table type from config"""
-        # Check if stats section exists at all
-        if 'stats' not in self.cfg:
-            print(f"[DEBUG] No 'stats' section in configuration")
-            return []
-            
-        # Check if this table type is in stats config
-        if table_type not in self.cfg['stats']:
-            print(f"[DEBUG] No stats config found for table type: {table_type}")
-            return []
-            
-        return [
-            test for test in [
-                'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 
-                'pca', 'pcoa', 'tsne', 'umap'
-            ] if self.cfg['stats'][table_type].get(test, False)
-        ]
+    def _identify_top_features(self):
+        """Identify top features associated with contamination status"""
+        analyzer = TopFeaturesAnalyzer(self.cfg, self.verbose)
+        self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
+            self.stats, DEFAULT_GROUP_COLUMN
+        )
 
 
 # ================================= MAIN EXECUTION ================================== #
