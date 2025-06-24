@@ -77,9 +77,9 @@ from workflow_16s.stats.beta_diversity import (
 )
 from workflow_16s.figures.html_report import HTMLReport
 from workflow_16s.figures.merged.merged import (
-    mds as plot_mds, 
-    pca as plot_pca, 
-    pcoa as plot_pcoa, 
+    mds,# as plot_mds, 
+    pca,# as plot_pca, 
+    pcoa,# as plot_pcoa, 
     sample_map_categorical
 )
 
