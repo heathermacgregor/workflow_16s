@@ -341,6 +341,8 @@ class Ordination:
                     'components': ordination_result['components'],
                     'proportion_explained': ordination_result['exp_var_ratio']
                 })
+                print(ordination_result['components'])
+                print(ordination_result['exp_var_ratio'])
             elif test_key == 'pcoa':
                 plot_kwargs.update({
                     'components': ordination_result.samples,
@@ -1187,7 +1189,6 @@ class AmpliconData:
         # self._run_statistical_analyses()
         self._run_ordination()
         # self._identify_top_features()
-        logger.info(self.ordination)
     
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
