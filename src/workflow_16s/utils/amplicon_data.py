@@ -278,6 +278,7 @@ class Plotter:
         Returns:
             Dictionary containing PCA results
         """
+        print(f"[DEBUG] Computing PCA for table with {table.shape[0]} features and {table.shape[1]} samples")
         df = table_to_dataframe(table).T
         return pca(df, n_components)
     
@@ -298,6 +299,7 @@ class Plotter:
         Returns:
             PCoA results object
         """
+        print(f"[DEBUG] Computing PCoA for table with {table.shape[0]} features and {table.shape[1]} samples")
         df = table_to_dataframe(table).T
         return pcoa(df, metric, n_dimensions)
     
@@ -318,6 +320,7 @@ class Plotter:
         Returns:
             DataFrame with t-SNE coordinates
         """
+        print(f"[DEBUG] Computing t-SNE for table with {table.shape[0]} features and {table.shape[1]} samples")
         df = table_to_dataframe(table).T
         return tsne(df, n_components, random_state)
     
@@ -338,6 +341,7 @@ class Plotter:
         Returns:
             DataFrame with UMAP coordinates
         """
+        print(f"[DEBUG] Computing UMAP for table with {table.shape[0]} features and {table.shape[1]} samples")
         df = table_to_dataframe(table).T
         return umap(df, n_components, random_state)
     
@@ -367,12 +371,14 @@ class Plotter:
         Returns:
             Tuple of figure and color dictionary
         """
+        print(f"[DEBUG] Generating PCoA plot with {color_col} colors and {symbol_col} symbols")
         components = pcoa_result.samples
         proportion_explained = pcoa_result.proportion_explained
         
         # Create output directory
         output_dir = self.output_dir / 'pcoa'
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[DEBUG] Saving PCoA plots to: {output_dir}")
         
         fig, colordict = plot_pcoa(
             components=components,
@@ -386,6 +392,7 @@ class Plotter:
             y=y,
             **kwargs
         )
+        print(f"[DEBUG] PCoA plot generated successfully")
         return fig, colordict
     
     def generate_pca_plot(
@@ -414,12 +421,14 @@ class Plotter:
         Returns:
             Tuple of figure and color dictionary
         """
+        print(f"[DEBUG] Generating PCA plot with {color_col} colors and {symbol_col} symbols")
         components = pca_result['components']
         proportion_explained = pca_result['exp_var_ratio']
         
         # Create output directory
         output_dir = self.output_dir / 'pca'
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[DEBUG] Saving PCA plots to: {output_dir}")
         
         fig, colordict = plot_pca(
             components=components,
@@ -433,6 +442,7 @@ class Plotter:
             y=y,
             **kwargs
         )
+        print(f"[DEBUG] PCA plot generated successfully")
         return fig, colordict
     
     def generate_mds_plot(
@@ -463,9 +473,11 @@ class Plotter:
         Returns:
             Tuple of figure and color dictionary
         """
+        print(f"[DEBUG] Generating {mode} plot with {group_col} groups and {symbol_col} symbols")
         # Create output directory
         output_dir = self.output_dir / mode.lower()
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[DEBUG] Saving {mode} plots to: {output_dir}")
         
         fig, colordict = plot_mds(
             df=coordinates,
@@ -479,6 +491,7 @@ class Plotter:
             y=y,
             **kwargs
         )
+        print(f"[DEBUG] {mode} plot generated successfully")
         return fig, colordict
     
     def generate_ordination_plot(
@@ -505,34 +518,44 @@ class Plotter:
         Returns:
             Generated figure
         """
+        print(f"[DEBUG] Starting ordination: {method.upper()} for {transformation} data")
         # Compute ordination
         if method == 'pcoa':
+            print("[DEBUG] Computing PCoA...")
             pcoa_result = self.compute_pcoa(table)
             self.ordination_results['pcoa'] = pcoa_result
+            print("[DEBUG] Generating PCoA plot...")
             fig, _ = self.generate_pcoa_plot(
                 pcoa_result, metadata, color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'pca':
+            print("[DEBUG] Computing PCA...")
             pca_result = self.compute_pca(table)
             self.ordination_results['pca'] = pca_result
+            print("[DEBUG] Generating PCA plot...")
             fig, _ = self.generate_pca_plot(
                 pca_result, metadata, color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'tsne':
+            print("[DEBUG] Computing t-SNE...")
             coordinates = self.compute_tsne(table)
             self.ordination_results['tsne'] = coordinates
+            print("[DEBUG] Generating t-SNE plot...")
             fig, _ = self.generate_mds_plot(
                 coordinates, metadata, 't-SNE', color_col, symbol_col, transformation, **kwargs
             )
         elif method == 'umap':
+            print("[DEBUG] Computing UMAP...")
             coordinates = self.compute_umap(table)
             self.ordination_results['umap'] = coordinates
+            print("[DEBUG] Generating UMAP plot...")
             fig, _ = self.generate_mds_plot(
                 coordinates, metadata, 'UMAP', color_col, symbol_col, transformation, **kwargs
             )
         else:
             raise ValueError(f"Unsupported ordination method: {method}")
         
+        print(f"[DEBUG] Completed ordination: {method.upper()}")
         return fig
 
 
@@ -1208,80 +1231,52 @@ class AmpliconData:
     
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
-        self._run_statistical_analyses()
-        self._identify_top_features()
+        # Temporarily skip statistical tests
+        print("[DEBUG] Skipping statistical tests for debugging")
+        # self._run_statistical_analyses()
+        self._run_ordination_only()
+        # self._identify_top_features()
     
-    def _run_statistical_analyses(self):
-        """Run all configured statistical analyses"""
-        self.stats_analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
+    def _run_ordination_only(self):
+        """Run only ordination analyses with debug logging"""
+        print("[DEBUG] Starting ordination analyses")
         
         # Create plotter if not already created
         if not hasattr(self, 'plotter'):
             self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
         
-        # Calculate total tasks
-        total_main_tasks = 0
+        # Calculate total plots
         total_plots = 0
         for table_type, tables in self.tables.items():
             enabled_tests = self._get_enabled_tests(table_type)
             if not enabled_tests:
                 continue
             for level in tables:
-                total_main_tasks += 1
                 # Count plots for this level
                 for test_name in enabled_tests:
                     if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
                         total_plots += 1
         
+        print(f"[DEBUG] Total ordination plots to generate: {total_plots}")
+        
         with create_progress() as progress:
-            # Create main tasks
+            # Create main task for ordination
             main_task = progress.add_task(
-                "[white]Running statistical analyses".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=total_main_tasks
-            )
-            plot_task = progress.add_task(
-                "[cyan]Generating ordination plots".ljust(DEFAULT_PROGRESS_TEXT_N),
+                "[white]Running ordination analyses".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=total_plots
             )
             
             for table_type, tables in self.tables.items():
-                # FIXED: Changed bracket to parenthesis
                 enabled_tests = self._get_enabled_tests(table_type)
-                
-                # Skip if no tests enabled for this table type
                 if not enabled_tests:
                     continue
                 
-                # Initialize stats dictionary for this table type
-                if table_type not in self.stats:
-                    self.stats[table_type] = {}
-                    
                 for level, table in tables.items():
-                    # Create a subtask for this level
-                    level_task = progress.add_task(
-                        f"[white]{table_type} {level}".ljust(DEFAULT_PROGRESS_TEXT_N),
-                        total=len(enabled_tests),
-                        parent=main_task
-                    )
-                    
-                    # Run statistical tests
-                    test_results = self.stats_analyzer.run_tests(
-                        table=table,
-                        metadata=self.meta,
-                        group_column=DEFAULT_GROUP_COLUMN,
-                        group_values=DEFAULT_GROUP_COLUMN_VALUES,
-                        enabled_tests=enabled_tests,
-                        progress=progress,
-                        task_id=level_task
-                    )
-                    
-                    # Store results for this level
-                    self.stats[table_type][level] = test_results
-                    
                     # Generate ordination plots
                     for test_name in enabled_tests:
                         if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
                             try:
+                                print(f"[DEBUG] Generating {test_name} for {table_type}/{level}")
                                 fig = self.plotter.generate_ordination_plot(
                                     test_name, table, self.meta,
                                     transformation=table_type
@@ -1292,15 +1287,12 @@ class AmpliconData:
                                     logger.info(f"Generated {key} plot")
                             except Exception as e:
                                 logger.error(f"{test_name} failed for {table_type}/{level}: {str(e)}")
+                                # Print detailed traceback
+                                import traceback
+                                traceback.print_exc()
                             finally:
-                                # Update plot progress
-                                progress.update(plot_task, advance=1)
-                    
-                    # Update main progress
-                    progress.update(main_task, advance=1)
-            
-            # Save statistical results
-            self._save_statistical_results()
+                                # Update progress
+                                progress.update(main_task, advance=1)
     
     def _get_enabled_tests(self, table_type: str) -> List[str]:
         """Get enabled tests for a table type from config"""
@@ -1314,92 +1306,6 @@ class AmpliconData:
                 'pca', 'pcoa', 'tsne', 'umap'
             ] if self.cfg['stats'][table_type].get(test, False)
         ]
-    
-    def _save_statistical_results(self):
-        """Save statistical analysis results to CSV files"""
-        total_files = 0
-        # Count total files to save for progress tracking
-        for table_type, levels in self.stats.items():
-            for level, tests in levels.items():
-                total_files += len(tests)
-        
-        with create_progress() as progress:
-            task = progress.add_task(
-                "[white]Saving statistical results...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=total_files
-            )
-            base_dir = Path(self.project_dir.tables) / 'stats' / 'tests'
-            base_dir.mkdir(parents=True, exist_ok=True) 
-            for table_type, levels in self.stats.items():
-                type_dir = base_dir / table_type
-                type_dir.mkdir(parents=True, exist_ok=True)
-                for level, tests in levels.items():
-                    level_dir = type_dir / level
-                    level_dir.mkdir(parents=True, exist_ok=True)
-                    for test_name, result_df in tests.items():
-                        output_path = level_dir / f"{test_name}.csv"
-                        # Sort by p-value before saving
-                        if 'p_value' in result_df.columns:
-                            result_df = result_df.sort_values(by='p_value', ascending=True)
-                        # Save DataFrame to CSV
-                        result_df.to_csv(output_path, index=False)
-                            
-                        if self.verbose:
-                            logger.info(
-                                f"Saved {table_type}/{level}/{test_name} stats "
-                                f"to {output_path}"
-                            )
-                                
-                        # Update progress
-                        progress.update(task, advance=1)
-    
-    def _identify_top_features(self):
-        """Identify top differentiating features"""
-        analyzer = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
-            self.stats, DEFAULT_GROUP_COLUMN
-        )
-        self._save_top_features()
-    
-    def _save_top_features(self):
-        """Save top feature associations to CSV files"""
-        # Create output directory
-        output_dir = Path(self.project_dir.tables) / "top_features"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Current timestamp for filename
-        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Create DataFrames from feature lists
-        contam_df = pd.DataFrame(self.top_contaminated_features)
-        pristine_df = pd.DataFrame(self.top_pristine_features)
-        
-        # Add direction column
-        if not contam_df.empty:
-            contam_df['direction'] = 'contaminated'
-            contam_path = output_dir / f"contaminated_features_{timestamp}.csv"
-            contam_df.to_csv(contam_path, index=False)
-            logger.info(f"Saved {len(contam_df)} contaminated features to {contam_path}")
-        
-        if not pristine_df.empty:
-            pristine_df['direction'] = 'pristine'
-            pristine_path = output_dir / f"pristine_features_{timestamp}.csv"
-            pristine_df.to_csv(pristine_path, index=False)
-            logger.info(f"Saved {len(pristine_df)} pristine features to {pristine_path}")
-        
-        # Create and save combined report
-        if not contam_df.empty or not pristine_df.empty:
-            combined_df = pd.concat([contam_df, pristine_df], ignore_index=True)
-            combined_path = output_dir / f"all_significant_features_{timestamp}.csv"
-            combined_df.to_csv(combined_path, index=False)
-            logger.info(f"Saved {len(combined_df)} total features to {combined_path}")
-            
-            # Also save a version without timestamp for easy access
-            latest_path = output_dir / "latest_significant_features.csv"
-            combined_df.to_csv(latest_path, index=False)
-            logger.info(f"Saved latest features to {latest_path}")
-        else:
-            logger.warning("No significant features found to save")
 
 
 # ================================= MAIN EXECUTION ================================== #
@@ -1421,31 +1327,31 @@ if __name__ == "__main__":
         },
         'stats': {
             'raw': {
-                'ttest': True,
-                'mwu_bonferroni': True,
-                'kruskal_bonferroni': True,
+                'ttest': False,  # Disabled
+                'mwu_bonferroni': False,  # Disabled
+                'kruskal_bonferroni': False,  # Disabled
                 'pca': True,
                 'pcoa': True,
                 'tsne': True,
                 'umap': True
             },
             'filtered': {
-                'ttest': True,
-                'mwu_bonferroni': True,
-                'kruskal_bonferroni': True,
+                'ttest': False,  # Disabled
+                'mwu_bonferroni': False,  # Disabled
+                'kruskal_bonferroni': False,  # Disabled
                 'pca': True,
                 'pcoa': True
             },
             'normalized': {
-                'ttest': True,
+                'ttest': False,  # Disabled
                 'pca': True
             },
             'clr_transformed': {
-                'ttest': True,
+                'ttest': False,  # Disabled
                 'pca': True
             },
             'presence_absence': {
-                'fisher': True
+                'fisher': False  # Disabled
             }
         },
         'figures': {
@@ -1481,4 +1387,7 @@ if __name__ == "__main__":
         logger.info("Analysis completed successfully")
     except Exception as e:
         logger.error(f"Analysis failed: {str(e)}")
+        # Print detailed traceback
+        import traceback
+        traceback.print_exc()
         raise
