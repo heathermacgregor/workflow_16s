@@ -335,8 +335,8 @@ class Ordination:
                     symbol_col=symbol_col,
                     output_dir=self.figure_output_dir,
                     transformation=transformation,
-                    x=x,
-                    y=y,
+                    x=1,
+                    y=2,
                     **kwargs
                 )
                 print(f"[DEBUG] PCA plot generated successfully")
