@@ -1245,7 +1245,8 @@ class AmpliconData:
             )
             
             for table_type, tables in self.tables.items():
-                enabled_tests = self._get_enabled_tests(table_type]
+                # FIXED: Changed bracket to parenthesis
+                enabled_tests = self._get_enabled_tests(table_type)
                 
                 # Skip if no tests enabled for this table type
                 if not enabled_tests:
