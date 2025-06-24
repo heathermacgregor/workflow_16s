@@ -1175,7 +1175,9 @@ class AmpliconData:
             for table_type, level_tables in self.tables.items():
                 self.ordination[table_type] = {}
                 for level, table in level_tables.items():
-                    ordination_result = Ordination(cfg).run_tests(
+                    ordination_result = Ordination(
+                        cfg=self.cfg
+                    ).run_tests(
                         table=table,
                         metadata=self.metadata,
                         group_column='nuclear_contamination_status',
