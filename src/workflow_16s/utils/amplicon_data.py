@@ -1140,6 +1140,7 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
+                )
                 for level in levels:
                     source_table = get_source(level)
                     processed = process_func(source_table, level, *func_args)
