@@ -1249,6 +1249,7 @@ class AmpliconData:
         total_plots = 0
         for table_type, tables in self.tables.items():
             enabled_tests = self._get_enabled_tests(table_type)
+            print(f"[DEBUG] Table type: {table_type}, enabled tests: {enabled_tests}")
             if not enabled_tests:
                 continue
             for level in tables:
@@ -1264,14 +1265,16 @@ class AmpliconData:
             main_task = progress.add_task(
                 "[white]Running ordination analyses".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=total_plots
-            )
+            ) if total_plots > 0 else None
             
             for table_type, tables in self.tables.items():
                 enabled_tests = self._get_enabled_tests(table_type)
+                print(f"[DEBUG] Processing table type: {table_type}, tests: {enabled_tests}")
                 if not enabled_tests:
                     continue
                 
                 for level, table in tables.items():
+                    print(f"[DEBUG] Processing level: {level}")
                     # Generate ordination plots
                     for test_name in enabled_tests:
                         if test_name in ['pca', 'pcoa', 'tsne', 'umap']:
@@ -1287,17 +1290,22 @@ class AmpliconData:
                                     logger.info(f"Generated {key} plot")
                             except Exception as e:
                                 logger.error(f"{test_name} failed for {table_type}/{level}: {str(e)}")
-                                # Print detailed traceback
                                 import traceback
                                 traceback.print_exc()
                             finally:
-                                # Update progress
-                                progress.update(main_task, advance=1)
+                                if main_task:
+                                    progress.update(main_task, advance=1)
     
     def _get_enabled_tests(self, table_type: str) -> List[str]:
         """Get enabled tests for a table type from config"""
-        # Ensure config exists for this table type
+        # Check if stats section exists at all
+        if 'stats' not in self.cfg:
+            print(f"[DEBUG] No 'stats' section in configuration")
+            return []
+            
+        # Check if this table type is in stats config
         if table_type not in self.cfg['stats']:
+            print(f"[DEBUG] No stats config found for table type: {table_type}")
             return []
             
         return [
@@ -1317,7 +1325,7 @@ if __name__ == "__main__":
     )
     logger = logging.getLogger('workflow_16s')
     
-    # Sample configuration - should be replaced with real configuration
+    # Updated configuration with proper ordination settings
     cfg = {
         'features': {
             'filter': True,
@@ -1327,31 +1335,20 @@ if __name__ == "__main__":
         },
         'stats': {
             'raw': {
-                'ttest': False,  # Disabled
-                'mwu_bonferroni': False,  # Disabled
-                'kruskal_bonferroni': False,  # Disabled
                 'pca': True,
                 'pcoa': True,
                 'tsne': True,
                 'umap': True
             },
             'filtered': {
-                'ttest': False,  # Disabled
-                'mwu_bonferroni': False,  # Disabled
-                'kruskal_bonferroni': False,  # Disabled
                 'pca': True,
                 'pcoa': True
             },
             'normalized': {
-                'ttest': False,  # Disabled
                 'pca': True
             },
             'clr_transformed': {
-                'ttest': False,  # Disabled
                 'pca': True
-            },
-            'presence_absence': {
-                'fisher': False  # Disabled
             }
         },
         'figures': {
