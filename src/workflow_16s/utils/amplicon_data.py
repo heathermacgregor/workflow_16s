@@ -232,32 +232,32 @@ class StatisticalAnalyzer:
 # ============================= STATISTICAL ANALYZER CLASS ============================ #
 # ============================= ORDINATION CLASS ============================ #
 class Ordination:
-    """Handles ordination analyses and plotting for amplicon data"""
+    """Handles ordination analyses and plotting for all taxonomic levels"""
     
     TEST_CONFIG = {
         'pca': {
             'key': 'pca',
             'func': calculate_pca,
-            'plot_func': plot_pca,
+            'plot_func': pca,  # Using the fixed pca function
             'name': 'Principal Components Analysis'
         },
         'pcoa': {
             'key': 'pcoa',
             'func': calculate_pcoa,
-            'plot_func': plot_pcoa,
+            'plot_func': pcoa,  # Using the fixed pcoa function
             'name': 'Principal Coordinates Analysis',
         },
         'tsne': {
             'key': 'tsne',
             'func': calculate_tsne,
-            'plot_func': plot_mds,
+            'plot_func': mds,  # Using MDS plotter with mode='t-SNE'
             'name': 't-SNE',
             'plot_kwargs': {'mode': 't-SNE'}
         },
         'umap': {
             'key': 'umap',
             'func': calculate_umap,
-            'plot_func': plot_mds,
+            'plot_func': mds,  # Using MDS plotter with mode='UMAP'
             'name': 'UMAP',
             'plot_kwargs': {'mode': 'UMAP'}
         }
@@ -267,6 +267,7 @@ class Ordination:
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
+        self.results = {}
     
     def run_tests(
         self,
@@ -281,18 +282,17 @@ class Ordination:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Run ordination analyses and generate plots
+        Run ordination analyses and generate plots for a specific table
         
         Args:
-            table:         BIOM feature table
+            table:         BIOM feature table for current taxonomic level
             metadata:      Sample metadata
             color_col:     Column for coloring points
             symbol_col:    Column for point symbols
-            transformation: Data transformation applied
+            transformation: Data transformation applied + taxonomic level
             enabled_tests: List of ordination methods to run
             progress:      Rich progress object
             task_id:       Parent task ID
-            **kwargs:      Additional plot arguments (x, y, etc.)
             
         Returns:
             Dictionary of ordination results keyed by method name
@@ -302,63 +302,75 @@ class Ordination:
         
         if progress and task_id:
             main_task = progress.add_task(
-                f"[white]Running ordination calculations", 
+                f"[white]Running ordination for {transformation}", 
                 total=total_tests,
                 parent=task_id
             )
         
-        # Filter and align table with metadata
-        table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-        
-        for test_name in enabled_tests:
-            if test_name not in self.TEST_CONFIG:
-                continue
+        try:
+            # Filter and align table with metadata
+            logger.info(f"Aligning samples for {transformation}")
+            table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
+            logger.info(f"Aligned table: {table.shape[0]} features × {table.shape[1]} samples")
+            
+            # Run each enabled ordination method
+            for test_name in enabled_tests:
+                if test_name not in self.TEST_CONFIG:
+                    continue
+                    
+                config = self.TEST_CONFIG[test_name]
+                test_key = config['key']
                 
-            config = self.TEST_CONFIG[test_name]
-            test_key = config['key']
+                if self.verbose:
+                    logger.info(f"Running {config['name']} for {transformation}...")
+                    
+                try:
+                    # Compute ordination
+                    ordination_result = config['func'](table=table)
+                    results[test_key] = ordination_result
+                    
+                    # Prepare plot arguments
+                    plot_kwargs = config.get('plot_kwargs', {})
+                    plot_kwargs.update({
+                        'metadata': metadata,
+                        'color_col': color_col,
+                        'symbol_col': symbol_col,
+                        'transformation': transformation,
+                        'output_dir': self.figure_output_dir / test_key,
+                        **kwargs
+                    })
+                    
+                    # Handle different result types
+                    if test_key == 'pca':
+                        plot_kwargs.update({
+                            'components': ordination_result['components'],
+                            'proportion_explained': ordination_result['exp_var_ratio']
+                        })
+                    elif test_key == 'pcoa':
+                        plot_kwargs.update({
+                            'components': ordination_result.samples,
+                            'proportion_explained': ordination_result.proportion_explained
+                        })
+                    else:  # t-SNE or UMAP
+                        plot_kwargs['df'] = ordination_result
+                    
+                    # Generate plot
+                    logger.info(f"Generating {test_key} plot for {transformation}")
+                    config['plot_func'](**plot_kwargs)
+                    
+                except Exception as e:
+                    logger.error(f"Failed {test_name} for {transformation}: {str(e)}")
+                    logger.debug("Traceback:", exc_info=True)
+                    
+                finally:
+                    if progress and task_id:
+                        progress.update(main_task, advance=1)
+                        
+        except Exception as e:
+            logger.error(f"Ordination failed for {transformation}: {str(e)}")
+            logger.debug("Traceback:", exc_info=True)
             
-            if self.verbose:
-                logger.info(f"Running {config['name']}...")
-                
-            # Compute ordination
-            ordination_result = config['func'](table=table)
-            results[test_key] = ordination_result
-            
-            # Prepare plot arguments
-            plot_kwargs = config.get('plot_kwargs', {})
-            plot_kwargs.update({
-                'metadata': metadata,
-                'color_col': color_col,
-                'symbol_col': symbol_col,
-                'transformation': transformation,
-                'output_dir': self.figure_output_dir / test_key,
-                **kwargs
-            })
-            
-            # Handle different result types
-            if test_key == 'pca':
-                plot_kwargs.update({
-                    'components': ordination_result['components'],
-                    'proportion_explained': ordination_result['exp_var_ratio']
-                })
-                print(ordination_result['components'])
-                print(ordination_result['exp_var_ratio'])
-            elif test_key == 'pcoa':
-                plot_kwargs.update({
-                    'components': ordination_result.samples,
-                    'proportion_explained': ordination_result.proportion_explained
-                })
-            else:  # t-SNE or UMAP
-                plot_kwargs['df'] = ordination_result
-            
-            # Generate plot
-            config['plot_func'](**plot_kwargs)
-            
-            if progress and task_id:
-                progress.update(main_task, advance=1)
-                
         return results
-
 
 # ================================= PLOTTER CLASS ================================== #
 class Plotter:
