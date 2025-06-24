@@ -1179,7 +1179,7 @@ class AmpliconData:
                         cfg=self.cfg
                     ).run_tests(
                         table=table,
-                        metadata=self.metadata,
+                        metadata=self.meta,
                         group_column='nuclear_contamination_status',
                         group_values=[True, False],
                         enabled_tests=ordination_methods
