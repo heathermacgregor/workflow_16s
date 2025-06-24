@@ -309,10 +309,7 @@ class Ordination:
                 metadata
             )
             results[test_key] = config['func'](
-                table=table,
-                metadata=metadata,
-                group_column=group_column,
-                group_column_values=group_values,
+                table=table
             )
             
             if progress and task_id:
