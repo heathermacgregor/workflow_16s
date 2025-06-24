@@ -385,76 +385,75 @@ def pca(
     x: int = 1, 
     y: int = 2
 ) -> Tuple[go.Figure, Any]:
-    # Validate inputs first
-    _validate_metadata(metadata, [color_col, symbol_col])
+    """
+    Generate a PCA plot with robust error handling and debugging.
+    """
+    try:
+        # Validate inputs
+        _validate_metadata(metadata, [color_col, symbol_col])
+        
+        # Prepare visualization data
+        data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
+        
+        # Check for empty data after preparation
+        if data.empty:
+            logger.error("No data available for plotting after merging and filtering")
+            return go.Figure(), None
+        
+        # Add explicit sample ID column
+        data['sample_id'] = data.index
+        
+        # Check for valid columns
+        x_col = f'PC{x}'
+        y_col = f'PC{y}'
+        
+        if x_col not in data.columns:
+            raise ValueError(f"Missing x-axis column: {x_col}. Available: {data.columns.tolist()}")
+        if y_col not in data.columns:
+            raise ValueError(f"Missing y-axis column: {y_col}. Available: {data.columns.tolist()}")
+        
+        # Create plot
+        fig = px.scatter(
+            data,
+            x=x_col,
+            y=y_col,
+            color=color_col,
+            symbol=symbol_col,
+            hover_data=['sample_id', color_col, symbol_col],  # Use actual columns
+            opacity=0.8,
+            size_max=10
+        )
+        
+        # Add variance explained to axis labels
+        x_title = f"PC{x} ({proportion_explained[x-1]:.2%})" if proportion_explained else f"PC{x}"
+        y_title = f"PC{y} ({proportion_explained[y-1]:.2%})" if proportion_explained else f"PC{y}"
+        
+        fig.update_layout(
+            template='heather',
+            height=800,
+            width=800,
+            showlegend=True,  # Keep visible for debugging
+            font_family="Helvetica",
+            font_color="black",
+            font_size=15,
+            title_text=f'PCA ({transformation or "raw"})' if transformation else 'PCA',
+            title_x=0.5,
+            xaxis_title=x_title,
+            yaxis_title=y_title
+        )
+        
+        # Save output if requested
+        if output_dir:
+            output_path = Path(output_dir) / 'pca'
+            output_path.mkdir(parents=True, exist_ok=True)
+            file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
+            plotly_show_and_save(fig, show, output_path / file_stem)
+        
+        return fig, None  # Return colordict if needed
     
-    # DEBUG: Log column names
-    logger.debug(f"PCA components columns: {components.columns.tolist()}")
-    
-    # Ensure consistent index types
-    components.index = components.index.astype(str)
-    metadata.index = metadata.index.astype(str)
-    
-    # Prepare visualization data
-    data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
-    logger.info(f"Visualization data shape: {data.shape}")
-    
-    # Check for valid columns
-    x_col = f'PC{x}'
-    y_col = f'PC{y}'
-    
-    if x_col not in data.columns:
-        logger.error(f"Missing x-axis column: {x_col}. Available columns: {data.columns.tolist()}")
-        raise ValueError(f"Column {x_col} not found in PCA components")
-    
-    if y_col not in data.columns:
-        logger.error(f"Missing y-axis column: {y_col}. Available columns: {data.columns.tolist()}")
-        raise ValueError(f"Column {y_col} not found in PCA components")
-    
-    # Create plot
-    fig = px.scatter(
-        data,
-        x=x_col,
-        y=y_col,
-        color=color_col,
-        symbol=symbol_col,
-        hover_data=['index', color_col],
-        opacity=0.8,  # Ensure points are visible
-        size_max=10   # Ensure points are reasonably sized
-    )
-    
-    # TEMPORARY DEBUG: Add text labels
-    fig.add_trace(go.Scatter(
-        x=data[x_col],
-        y=data[y_col],
-        text=data.index,
-        mode='text',
-        name='Samples',
-        textposition='top center',
-        visible='legendonly'  # Hide by default but showable in legend
-    ))
-    
-    fig.update_layout(
-        template='heather',
-        height=800,
-        width=800,
-        showlegend=True,  # ENABLED FOR DEBUGGING
-        font_family="Helvetica",
-        font_color="black",
-        font_size=15,
-        title_text='PCA',
-        title_x=0.5
-    )
-    
-    # Save output if requested
-    if output_dir:
-        output_path = Path(output_dir) / 'pca'
-        output_path.mkdir(parents=True, exist_ok=True)
-        file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
-    
-    return fig, None  # Temporarily return None for colordict
-
+    except Exception as e:
+        logger.exception(f"Error generating PCA plot: {str(e)}")
+        raise
 
 def mds(
     df: pd.DataFrame, 
