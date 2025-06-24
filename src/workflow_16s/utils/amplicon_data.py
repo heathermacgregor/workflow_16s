@@ -1233,7 +1233,7 @@ class AmpliconData:
                         metadata=self.meta,
                         color_col='dataset_name',
                         symbol_col='nuclear_contamination_status',
-                        transformation=table_type,
+                        transformation=f"{table_type}_{level}",
                         enabled_tests=ordination_methods
                     )
                     self.ordination[table_type][level] = ordination_result
