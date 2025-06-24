@@ -370,13 +370,17 @@ class Plotter:
         components = pcoa_result.samples
         proportion_explained = pcoa_result.proportion_explained
         
+        # Create output directory
+        output_dir = self.output_dir / 'pcoa'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         fig, colordict = plot_pcoa(
             components=components,
             proportion_explained=proportion_explained,
             metadata=metadata,
             color_col=color_col,
             symbol_col=symbol_col,
-            output_dir=self.output_dir,
+            output_dir=output_dir,
             transformation=transformation,
             x=x,
             y=y,
@@ -413,13 +417,17 @@ class Plotter:
         components = pca_result['components']
         proportion_explained = pca_result['exp_var_ratio']
         
+        # Create output directory
+        output_dir = self.output_dir / 'pca'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         fig, colordict = plot_pca(
             components=components,
             proportion_explained=proportion_explained,
             metadata=metadata,
             color_col=color_col,
             symbol_col=symbol_col,
-            output_dir=self.output_dir,
+            output_dir=output_dir,
             transformation=transformation,
             x=x,
             y=y,
@@ -455,12 +463,16 @@ class Plotter:
         Returns:
             Tuple of figure and color dictionary
         """
+        # Create output directory
+        output_dir = self.output_dir / mode.lower()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         fig, colordict = plot_mds(
             df=coordinates,
             metadata=metadata,
             group_col=group_col,
             symbol_col=symbol_col,
-            output_dir=self.output_dir,
+            output_dir=output_dir,
             transformation=transformation,
             mode=mode,
             x=x,
@@ -1233,7 +1245,7 @@ class AmpliconData:
             )
             
             for table_type, tables in self.tables.items():
-                enabled_tests = self._get_enabled_tests(table_type)
+                enabled_tests = self._get_enabled_tests(table_type]
                 
                 # Skip if no tests enabled for this table type
                 if not enabled_tests:
