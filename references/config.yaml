@@ -91,3 +91,6 @@ stats:
 
 figures:
   map: True
+  raw:
+    pcoa: True
+    pcoa_metric: "braycurtis"
