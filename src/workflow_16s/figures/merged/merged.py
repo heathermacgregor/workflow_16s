@@ -3,6 +3,7 @@
 # Standard Library Imports
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+import logging
 
 # Third Party Imports
 import matplotlib.colors as mcolors
@@ -16,7 +17,6 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
-import logging
 
 # Local Imports
 import workflow_16s.figures.figures
@@ -42,7 +42,7 @@ def _validate_metadata(metadata: pd.DataFrame, required_cols: List[str]) -> None
         raise ValueError(
             f"Missing required columns in metadata: {', '.join(missing)}"
         )
-      
+
 
 def _prepare_visualization_data(
     components: pd.DataFrame,
@@ -51,75 +51,88 @@ def _prepare_visualization_data(
     symbol_col: str,
     placeholder: str = 'unknown'
 ) -> pd.DataFrame:
-    """Prepare merged component and metadata data for visualization."""
-    metadata.index = metadata['#sampleid']
-    common_idx = components.index.intersection(metadata.index)
-    metadata = metadata.loc[common_idx].copy()
-    components = components.loc[common_idx].copy()
-    metadata = metadata.dropna(
-        subset=[color_col, symbol_col], how='all'
-    ).fillna(placeholder)
-    return components.join(metadata[[color_col, symbol_col]], how='inner')
-  
-
-def _create_scatter_figure(
-    data: pd.DataFrame,
-    x_col: str,
-    y_col: str,
-    color_col: str,
-    symbol_col: str,
-    color_map: Dict[str, str],
-    hover_data: List[str] = None,
-    marker_size: int = 8
-) -> go.Figure:
-    """Create standardized scatter plot figure."""
-    fig = px.scatter(
-        data,
-        x=x_col,
-        y=y_col,
-        color=color_col,
-        symbol=symbol_col,
-        hover_data=hover_data or data.index,
-        color_discrete_map=color_map,
-    )
-    fig.update_traces(
-        marker_size=marker_size,
-        marker=dict(
-            line=dict(
-                width=0.1, 
-                color='black'
-            )
-        )
-    )
-    return fig
-  
-
-def _configure_axes(
-    fig: go.Figure,
-    x_title: str,
-    y_title: str,
-    linewidth: int = 4,
-    mirror: bool = True
-) -> None:
-    """Configure plot axes with standardized settings."""
-    fig.update_xaxes(
-        title_text=x_title,
-        showline=True,
-        linewidth=linewidth,
-        linecolor='black',
-        mirror=mirror,
-        automargin=True
-    )
-    fig.update_yaxes(
-        title_text=y_title,
-        showline=True,
-        linewidth=linewidth,
-        linecolor='black', 
-        mirror=mirror,
-        automargin=True
+    """
+    Prepare merged component and metadata data for visualization with robust diagnostics.
+    
+    Returns:
+        Merged DataFrame containing components and requested metadata columns
+        
+    Raises:
+        ValueError: If no common samples found between components and metadata
+    """
+    # Create copies to avoid modifying originals
+    comp_copy = components.copy()
+    meta_copy = metadata.copy()
+    
+    # Standardize indices to lowercase strings with whitespace trimming
+    comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
+    
+    # Handle metadata index - prefer '#sampleid' column if available
+    if '#sampleid' in meta_copy.columns:
+        meta_copy['#sampleid'] = meta_copy['#sampleid'].astype(str).str.strip().str.lower()
+        meta_copy.index = meta_copy['#sampleid']
+        logger.debug("Set metadata index from '#sampleid' column")
+    else:
+        logger.warning("Metadata missing '#sampleid' column - using existing index")
+        meta_copy.index = meta_copy.index.astype(str).str.strip().str.lower()
+    
+    # Log sample IDs for debugging
+    logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
+    logger.debug(f"Metadata index (first 5): {meta_copy.index.tolist()[:5]}")
+    
+    # Find common samples
+    common_idx = comp_copy.index.intersection(meta_copy.index)
+    logger.info(f"Found {len(common_idx)} common samples between components and metadata")
+    
+    # Handle no common samples case with detailed diagnostics
+    if len(common_idx) == 0:
+        comp_samples = set(comp_copy.index)
+        meta_samples = set(meta_copy.index)
+        
+        comp_only = comp_samples - meta_samples
+        meta_only = meta_samples - comp_samples
+        
+        logger.critical("CRITICAL ERROR: No common samples between components and metadata!")
+        logger.critical(f"Components-only samples ({len(comp_only)}): {list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}")
+        logger.critical(f"Metadata-only samples ({len(meta_only)}): {list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}")
+        
+        # Look for partial matches
+        partial_matches = []
+        for comp_id in list(comp_samples)[:10]:  # Check first 10
+            for meta_id in meta_samples:
+                if comp_id in meta_id or meta_id in comp_id:
+                    partial_matches.append(f"{comp_id} ~ {meta_id}")
+                    break
+        
+        if partial_matches:
+            logger.critical(f"Possible partial matches: {partial_matches[:5]}")
+        
+        raise ValueError("No common samples between components and metadata")
+    
+    # Filter to common samples
+    meta_filtered = meta_copy.loc[common_idx].copy()
+    comp_filtered = comp_copy.loc[common_idx].copy()
+    
+    # Handle missing metadata columns
+    for col in [color_col, symbol_col]:
+        if col not in meta_filtered.columns:
+            logger.warning(f"Column '{col}' missing from metadata. Creating placeholder column.")
+            meta_filtered[col] = placeholder
+    
+    # Merge components with metadata
+    merged = comp_filtered.join(
+        meta_filtered[[color_col, symbol_col]], 
+        how='inner'
     )
     
-# ==================================== FUNCTIONS ===================================== #
+    # Fill missing values in metadata columns
+    for col in [color_col, symbol_col]:
+        if col in merged.columns:
+            merged[col] = merged[col].fillna(placeholder)
+    
+    logger.debug(f"Merged data shape: {merged.shape}")
+    return merged
+
 
 def sample_map_categorical(
     metadata: pd.DataFrame, 
@@ -136,61 +149,27 @@ def sample_map_categorical(
     verbose: bool = False
 ) -> Tuple[go.Figure, Any]:
     """
-    Generate an interactive geographical map of samples colored by categorical 
-    metadata.
-
-    Args:
-        metadata:         DataFrame containing sample metadata with coordinates.
-        show:             Whether to display the figure immediately. Defaults 
-                          to False.
-        output_dir:       Directory to save figure/legend. Defaults to None.
-        projection_type:  Geo projection style. Defaults to 'natural earth'.
-        height:           Figure height in pixels. Defaults to 800.
-        size:             Marker size for samples. Defaults to 5.
-        opacity:          Marker opacity (0-1). Defaults to 0.3.
-        lat:              Metadata column containing latitude values. Defaults 
-                          to 'latitude_deg'.
-        lon:              Metadata column containing longitude values. Defaults 
-                          to 'longitude_deg'.
-        color_col:        Metadata column for color grouping. Defaults to 
-                          'dataset_name'.
-        limit_axes:       Toggle to limit axes by the present data points.
-        verbose:
-
-    Returns:
-        Tuple containing:
-        - Plotly Figure object with geographical sample distribution
-        - Dictionary mapping categories to assigned colors
-
-    Notes:
-        - Handles missing values by filling with 'other' category
-        - Automatically generates and saves legend when output_dir is specified
-        - Logs color assignments for tracking category-color relationships
+    Generate an interactive geographical map of samples colored by categorical metadata.
     """
-    # Convert empty strings in 'color_col' to NaN, then 'other'
+    # Convert empty strings to NaN then to 'other'
     metadata[color_col] = metadata[color_col].replace('', np.nan) 
     metadata[color_col] = metadata[color_col].fillna('other')      
     metadata = metadata.sort_values(by=color_col, ascending=True)
     
-    # Group by 'color_col' and count samples
+    # Count samples per category
     cat_counts = metadata[color_col].value_counts().reset_index()
     cat_counts.columns = [color_col, 'sample_count']
-    
-    # Merge the counts back into the original metadata
     metadata = metadata.merge(cat_counts, on=color_col, how='left')
 
-    # Create a color mapping for datasets
+    # Create color mapping
     colordict = {c: largecolorset[i % len(largecolorset)] 
                  for i, c in enumerate(cat_counts[color_col])}
 
     if verbose:
-        # Print the assigned colors
-        for cat, assigned_color in colordict.items():
-            logger.info(f"[{assigned_color}]    {cat}")
+        for cat, color in colordict.items():
+            logger.info(f"[{color}]    {cat}")
         
-    #legend = plot_legend(color_mapping, color_col)
-    
-    # Plot the points on a map
+    # Create plot
     fig = px.scatter_geo(
         metadata, 
         lat=lat, 
@@ -201,6 +180,7 @@ def sample_map_categorical(
         hover_data={'sample_count': True}  
     )
     
+    # Configure map
     fig.update_geos(
         projection_type=projection_type,  
         resolution=50,
@@ -209,33 +189,34 @@ def sample_map_categorical(
         showlakes=True, lakecolor="#fff",
         showrivers=True, rivercolor="#fff",
     )
+    
+    # Set axis limits if requested
     if limit_axes:
-        # Set axis limits based on the range of latitude and longitude values
         fig.update_geos(
-            lonaxis_range=[metadata[lon].min() - 20, 
-                           metadata[lon].max() + 20], 
-            lataxis_range=[metadata[lat].min() - 20, 
-                           metadata[lat].max() + 20]
+            lonaxis_range=[metadata[lon].min() - 20, metadata[lon].max() + 20], 
+            lataxis_range=[metadata[lat].min() - 20, metadata[lat].max() + 20]
         )
     
+    # Update layout
     fig.update_layout(
         template='heather',
-        margin=dict(l=5, r=5, t=5, b=5), # Increase width and height
+        margin=dict(l=5, r=5, t=5, b=5),
         showlegend=False, 
         font_size=12
     )  
     
-    # Update marker size to make the dots smaller and semi-transparent
+    # Update marker appearance
     fig.update_traces(marker=dict(size=size, opacity=opacity)) 
 
-    #fig.show()
+    # Save output if requested
     if output_dir:
         output_path = Path(output_dir) / f"sample_map.{color_col}"
         plotly_show_and_save(fig=fig, show=show, output_path=output_path)
 
         legend_path = Path(output_dir) / f'legend.{color_col}.png'
         plot_legend(colordict, color_col, legend_path)
-    return fig, colordict#, legend
+        
+    return fig, colordict
     
 
 def heatmap_feature_abundance(
@@ -245,18 +226,7 @@ def heatmap_feature_abundance(
     feature_type: str = "ASV",
 ) -> go.Figure:
     """
-    Generate an interactive heatmap visualization of feature abundance across samples.
-    
-    Args:
-        table:        Feature abundance matrix with features as rows and samples 
-                      as columns.
-        show:         Whether to display the figure immediately. Defaults to False.
-        output_dir:   Directory path to save the figure. Defaults to None.
-        feature_type: Type of features displayed (e.g., 'ASV', 'OTU'). Defaults 
-                      to "ASV".
-
-    Returns:
-        Interactive Plotly figure object displaying the heatmap.
+    Generate an interactive heatmap visualization of feature abundance.
     """
     fig = px.imshow(
         table,
@@ -294,82 +264,54 @@ def pcoa(
     y: int = 2
 ) -> Tuple[go.Figure, Any]:
     """
-    Generate a PCoA plot with metadata annotations and explanatory variance percentages.
-    
-    Args:
-        components:           PCoA coordinates matrix with samples as rows and 
-                              components as columns.
-        proportion_explained: Array of variance explained percentages for each 
-                              component.
-        metadata:             Metadata DataFrame containing color and symbol columns.
-        metric:               Beta diversity metric used for PCoA. Defaults to 
-                              'braycurtis'.
-        color_col:            Metadata column name for point colors. Defaults to 
-                              'dataset_name'.
-        symbol_col:           Metadata column name for point markers. Defaults to 
-                              'nuclear_contamination_status'.
-        show:                 Whether to display the figure immediately. Defaults 
-                              to False.
-        output_dir:           Directory path to save outputs. Defaults to None.
-        transformation:       Data transformation applied prior to PCoA. Defaults 
-                              to None.
-        x:                    Component number for x-axis. Defaults to 1.
-        y:                    Component number for y-axis. Defaults to 2.
-
-    Returns:
-        Tuple containing Plotly figure object and legend figure.
-        
-    Raises:
-        ValueError: If specified color_col or symbol_col are missing from metadata.
+    Generate a PCoA plot with metadata annotations.
     """
+    # Validate metadata columns
     _validate_metadata(metadata, [color_col, symbol_col])
     
+    # Prepare visualization data
     data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
-    colordict, _ = marker_color_map(data, color_col, continuous_color_set=False)
     
-    x_col = f'PC{x}'
-    y_col = f'PC{y}'
-    x_title = f"PCo{x} ({round(100 * proportion_explained[x-1], 2)}%)"
-    y_title = f"PCo{y} ({round(100 * proportion_explained[y-1], 2)}%)"
-
-    data['index'] = data.index
+    # Add explicit sample ID column
+    data['sample_id'] = data.index
     
-    fig = _create_scatter_figure(
-        data=data,
-        x_col=x_col,
-        y_col=y_col,
-        color_col=color_col,
-        
-        symbol_col=symbol_col,
-        #color_map=colordict,
-        color_map=color_map,
-        hover_data=['index', color_col]
+    # Create plot
+    fig = px.scatter(
+        data,
+        x=f'PCo{x}',
+        y=f'PCo{y}',
+        color=color_col,
+        symbol=symbol_col,
+        hover_data=['sample_id', color_col],
+        opacity=0.8
     )
+    
+    # Configure axes
+    if proportion_explained is not None and len(proportion_explained) >= max(x, y):
+        x_title = f"PCo{x} ({proportion_explained[x-1]:.2%})"
+        y_title = f"PCo{y} ({proportion_explained[y-1]:.2%})"
+    else:
+        x_title = f"PCo{x}"
+        y_title = f"PCo{y}"
     
     fig.update_layout(
         template='heather',
-        height=1000,
+        height=800,
         width=1100,
         plot_bgcolor='#fff',
-        font_size=45,
-        showlegend=False,
-        xaxis=dict(showticklabels=False, zeroline=True),
-        yaxis=dict(showticklabels=False, zeroline=True)
+        font_size=18,
+        xaxis_title=x_title,
+        yaxis_title=y_title
     )
-    _configure_axes(fig, x_title, y_title, linewidth=7)
-
-    if output_dir:
-        file_stem = (
-            f"pcoa.{f'{transformation}.' if transformation else ''}"
-            f"{metric}.{x}-{y}.{color_col}.{symbol_col}"
-        )
-        plotly_show_and_save(
-            fig, show, Path(output_dir) / 'pcoa' / file_stem
-        )
-        legend_path = Path(output_dir) / 'pcoa' / f'legend.{color_col}.png'
-        plot_legend(colordict, color_col, legend_path)
     
-    return fig, colordict
+    # Save output if requested
+    if output_dir:
+        output_path = Path(output_dir) / 'pcoa'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"pcoa.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
+    
+    return fig, None
   
 
 def pca(
@@ -386,57 +328,87 @@ def pca(
     y: int = 2
 ) -> Tuple[go.Figure, Any]:
     """
-    Generate a PCA plot with robust error handling and debugging.
+    Generate a PCA plot with comprehensive error handling and diagnostics.
     """
     try:
-        # Validate inputs
-        _validate_metadata(metadata, [color_col, symbol_col])
+        # Validate required metadata columns
+        required_columns = [color_col, symbol_col, '#sampleid']
+        missing = [col for col in required_columns if col not in metadata.columns]
+        if missing:
+            logger.error(f"Missing required metadata columns: {', '.join(missing)}")
+            raise ValueError(f"Missing columns: {', '.join(missing)}")
         
         # Prepare visualization data
+        logger.info("Preparing PCA visualization data...")
         data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
         
-        # Check for empty data after preparation
+        # Handle empty data case
         if data.empty:
-            logger.error("No data available for plotting after merging and filtering")
-            return go.Figure(), None
+            logger.error("No data available for PCA plotting after merging")
+            fig = go.Figure()
+            fig.add_annotation(
+                text="No data available for plotting",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=24, color="red")
+            )
+            fig.update_layout(
+                title="PCA Plot - Data Unavailable",
+                template='heather'
+            )
+            return fig, None
         
         # Add explicit sample ID column
         data['sample_id'] = data.index
         
-        # Check for valid columns
+        # Verify PC columns exist
         x_col = f'PC{x}'
         y_col = f'PC{y}'
         
         if x_col not in data.columns:
-            raise ValueError(f"Missing x-axis column: {x_col}. Available: {data.columns.tolist()}")
+            available_pcs = [col for col in data.columns if col.startswith('PC')]
+            logger.error(f"Missing x-axis column '{x_col}'. Available PC columns: {available_pcs}")
+            raise ValueError(f"Column {x_col} not found in PCA components")
+        
         if y_col not in data.columns:
-            raise ValueError(f"Missing y-axis column: {y_col}. Available: {data.columns.tolist()}")
+            available_pcs = [col for col in data.columns if col.startswith('PC')]
+            logger.error(f"Missing y-axis column '{y_col}'. Available PC columns: {available_pcs}")
+            raise ValueError(f"Column {y_col} not found in PCA components")
         
         # Create plot
+        logger.info(f"Creating PCA plot with {len(data)} samples")
         fig = px.scatter(
             data,
             x=x_col,
             y=y_col,
             color=color_col,
             symbol=symbol_col,
-            hover_data=['sample_id', color_col, symbol_col],  # Use actual columns
+            hover_data=['sample_id', color_col, symbol_col],
             opacity=0.8,
             size_max=10
         )
         
         # Add variance explained to axis labels
-        x_title = f"PC{x} ({proportion_explained[x-1]:.2%})" if proportion_explained else f"PC{x}"
-        y_title = f"PC{y} ({proportion_explained[y-1]:.2%})" if proportion_explained else f"PC{y}"
+        if proportion_explained is not None and len(proportion_explained) >= max(x, y):
+            x_pct = proportion_explained[x-1] * 100
+            y_pct = proportion_explained[y-1] * 100
+            x_title = f"PC{x} ({x_pct:.1f}%)"
+            y_title = f"PC{y} ({y_pct:.1f}%)"
+        else:
+            logger.warning("Proportion explained array missing or too short")
+            x_title = f"PC{x}"
+            y_title = f"PC{y}"
         
+        # Configure layout
         fig.update_layout(
             template='heather',
             height=800,
             width=800,
-            showlegend=True,  # Keep visible for debugging
+            showlegend=True,
             font_family="Helvetica",
             font_color="black",
-            font_size=15,
-            title_text=f'PCA ({transformation or "raw"})' if transformation else 'PCA',
+            font_size=18,
+            title_text=f'PCA: {transformation.title() if transformation else "Raw Data"}',
             title_x=0.5,
             xaxis_title=x_title,
             yaxis_title=y_title
@@ -448,12 +420,26 @@ def pca(
             output_path.mkdir(parents=True, exist_ok=True)
             file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
             plotly_show_and_save(fig, show, output_path / file_stem)
+            logger.info(f"Saved PCA plot to {output_path / file_stem}")
         
-        return fig, None  # Return colordict if needed
+        return fig, None
     
     except Exception as e:
-        logger.exception(f"Error generating PCA plot: {str(e)}")
-        raise
+        logger.exception(f"Critical error generating PCA plot: {str(e)}")
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error: {str(e)[:100]}...",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=20, color="red")
+        )
+        fig.update_layout(
+            title="PCA Plot - Generation Failed",
+            template='heather'
+        )
+        return fig, None
+
 
 def mds(
     df: pd.DataFrame, 
@@ -468,71 +454,47 @@ def mds(
     y: int = 2
 ) -> Tuple[go.Figure, Any]:
     """
-    Generate a multidimensional scaling plot (e.g., UMAP, t-SNE) with metadata 
-    annotations.
-    
-    Args:
-        df:             MDS/UMAP coordinates matrix with samples as rows and 
-                        dimensions as columns.
-        metadata:       Metadata DataFrame containing group and symbol annotations.
-        group_col:      Metadata column name for grouping/coloring points.
-        symbol_col:     Metadata column name for point markers.
-        show:           Whether to display the figure immediately. Defaults to False.
-        output_dir:     Directory path to save outputs. Defaults to None.
-        transformation: Data transformation applied prior to MDS. Defaults to None.
-        mode:           Dimensionality reduction method used. Defaults to 'UMAP'.
-        x:              Dimension number for x-axis. Defaults to 1.
-        y:              Dimension number for y-axis. Defaults to 2.
-
-    Returns:
-        Tuple containing Plotly figure object and legend figure.
+    Generate a multidimensional scaling plot (t-SNE or UMAP).
     """
+    # Validate metadata columns
     _validate_metadata(metadata, [group_col, symbol_col])
     
-    # Align indices and handle missing values
-    df.index = df.index.astype(str)
-    metadata.index = metadata.index.astype(str)
+    # Prepare visualization data
     data = _prepare_visualization_data(df, metadata, group_col, symbol_col)
     
-    if f'{mode}{x}' not in data.columns or f'{mode}{y}' not in data.columns:
-        raise ValueError(f"Missing {mode} coordinates in data columns")
-
-    colordict, _ = marker_color_map(data, group_col, continuous_color_set=False)
-
-    data['index'] = data.index
+    # Add explicit sample ID column
+    data['sample_id'] = data.index
     
-    fig = _create_scatter_figure(
-        data=data,
-        x_col=f'{mode}{x}',
-        y_col=f'{mode}{y}',
-        color_col=group_col,
-        symbol_col=symbol_col,
-        color_map=colordict,
-        hover_data=['index', group_col]
+    # Create plot
+    fig = px.scatter(
+        data,
+        x=f'{mode}{x}',
+        y=f'{mode}{y}',
+        color=group_col,
+        symbol=symbol_col,
+        hover_data=['sample_id', group_col],
+        opacity=0.8
     )
     
+    # Configure layout
     fig.update_layout(
         template='heather',
         height=800,
         width=800,
-        showlegend=False,
         title_text=mode,
-        title_x=0.5
+        title_x=0.5,
+        xaxis_title=f'{mode}{x}',
+        yaxis_title=f'{mode}{y}'
     )
-    _configure_axes(fig, f'{mode}{x}', f'{mode}{y}')
-
-    if output_dir: 
-        file_stem = (
-            f"{mode}.{f'{transformation}.' if transformation else ''}"
-            f"{x}-{y}.{group_col}.{symbol_col}"
-        )
-        plotly_show_and_save(
-            fig, show, Path(output_dir) / mode.lower() / file_stem
-        )
-        legend_path = Path(output_dir) / mode.lower() / f'legend_{group_col}.png'
-        plot_legend(colordict, group_col, legend_path)
     
-    return fig, colordict
+    # Save output if requested
+    if output_dir: 
+        output_path = Path(output_dir) / mode.lower()
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"{mode}.{transformation or 'raw'}.{x}-{y}.{group_col}.{symbol_col}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
+    
+    return fig, None
   
 
 def plot_ubiquity(
@@ -547,23 +509,7 @@ def plot_ubiquity(
     transformation: str = None
 ) -> go.Figure:
     """
-    Generate a ubiquity plot comparing feature prevalence between contaminated 
-    and pristine groups.
-    
-    Args:
-        cm:             Mean abundance values for contaminated group.
-        pm:             Mean abundance values for pristine group.
-        ubi_c:          Ubiquity scores for contaminated group.
-        ubi_p:          Ubiquity scores for pristine group.
-        contaminated:   Sample IDs in contaminated group.
-        pristine:       Sample IDs in pristine group.
-        show:           Whether to display the figure immediately. Defaults 
-                        to False.
-        output_dir:     Directory path to save outputs. Defaults to None.
-        transformation: Data transformation applied. Defaults to None.
-
-    Returns:
-        Interactive Plotly figure object showing ubiquity relationships.
+    Generate a ubiquity plot comparing feature prevalence.
     """
     sizes = np.array(
         [(v / len(contaminated)) + (ubi_p[i] / len(pristine)) 
@@ -589,19 +535,17 @@ def plot_ubiquity(
         template='heather',
         height=600,
         width=800,
-        title_text='Enrichment of significant changers',
+        title_text='Feature Ubiquity Comparison',
         title_x=0.5,
         xaxis_title='Contaminated',
         yaxis_title='Pristine'
     )
 
     if output_dir:
-        file_stem = (
-            f"ubiquity.{f'{transformation}.' if transformation else ''}"
-        )
-        plotly_show_and_save(
-            fig, show, Path(output_dir) / 'ubiquity' / file_stem
-        )
+        output_path = Path(output_dir) / 'ubiquity'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"ubiquity.{transformation or 'raw'}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
     
     return fig
   
@@ -615,23 +559,12 @@ def violin_feature(
     show: bool = False
 ) -> go.Figure:
     """
-    Generate a violin plot showing distribution of a feature across contamination 
-    status groups.
-    
-    Args:
-        df:             DataFrame containing feature values and metadata.
-        feature:        Name of feature column to plot.
-        output_dir:     Base directory path for saving outputs.
-        sub_output_dir: Subdirectory for specific output type. Defaults to 'faprotax'.
-        status_col:     Metadata column containing contamination status. Defaults 
-                        to 'nuclear_contamination_status'.
-        show:           Whether to display the figure immediately. Defaults to False.
-
-    Returns:
-        Interactive Plotly figure object displaying violin plot.
+    Generate a violin plot for a specific feature.
     """
+    # Reset index and handle missing values
     df = df.reset_index().dropna(subset=[feature, status_col])
     
+    # Create plot
     fig = px.violin(
         df, 
         y=feature, 
@@ -642,18 +575,19 @@ def violin_feature(
         hover_data=['index', 'dataset_name']
     )
     
+    # Configure layout
     fig.update_layout(
         template='heather',
         xaxis_title="Contamination Status",
         yaxis_title=feature.replace('_', ' ').title()
     )
 
+    # Save output
     if output_dir:
-        plotly_show_and_save(
-            fig, 
-            show, 
-            Path(output_dir) / sub_output_dir / f'violin.{status_col}.{feature}'.lower()
-        )
+        output_path = Path(output_dir) / sub_output_dir
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f'violin.{status_col}.{feature}'.lower()
+        plotly_show_and_save(fig, show, output_path / file_stem)
     
     return fig
   
@@ -668,25 +602,16 @@ def ancom(
     feature_type: str = "l6"
 ) -> Tuple[go.Figure, Any]:
     """
-    Generate an ANCOM volcano plot showing differentially abundant features.
-    
-    Args:
-        data:           ANCOM results DataFrame containing CLR values and W statistics.
-        min_W:          Minimum W statistic threshold for significance.
-        output_dir:     Directory path to save outputs. Defaults to None.
-        color_col:      Column name for color coding points. Defaults to 'p'.
-        show:           Whether to display the figure immediately. Defaults to False.
-        reverse_x_axis: Whether to invert CLR values on x-axis. Defaults to True.
-        feature_type:   Taxonomic level or feature type analyzed. Defaults to "l6".
-
-    Returns:
-        Tuple containing ANCOM plot figure and legend figure.
+    Generate an ANCOM volcano plot.
     """
+    # Create color mapping
     colordict, colormap = marker_color_map(data, color_col)
     
+    # Optionally reverse CLR values
     if reverse_x_axis:
         data['clr'] = -data['clr']
     
+    # Create plot
     fig = px.scatter(
         data, 
         x='clr', 
@@ -696,15 +621,17 @@ def ancom(
         color_continuous_scale='viridis'
     )
     
+    # Configure layout
     fig.update_layout(
         template='heather',
         width=1100,
         height=1000,
-        paper_bgcolor='#fff'
+        paper_bgcolor='#fff',
+        xaxis_title='CLR',
+        yaxis_title='W statistic'
     )
-    _configure_axes(fig, 'clr', 'W', linewidth=7)
     
-    # Add significance threshold line
+    # Add significance threshold
     fig.add_shape(
         type='line',
         x0=data['clr'].min(),
@@ -714,17 +641,12 @@ def ancom(
         line=dict(color='black', dash='dash', width=4)
     )
 
+    # Save output
     if output_dir:
-        plotly_show_and_save(
-            fig, 
-            show, 
-            Path(output_dir) / 'ancom' / f"ancom.{feature_type.lower()}"
-        )
-        plot_legend(
-            colordict, 
-            color_col, 
-            Path(output_dir) / 'ancom' / f'legend.{feature_type.lower()}.png'
-        )
+        output_path = Path(output_dir) / 'ancom'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"ancom.{feature_type.lower()}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
     
     return fig, colordict
   
@@ -736,16 +658,7 @@ def plot_correlation_matrix(
     feature_type: str = "ASV"
 ) -> go.Figure:
     """
-    Generate an interactive correlation matrix heatmap for features.
-    
-    Args:
-        data:         Correlation matrix DataFrame.
-        show:         Whether to display the figure immediately. Defaults to False.
-        output_dir:   Directory path to save outputs. Defaults to None.
-        feature_type: Type of features analyzed. Defaults to "ASV".
-
-    Returns:
-        Interactive Plotly figure object displaying correlation matrix.
+    Generate a correlation matrix heatmap.
     """
     fig = px.imshow(
         data, 
@@ -753,6 +666,7 @@ def plot_correlation_matrix(
         title=f"{feature_type} Correlation Matrix"
     )
     
+    # Configure layout
     fig.update_layout(
         template='heather',
         height=1200,
@@ -763,14 +677,13 @@ def plot_correlation_matrix(
             y=0.5,
             yanchor='middle',
             tickfont=dict(size=14)
-        )
     )
 
+    # Save output
     if output_dir:
-        plotly_show_and_save(
-            fig, 
-            show, 
-            Path(output_dir) / 'correlation' / f"correlation.{feature_type.lower()}"
-        )
+        output_path = Path(output_dir) / 'correlation'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"correlation.{feature_type.lower()}"
+        plotly_show_and_save(fig, show, output_path / file_stem)
     
     return fig
