@@ -1150,6 +1150,7 @@ class AmpliconData:
         # self._run_statistical_analyses()
         self._run_ordination()
         # self._identify_top_features()
+        logger.info(self.ordination)
     
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
