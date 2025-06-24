@@ -80,35 +80,20 @@ def distance_matrix(
     return dm
 
 
-def pcoa(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
-    metric: str = DEFAULT_METRIC,
-    n_dimensions: Optional[int] = DEFAULT_N_PCOA
-) -> PCoA:
+def pcoa(table: Table, metric: str = DEFAULT_METRIC, n_dimensions: Optional[int] = DEFAULT_N_PCOA) -> PCoA:
     """
-    Perform Principal Coordinates Analysis (PCoA) on a feature table.
-
-    Args:
-        table:        Input feature table as a dict-like, BIOM Table, or DataFrame
-                      (samples x features or features x samples).
-        metric:       Distance metric name for computing the distance matrix.
-        n_dimensions: Number of dimensions to return; if None, returns all.
-
-    Returns:
-        A PCoAResults object containing eigenvalues, coordinates, and
-        proportion of variance explained.
+    Compute Principal Coordinates Analysis (PCoA) with sample IDs preserved
     """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-    print(table.shape)
+    # Convert to dataframe with samples as rows
+    df = table_to_dataframe(table).T
+    sample_ids = df.index.tolist()
+    
     # Compute distance matrix
-    dm = distance_matrix(table, metric=metric)
-    dm_df = pd.DataFrame(dm, index=table.index, columns=table.index)
-    print(dm_df.shape)
-    # Run PCoA
-    if n_dimensions:
-        return PCoA(dm_df, number_of_dimensions=n_dimensions)
-    return PCoA(dm_df)
+    dist_matrix = DistanceMatrix(squareform(pdist(df, metric=metric), ids=sample_ids)
+    
+    # Perform PCoA
+    pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
+    return pcoa_result
 
 
 def pca(
