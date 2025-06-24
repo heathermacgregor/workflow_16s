@@ -1140,7 +1140,6 @@ class AmpliconData:
                 task = progress.add_task(
                     f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                     total=len(levels)
-                )
                 for level in levels:
                     source_table = get_source(level)
                     processed = process_func(source_table, level, *func_args)
@@ -1238,6 +1237,10 @@ class AmpliconData:
                 # Skip if no tests enabled for this table type
                 if not enabled_tests:
                     continue
+                
+                # Initialize stats dictionary for this table type
+                if table_type not in self.stats:
+                    self.stats[table_type] = {}
                     
                 for level, table in tables.items():
                     # Create a subtask for this level
@@ -1257,6 +1260,8 @@ class AmpliconData:
                         progress=progress,
                         task_id=level_task
                     )
+                    
+                    # Store results for this level
                     self.stats[table_type][level] = test_results
                     
                     # Generate ordination plots
