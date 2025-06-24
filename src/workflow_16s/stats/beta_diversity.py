@@ -79,21 +79,29 @@ def distance_matrix(
     dm = squareform(pdist(table.values, metric=metric))
     return dm
 
-
-def pcoa(table: Table, metric: str = DEFAULT_METRIC, n_dimensions: Optional[int] = DEFAULT_N_PCOA) -> PCoA:
+def pcoa(
+    table: Table, 
+    metric: str = DEFAULT_METRIC, 
+    n_dimensions: Optional[int] = DEFAULT_N_PCOA
+) -> PCoA:
     """
-    Compute Principal Coordinates Analysis (PCoA) with sample IDs preserved
+    Compute PCoA with proper sample ID handling
     """
     # Convert to dataframe with samples as rows
     df = table_to_dataframe(table).T
     sample_ids = df.index.tolist()
     
-    # Compute distance matrix
-    dist_matrix = DistanceMatrix(squareform(pdist(df, metric=metric), ids=sample_ids))
+    # Compute pairwise distances
+    condensed_dists = pdist(df, metric=metric)
+    
+    # Convert to square form
+    square_dists = squareform(condensed_dists)
+    
+    # Create DistanceMatrix with sample IDs
+    dist_matrix = DistanceMatrix(square_dists, ids=sample_ids)
     
     # Perform PCoA
-    pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
-    return pcoa_result
+    return PCoA(dist_matrix, number_of_dimensions=n_dimensions)
 
 
 def pca(
