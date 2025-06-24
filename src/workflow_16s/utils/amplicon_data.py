@@ -1205,7 +1205,7 @@ class AmpliconData:
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
         # Define ordination methods to run
-        ordination_methods = ['pca']#, 'pcoa', 'tsne', 'umap']
+        ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
         # Calculate total plots: (table_types * levels * methods)
         total_plots = 0
         for table_type in self.tables:
