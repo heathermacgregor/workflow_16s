@@ -1177,7 +1177,7 @@ class AmpliconData:
                         table=table,
                         metadata=self.metadata,
                         group_column='nuclear_contamination_status',
-                        group_values: List[Any],
+                        group_values=[True, False],
                         enabled_tests=ordination_methods
                     )
                     self.ordination[table_type][level] = ordination_result
