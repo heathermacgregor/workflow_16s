@@ -677,7 +677,7 @@ def plot_correlation_matrix(
             y=0.5,
             yanchor='middle',
             tickfont=dict(size=14)
-    )
+    ))
 
     # Save output
     if output_dir:
