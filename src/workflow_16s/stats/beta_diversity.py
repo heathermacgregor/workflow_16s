@@ -106,7 +106,7 @@ def pcoa(
         pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
         
         # Ensure consistent PC naming
-        pcoa_result.samples.columns = [f"PC{i+1}" for i in range(n_dimensions)]
+        pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
         
         return pcoa_result
     except:
@@ -114,7 +114,7 @@ def pcoa(
         pcoa_result = PCoA(dist_matrix, number_of_dimensions=3)
         
         # Ensure consistent PC naming
-        pcoa_result.samples.columns = [f"PC{i+1}" for i in range(3)]
+        pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(3)]
         
         return pcoa_result
 
