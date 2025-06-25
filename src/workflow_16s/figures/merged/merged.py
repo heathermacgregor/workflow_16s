@@ -147,7 +147,7 @@ def sample_map_categorical(
     color_col: str = 'dataset_name',
     limit_axes: bool = False,
     verbose: bool = False
-) -> Tuple[go.Figure, Any]:
+) -> Tuple[go.Figure, Dict]:
     """
     Generate an interactive geographical map of samples colored by categorical metadata.
     """
@@ -161,9 +161,10 @@ def sample_map_categorical(
     cat_counts.columns = [color_col, 'sample_count']
     metadata = metadata.merge(cat_counts, on=color_col, how='left')
 
-    # Create color mapping
+    # Create color mapping using sorted unique categories
+    categories = sorted(metadata[color_col].astype(str).unique())
     colordict = {c: largecolorset[i % len(largecolorset)] 
-                 for i, c in enumerate(cat_counts[color_col])}
+                 for i, c in enumerate(categories)}
 
     if verbose:
         for cat, color in colordict.items():
@@ -202,51 +203,25 @@ def sample_map_categorical(
         template='heather',
         margin=dict(l=5, r=5, t=5, b=5),
         showlegend=False, 
-        font_size=12
+        font_size=40,
+        xaxis=dict(showticklabels=False, zeroline=True),
+        yaxis=dict(showticklabels=False, zeroline=True)
     )  
     
     # Update marker appearance
     fig.update_traces(marker=dict(size=size, opacity=opacity)) 
 
-    # Save output if requested
+    # Save output and legend if requested
     if output_dir:
-        output_path = Path(output_dir) / f"sample_map.{color_col}"
-        plotly_show_and_save(fig=fig, show=show, output_path=output_path)
+        output_path = Path(output_dir)
+        file_stem = f"sample_map.{color_col}"
+        plotly_show_and_save(fig=fig, show=show, output_path=output_path / file_stem)
 
-        legend_path = Path(output_dir) / f'legend.{color_col}.png'
+        # Save legend
+        legend_path = output_path / f"{file_stem}.legend.png"
         plot_legend(colordict, color_col, legend_path)
         
     return fig, colordict
-    
-
-def heatmap_feature_abundance(
-    table: pd.DataFrame, 
-    show: bool = False,
-    output_dir: Union[str, Path] = None,
-    feature_type: str = "ASV",
-) -> go.Figure:
-    """
-    Generate an interactive heatmap visualization of feature abundance.
-    """
-    fig = px.imshow(
-        table,
-        color_continuous_scale='viridis',
-        labels={'x': 'Samples', 'y': feature_type, 'color': 'Abundance'},
-        title=f"Heatmap of {feature_type} Abundance"
-    )
-
-    fig.update_layout(
-        template='heather',
-        height=1200,
-        xaxis_showticklabels=False,
-        yaxis_showticklabels=False
-    )
-    
-    if output_dir:
-        output_path = Path(output_dir) / f"heatmap.{feature_type.lower()}"
-        plotly_show_and_save(fig=fig, show=show, output_path=output_path)
-    
-    return fig
   
 
 def pcoa(
@@ -262,7 +237,7 @@ def pcoa(
     transformation: str = None,
     x: int = 1, 
     y: int = 2
-) -> Tuple[go.Figure, Any]:
+) -> Tuple[go.Figure, Dict]:
     """
     Generate a PCoA plot with metadata annotations.
     """
@@ -271,6 +246,11 @@ def pcoa(
     
     # Prepare visualization data
     data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
+    
+    # Create color mapping using sorted unique categories
+    categories = sorted(data[color_col].astype(str).unique())
+    colordict = {c: largecolorset[i % len(largecolorset)] 
+                 for i, c in enumerate(categories)}
     
     # Add explicit sample ID column
     data['sample_id'] = data.index
@@ -282,6 +262,7 @@ def pcoa(
         y=f'PCo{y}',
         color=color_col,
         symbol=symbol_col,
+        color_discrete_map=colordict,
         hover_data=['sample_id', color_col],
         opacity=0.8
     )
@@ -296,23 +277,29 @@ def pcoa(
     
     fig.update_layout(
         template='heather',
-        height=800,
+        height=1000,
         width=1100,
         plot_bgcolor='#fff',
-        font_size=18,
+        font_size=45,
+        showlegend=False,
         xaxis_title=x_title,
         yaxis_title=y_title,
-        showlegend=False
+        xaxis=dict(showticklabels=False, zeroline=True),
+        yaxis=dict(showticklabels=False, zeroline=True)
     )
     
-    # Save output if requested
+    # Save output and legend if requested
     if output_dir:
         output_path = Path(output_dir) / 'pcoa'
         output_path.mkdir(parents=True, exist_ok=True)
         file_stem = f"pcoa.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
         plotly_show_and_save(fig, show, output_path / file_stem)
+        
+        # Save legend
+        legend_path = output_path / f"{file_stem}.legend.png"
+        plot_legend(colordict, color_col, legend_path)
     
-    return fig, None
+    return fig, colordict
   
 
 def pca(
@@ -327,7 +314,7 @@ def pca(
     transformation: str = None,
     x: int = 1, 
     y: int = 2
-) -> Tuple[go.Figure, Any]:
+) -> Tuple[go.Figure, Dict]:
     """
     Generate a PCA plot with comprehensive error handling and diagnostics.
     """
@@ -357,7 +344,12 @@ def pca(
                 title="PCA Plot - Data Unavailable",
                 template='heather'
             )
-            return fig, None
+            return fig, {}
+        
+        # Create color mapping using sorted unique categories
+        categories = sorted(data[color_col].astype(str).unique())
+        colordict = {c: largecolorset[i % len(largecolorset)] 
+                     for i, c in enumerate(categories)}
         
         # Add explicit sample ID column
         data['sample_id'] = data.index
@@ -384,6 +376,7 @@ def pca(
             y=y_col,
             color=color_col,
             symbol=symbol_col,
+            color_discrete_map=colordict,
             hover_data=['sample_id', color_col, symbol_col],
             opacity=0.8,
             size_max=10
@@ -399,31 +392,35 @@ def pca(
             logger.warning("Proportion explained array missing or too short")
             x_title = f"PC{x}"
             y_title = f"PC{y}"
-        
-        # Configure layout
+
         fig.update_layout(
             template='heather',
-            height=800,
-            width=800,
+            height=1000,
+            width=1100,
+            plot_bgcolor='#fff',
+            font_size=45,
             showlegend=False,
-            font_family="Helvetica",
-            font_color="black",
-            font_size=18,
             title_text=f'PCA: {transformation.title() if transformation else "Raw Data"}',
             title_x=0.5,
             xaxis_title=x_title,
-            yaxis_title=y_title
+            yaxis_title=y_title,
+            xaxis=dict(showticklabels=False, zeroline=True),
+            yaxis=dict(showticklabels=False, zeroline=True)
         )
         
-        # Save output if requested
+        # Save output and legend if requested
         if output_dir:
             output_path = Path(output_dir) / 'pca'
             output_path.mkdir(parents=True, exist_ok=True)
             file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
             plotly_show_and_save(fig, show, output_path / file_stem)
             logger.info(f"Saved PCA plot to {output_path / file_stem}")
+            
+            # Save legend
+            legend_path = output_path / f"{file_stem}.legend.png"
+            plot_legend(colordict, color_col, legend_path)
         
-        return fig, None
+        return fig, colordict
     
     except Exception as e:
         logger.exception(f"Critical error generating PCA plot: {str(e)}")
@@ -439,7 +436,7 @@ def pca(
             title="PCA Plot - Generation Failed",
             template='heather'
         )
-        return fig, None
+        return fig, {}
 
 
 def mds(
@@ -453,7 +450,7 @@ def mds(
     mode: str = 'UMAP',
     x: int = 1, 
     y: int = 2
-) -> Tuple[go.Figure, Any]:
+) -> Tuple[go.Figure, Dict]:
     """
     Generate a multidimensional scaling plot (t-SNE or UMAP).
     """
@@ -462,6 +459,11 @@ def mds(
     
     # Prepare visualization data
     data = _prepare_visualization_data(df, metadata, color_col, symbol_col)
+    
+    # Create color mapping using sorted unique categories
+    categories = sorted(data[color_col].astype(str).unique())
+    colordict = {c: largecolorset[i % len(largecolorset)] 
+                 for i, c in enumerate(categories)}
     
     # Add explicit sample ID column
     data['sample_id'] = data.index
@@ -473,6 +475,7 @@ def mds(
         y=f'{mode}{y}',
         color=color_col,
         symbol=symbol_col,
+        color_discrete_map=colordict,
         hover_data=['sample_id', color_col, symbol_col],
         opacity=0.8
     )
@@ -480,23 +483,61 @@ def mds(
     # Configure layout
     fig.update_layout(
         template='heather',
-        height=800,
-        width=800,
+        height=1000,
+        width=1100,
+        plot_bgcolor='#fff',
+        font_size=45,
+        showlegend=False,
         title_text=mode,
         title_x=0.5,
         xaxis_title=f'{mode}{x}',
         yaxis_title=f'{mode}{y}',
-        showlegend=False
+        xaxis=dict(showticklabels=False, zeroline=True),
+        yaxis=dict(showticklabels=False, zeroline=True)
     )
     
-    # Save output if requested
+    # Save output and legend if requested
     if output_dir: 
         output_path = Path(output_dir) / mode.lower()
         output_path.mkdir(parents=True, exist_ok=True)
         file_stem = f"{mode}.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
         plotly_show_and_save(fig, show, output_path / file_stem)
+        
+        # Save legend
+        legend_path = output_path / f"{file_stem}.legend.png"
+        plot_legend(colordict, color_col, legend_path)
     
-    return fig, None
+    return fig, colordict
+
+
+def heatmap_feature_abundance(
+    table: pd.DataFrame, 
+    show: bool = False,
+    output_dir: Union[str, Path] = None,
+    feature_type: str = "ASV",
+) -> go.Figure:
+    """
+    Generate an interactive heatmap visualization of feature abundance.
+    """
+    fig = px.imshow(
+        table,
+        color_continuous_scale='viridis',
+        labels={'x': 'Samples', 'y': feature_type, 'color': 'Abundance'},
+        title=f"Heatmap of {feature_type} Abundance"
+    )
+
+    fig.update_layout(
+        template='heather',
+        height=1200,
+        xaxis_showticklabels=False,
+        yaxis_showticklabels=False
+    )
+    
+    if output_dir:
+        output_path = Path(output_dir) / f"heatmap.{feature_type.lower()}"
+        plotly_show_and_save(fig=fig, show=show, output_path=output_path)
+    
+    return fig
   
 
 def plot_ubiquity(
