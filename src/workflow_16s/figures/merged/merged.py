@@ -458,10 +458,10 @@ def mds(
     Generate a multidimensional scaling plot (t-SNE or UMAP).
     """
     # Validate metadata columns
-    _validate_metadata(metadata, [group_col, symbol_col])
+    _validate_metadata(metadata, [color_col, symbol_col])
     
     # Prepare visualization data
-    data = _prepare_visualization_data(df, metadata, group_col, symbol_col)
+    data = _prepare_visualization_data(df, metadata, color_col, symbol_col)
     
     # Add explicit sample ID column
     data['sample_id'] = data.index
