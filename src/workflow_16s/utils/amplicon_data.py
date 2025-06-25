@@ -1227,16 +1227,18 @@ class AmpliconData:
                 for level, table in level_tables.items():
                     ordination_result = Ordination(
                         cfg=self.cfg,
-                        output_dir=self.figure_output_dir
+                        output_dir=self.figure_output_dir / level
                     ).run_tests(
                         table=table,
                         metadata=self.meta,
                         color_col='dataset_name',
                         symbol_col='nuclear_contamination_status',
-                        transformation=f"{table_type}_{level}",
+                        transformation=table_type,
                         enabled_tests=ordination_methods
                     )
                     self.ordination[table_type][level] = ordination_result
+                    # Update progress after each table save
+                    progress.update(task, advance=1)
     
     def _identify_top_features(self):
         """Identify top features associated with contamination status"""
