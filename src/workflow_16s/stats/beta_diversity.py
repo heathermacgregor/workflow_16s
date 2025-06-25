@@ -88,7 +88,7 @@ def pcoa(
     Compute PCoA with proper sample ID handling
     """
     # Convert to dataframe with samples as rows
-    df = table_to_dataframe(table).T
+    df = table_to_dataframe(table)
     sample_ids = df.index.tolist()
     
     # Compute pairwise distances
