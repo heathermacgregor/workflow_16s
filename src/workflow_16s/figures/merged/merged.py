@@ -445,7 +445,7 @@ def pca(
 def mds(
     df: pd.DataFrame, 
     metadata: pd.DataFrame,
-    group_col: str, 
+    color_col: str, 
     symbol_col: str,
     show: bool = False,
     output_dir: Union[str, Path] = None, 
@@ -471,7 +471,7 @@ def mds(
         data,
         x=f'{mode}{x}',
         y=f'{mode}{y}',
-        color=group_col,
+        color=color_col,
         symbol=symbol_col,
         hover_data=['sample_id', group_col],
         opacity=0.8
