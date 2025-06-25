@@ -299,7 +299,11 @@ class Ordination:
         """
         results = {}
         total_tests = len(enabled_tests)
+        tests_to_run = [test for test in enabled_tests if test in self.TEST_CONFIG]
         
+        if not tests_to_run:
+            return results
+            
         if progress and task_id:
             main_task = progress.add_task(
                 f"[white]Running ordination for {transformation}", 
@@ -314,10 +318,7 @@ class Ordination:
             logger.info(f"Aligned table: {table.shape[0]} features × {table.shape[1]} samples")
             
             # Run each enabled ordination method
-            for test_name in enabled_tests:
-                if test_name not in self.TEST_CONFIG:
-                    continue
-                    
+            for test_name in tests_to_run:
                 config = self.TEST_CONFIG[test_name]
                 test_key = config['key']
                 
@@ -363,13 +364,17 @@ class Ordination:
                     logger.debug("Traceback:", exc_info=True)
                     
                 finally:
+                    # Update progress after each test
                     if progress and task_id:
                         progress.update(main_task, advance=1)
                         
         except Exception as e:
             logger.error(f"Ordination failed for {transformation}: {str(e)}")
             logger.debug("Traceback:", exc_info=True)
-            
+            # Advance progress even if alignment fails
+            if progress and task_id:
+                progress.update(main_task, advance=total_tests)
+                
         return results
 
 # ================================= PLOTTER CLASS ================================== #
