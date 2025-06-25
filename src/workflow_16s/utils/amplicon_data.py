@@ -1237,8 +1237,6 @@ class AmpliconData:
                         enabled_tests=ordination_methods
                     )
                     self.ordination[table_type][level] = ordination_result
-                    # Update progress after each table save
-                    progress.update(task, advance=1)
     
     def _identify_top_features(self):
         """Identify top features associated with contamination status"""
