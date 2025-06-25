@@ -252,7 +252,7 @@ class Ordination:
             'func': calculate_tsne,
             'plot_func': mds,  # Using MDS plotter with mode='t-SNE'
             'name': 'TSNE',
-            'plot_kwargs': {'mode': 't-SNE'}
+            'plot_kwargs': {'mode': 'TSNE'}
         },
         'umap': {
             'key': 'umap',
