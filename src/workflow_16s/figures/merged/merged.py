@@ -493,7 +493,7 @@ def mds(
     if output_dir: 
         output_path = Path(output_dir) / mode.lower()
         output_path.mkdir(parents=True, exist_ok=True)
-        file_stem = f"{mode}.{transformation or 'raw'}.{x}-{y}.{group_col}.{symbol_col}"
+        file_stem = f"{mode}.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
         plotly_show_and_save(fig, show, output_path / file_stem)
     
     return fig, None
