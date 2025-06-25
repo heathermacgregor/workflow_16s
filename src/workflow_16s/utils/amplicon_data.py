@@ -535,7 +535,23 @@ class AmpliconData:
         self._load_data()
         self._process_data()
         self._run_analyses()
-    
+
+    def _biom_to_df(self, table: Table) -> pd.DataFrame:
+        """
+        Convert a BIOM table to a pandas DataFrame with samples as rows and features as columns.
+        
+        Args:
+            table: BIOM table to convert
+            
+        Returns:
+            DataFrame with samples as rows and features as columns
+        """
+        # Transpose to get samples as rows and features as columns
+        data = table.matrix_data.toarray().T
+        sample_ids = table.ids(axis='sample')
+        feature_ids = table.ids(axis='observation')
+        return pd.DataFrame(data, index=sample_ids, columns=feature_ids)
+        
     def _validate_mode(self):
         """Validate processing mode"""
         if self.mode not in self.MODE_CONFIG:
@@ -919,33 +935,38 @@ class AmpliconData:
             return
     
         tbl_type = ml_cfg["table_type"]
-        level     = ml_cfg["level"]
-        table     = self.tables[tbl_type][level]
-    
+        level = ml_cfg["level"]
+        
+        # Get the table and convert to DataFrame
+        table = self.tables[tbl_type][level]
         X = self._biom_to_df(table)
-        y = self.meta[DEFAULT_GROUP_COLUMN]              # contamination label
-    
-        # Keep indices identical
-        X, self.meta = X.loc[y.index], self.meta.loc[y.index]
-    
-        # Stratified split so class balance is preserved
+        
+        # Get labels and align with feature matrix
+        y = self.meta[DEFAULT_GROUP_COLUMN]  # contamination label
+        
+        # Align indices (crucial for correct sample-feature matching)
+        common_samples = X.index.intersection(y.index)
+        X = X.loc[common_samples]
+        y = y.loc[common_samples]
+        
+        # Stratified split preserving class balance
         X_tr, X_te, y_tr, y_te = filter_data(
-            X, y, self.meta, DEFAULT_GROUP_COLUMN,
-            test_size = 0.3, random_state = 42
+            X, y, self.meta.loc[common_samples], DEFAULT_GROUP_COLUMN,
+            test_size=0.3, random_state=42
         )
-    
-        # Wrapper around CatBoost + RFE / SHAP / … already implemented
+        
+        # Feature selection
         X_tr_sel, X_te_sel, selected = perform_feature_selection(
             X_tr, y_tr, X_te, y_te,
-            feature_selection      = ml_cfg["method"],
-            num_features           = ml_cfg["num_features"],
-            step_size              = ml_cfg.get("step_size", 100),
-            thread_count           = ml_cfg["catboost_threads"],
-            random_state           = 42,
-            use_permutation_importance = ml_cfg["permutation_importance"],
+            feature_selection=ml_cfg["method"],
+            num_features=ml_cfg["num_features"],
+            step_size=ml_cfg.get("step_size", 100),
+            thread_count=ml_cfg["catboost_threads"],
+            random_state=42,
+            use_permutation_importance=ml_cfg["permutation_importance"],
         )
-    
-        # Hyper-parameter sweep (grid_search) returns best model & metrics
+        
+        # Hyperparameter tuning
         params_grid = {
             "iterations": [1000],
             "learning_rate": [0.1],
@@ -956,12 +977,17 @@ class AmpliconData:
         best_model, best_params, best_mcc = grid_search(
             X_tr_sel, y_tr, X_te_sel, y_te,
             params_grid,
-            output_dir = self.figure_output_dir / "ml"
+            output_dir=self.figure_output_dir / "ml"
         )
-        save_feature_importances(best_model,
-                                 pd.DataFrame(X_tr_sel, columns=selected),
-                                 self.figure_output_dir / "ml")
-        # Store for later use
+        
+        # Save feature importances
+        save_feature_importances(
+            best_model,
+            pd.DataFrame(X_tr_sel, columns=selected),
+            self.figure_output_dir / "ml"
+        )
+        
+        # Store results for later use
         self.ml_selected_features = selected
-        self.ml_model             = best_model
+        self.ml_model = best_model
 
