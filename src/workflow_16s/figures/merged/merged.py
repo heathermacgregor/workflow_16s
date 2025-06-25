@@ -35,7 +35,10 @@ logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
-def _validate_metadata(metadata: pd.DataFrame, required_cols: List[str]) -> None:
+def _validate_metadata(
+    metadata: pd.DataFrame, 
+    required_cols: List[str]
+) -> None:
     """Validate presence of required columns in metadata."""
     missing = [col for col in required_cols if col not in metadata.columns]
     if missing:
@@ -49,7 +52,8 @@ def _prepare_visualization_data(
     metadata: pd.DataFrame,
     color_col: str,
     symbol_col: str,
-    placeholder: str = 'unknown'
+    placeholder: str = 'unknown',
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Prepare merged component and metadata data for visualization with robust diagnostics.
@@ -71,18 +75,22 @@ def _prepare_visualization_data(
     if '#sampleid' in meta_copy.columns:
         meta_copy['#sampleid'] = meta_copy['#sampleid'].astype(str).str.strip().str.lower()
         meta_copy.index = meta_copy['#sampleid']
-        logger.debug("Set metadata index from '#sampleid' column")
+        if verbose:
+            logger.debug("Set metadata index from '#sampleid' column")
     else:
-        logger.warning("Metadata missing '#sampleid' column - using existing index")
+        if verbose:
+            logger.warning("Metadata missing '#sampleid' column - using existing index")
         meta_copy.index = meta_copy.index.astype(str).str.strip().str.lower()
-    
-    # Log sample IDs for debugging
-    logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
-    logger.debug(f"Metadata index (first 5): {meta_copy.index.tolist()[:5]}")
+        
+    if verbose:
+        # Log sample IDs for debugging
+        logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
+        logger.debug(f"Metadata index (first 5): {meta_copy.index.tolist()[:5]}")
     
     # Find common samples
     common_idx = comp_copy.index.intersection(meta_copy.index)
-    logger.info(f"Found {len(common_idx)} common samples between components and metadata")
+    if verbose:
+        logger.info(f"Found {len(common_idx)} common samples between components and metadata")
     
     # Handle no common samples case with detailed diagnostics
     if len(common_idx) == 0:
@@ -91,10 +99,11 @@ def _prepare_visualization_data(
         
         comp_only = comp_samples - meta_samples
         meta_only = meta_samples - comp_samples
-        
-        logger.critical("CRITICAL ERROR: No common samples between components and metadata!")
-        logger.critical(f"Components-only samples ({len(comp_only)}): {list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}")
-        logger.critical(f"Metadata-only samples ({len(meta_only)}): {list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}")
+
+        if verbose:
+            logger.critical("CRITICAL ERROR: No common samples between components and metadata!")
+            logger.critical(f"Components-only samples ({len(comp_only)}): {list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}")
+            logger.critical(f"Metadata-only samples ({len(meta_only)}): {list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}")
         
         # Look for partial matches
         partial_matches = []
@@ -105,7 +114,8 @@ def _prepare_visualization_data(
                     break
         
         if partial_matches:
-            logger.critical(f"Possible partial matches: {partial_matches[:5]}")
+            if verbose:
+                logger.critical(f"Possible partial matches: {partial_matches[:5]}")
         
         raise ValueError("No common samples between components and metadata")
     
@@ -116,7 +126,8 @@ def _prepare_visualization_data(
     # Handle missing metadata columns
     for col in [color_col, symbol_col]:
         if col not in meta_filtered.columns:
-            logger.warning(f"Column '{col}' missing from metadata. Creating placeholder column.")
+            if verbose:
+                logger.warning(f"Column '{col}' missing from metadata. Creating placeholder column.")
             meta_filtered[col] = placeholder
     
     # Merge components with metadata
@@ -129,8 +140,8 @@ def _prepare_visualization_data(
     for col in [color_col, symbol_col]:
         if col in merged.columns:
             merged[col] = merged[col].fillna(placeholder)
-    
-    logger.debug(f"Merged data shape: {merged.shape}")
+    if verbose:
+        logger.debug(f"Merged data shape: {merged.shape}")
     return merged
 
 
@@ -222,85 +233,7 @@ def sample_map_categorical(
         plot_legend(colordict, color_col, legend_path)
         
     return fig, colordict
-  
 
-def pcoa(
-    components: pd.DataFrame, 
-    proportion_explained: np.ndarray, 
-    metadata: pd.DataFrame,
-    metric: str = 'braycurtis',
-    color_map: Dict = None,
-    color_col: str = 'dataset_name', 
-    symbol_col: str = 'nuclear_contamination_status',
-    show: bool = False,
-    output_dir: Union[str, Path] = None, 
-    transformation: str = None,
-    x: int = 1, 
-    y: int = 2
-) -> Tuple[go.Figure, Dict]:
-    """
-    Generate a PCoA plot with metadata annotations.
-    """
-    # Validate metadata columns
-    _validate_metadata(metadata, [color_col, symbol_col])
-    
-    # Prepare visualization data
-    data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
-    
-    # Create color mapping using sorted unique categories
-    categories = sorted(data[color_col].astype(str).unique())
-    colordict = {c: largecolorset[i % len(largecolorset)] 
-                 for i, c in enumerate(categories)}
-    
-    # Add explicit sample ID column
-    data['sample_id'] = data.index
-    
-    # Create plot
-    fig = px.scatter(
-        data,
-        x=f'PCo{x}',
-        y=f'PCo{y}',
-        color=color_col,
-        symbol=symbol_col,
-        color_discrete_map=colordict,
-        hover_data=['sample_id', color_col],
-        opacity=0.8
-    )
-    
-    # Configure axes
-    if proportion_explained is not None and len(proportion_explained) >= max(x, y):
-        x_title = f"PCo{x} ({proportion_explained[x-1]:.2%})"
-        y_title = f"PCo{y} ({proportion_explained[y-1]:.2%})"
-    else:
-        x_title = f"PCo{x}"
-        y_title = f"PCo{y}"
-    
-    fig.update_layout(
-        template='heather',
-        height=1000,
-        width=1100,
-        plot_bgcolor='#fff',
-        font_size=45,
-        showlegend=False,
-        xaxis_title=x_title,
-        yaxis_title=y_title,
-        xaxis=dict(showticklabels=False, zeroline=True),
-        yaxis=dict(showticklabels=False, zeroline=True)
-    )
-    
-    # Save output and legend if requested
-    if output_dir:
-        output_path = Path(output_dir) / 'pcoa'
-        output_path.mkdir(parents=True, exist_ok=True)
-        file_stem = f"pcoa.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
-        
-        # Save legend
-        legend_path = output_path / f"{file_stem}.legend.png"
-        plot_legend(colordict, color_col, legend_path)
-    
-    return fig, colordict
-  
 
 def pca(
     components: pd.DataFrame, 
@@ -313,7 +246,8 @@ def pca(
     output_dir: Union[str, Path] = None, 
     transformation: str = None,
     x: int = 1, 
-    y: int = 2
+    y: int = 2,
+    verbose: bool = False
 ) -> Tuple[go.Figure, Dict]:
     """
     Generate a PCA plot with comprehensive error handling and diagnostics.
@@ -323,16 +257,18 @@ def pca(
         required_columns = [color_col, symbol_col, '#sampleid']
         missing = [col for col in required_columns if col not in metadata.columns]
         if missing:
-            logger.error(f"Missing required metadata columns: {', '.join(missing)}")
+            if verbose:
+                logger.error(f"Missing required metadata columns: {', '.join(missing)}")
             raise ValueError(f"Missing columns: {', '.join(missing)}")
         
         # Prepare visualization data
         logger.info("Preparing PCA visualization data...")
-        data = _prepare_visualization_data(components, metadata, color_col, symbol_col)
+        data = _prepare_visualization_data(components, metadata, color_col, symbol_col, verbose)
         
         # Handle empty data case
         if data.empty:
-            logger.error("No data available for PCA plotting after merging")
+            if verbose:
+                logger.error("No data available for PCA plotting after merging")
             fig = go.Figure()
             fig.add_annotation(
                 text="No data available for plotting",
@@ -360,12 +296,14 @@ def pca(
         
         if x_col not in data.columns:
             available_pcs = [col for col in data.columns if col.startswith('PC')]
-            logger.error(f"Missing x-axis column '{x_col}'. Available PC columns: {available_pcs}")
+            if verbose:
+                logger.error(f"Missing x-axis column '{x_col}'. Available PC columns: {available_pcs}")
             raise ValueError(f"Column {x_col} not found in PCA components")
         
         if y_col not in data.columns:
             available_pcs = [col for col in data.columns if col.startswith('PC')]
-            logger.error(f"Missing y-axis column '{y_col}'. Available PC columns: {available_pcs}")
+            if verbose:
+                logger.error(f"Missing y-axis column '{y_col}'. Available PC columns: {available_pcs}")
             raise ValueError(f"Column {y_col} not found in PCA components")
         
         # Create plot
@@ -413,7 +351,7 @@ def pca(
             output_path = Path(output_dir) / 'pca'
             output_path.mkdir(parents=True, exist_ok=True)
             file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
-            plotly_show_and_save(fig, show, output_path / file_stem)
+            plotly_show_and_save(fig, show, output_path / file_stem, ['png', 'html'], verbose)
             logger.info(f"Saved PCA plot to {output_path / file_stem}")
             
             # Save legend
@@ -437,7 +375,86 @@ def pca(
             template='heather'
         )
         return fig, {}
+  
 
+def pcoa(
+    components: pd.DataFrame, 
+    proportion_explained: np.ndarray, 
+    metadata: pd.DataFrame,
+    metric: str = 'braycurtis',
+    color_map: Dict = None,
+    color_col: str = 'dataset_name', 
+    symbol_col: str = 'nuclear_contamination_status',
+    show: bool = False,
+    output_dir: Union[str, Path] = None, 
+    transformation: str = None,
+    x: int = 1, 
+    y: int = 2,
+    verbose: bool = False
+) -> Tuple[go.Figure, Dict]:
+    """
+    Generate a PCoA plot with metadata annotations.
+    """
+    # Validate metadata columns
+    _validate_metadata(metadata, [color_col, symbol_col])
+    
+    # Prepare visualization data
+    data = _prepare_visualization_data(components, metadata, color_col, symbol_col, verbose)
+    
+    # Create color mapping using sorted unique categories
+    categories = sorted(data[color_col].astype(str).unique())
+    colordict = {c: largecolorset[i % len(largecolorset)] 
+                 for i, c in enumerate(categories)}
+    
+    # Add explicit sample ID column
+    data['sample_id'] = data.index
+    
+    # Create plot
+    fig = px.scatter(
+        data,
+        x=f'PCo{x}',
+        y=f'PCo{y}',
+        color=color_col,
+        symbol=symbol_col,
+        color_discrete_map=colordict,
+        hover_data=['sample_id', color_col],
+        opacity=0.8
+    )
+    
+    # Configure axes
+    if proportion_explained is not None and len(proportion_explained) >= max(x, y):
+        x_title = f"PCo{x} ({proportion_explained[x-1]:.2%})"
+        y_title = f"PCo{y} ({proportion_explained[y-1]:.2%})"
+    else:
+        x_title = f"PCo{x}"
+        y_title = f"PCo{y}"
+    
+    fig.update_layout(
+        template='heather',
+        height=1000,
+        width=1100,
+        plot_bgcolor='#fff',
+        font_size=45,
+        showlegend=False,
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+        xaxis=dict(showticklabels=False, zeroline=True),
+        yaxis=dict(showticklabels=False, zeroline=True)
+    )
+    
+    # Save output and legend if requested
+    if output_dir:
+        output_path = Path(output_dir) / 'pcoa'
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_stem = f"pcoa.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
+        plotly_show_and_save(fig, show, output_path / file_stem, ['png', 'html'], verbose)
+        
+        # Save legend
+        legend_path = output_path / f"{file_stem}.legend.png"
+        plot_legend(colordict, color_col, legend_path)
+    
+    return fig, colordict
+    
 
 def mds(
     df: pd.DataFrame, 
@@ -449,7 +466,8 @@ def mds(
     transformation: str = None,
     mode: str = 'UMAP',
     x: int = 1, 
-    y: int = 2
+    y: int = 2,
+    verbose: bool = False
 ) -> Tuple[go.Figure, Dict]:
     """
     Generate a multidimensional scaling plot (t-SNE or UMAP).
@@ -501,7 +519,7 @@ def mds(
         output_path = Path(output_dir) / mode.lower()
         output_path.mkdir(parents=True, exist_ok=True)
         file_stem = f"{mode}.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
-        plotly_show_and_save(fig, show, output_path / file_stem)
+        plotly_show_and_save(fig, show, output_path / file_stem, ['png', 'html'], verbose)
         
         # Save legend
         legend_path = output_path / f"{file_stem}.legend.png"
