@@ -336,7 +336,7 @@ class Ordination:
                         'color_col': color_col,
                         'symbol_col': symbol_col,
                         'transformation': transformation,
-                        'output_dir': self.figure_output_dir / test_key,
+                        'output_dir': self.figure_output_dir,
                         **kwargs
                     })
                     
