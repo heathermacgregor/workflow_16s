@@ -101,7 +101,10 @@ def pcoa(
     dist_matrix = DistanceMatrix(square_dists, ids=sample_ids)
     
     # Perform PCoA
-    return PCoA(dist_matrix, number_of_dimensions=n_dimensions)
+    try:
+        return PCoA(dist_matrix, number_of_dimensions=n_dimensions)
+    except:
+        return PCoA(dist_matrix, number_of_dimensions=3)
 
 
 def pca(
