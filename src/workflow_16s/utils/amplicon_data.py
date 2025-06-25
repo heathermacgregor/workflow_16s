@@ -3,85 +3,29 @@
 # Standard Library Imports
 import glob
 import logging
-import os
-import re
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from functools import reduce
 
 # Third-Party Imports
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    track,
-    TaskID
-)
-from scipy.spatial.distance import pdist, squareform
-from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
-from skbio.stats.composition import clr as CLR
-from skbio.stats.distance import DistanceMatrix
+from rich.progress import Progress, TaskID
 from skbio.stats.ordination import pcoa as PCoA
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.preprocessing import StandardScaler
-from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.biom import (
-    collapse_taxa, 
-    convert_to_biom, 
-    export_h5py, 
-    presence_absence, 
-    filter_presence_absence
-)
+from workflow_16s.utils.biom import collapse_taxa, convert_to_biom, export_h5py, presence_absence
 from workflow_16s.utils.progress import create_progress
-from workflow_16s.utils.file_utils import (
-    import_merged_table_biom,
-    import_merged_meta_tsv
-)
-from workflow_16s.utils import df_utils
-from workflow_16s.utils.dir_utils import SubDirs
-from workflow_16s.stats import beta_diversity 
-from workflow_16s.stats.utils import (
-    clr_transform_table,
-    filter_table, 
-    merge_table_with_metadata,
-    normalize_table,
-    table_to_dataframe
-)
-from workflow_16s.stats.tests import (
-    fisher_exact_bonferroni, 
-    kruskal_bonferroni, 
-    mwu_bonferroni, 
-    ttest 
-)
-from workflow_16s.stats.beta_diversity import (
-    pcoa as calculate_pcoa,
-    pca as calculate_pca,
-    tsne as calculate_tsne,
-    umap as calculate_umap
-)
-from workflow_16s.figures.html_report import HTMLReport
-from workflow_16s.figures.merged.merged import (
-    mds,# as plot_mds, 
-    pca,# as plot_pca, 
-    pcoa,# as plot_pcoa, 
-    sample_map_categorical
-)
+from workflow_16s.utils.file_utils import import_merged_table_biom, import_merged_meta_tsv
+from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table
+from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
+from workflow_16s.stats.beta_diversity import pcoa as calculate_pcoa, pca as calculate_pca, tsne as calculate_tsne, umap as calculate_umap
+from workflow_16s.figures.merged.merged import mds, pca, pcoa, sample_map_categorical
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -97,17 +41,7 @@ YELLOW = "\033[93m"
 RESET = "\033[0m"
 
 DEFAULT_PROGRESS_TEXT_N = 50
-
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
-DEFAULT_GROUP_COLUMN_VALUES = [True, False]
-
-# Ordination constants
-DEFAULT_METRIC = 'braycurtis'
-DEFAULT_N_PCA = 20
-DEFAULT_N_PCOA = None
-DEFAULT_N_TSNE = 3
-DEFAULT_N_UMAP = 3
-DEFAULT_RANDOM_STATE = 0
 
 # ============================= STATISTICAL ANALYZER CLASS ============================ #
 class StatisticalAnalyzer:
@@ -237,26 +171,26 @@ class Ordination:
         'pca': {
             'key': 'pca',
             'func': calculate_pca,
-            'plot_func': pca,  # Using the fixed pca function
+            'plot_func': pca,
             'name': 'Principal Components Analysis'
         },
         'pcoa': {
             'key': 'pcoa',
             'func': calculate_pcoa,
-            'plot_func': pcoa,  # Using the fixed pcoa function
+            'plot_func': pcoa,
             'name': 'Principal Coordinates Analysis',
         },
         'tsne': {
             'key': 'tsne',
             'func': calculate_tsne,
-            'plot_func': mds,  # Using MDS plotter with mode='t-SNE'
+            'plot_func': mds,
             'name': 'TSNE',
             'plot_kwargs': {'mode': 'TSNE'}
         },
         'umap': {
             'key': 'umap',
             'func': calculate_umap,
-            'plot_func': mds,  # Using MDS plotter with mode='UMAP'
+            'plot_func': mds,
             'name': 'UMAP',
             'plot_kwargs': {'mode': 'UMAP'}
         }
@@ -382,15 +316,13 @@ class Ordination:
 
 # ================================= PLOTTER CLASS ================================== #
 class Plotter:
-    """Handles all visualization tasks for amplicon data"""
+    """Handles sample map visualization"""
     
     def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
-        self.figures = {}
-        self.ordination_results = {}
-    
+        
     def generate_sample_map(
         self, 
         metadata: pd.DataFrame,
@@ -418,302 +350,6 @@ class Plotter:
             )
             figures[color_col] = fig
         return figures
-    
-    def compute_pca(
-        self,
-        table: Table,
-        n_components: int = DEFAULT_N_PCA
-    ) -> Dict[str, Any]:
-        """
-        Compute Principal Component Analysis (PCA) on a feature table.
-        
-        Args:
-            table:        Input BIOM table
-            n_components: Number of principal components to compute
-            
-        Returns:
-            Dictionary containing PCA results
-        """
-        print(f"[DEBUG] Computing PCA for table with {table.shape[0]} features and {table.shape[1]} samples")
-        df = table_to_dataframe(table).T
-        return pca(df, n_components)
-    
-    def compute_pcoa(
-        self,
-        table: Table,
-        metric: str = DEFAULT_METRIC,
-        n_dimensions: Optional[int] = DEFAULT_N_PCOA
-    ) -> PCoA:
-        """
-        Compute Principal Coordinates Analysis (PCoA) on a feature table.
-        
-        Args:
-            table:        Input BIOM table
-            metric:       Distance metric
-            n_dimensions: Number of dimensions to return
-            
-        Returns:
-            PCoA results object
-        """
-        print(f"[DEBUG] Computing PCoA for table with {table.shape[0]} features and {table.shape[1]} samples")
-        df = table_to_dataframe(table).T
-        return pcoa(df, metric, n_dimensions)
-    
-    def compute_tsne(
-        self,
-        table: Table,
-        n_components: int = DEFAULT_N_TSNE,
-        random_state: int = DEFAULT_RANDOM_STATE
-    ) -> pd.DataFrame:
-        """
-        Compute t-SNE on a feature table.
-        
-        Args:
-            table:        Input BIOM table
-            n_components: Dimension of the embedded space
-            random_state: Random seed
-            
-        Returns:
-            DataFrame with t-SNE coordinates
-        """
-        print(f"[DEBUG] Computing t-SNE for table with {table.shape[0]} features and {table.shape[1]} samples")
-        df = table_to_dataframe(table).T
-        return tsne(df, n_components, random_state)
-    
-    def compute_umap(
-        self,
-        table: Table,
-        n_components: int = DEFAULT_N_UMAP,
-        random_state: int = DEFAULT_RANDOM_STATE
-    ) -> pd.DataFrame:
-        """
-        Compute UMAP on a feature table.
-        
-        Args:
-            table:        Input BIOM table
-            n_components: Dimension of the embedded space
-            random_state: Random seed
-            
-        Returns:
-            DataFrame with UMAP coordinates
-        """
-        print(f"[DEBUG] Computing UMAP for table with {table.shape[0]} features and {table.shape[1]} samples")
-        df = table_to_dataframe(table).T
-        return umap(df, n_components, random_state)
-    
-    def generate_pcoa_plot(
-        self,
-        pcoa_result: PCoA,
-        metadata: pd.DataFrame,
-        color_col: str = 'dataset_name',
-        symbol_col: str = 'nuclear_contamination_status',
-        transformation: Optional[str] = None,
-        x: int = 1,
-        y: int = 2,
-        **kwargs
-    ) -> Tuple[Any, Any]:
-        """
-        Generate PCoA plot from precomputed results
-        
-        Args:
-            pcoa_result:     PCoA results object
-            metadata:        Sample metadata
-            color_col:        Column for coloring points
-            symbol_col:       Column for point symbols
-            transformation:  Data transformation applied
-            x:               Component for x-axis
-            y:               Component for y-axis
-            
-        Returns:
-            Tuple of figure and color dictionary
-        """
-        print(f"[DEBUG] Generating PCoA plot with {color_col} colors and {symbol_col} symbols")
-        components = pcoa_result.samples
-        proportion_explained = pcoa_result.proportion_explained
-        
-        # Create output directory
-        output_dir = self.output_dir / 'pcoa'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[DEBUG] Saving PCoA plots to: {output_dir}")
-        
-        fig, colordict = plot_pcoa(
-            components=components,
-            proportion_explained=proportion_explained,
-            metadata=metadata,
-            color_col=color_col,
-            symbol_col=symbol_col,
-            output_dir=output_dir,
-            transformation=transformation,
-            x=x,
-            y=y,
-            **kwargs
-        )
-        print(f"[DEBUG] PCoA plot generated successfully")
-        return fig, colordict
-    
-    def generate_pca_plot(
-        self,
-        pca_result: Dict[str, Any],
-        metadata: pd.DataFrame,
-        color_col: str = 'dataset_name',
-        symbol_col: str = 'nuclear_contamination_status',
-        transformation: Optional[str] = None,
-        x: int = 1,
-        y: int = 2,
-        **kwargs
-    ) -> Tuple[Any, Any]:
-        """
-        Generate PCA plot from precomputed results
-        
-        Args:
-            pca_result:      PCA results dictionary
-            metadata:        Sample metadata
-            color_col:        Column for coloring points
-            symbol_col:       Column for point symbols
-            transformation:  Data transformation applied
-            x:               Component for x-axis
-            y:               Component for y-axis
-            
-        Returns:
-            Tuple of figure and color dictionary
-        """
-        print(f"[DEBUG] Generating PCA plot with {color_col} colors and {symbol_col} symbols")
-        components = pca_result['components']
-        proportion_explained = pca_result['exp_var_ratio']
-        
-        # Create output directory
-        output_dir = self.output_dir / 'pca'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[DEBUG] Saving PCA plots to: {output_dir}")
-        
-        fig, colordict = plot_pca(
-            components=components,
-            proportion_explained=proportion_explained,
-            metadata=metadata,
-            color_col=color_col,
-            symbol_col=symbol_col,
-            output_dir=output_dir,
-            transformation=transformation,
-            x=x,
-            y=y,
-            **kwargs
-        )
-        print(f"[DEBUG] PCA plot generated successfully")
-        return fig, colordict
-    
-    def generate_mds_plot(
-        self,
-        coordinates: pd.DataFrame,
-        metadata: pd.DataFrame,
-        mode: str = 'UMAP',
-        group_col: str = 'dataset_name',
-        symbol_col: str = 'nuclear_contamination_status',
-        transformation: Optional[str] = None,
-        x: int = 1,
-        y: int = 2,
-        **kwargs
-    ) -> Tuple[Any, Any]:
-        """
-        Generate MDS plot (t-SNE or UMAP) from precomputed coordinates
-        
-        Args:
-            coordinates:     Coordinates DataFrame
-            metadata:        Sample metadata
-            mode:            Reduction method ('UMAP' or 't-SNE')
-            group_col:        Column for grouping points
-            symbol_col:       Column for point symbols
-            transformation:  Data transformation applied
-            x:               Dimension for x-axis
-            y:               Dimension for y-axis
-            
-        Returns:
-            Tuple of figure and color dictionary
-        """
-        print(f"[DEBUG] Generating {mode} plot with {group_col} groups and {symbol_col} symbols")
-        # Create output directory
-        output_dir = self.output_dir / mode.lower()
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[DEBUG] Saving {mode} plots to: {output_dir}")
-        
-        fig, colordict = plot_mds(
-            df=coordinates,
-            metadata=metadata,
-            group_col=group_col,
-            symbol_col=symbol_col,
-            output_dir=output_dir,
-            transformation=transformation,
-            mode=mode,
-            x=x,
-            y=y,
-            **kwargs
-        )
-        print(f"[DEBUG] {mode} plot generated successfully")
-        return fig, colordict
-    
-    def generate_ordination_plot(
-        self,
-        method: str,
-        table: Table,
-        metadata: pd.DataFrame,
-        color_col: str = 'dataset_name',
-        symbol_col: str = 'nuclear_contamination_status',
-        transformation: Optional[str] = None,
-        **kwargs
-    ) -> Any:
-        """
-        Generate ordination plot (PCA, PCoA, t-SNE, UMAP) with proper calculation and plotting separation
-        
-        Args:
-            method:         Ordination method ('pca', 'pcoa', 'tsne', 'umap')
-            table:          BIOM feature table
-            metadata:       Sample metadata
-            color_col:      Column for coloring points
-            symbol_col:     Column for point symbols
-            transformation: Data transformation applied
-            
-        Returns:
-            Generated figure
-        """
-        print(f"[DEBUG] Starting ordination: {method.upper()} for {transformation} data")
-        # Compute ordination
-        if method == 'pcoa':
-            print("[DEBUG] Computing PCoA...")
-            pcoa_result = self.compute_pcoa(table)
-            self.ordination_results['pcoa'] = pcoa_result
-            print("[DEBUG] Generating PCoA plot...")
-            fig, _ = self.generate_pcoa_plot(
-                pcoa_result, metadata, color_col, symbol_col, transformation, **kwargs
-            )
-        elif method == 'pca':
-            print("[DEBUG] Computing PCA...")
-            pca_result = self.compute_pca(table)
-            self.ordination_results['pca'] = pca_result
-            print("[DEBUG] Generating PCA plot...")
-            fig, _ = self.generate_pca_plot(
-                pca_result, metadata, color_col, symbol_col, transformation, **kwargs
-            )
-        elif method == 'tsne':
-            print("[DEBUG] Computing t-SNE...")
-            coordinates = self.compute_tsne(table)
-            self.ordination_results['tsne'] = coordinates
-            print("[DEBUG] Generating t-SNE plot...")
-            fig, _ = self.generate_mds_plot(
-                coordinates, metadata, 't-SNE', color_col, symbol_col, transformation, **kwargs
-            )
-        elif method == 'umap':
-            print("[DEBUG] Computing UMAP...")
-            coordinates = self.compute_umap(table)
-            self.ordination_results['umap'] = coordinates
-            print("[DEBUG] Generating UMAP plot...")
-            fig, _ = self.generate_mds_plot(
-                coordinates, metadata, 'UMAP', color_col, symbol_col, transformation, **kwargs
-            )
-        else:
-            raise ValueError(f"Unsupported ordination method: {method}")
-        
-        print(f"[DEBUG] Completed ordination: {method.upper()}")
-        return fig
-
 
 # ================================== TOP FEATURES ANALYZER ================================== #
 class TopFeaturesAnalyzer:
@@ -1203,11 +839,9 @@ class AmpliconData:
     
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
-        # Temporarily skip statistical tests
-        print("[DEBUG] Skipping statistical tests for debugging")
-        # self._run_statistical_analyses()
+        self._run_statistical_analyses()
         self._run_ordination()
-        # self._identify_top_features()
+        self._identify_top_features()
     
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
@@ -1229,8 +863,8 @@ class AmpliconData:
             ) if total_plots > 0 else None
             
             # Initialize storage structures
-            self.ordination_results = {}
-            self.ordination_figures = {}
+            self.ordination = {}
+            self.figures = {}
             
             for table_type, level_tables in self.tables.items():
                 self.ordination[table_type] = {}
