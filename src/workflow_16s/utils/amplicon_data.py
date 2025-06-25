@@ -26,6 +26,10 @@ from workflow_16s.stats.utils import clr_transform_table, filter_table, normaliz
 from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 from workflow_16s.stats.beta_diversity import pcoa as calculate_pcoa, pca as calculate_pca, tsne as calculate_tsne, umap as calculate_umap
 from workflow_16s.figures.merged.merged import mds, pca, pcoa, sample_map_categorical
+from workflow_16s.models.feature_selection import (
+    filter_data, perform_feature_selection, grid_search,
+    save_feature_importances
+)
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -840,6 +844,7 @@ class AmpliconData:
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
         self._identify_top_features()
+        self._run_ml_feature_selection()
         self._run_ordination()
         
     
@@ -907,3 +912,56 @@ class AmpliconData:
         self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
             self.stats, DEFAULT_GROUP_COLUMN
         )
+
+    def _run_ml_feature_selection(self):
+        ml_cfg = self.cfg.get("ml", {})
+        if not ml_cfg.get("enable", False):
+            return
+    
+        tbl_type = ml_cfg["table_type"]
+        level     = ml_cfg["level"]
+        table     = self.tables[tbl_type][level]
+    
+        X = self._biom_to_df(table)
+        y = self.meta[DEFAULT_GROUP_COLUMN]              # contamination label
+    
+        # Keep indices identical
+        X, self.meta = X.loc[y.index], self.meta.loc[y.index]
+    
+        # Stratified split so class balance is preserved
+        X_tr, X_te, y_tr, y_te = filter_data(
+            X, y, self.meta, DEFAULT_GROUP_COLUMN,
+            test_size = 0.3, random_state = 42
+        )
+    
+        # Wrapper around CatBoost + RFE / SHAP / … already implemented
+        X_tr_sel, X_te_sel, selected = perform_feature_selection(
+            X_tr, y_tr, X_te, y_te,
+            feature_selection      = ml_cfg["method"],
+            num_features           = ml_cfg["num_features"],
+            step_size              = ml_cfg.get("step_size", 100),
+            thread_count           = ml_cfg["catboost_threads"],
+            random_state           = 42,
+            use_permutation_importance = ml_cfg["permutation_importance"],
+        )
+    
+        # Hyper-parameter sweep (grid_search) returns best model & metrics
+        params_grid = {
+            "iterations": [1000],
+            "learning_rate": [0.1],
+            "depth": [4],
+            "loss_function": ["Logloss"],
+            "thread_count": [ml_cfg["catboost_threads"]],
+        }
+        best_model, best_params, best_mcc = grid_search(
+            X_tr_sel, y_tr, X_te_sel, y_te,
+            params_grid,
+            output_dir = self.figure_output_dir / "ml"
+        )
+        save_feature_importances(best_model,
+                                 pd.DataFrame(X_tr_sel, columns=selected),
+                                 self.figure_output_dir / "ml")
+        # Store for later use
+        self.ml_selected_features = selected
+        self.ml_model             = best_model
+
