@@ -473,7 +473,7 @@ def mds(
         y=f'{mode}{y}',
         color=color_col,
         symbol=symbol_col,
-        hover_data=['sample_id', group_col],
+        hover_data=['sample_id', color_col, symbol_col],
         opacity=0.8
     )
     
