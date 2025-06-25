@@ -229,7 +229,6 @@ class StatisticalAnalyzer:
             return result_row[alt_effect_col]
         return None
 
-# ============================= STATISTICAL ANALYZER CLASS ============================ #
 # ============================= ORDINATION CLASS ============================ #
 class Ordination:
     """Handles ordination analyses and plotting for all taxonomic levels"""
@@ -268,6 +267,7 @@ class Ordination:
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
         self.results = {}
+        self.figures = {}
     
     def run_tests(
         self,
@@ -298,11 +298,12 @@ class Ordination:
             Dictionary of ordination results keyed by method name
         """
         results = {}
+        figures = {}
         total_tests = len(enabled_tests)
         tests_to_run = [test for test in enabled_tests if test in self.TEST_CONFIG]
         
         if not tests_to_run:
-            return results
+            return results, figures
             
         if progress and task_id:
             main_task = progress.add_task(
@@ -355,13 +356,15 @@ class Ordination:
                     else:  # t-SNE or UMAP
                         plot_kwargs['df'] = ordination_result
                     
-                    # Generate plot
+                    # Generate plot and capture figure
                     logger.info(f"Generating {test_key} plot for {transformation}")
-                    config['plot_func'](**plot_kwargs)
+                    fig, colordict = config['plot_func'](**plot_kwargs)
+                    figures[test_key] = fig
                     
                 except Exception as e:
                     logger.error(f"Failed {test_name} for {transformation}: {str(e)}")
                     logger.debug("Traceback:", exc_info=True)
+                    figures[test_key] = None  # Store placeholder for failed plot
                     
                 finally:
                     # Update progress after each test
@@ -375,7 +378,7 @@ class Ordination:
             if progress and task_id:
                 progress.update(main_task, advance=total_tests)
                 
-        return results
+        return results, figures
 
 # ================================= PLOTTER CLASS ================================== #
 class Plotter:
@@ -884,7 +887,6 @@ class AmpliconData:
         self.stats = {}
         self.ordination = {}
         self.figures = {}
-        self.ordination_results = {}
         self.top_contaminated_features = []
         self.top_pristine_features = []
         
@@ -1211,6 +1213,7 @@ class AmpliconData:
         """Run ordination analyses for all table types and levels"""
         # Define ordination methods to run
         ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
+        
         # Calculate total plots: (table_types * levels * methods)
         total_plots = 0
         for table_type in self.tables:
@@ -1225,23 +1228,44 @@ class AmpliconData:
                 total=total_plots
             ) if total_plots > 0 else None
             
-            
+            # Initialize storage structures
+            self.ordination_results = {}
+            self.ordination_figures = {}
             
             for table_type, level_tables in self.tables.items():
                 self.ordination[table_type] = {}
+                self.figures[table_type] = {}
+                
                 for level, table in level_tables.items():
-                    ordination_result = Ordination(
+                    # Create ordination instance with proper output directory
+                    ordination_output_dir = self.figure_output_dir / level / table_type
+                    ordination = Ordination(
                         cfg=self.cfg,
-                        output_dir=self.figure_output_dir / level
-                    ).run_tests(
+                        output_dir=ordination_output_dir,
+                        verbose=self.verbose
+                    )
+                    
+                    # Run ordination and capture results + figures
+                    results, figures = ordination.run_tests(
                         table=table,
                         metadata=self.meta,
                         color_col='dataset_name',
                         symbol_col='nuclear_contamination_status',
-                        transformation=table_type,
-                        enabled_tests=ordination_methods
+                        transformation=f"{table_type} ({level})",
+                        enabled_tests=ordination_methods,
+                        progress=progress,
+                        task_id=main_task
                     )
-                    self.ordination[table_type][level] = ordination_result
+                    
+                    # Store results
+                    self.ordination[table_type][level] = results
+                    self.figures[table_type][level] = figures
+                    
+                    # Additional debug logging
+                    if self.verbose:
+                        logger.info(f"Stored ordination results for {table_type}/{level}:")
+                        logger.info(f"  Methods: {list(results.keys())}")
+                        logger.info(f"  Figures: {list(figures.keys())}")
     
     def _identify_top_features(self):
         """Identify top features associated with contamination status"""
