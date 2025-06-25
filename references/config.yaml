@@ -94,3 +94,15 @@ figures:
   raw:
     pcoa: True
     pcoa_metric: "braycurtis"
+
+
+ml:
+  enable: true
+  table_type: "clr_transformed"   # raw | normalized | clr_transformed | presence_absence
+  level: "genus"                  # phylum | … | genus
+  method: "rfe"                   # rfe | select_k_best | chi_squared | lasso | shap
+  num_features: 500
+  step_size: 100                  # only used by RFE
+  permutation_importance: true
+  catboost_threads: 4
+
