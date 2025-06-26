@@ -238,6 +238,7 @@ class Ordination:
             "func": calculate_pcoa,
             "plot_func": plot_pcoa,
             "name": "Principal Coordinates Analysis",
+            # Requires metric parameter from config
         },
         "tsne": {
             "key": "tsne",
@@ -256,10 +257,10 @@ class Ordination:
     }
 
     def __init__(
-       self, 
-       cfg: Dict, 
-       output_dir: Union[str, Path], 
-       verbose: bool = False
+        self, 
+        cfg: Dict, 
+        output_dir: Union[str, Path], 
+        verbose: bool = False
     ):
         self.cfg = cfg
         self.verbose = verbose
@@ -268,74 +269,87 @@ class Ordination:
         self.figures: Dict[str, Any] = {}
 
     def run_tests(
-       self,
-       table: Table,
-       metadata: pd.DataFrame,
-       color_col: str,
-       symbol_col: str,
-       transformation: str,
-       enabled_tests: List[str],
-       progress: Optional[Progress] = None,
-       task_id: Optional[TaskID] = None,
-       **kwargs,
-   ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-       results = {}
-       figures = {}
-       tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
-       if not tests_to_run:
-           return results, figures
-   
-       try:
-           # Align samples once per table/level
-           table, metadata = filter_and_reorder_biom_and_metadata(
-               table, metadata
-           )
-           
-           for tname in tests_to_run:
-               cfg = self.TEST_CONFIG[tname]
-               key = cfg["key"]
-               try:
-                   # Run ordination method
-                   ord_res = cfg["func"](table=table)
-                   results[key] = ord_res
-                   
-                   # Generate plot
-                   pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+        self,
+        table: Table,
+        metadata: pd.DataFrame,
+        color_col: str,
+        symbol_col: str,
+        transformation: str,
+        enabled_tests: List[str],
+        progress: Optional[Progress] = None,
+        task_id: Optional[TaskID] = None,
+        **kwargs,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        # Get configuration for current transformation type
+        trans_cfg = self.cfg.get("ordination", {}).get(transformation, {})
+        
+        results = {}
+        figures = {}
+        tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
+        if not tests_to_run:
+            return results, figures
 
-                   # Handle different result types
-                   if key == 'pca':
-                       pkwargs.update({
+        try:
+            # Align samples once per table/level
+            table, metadata = filter_and_reorder_biom_and_metadata(
+                table, metadata
+            )
+            
+            for tname in tests_to_run:
+                cfg = self.TEST_CONFIG[tname]
+                key = cfg["key"]
+                try:
+                    # Prepare method-specific parameters
+                    method_params = {}
+                    
+                    # Handle PCoA metric from config
+                    if tname == "pcoa":
+                        method_params["metric"] = trans_cfg.get(
+                            "pcoa_metric", "braycurtis"  # Default metric
+                        )
+                    
+                    # Run ordination method with parameters
+                    ord_res = cfg["func"](table=table, **method_params)
+                    results[key] = ord_res
+                    
+                    # Prepare plot parameters
+                    pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+
+                    # Handle different result types for plotting
+                    if key == 'pca':
+                        pkwargs.update({
                             'components': ord_res['components'],
                             'proportion_explained': ord_res['exp_var_ratio']
-                       })
-                   elif key == 'pcoa':
-                       pkwargs.update({
+                        })
+                    elif key == 'pcoa':
+                        pkwargs.update({
                             'components': ord_res.samples,
                             'proportion_explained': ord_res.proportion_explained
-                       })
-                   else:  # t-SNE or UMAP
-                       pkwargs['df'] = ord_res
+                        })
+                    else:  # t-SNE or UMAP
+                        pkwargs['df'] = ord_res
                         
-                   fig, _ = cfg["plot_func"](
-                       metadata=metadata,
-                       color_col=color_col,
-                       symbol_col=symbol_col,
-                       transformation=transformation,
-                       output_dir=self.figure_output_dir,
-                       **pkwargs
-                   )
-                   figures[key] = fig
-               except Exception as e:
-                   logger.error(
-                       f"Failed {tname} for {transformation}: {e}"
-                   )
-                   figures[key] = None
-               finally:
-                   # Update parent task after EACH method completion
-                   if progress and task_id:
-                       progress.update(task_id, advance=1)  
-       finally:
-           return results, figures
+                    # Generate plot
+                    fig, _ = cfg["plot_func"](
+                        metadata=metadata,
+                        color_col=color_col,
+                        symbol_col=symbol_col,
+                        transformation=transformation,
+                        output_dir=self.figure_output_dir,
+                        **pkwargs
+                    )
+                    figures[key] = fig
+                except Exception as e:
+                    logger.error(
+                        f"Failed {tname} for {transformation}: {e}"
+                    )
+                    figures[key] = None
+                finally:
+                    # Update parent task after EACH method completion
+                    if progress and task_id:
+                        progress.update(task_id, advance=1)  
+        finally:
+            return results, figures
               
 
 class Plotter:
@@ -589,7 +603,7 @@ class _TableProcessor(_ProcessingMixin):
         lvls = ["phylum", "class", "order", "family", "genus"]
         raw_tbl = self.tables["raw"][self.mode]
         self.tables["presence_absence"] = self._run_processing_step(
-            "Converting raw features to presence/absence...",
+            "Converting raw feature tables to presence/absence...",
             presence_absence,
             lvls,
             (),
@@ -644,14 +658,18 @@ class _AnalysisManager(_ProcessingMixin):
         print_structure(self.stats)
         self._identify_top_features()
         if self.faprotax_enabled and self.top_contaminated_features:
+            print(self.top_contaminated_features[0])
+            print(self.top_contaminated_features[0]["feature"])
             print(
                 faprotax_functions_for_taxon(
-                    self.top_contaminated_features[0]["feature"], self.fdb, include_references=True
+                    self.top_contaminated_features[0]["feature"], 
+                    self.fdb, 
+                    include_references=True
                 )
             )
         self._run_ordination()
         print_structure(self.ordination)
-        self._run_ml_feature_selection()  # Uncomment when ML pipe stabilises
+        self._run_ml_feature_selection() 
         print_structure(self.models)
         
     def _run_statistical_tests(self) -> None:
@@ -691,12 +709,22 @@ class _AnalysisManager(_ProcessingMixin):
         )
         print_structure(self.top_contaminated_features)
 
-    # ------------------------------ ordination ------------------------------
     def _run_ordination(self) -> None:
-        methods = ["pca", "pcoa", "tsne", "umap"]
-        tot = sum(len(lv) * len(methods) for lv in self.tables.values())
+        # Define known ordination methods
+        KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
+        
+        # Calculate total runs: sum over [table levels × enabled methods per table type]
+        tot = 0
+        for ttype, lvls in self.tables.items():
+            # Get config for this table type (default empty dict)
+            ord_config = self.cfg.get("ordination", {}).get(ttype, {})
+            # Only include known methods that are enabled in config
+            enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+            tot += len(lvls) * len(enabled_methods)
+        
         if not tot:
             return
+        
         with create_progress() as prog:
             task = prog.add_task(
                 "[white]Running ordination...".ljust(DEFAULT_PROGRESS_TEXT_N), 
@@ -705,22 +733,32 @@ class _AnalysisManager(_ProcessingMixin):
             for ttype, lvls in self.tables.items():
                 self.ordination[ttype] = {}
                 self.figures[ttype] = {}
+                
+                # Get enabled methods for current table type from config
+                ord_config = self.cfg.get("ordination", {}).get(ttype, {})
+                enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+                
                 for lvl, tbl in lvls.items():
                     ordir = self.figure_output_dir / lvl / ttype
                     ordn = Ordination(self.cfg, ordir, False)
+                    
+                    # Run only enabled methods for this table type
                     res, figs = ordn.run_tests(
                         table=tbl,
                         metadata=self.meta,
                         color_col="dataset_name",
                         symbol_col="nuclear_contamination_status",
                         transformation=ttype,
-                        enabled_tests=methods,
+                        enabled_tests=enabled_methods,
                         progress=prog,
                         task_id=task,
                     )
                     self.ordination[ttype][lvl] = res
                     self.figures[ttype][lvl] = figs
-
+                    
+                    # Update progress by number of methods run for this level
+                    prog.update(task, advance=len(enabled_methods))
+                
     def _run_ml_feature_selection(self) -> None:
         if not self.cfg.get("run_ml", False):
             return
