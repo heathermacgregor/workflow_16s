@@ -9,9 +9,18 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from biom import Table
-from scipy.spatial.distance import braycurtis, pdist, squareform
+from scipy.spatial.distance import (
+    braycurtis, 
+    pdist, 
+    squareform
+)
 from scipy.stats import (
-    fisher_exact, f_oneway, kruskal, mannwhitneyu, spearmanr, ttest_ind
+    fisher_exact, 
+    f_oneway, 
+    kruskal, 
+    mannwhitneyu, 
+    spearmanr, 
+    ttest_ind
 )
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
@@ -24,7 +33,10 @@ from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
+from workflow_16s.stats.utils import (
+    merge_table_with_metadata, 
+    table_to_dataframe
+)
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -511,7 +523,8 @@ def spearman_correlation(
     alpha: float = 0.01
 ) -> pd.DataFrame:
     """
-    Calculate Spearman correlations between features and a continuous metadata variable.
+    Calculate Spearman correlations between features and a continuous 
+    metadata variable.
     
     Args:
         table: Input abundance table
@@ -526,7 +539,10 @@ def spearman_correlation(
     merged = merge_table_with_metadata(df, metadata, continuous_column)
     
     results = []
-    for feature in tqdm(merged.columns.drop(continuous_column), desc="Calculating correlations"):
+    for feature in tqdm(
+        merged.columns.drop(continuous_column), 
+        desc="Calculating correlations"
+    ):
         # Remove NA values pairwise
         valid_idx = merged[[feature, continuous_column]].dropna().index
         if len(valid_idx) < 3:
@@ -546,6 +562,7 @@ def spearman_correlation(
     result_df['p_adj'] = result_df['p_value'] * len(result_df)
     results_df = result_df[result_df['p_adj'] <= alpha].sort_values('rho', key=abs, ascending=False)
     return results_df
+
 
 def calculate_distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
@@ -603,4 +620,8 @@ def run_ordination(
     else:
         raise ValueError(f"Unknown method: {method}")
     
-    return pd.DataFrame(results, index=df.index, columns=[f"{method.upper()}{i+1}" for i in range(n_components)])
+    return pd.DataFrame(
+        results, 
+        index=df.index, 
+        columns=[f"{method.upper()}{i+1}" for i in range(n_components)]
+    )
