@@ -19,16 +19,46 @@ from skbio.stats.ordination import pcoa as PCoA
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.biom import collapse_taxa, convert_to_biom, export_h5py, presence_absence
+from workflow_16s.utils.biom import (
+    collapse_taxa, 
+    convert_to_biom, 
+    export_h5py, 
+    presence_absence
+)
 from workflow_16s.utils.progress import create_progress
-from workflow_16s.utils.file_utils import import_merged_table_biom, import_merged_meta_tsv
-from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table
-from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
-from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
-from workflow_16s.stats.beta_diversity import pcoa as calculate_pcoa, pca as calculate_pca, tsne as calculate_tsne, umap as calculate_umap
-from workflow_16s.figures.merged.merged import mds, pca, pcoa, sample_map_categorical
+from workflow_16s.utils.file_utils import (
+    import_merged_table_biom, 
+    import_merged_meta_tsv
+)
+from workflow_16s.stats.utils import (
+    clr_transform_table, 
+    filter_table, 
+    normalize_table, 
+    merge_table_with_metadata, 
+    table_to_dataframe
+)
+from workflow_16s.stats.tests import (
+    fisher_exact_bonferroni, 
+    kruskal_bonferroni, 
+    mwu_bonferroni, 
+    ttest
+)
+from workflow_16s.stats.beta_diversity import (
+    pcoa as calculate_pcoa, 
+    pca as calculate_pca, 
+    tsne as calculate_tsne, 
+    umap as calculate_umap
+)
+from workflow_16s.figures.merged.merged import (
+    mds, 
+    pca, 
+    pcoa, 
+    sample_map_categorical
+)
 from workflow_16s.models.feature_selection import (
-    filter_data, perform_feature_selection, grid_search,
+    filter_data, 
+    grid_search,
+    perform_feature_selection, 
     save_feature_importances
 )
 
@@ -907,7 +937,7 @@ class AmpliconData:
                         metadata=self.meta,
                         color_col='dataset_name',
                         symbol_col='nuclear_contamination_status',
-                        transformation=f"{table_type} ({level})",
+                        transformation=table_type,
                         enabled_tests=ordination_methods,
                         progress=progress,
                         task_id=main_task
