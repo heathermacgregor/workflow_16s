@@ -71,44 +71,37 @@ def plotly_show_and_save(
     show: bool = False,
     output_path: Union[str, Path] = None,
     save_as: List[str] = ['png', 'html'],
-    verbose: bool = True
+    verbose: bool = False
 ):
-    if show:
-        fig.update_layout(
-            plot_bgcolor='#fff', 
-            paper_bgcolor='#fff', 
-            height=1000
-        )
-        fig.show()
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)'
-        )   
-    
     if output_path:
         output_path = Path(output_path)
         output_dir = output_path.parent.resolve()
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+        # Handle PNG saving with APPENDED extension
         if 'png' in save_as:
+            png_file = output_path.with_name(output_path.name + ".png")  # Append .png
             try:
                 fig.write_image(
-                    str(output_path.with_suffix('.png')),  # Better path handling
+                    str(png_file),  # Use new path
                     format='png', 
                     scale=3,
-                    engine='kaleido'  # Explicitly specify engine
+                    engine='kaleido'
                 )
                 if verbose:
-                    logger.info(f"Saved figure to '{output_path.with_suffix('.png')}'.")
+                    logger.info(f"Saved figure to '{png_file}'.")
             except Exception as e:
                 logger.error(f"Failed to save PNG: {str(e)}")
                 if verbose:
-                    logger.info("You may need to install kaleido: pip install -U kaleido")
+                    logger.info("Install kaleido: pip install -U kaleido")
         
+        # Handle HTML saving with APPENDED extension
         if 'html' in save_as:
+            html_file = output_path.with_name(output_path.name + ".html")  # Append .html
             try:
-                fig.write_html(str(output_path.with_suffix('.html')))
+                fig.write_html(str(html_file))
                 if verbose:
-                    logger.info(f"Saved figure to '{output_path.with_suffix('.html')}'.")
+                    logger.info(f"Saved figure to '{html_file}'.")
             except Exception as e:
                 logger.error(f"Failed to save HTML: {str(e)}")
               
