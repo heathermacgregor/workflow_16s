@@ -42,7 +42,7 @@ from workflow_16s.stats.beta_diversity import (
     umap
 )
 from workflow_16s.figures.merged.merged import (
-    mds, 
+    mds as plot_mds, 
     pca as plot_pca, 
     pcoa as plot_pcoa, 
     sample_map_categorical
@@ -134,13 +134,24 @@ class StatisticalAnalyzer:
         }
     }
     
-    def __init__(self, cfg: Dict, verbose: bool = False):
+    def __init__(
+        self, 
+        cfg: Dict, 
+        verbose: bool = False
+    ):
         self.cfg = cfg
         self.verbose = verbose
     
-    def run_tests(self, table: Table, metadata: pd.DataFrame, group_column: str, 
-                 group_values: List[str], enabled_tests: List[str], 
-                 progress: Optional[Progress] = None, task_id: Optional[TaskID] = None) -> Dict[str, Any]:
+    def run_tests(
+        self, 
+        table: Table, 
+        metadata: pd.DataFrame, 
+        group_column: str,
+        group_values: List[str], 
+        enabled_tests: List[str],
+        progress: Optional[Progress] = None, 
+        task_id: Optional[TaskID] = None
+    ) -> Dict[str, Any]:
         """Run configured statistical tests"""
         results = {}
         for test_name in enabled_tests:
@@ -191,13 +202,13 @@ class OrdinationHandler:
         },
         'tsne': {
             'func': tsne,
-            'plotter': mds,
+            'plotter': plot_mds,
             'name': 't-SNE',
             'plot_kwargs': {'mode': 'TSNE'}
         },
         'umap': {
             'func': umap,
-            'plotter': mds,
+            'plotter': plot_mds,
             'name': 'UMAP',
             'plot_kwargs': {'mode': 'UMAP'}
         }
@@ -393,7 +404,7 @@ class DataProcessor:
             return
             
         self.tables["presence_absence"] = {
-            level: presence_absence(self.tables["raw"][level])
+            level: presence_absence(self.tables["raw"][level], target_level=level)  # Added target_level
             for level in self.tables["raw"]
         }
 
