@@ -436,11 +436,16 @@ class TopFeaturesAnalyzer:
                         eff = san.get_effect_size(tname, row)
                         if eff is None:
                             continue
+                        
+                        # Capture effect direction
+                        effect_dir = "positive" if eff > 0 else "negative"
+                        
                         cur = lvl_best.get(feat)
                         if not cur or pval < cur["p_value"]:
                             lvl_best[feat] = {
                                 "p_value": pval,
                                 "effect": eff,
+                                "effect_dir": effect_dir,  # New field
                                 "table_type": tbl_type,
                                 "test": tname,
                             }
@@ -452,6 +457,7 @@ class TopFeaturesAnalyzer:
                     "test": res["test"],
                     "effect": res["effect"],
                     "p_value": res["p_value"],
+                    "effect_dir": res["effect_dir"],  # Added
                 }
                 (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
         keyf = lambda d: (-abs(d["effect"]), d["p_value"])  
@@ -669,35 +675,36 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._run_statistical_tests()
-        print_structure(self.stats)
         self._identify_top_features()
-        if self.faprotax_enabled and self.top_contaminated_features:
-            
-            
-            for i in range(0, 20):
-                print(self.top_contaminated_features[i])
-                print(self.top_contaminated_features[i]["feature"])
-                print(
-                    faprotax_functions_for_taxon(
-                        self.top_contaminated_features[i]["feature"], 
-                        self.fdb, 
-                        #include_references=True
-                    )
-                )
-        #self._run_ordination()
-        #print_structure(self.ordination)
-        #self._run_ml_feature_selection() 
-        #print_structure(self.models)
         
+        # Add FAPROTAX annotations to top features
+        if self.faprotax_enabled:
+            for feat_list in [self.top_contaminated_features, self.top_pristine_features]:
+                for feat in feat_list:
+                    feat['faprotax_functions'] = faprotax_functions_for_taxon(
+                        feat['feature'], 
+                        self.fdb,
+                        include_references=False
+                    )
+    
+    def _annotate_with_faprotax(self, df: pd.DataFrame, level: str) -> pd.DataFrame:
+        """Adds FAPROTAX functional annotations to a stats DataFrame."""
+        if not self.faprotax_enabled or 'feature' not in df.columns:
+            return df
+        
+        # Add functional annotations
+        df['faprotax_functions'] = df['feature'].apply(
+            lambda taxon: faprotax_functions_for_taxon(taxon, self.fdb, include_references=False)
+        return df
+
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         
-        # Calculate total tests for progress bar: sum over [table levels × enabled tests per table type]
+        # Calculate total tests
         tot = 0
         for ttype, lvls in self.tables.items():
-            # Get enabled tests for this table type from config; fallback to empty list if undefined
             tests_config = self.cfg["stats"].get(ttype, {})
             enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
             tot += len(lvls) * len(enabled_for_ttype)
@@ -706,17 +713,18 @@ class _AnalysisManager(_ProcessingMixin):
             task = prog.add_task("[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N), total=tot)
             for ttype, lvls in self.tables.items():
                 self.stats[ttype] = {}
-                # Fetch enabled tests for current table type (skip if config missing)
                 tests_config = self.cfg["stats"].get(ttype, {})
                 enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
                 
                 for lvl, tbl in lvls.items():
                     tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
-                    # Run only tests enabled for this table type
                     res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, prog, task)
+                    
+                    # Add FAPROTAX annotations to results
                     for key, df in res.items():
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
-                    # Advance progress bar by number of tests run for this level
+                        annotated_df = self._annotate_with_faprotax(df, lvl)
+                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = annotated_df
+                    
                     prog.update(task, advance=len(enabled_for_ttype))
 
     def _identify_top_features(self) -> None:
@@ -724,7 +732,6 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
             self.stats, DEFAULT_GROUP_COLUMN
         )
-        print_structure(self.top_contaminated_features)
 
     def _run_ordination(self) -> None:
         # Define known ordination methods
