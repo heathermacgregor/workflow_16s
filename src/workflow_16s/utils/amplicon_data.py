@@ -21,7 +21,12 @@ from workflow_16s.utils.file_utils import (
     import_merged_meta_tsv, 
     filter_and_reorder_biom_and_metadata
 )
-from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table, table_to_dataframe
+from workflow_16s.stats.utils import (
+    clr_transform_table, 
+    filter_table, 
+    normalize_table, 
+    table_to_dataframe
+)
 from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 from workflow_16s.stats.beta_diversity import pcoa, pca, tsne, umap
 from workflow_16s.figures.merged.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
@@ -436,7 +441,7 @@ class AmpliconData:
         pattern = self.project_dir.qiime_data_per_dataset / '*' / '*' / '*' / '*' / 'FWD_*_REV_*' / self.MODES[self.mode][0] / 'feature-table.biom'
         return list(pattern.parent.glob('feature-table.biom'))
 
-     def _get_metadata_paths(self) -> List[Path]:
+    def _get_metadata_paths(self) -> List[Path]:
         """Get paths to metadata files corresponding to BIOM tables"""
         meta_paths = []
         for biom_path in self._get_biom_paths():
