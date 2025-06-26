@@ -1010,13 +1010,19 @@ def catboost_feature_selection(
         X, y, metadata, contamination_status_col
     )
 
+    num_features = 500
+    if X_train.shape[1] < 500:
+        print(X_train.shape)
+        num_features = X_train.shape[1]
+        
     # Perform feature selection
     X_train_selected, X_test_selected, final_selected_features = perform_feature_selection(
         X_train,
         y_train,
         X_test,
         y_test,
-        feature_selection=method
+        feature_selection=method,
+        num_features=num_features
     )
     logger.info(X_train_selected.var().describe())  # Check feature variance after correction
 
