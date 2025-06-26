@@ -88,13 +88,42 @@ stats:
     mwu_bonferroni: True
     kruskal_bonferroni: True
 
+ordination:
+  raw:
+    pca: True
+    pcoa: True
+    pcoa_metric: "braycurtis"
+    tsne: True
+    umap: True
+  presence_absence:
+    pca: True
+    pcoa: True
+    pcoa_metric: "jaccard"
+    tsne: True
+    umap: True
+  filtered:
+    pca: True
+    pcoa: True
+    pcoa_metric: "braycurtis"
+    tsne: True
+    umap: True
+  normalized:
+    pca: True
+    pcoa: True
+    pcoa_metric: "braycurtis"
+    tsne: True
+    umap: True
+  clr_transformed:
+    pca: True
+    pcoa: True
+    pcoa_metric: "euclidean"
+    tsne: True
+    umap: True
+
 faprotax: True
 
 figures:
   map: True
-  raw:
-    pcoa: True
-    pcoa_metric: "braycurtis"
 
 run_ml: True
 ml:
