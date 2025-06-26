@@ -250,8 +250,9 @@ def faprotax_functions_for_taxon(
     Returns:
         List of traits or dict mapping traits to references
     """
-    # Normalize the taxon string to have exactly one space after each semicolon
-    taxon_norm = re.sub(r';\s*', '; ', taxon.strip().lower())
+    # Enhanced normalization: handles any spacing and preserves underscores
+    taxon_norm = re.sub(r'([a-z])__(?=[^;\s])', r'\1__ ', taxon.strip().lower())
+    taxon_norm = re.sub(r';\s*', '; ', taxon_norm)  # Standardize spaces after semicolons
 
     if include_references:
         trait_to_refs: Dict[str, List[str]] = {}
