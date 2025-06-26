@@ -215,8 +215,8 @@ def sample_map_categorical(
         margin=dict(l=5, r=5, t=5, b=5),
         showlegend=False, 
         font_size=40,
-        xaxis=dict(showticklabels=False, zeroline=True),
-        yaxis=dict(showticklabels=False, zeroline=True)
+        xaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True),
+        yaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True)
     )  
     
     # Update marker appearance
@@ -345,8 +345,8 @@ def pca(
             title_x=0.5,
             xaxis_title=x_title,
             yaxis_title=y_title,
-            xaxis=dict(showticklabels=False, zeroline=True),
-            yaxis=dict(showticklabels=False, zeroline=True)
+            xaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True),
+            yaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True)
         )
         
         # Save output and legend if requested
@@ -443,8 +443,8 @@ def pcoa(
         showlegend=False,
         xaxis_title=x_title,
         yaxis_title=y_title,
-        xaxis=dict(showticklabels=False, zeroline=True),
-        yaxis=dict(showticklabels=False, zeroline=True)
+        xaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True),
+        yaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True)
     )
     
     # Save output and legend if requested
@@ -515,8 +515,8 @@ def mds(
         title_x=0.5,
         xaxis_title=f'{mode}{x}',
         yaxis_title=f'{mode}{y}',
-        xaxis=dict(showticklabels=False, zeroline=True),
-        yaxis=dict(showticklabels=False, zeroline=True)
+        xaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True),
+        yaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True)
     )
     
     # Save output and legend if requested
