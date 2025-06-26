@@ -9,39 +9,16 @@ import pandas as pd
 from biom.table import Table
 from rich.progress import Progress, TaskID
 
-# Local
-from workflow_16s.utils import (
-    collapse_taxa, 
-    convert_to_biom, 
-    export_h5py, 
-    presence_absence,
-    create_progress,
-    import_merged_table_biom, 
-    import_merged_meta_tsv,
-    filter_and_reorder_biom_and_metadata
-)
-from workflow_16s.stats import (
-    clr_transform_table, 
-    filter_table, 
-    normalize_table, 
-    merge_table_with_metadata, 
-    table_to_dataframe,
-    fisher_exact_bonferroni, 
-    kruskal_bonferroni, 
-    mwu_bonferroni, 
-    ttest
-)
+# Local - Specific imports from submodules
+from workflow_16s.utils.biom import collapse_taxa, export_h5py, presence_absence
+from workflow_16s.utils.progress import create_progress
+from workflow_16s.utils.file_utils import import_merged_table_biom, import_merged_meta_tsv, filter_and_reorder_biom_and_metadata
+from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table, table_to_dataframe
+from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 from workflow_16s.stats.beta_diversity import pcoa, pca, tsne, umap
-from workflow_16s.figures.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
+from workflow_16s.figures.merged.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
 from workflow_16s.function.faprotax import get_faprotax_parsed, faprotax_functions_for_taxon
-from workflow_16s.models.feature_selection import (
-    filter_data, 
-    grid_search,
-    perform_feature_selection, 
-    save_feature_importances,
-    catboost_feature_selection
-)
-
+from workflow_16s.models.feature_selection import catboost_feature_selection
 # ================================== CONFIGURATION =================================== #
 logger = logging.getLogger('workflow_16s')
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
