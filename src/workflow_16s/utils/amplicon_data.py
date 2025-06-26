@@ -819,12 +819,19 @@ class AmpliconData:
                 if "Nitrososphaerales" in str(rec["pat"]):
                     print(f"Found in trait: {trait}")
                     print(f"Pattern: {rec['pat']}")
+        print('Testing: d__Archaea; p__Crenarchaeota; c__Thaumarchaeota; o__Nitrososphaerales; f__Nitrososphaeraceae; g__Candidatus Nitrososphaera')
         print(faprotax_functions_for_taxon(
             'd__Archaea; p__Crenarchaeota; c__Thaumarchaeota; o__Nitrososphaerales; f__Nitrososphaeraceae; g__Candidatus Nitrososphaera', 
             self.fdb
         ))
+        print('Testing: Nitrososphaeraceae;Candidatus Nitrososphaera')
         print(faprotax_functions_for_taxon(
             'Nitrososphaeraceae;Candidatus Nitrososphaera', 
+            self.fdb
+        ))
+        print('Testing: Nitrososphaeraceae;Nitrososphaera')
+        print(faprotax_functions_for_taxon(
+            'Nitrososphaeraceae;Nitrososphaera', 
             self.fdb
         ))
         dl = _DataLoader(cfg, project_dir, mode, verbose)
