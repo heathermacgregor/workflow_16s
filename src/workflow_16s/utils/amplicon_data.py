@@ -812,6 +812,11 @@ class AmpliconData:
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
         print(self.fdb)
+        for trait, data in self.fdb.items():
+            for rec in data["taxa"]:
+                if "Nitrososphaerales" in str(rec["pat"]):
+                    print(f"Found in trait: {trait}")
+                    print(f"Pattern: {rec['pat']}")
         print(
                     faprotax_functions_for_taxon(
                         'd__Archaea; p__Crenarchaeota; c__Thaumarchaeota; o__Nitrososphaerales; f__Nitrososphaeraceae; g__Candidatus Nitrososphaera', 
