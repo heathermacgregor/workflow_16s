@@ -928,7 +928,7 @@ class AmpliconData:
                     ordination = Ordination(
                         cfg=self.cfg,
                         output_dir=ordination_output_dir,
-                        verbose=self.verbose
+                        verbose=False#self.verbose
                     )
                     
                     # Run ordination and capture results + figures
