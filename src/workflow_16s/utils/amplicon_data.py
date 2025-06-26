@@ -8,9 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
-import h5py  # noqa: F401 – retained for downstream utils
-import matplotlib.pyplot as plt  # noqa: F401 – retained for plotting functions
-import numpy as np  # noqa: F401 – kept: used by local helpers
+import numpy as np 
 import pandas as pd
 from biom.table import Table
 from rich.progress import Progress, TaskID
@@ -78,7 +76,7 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 
-DEFAULT_PROGRESS_TEXT_N = 50
+DEFAULT_PROGRESS_TEXT_N = 60
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 
 # ==================================== FUNCTIONS ===================================== #
@@ -111,14 +109,14 @@ class _ProcessingMixin:
     ) -> Dict[str, Table]:
         processed: Dict[str, Table] = {}
         if getattr(self, "verbose", False):
-            logger.info(f"{process_name}…")
+            logger.info(f"{process_name}")
             for lvl in levels:
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 self._log_level_action(lvl, log_template, log_action)
         else:
             with create_progress() as progress:
                 task = progress.add_task(
-                    f"[white]{process_name}…".ljust(DEFAULT_PROGRESS_TEXT_N),
+                    f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
                     total=len(levels),
                 )
                 for lvl in levels:
@@ -189,7 +187,7 @@ class StatisticalAnalyzer:
         results: Dict[str, Any] = {}
         if progress and task_id:
             ptask = progress.add_task(
-               "[white]Running statistical tests…".ljust(DEFAULT_PROGRESS_TEXT_N), 
+               "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                total=len(enabled_tests), 
                parent=task_id
             )
@@ -198,7 +196,7 @@ class StatisticalAnalyzer:
                 continue
             cfg = self.TEST_CONFIG[tname]
             if self.verbose:
-                logger.info(f"Running {cfg['name']}…")
+                logger.info(f"Running {cfg['name']}...")
             results[cfg["key"]] = cfg["func"](
                 table=table,
                 metadata=metadata,
