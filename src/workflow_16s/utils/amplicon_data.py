@@ -953,13 +953,13 @@ class AmpliconData:
         print(y.index)
         # Align indices (crucial for correct sample-feature matching)
         common_samples = X.index.intersection(y.index)
-        print(common_samples)
+        print(common_samples.tolist())
         X = X.loc[common_samples]
         y = y.loc[common_samples]
         
         # Stratified split preserving class balance
         X_tr, X_te, y_tr, y_te = filter_data(
-            X, y, self.meta.loc[list(common_samples)], DEFAULT_GROUP_COLUMN,
+            X, y, self.meta.set_index('#sampleid').loc[common_samples.tolist()], DEFAULT_GROUP_COLUMN,
             test_size=0.3, random_state=42
         )
         
