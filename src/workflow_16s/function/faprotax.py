@@ -213,21 +213,27 @@ def get_faprotax_parsed(
     Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
 ] | None:
     """
-    Locate workflow_16s/references/, ensure a **faprotax/** subdir, download /
+    Locate workflow_16s/references/, ensure a faprotax/ subdir, download /
     parse the latest FAPROTAX database, and return it.
 
     Returns
     -------
     dict | None
-        Parsed FAPROTAX or *None* if anything fails.
+        Parsed FAPROTAX or *None* on failure.
     """
     try:
         references_dir = find_references_dir()
         faprotax_dir = references_dir / "faprotax"
         faprotax_txt = download_latest_faprotax(faprotax_dir)
         return parse_faprotax_db(faprotax_txt, compile_regex=compile_regex)
-    except Exception as exc:  # pragma: no cover
-        logging.error("Failed to prepare FAPROTAX database: %s", exc)
+    except Exception as exc:
+        import traceback
+
+        logger.exception(
+            "Failed to prepare FAPROTAX database: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
         return None
 
 
