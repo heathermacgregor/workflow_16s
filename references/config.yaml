@@ -67,25 +67,25 @@ features:
 
 stats:
   raw:
-    ttest: True
-    mwu_bonferroni: True
+    ttest: False          # Avoid: compositionality violates assumptions
+    mwu_bonferroni: True   # Non-parametric alternative
     kruskal_bonferroni: True
   presence_absence:
-    fisher: True
-    ttest: False
-    mwu_bonferroni: False
+    fisher: True           # Ideal for binary data
+    ttest: False           # Avoid: designed for continuous data
+    mwu_bonferroni: False  # Avoid: not designed for binary data
     kruskal_bonferroni: False
   filtered:
-    ttest: True
+    ttest: False           # Same issues as raw counts
     mwu_bonferroni: True
     kruskal_bonferroni: True
   normalized:
-    ttest: True
-    mwu_bonferroni: True
+    ttest: True            # Can be used after proper normalization
+    mwu_bonferroni: True   # Still valuable for robustness
     kruskal_bonferroni: True
   clr_transformed:
-    ttest: True
-    mwu_bonferroni: True
+    ttest: True            # Recommended: CLR addresses compositionality
+    mwu_bonferroni: True   # Good alternative for non-normal distributions
     kruskal_bonferroni: True
 
 ordination:
