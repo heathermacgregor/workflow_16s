@@ -90,11 +90,11 @@ stats:
 
 ordination:
   raw:
-    pca: True
+    pca: False
     pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False
+    umap: False
   presence_absence:
     pca: False
     pcoa: True
@@ -102,7 +102,7 @@ ordination:
     tsne: True
     umap: True
   filtered:
-    pca: True
+    pca: False
     pcoa: True
     pcoa_metric: "braycurtis"
     tsne: True
