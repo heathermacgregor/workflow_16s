@@ -41,7 +41,12 @@ from workflow_16s.stats.beta_diversity import (
     tsne, 
     umap
 )
-from workflow_16s.figures.merged.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
+from workflow_16s.figures.merged.merged import (
+    mds, 
+    pca as plot_pca, 
+    pcoa as plot_pcoa, 
+    sample_map_categorical
+)
 from workflow_16s.function.faprotax import get_faprotax_parsed, faprotax_functions_for_taxon
 from workflow_16s.models.feature_selection import catboost_feature_selection
 # ================================== CONFIGURATION =================================== #
@@ -457,7 +462,7 @@ class AmpliconData:
             List of Path objects to BIOM files
         """
         pattern = '/'.join(
-          ['*', '*', '*', '*', 'FWD_*_REV_*', self.MODE_CONFIG[self.mode][0], 
+          ['*', '*', '*', '*', 'FWD_*_REV_*', self.MODES[self.mode][0], 
            'feature-table.biom']
         )
         biom_paths = glob.glob(
