@@ -464,13 +464,6 @@ def filter_and_reorder_biom_and_metadata(
     metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
     metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
 
-    # Store original case metadata IDs for later reference
-    original_meta_ids = metadata_df[sample_column].copy()
-    
-    # Lowercase and deduplicate sample IDs in metadata
-    metadata_df = metadata_df.copy()
-    metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
-
     # Lowercase biom sample IDs, mapping to original IDs
     original_sample_ids = table.ids(axis='sample')
     lowercase_to_original = {}
@@ -511,9 +504,6 @@ def filter_and_reorder_biom_and_metadata(
         sample_ids=ordered_biom_sample_ids
     )
 
-    # Restore original case in metadata
-    metadata_df[sample_column] = original_meta_ids.loc[metadata_df.index]
-
     return table_reordered, metadata_df
 
 
@@ -545,15 +535,20 @@ class AmpliconData:
         self._load_data()
         self._process_data()
         self._run_analyses()
-        self.debug_sample_alignment()
 
     def _biom_to_df(self, table: Table) -> pd.DataFrame:
         """
         Convert a BIOM table to a pandas DataFrame with samples as rows and features as columns.
+        
+        Args:
+            table: BIOM table to convert
+            
+        Returns:
+            DataFrame with samples as rows and features as columns
         """
         # Transpose to get samples as rows and features as columns
         data = table.matrix_data.toarray().T
-        sample_ids = [sid.lower() for sid in table.ids(axis='sample')]  # Convert to lowercase
+        sample_ids = table.ids(axis='sample')
         feature_ids = table.ids(axis='observation')
         return pd.DataFrame(data, index=sample_ids, columns=feature_ids)
         
@@ -646,33 +641,27 @@ class AmpliconData:
     
     def _filter_and_align_data(self):
         """Filter and align BIOM table with metadata"""
-        original_biom_samples = set(self.table.ids(axis='sample'))
-        original_meta_samples = set(self.meta['#sampleid'])
-        
-        logger.info(f"Original BIOM samples: {len(original_biom_samples)}")
-        logger.info(f"Original metadata samples: {len(original_meta_samples)}")
-        logger.info(f"Original intersection: {len(original_biom_samples & original_meta_samples)}")
-    
-        # Perform alignment
+        original_n_samples = self.table.shape[1]
         self.table, self.meta = filter_and_reorder_biom_and_metadata(
             table=self.table, metadata_df=self.meta, sample_column="#sampleid"
         )
         
-        # Log results
-        aligned_biom_samples = set(self.table.ids(axis='sample'))
-        aligned_meta_samples = set(self.meta['#sampleid'])
-        logger.info(f"Aligned BIOM samples: {len(aligned_biom_samples)}")
-        logger.info(f"Aligned metadata samples: {len(aligned_meta_samples)}")
-        logger.info(f"Aligned intersection: {len(aligned_biom_samples & aligned_meta_samples)}")
-        
-        # Check for mismatches
-        biom_only = aligned_biom_samples - aligned_meta_samples
-        meta_only = aligned_meta_samples - aligned_biom_samples
-        
-        if biom_only:
-            logger.warning(f"{len(biom_only)} samples only in BIOM table. First 5: {list(biom_only)[:5]}")
-        if meta_only:
-            logger.warning(f"{len(meta_only)} samples only in metadata. First 5: {list(meta_only)[:5]}")
+        logger.info(
+            f"Loaded (samples x features) metadata table with "
+            f"{RED}{self.meta.shape[0]}{RESET} samples "
+            f"and {RED}{self.meta.shape[1]}{RESET} columns"
+        )
+
+        if self.cfg["figures"]["map"]:
+            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
+            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
+            
+        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
+        logger.info(
+            f"Loaded (features x samples) feature table with "
+            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
+            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
+        )
     
     def _process_data(self):
         """Process data through filtering and transformation pipeline"""
@@ -870,41 +859,11 @@ class AmpliconData:
     
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
-        logger.info(f"Starting analyses with {self.table.shape[1]} samples")
         self._identify_top_features()
-        self._run_ordination()
         self._run_ml_feature_selection()
-        logger.info("Completed all analyses")
+        self._run_ordination()
         
-    def debug_sample_alignment(self):
-        """Debug method to trace sample handling"""
-        # Track sample through the pipeline
-        sample_id = list(self.meta['#sampleid'])[0] if not self.meta.empty else "TEST_SAMPLE"
-        
-        # Original tables
-        in_original_biom = sample_id in self.table.ids(axis='sample')
-        in_original_meta = sample_id in self.meta['#sampleid'].values
-        
-        # After alignment
-        in_aligned_biom = sample_id in self.table.ids(axis='sample')
-        in_aligned_meta = sample_id in self.meta['#sampleid'].values
-        
-        # In ML-ready data
-        ml_table = self.tables.get("filtered", {}).get("genus")
-        in_ml_biom = False
-        if ml_table:
-            in_ml_biom = sample_id in ml_table.ids(axis='sample')
-        
-        logger.debug(f"Sample '{sample_id}' tracking:")
-        logger.debug(f"  Original BIOM: {in_original_biom}")
-        logger.debug(f"  Original metadata: {in_original_meta}")
-        logger.debug(f"  Aligned BIOM: {in_aligned_biom}")
-        logger.debug(f"  Aligned metadata: {in_aligned_meta}")
-        logger.debug(f"  ML BIOM: {in_ml_biom}")
-        
-        # Check lowercase representation
-        logger.debug(f"Lowercase sample: '{sample_id.lower()}'")
-        logger.debug(f"In ML metadata index: {sample_id.lower() in self.meta['#sampleid_lower'].values}")
+    
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
         # Define ordination methods to run
@@ -975,102 +934,59 @@ class AmpliconData:
         if not ml_cfg.get("enable", False):
             return
     
-        try:
-            # Get table configuration
-            tbl_type = ml_cfg["table_type"]
-            level = ml_cfg["level"]
-            
-            # Verify table exists
-            if tbl_type not in self.tables or level not in self.tables[tbl_type]:
-                logger.error(f"Missing table: {tbl_type}/{level} - skipping ML feature selection")
-                return
-                
-            table = self.tables[tbl_type][level]
-            
-            # Convert to DataFrame
-            X = self._biom_to_df(table)
-            
-            # Verify group column exists
-            if DEFAULT_GROUP_COLUMN not in self.meta.columns:
-                logger.error(f"Metadata missing '{DEFAULT_GROUP_COLUMN}' column - skipping ML feature selection")
-                return
-                
-            # Convert metadata sample IDs to lowercase for consistent matching
-            self.meta['#sampleid_lower'] = self.meta['#sampleid'].str.lower()
-            y = self.meta.set_index('#sampleid_lower')[DEFAULT_GROUP_COLUMN]
-            
-            # Find common samples
-            common_samples = X.index.intersection(y.index)
-            if not common_samples.empty:
-                logger.info(
-                    f"Found {len(common_samples)} common samples between features "
-                    f"and metadata for ML feature selection"
-                )
-                
-            # Filter to common samples
-            X = X.loc[common_samples]
-            y = y.loc[common_samples]
-            
-            # Check class balance
-            class_counts = y.value_counts()
-            logger.info(f"Class distribution for ML: {class_counts.to_dict()}")
-            min_samples = max(10, ml_cfg.get("min_samples", 20))
-            if len(y) < min_samples:
-                logger.warning(
-                    f"Insufficient samples ({len(y)} < {min_samples}) - skipping ML feature selection"
-                )
-                return
-            # Verify we have enough samples
-            if len(class_counts) < 2:
-                logger.error(f"Only one class present: {class_counts.index[0]} - skipping ML feature selection")
-                return
-                
-            # Stratified split preserving class balance
-            X_tr, X_te, y_tr, y_te = filter_data(
-                X, y, self.meta.loc[common_samples], DEFAULT_GROUP_COLUMN,
-                test_size=0.3, random_state=42
-            )
-            
-            # Feature selection
-            X_tr_sel, X_te_sel, selected = perform_feature_selection(
-                X_tr, y_tr, X_te, y_te,
-                feature_selection=ml_cfg["method"],
-                num_features=ml_cfg["num_features"],
-                step_size=ml_cfg.get("step_size", 100),
-                thread_count=ml_cfg["catboost_threads"],
-                random_state=42,
-                use_permutation_importance=ml_cfg["permutation_importance"],
-            )
-            
-            # Hyperparameter tuning
-            params_grid = {
-                "iterations": [1000],
-                "learning_rate": [0.1],
-                "depth": [4],
-                "loss_function": ["Logloss"],
-                "thread_count": [ml_cfg["catboost_threads"]],
-            }
-            output_dir = self.figure_output_dir / "ml"
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            best_model, best_params, best_mcc = grid_search(
-                X_tr_sel, y_tr, X_te_sel, y_te,
-                params_grid,
-                output_dir=output_dir
-            )
-            
-            # Save feature importances
-            save_feature_importances(
-                best_model,
-                pd.DataFrame(X_tr_sel, columns=selected),
-                output_dir
-            )
-            
-            # Store results
-            self.ml_selected_features = selected
-            self.ml_model = best_model
-            
-        except Exception as e:
-            logger.error(f"Machine learning feature selection failed: {str(e)}")
-            logger.debug("Traceback:", exc_info=True)
-
+        tbl_type = ml_cfg["table_type"]
+        level = ml_cfg["level"]
+        
+        # Get the table and convert to DataFrame
+        table = self.tables[tbl_type][level]
+        X = self._biom_to_df(table)
+        
+        # Get labels and align with feature matrix
+        y = self.meta[DEFAULT_GROUP_COLUMN]  # contamination label
+        
+        # Align indices (crucial for correct sample-feature matching)
+        common_samples = X.index.intersection(y.index)
+        X = X.loc[common_samples]
+        y = y.loc[common_samples]
+        
+        # Stratified split preserving class balance
+        X_tr, X_te, y_tr, y_te = filter_data(
+            X, y, self.meta.loc[common_samples], DEFAULT_GROUP_COLUMN,
+            test_size=0.3, random_state=42
+        )
+        
+        # Feature selection
+        X_tr_sel, X_te_sel, selected = perform_feature_selection(
+            X_tr, y_tr, X_te, y_te,
+            feature_selection=ml_cfg["method"],
+            num_features=ml_cfg["num_features"],
+            step_size=ml_cfg.get("step_size", 100),
+            thread_count=ml_cfg["catboost_threads"],
+            random_state=42,
+            use_permutation_importance=ml_cfg["permutation_importance"],
+        )
+        
+        # Hyperparameter tuning
+        params_grid = {
+            "iterations": [1000],
+            "learning_rate": [0.1],
+            "depth": [4],
+            "loss_function": ["Logloss"],
+            "thread_count": [ml_cfg["catboost_threads"]],
+        }
+        best_model, best_params, best_mcc = grid_search(
+            X_tr_sel, y_tr, X_te_sel, y_te,
+            params_grid,
+            output_dir=self.figure_output_dir / "ml"
+        )
+        
+        # Save feature importances
+        save_feature_importances(
+            best_model,
+            pd.DataFrame(X_tr_sel, columns=selected),
+            self.figure_output_dir / "ml"
+        )
+        
+        # Store results for later use
+        self.ml_selected_features = selected
+        self.ml_model = best_model
