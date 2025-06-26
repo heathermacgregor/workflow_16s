@@ -695,6 +695,7 @@ class _AnalysisManager(_ProcessingMixin):
         # Add functional annotations
         df['faprotax_functions'] = df['feature'].apply(
             lambda taxon: faprotax_functions_for_taxon(taxon, self.fdb, include_references=False)
+        )
         return df
 
     def _run_statistical_tests(self) -> None:
