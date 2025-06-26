@@ -224,8 +224,10 @@ def mwu_bonferroni(
         
     results_df = pd.DataFrame(results)
     if results_df.empty:
+        print("")
         logger.error(
-            f"No features passed for groups: {group_column_values} "
+            f"No features passed Mann-Whitney U tests with Bonferroni correction "
+            f"for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
@@ -308,8 +310,10 @@ def kruskal_bonferroni(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
+        print("")
         logger.error(
-            f"No features passed for groups: {group_column_values} "
+            f"No features passed Kruskal-Wallis H-test with Bonferroni correction "
+            f"for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
@@ -395,8 +399,9 @@ def anova(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
+        print("")
         logger.error(
-            f"No features passed ANOVA for groups: {group_column_values} "
+            f"No features passed one-way ANOVA for groups: {group_column_values} "
             f"in column '{group_column}'"
         )
         return pd.DataFrame(columns=['feature', 'f_statistic', 'p_value'])
@@ -503,7 +508,8 @@ def fisher_exact_bonferroni(
     # Create results DataFrame
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.warning("No significant features found after testing")
+        print("")
+        logger.warning("No significant features found after Fisher's Exact Tests with Bonferroni correction")
         return pd.DataFrame()
     
     # Apply Bonferroni correction
