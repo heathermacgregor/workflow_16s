@@ -1023,7 +1023,7 @@ class AmpliconData:
                     X = X.loc[common_samples]
                     y = y.loc[common_samples]
                     # Create ordination instance with proper output directory
-                    model_output_dir = self.project_dir / 'final' / 'ml' / level / table_type 
+                    model_output_dir = self.project_dir.final / 'ml' / level / table_type 
                     catboost_feature_selection(
                         metadata=y,
                         features=X,
