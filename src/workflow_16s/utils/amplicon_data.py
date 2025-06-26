@@ -1,6 +1,8 @@
 # ===================================== IMPORTS ====================================== #
 # Standard Library
+import glob
 import logging
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -27,13 +29,24 @@ from workflow_16s.stats.utils import (
     normalize_table, 
     table_to_dataframe
 )
-from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
-from workflow_16s.stats.beta_diversity import pcoa, pca, tsne, umap
+from workflow_16s.stats.tests import (
+    fisher_exact_bonferroni, 
+    kruskal_bonferroni, 
+    mwu_bonferroni, 
+    ttest
+)
+from workflow_16s.stats.beta_diversity import (
+    pcoa, 
+    pca, 
+    tsne, 
+    umap
+)
 from workflow_16s.figures.merged.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
 from workflow_16s.function.faprotax import get_faprotax_parsed, faprotax_functions_for_taxon
 from workflow_16s.models.feature_selection import catboost_feature_selection
 # ================================== CONFIGURATION =================================== #
 logger = logging.getLogger('workflow_16s')
+warnings.filterwarnings("ignore")  # Suppress warnings
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
@@ -437,9 +450,23 @@ class AmpliconData:
         return import_merged_table_biom(biom_paths, 'table', self.verbose)
     
     def _get_biom_paths(self) -> List[Path]:
-        """Discover BIOM file paths"""
-        pattern = self.project_dir.qiime_data_per_dataset / '*' / '*' / '*' / '*' / 'FWD_*_REV_*' / self.MODES[self.mode][0] / 'feature-table.biom'
-        return list(pattern.parent.glob('feature-table.biom'))
+        """
+        Get paths to BIOM feature tables using a glob pattern.
+        
+        Returns:
+            List of Path objects to BIOM files
+        """
+        pattern = '/'.join(
+          ['*', '*', '*', '*', 'FWD_*_REV_*', self.MODE_CONFIG[self.mode][0], 
+           'feature-table.biom']
+        )
+        biom_paths = glob.glob(
+            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+            recursive=True
+        )
+        if self.verbose:
+            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
+        return [Path(p) for p in biom_paths]
 
     def _get_metadata_paths(self) -> List[Path]:
         """Get paths to metadata files corresponding to BIOM tables"""
