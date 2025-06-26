@@ -10,7 +10,11 @@ from biom.table import Table
 from rich.progress import Progress, TaskID
 
 # Local - Specific imports from submodules
-from workflow_16s.utils.biom import collapse_taxa, export_h5py, presence_absence
+from workflow_16s.utils.biom import (
+    collapse_taxa, 
+    export_h5py, 
+    presence_absence
+)
 from workflow_16s.utils.progress import create_progress
 from workflow_16s.utils.file_utils import import_merged_table_biom, import_merged_meta_tsv, filter_and_reorder_biom_and_metadata
 from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table, table_to_dataframe
@@ -412,7 +416,7 @@ class AmpliconData:
     def _load_metadata(self) -> pd.DataFrame:
         """Load metadata from project directory"""
         meta_paths = [
-            self.project_dir / 'metadata_per_dataset' / p.parts[-6:-1] / "sample-metadata.tsv"
+            self.project_dir.metadata_per_dataset / p.parts[-6:-1] / "sample-metadata.tsv"
             for p in self._get_biom_paths()
         ]
         return import_merged_meta_tsv(meta_paths, self.verbose)
@@ -426,7 +430,7 @@ class AmpliconData:
     
     def _get_biom_paths(self) -> List[Path]:
         """Discover BIOM file paths"""
-        pattern = self.project_dir / 'qiime_data_per_dataset' / '*' / '*' / '*' / '*' / 'FWD_*_REV_*' / self.MODES[self.mode][0] / 'feature-table.biom'
+        pattern = self.project_dir.qiime_data_per_dataset / '*' / '*' / '*' / '*' / 'FWD_*_REV_*' / self.MODES[self.mode][0] / 'feature-table.biom'
         return list(pattern.parent.glob('feature-table.biom'))
     
     def _process_data(self):
