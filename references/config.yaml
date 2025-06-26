@@ -100,7 +100,6 @@ ml:
   enable: true
   methods: 
     - 'catboost'
-    - 'random_forest'
   table_types: 
     - 'clr_transformed'
     - 'normalized'
