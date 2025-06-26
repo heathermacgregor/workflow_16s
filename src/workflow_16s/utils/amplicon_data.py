@@ -545,6 +545,7 @@ class AmpliconData:
         self._load_data()
         self._process_data()
         self._run_analyses()
+        self.debug_sample_alignment()
 
     def _biom_to_df(self, table: Table) -> pd.DataFrame:
         """
@@ -875,7 +876,35 @@ class AmpliconData:
         self._run_ml_feature_selection()
         logger.info("Completed all analyses")
         
-    
+    def debug_sample_alignment(self):
+        """Debug method to trace sample handling"""
+        # Track sample through the pipeline
+        sample_id = list(self.meta['#sampleid'])[0] if not self.meta.empty else "TEST_SAMPLE"
+        
+        # Original tables
+        in_original_biom = sample_id in self.table.ids(axis='sample')
+        in_original_meta = sample_id in self.meta['#sampleid'].values
+        
+        # After alignment
+        in_aligned_biom = sample_id in self.table.ids(axis='sample')
+        in_aligned_meta = sample_id in self.meta['#sampleid'].values
+        
+        # In ML-ready data
+        ml_table = self.tables.get("filtered", {}).get("genus")
+        in_ml_biom = False
+        if ml_table:
+            in_ml_biom = sample_id in ml_table.ids(axis='sample')
+        
+        logger.debug(f"Sample '{sample_id}' tracking:")
+        logger.debug(f"  Original BIOM: {in_original_biom}")
+        logger.debug(f"  Original metadata: {in_original_meta}")
+        logger.debug(f"  Aligned BIOM: {in_aligned_biom}")
+        logger.debug(f"  Aligned metadata: {in_aligned_meta}")
+        logger.debug(f"  ML BIOM: {in_ml_biom}")
+        
+        # Check lowercase representation
+        logger.debug(f"Lowercase sample: '{sample_id.lower()}'")
+        logger.debug(f"In ML metadata index: {sample_id.lower() in self.meta['#sampleid_lower'].values}")
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
         # Define ordination methods to run
