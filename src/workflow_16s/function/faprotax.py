@@ -176,14 +176,50 @@ def parse_faprotax_db(
 
     return trait_dict
 
+def find_references_dir(project_name: str = "workflow_16s") -> Path:
+    """
+    Search upward from the current file or working directory to find the
+    '<project_name>/references' folder.
+
+    Parameters
+    ----------
+    project_name : str
+        Name of the root folder containing 'references/'.
+
+    Returns
+    -------
+    Path
+        Path to the references directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the directory cannot be found.
+    """
+    current = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+
+    for parent in [current] + list(current.parents):
+        if parent.name == project_name:
+            ref_dir = parent / "references"
+            if ref_dir.exists() and ref_dir.is_dir():
+                return ref_dir
+
+    raise FileNotFoundError(f"Could not locate '{project_name}/references' directory.")
+
 
 def get_faprotax_parsed(
-    target_folder: str | Path = "../../../references/faprotax",
+    target_folder: str | Path | None = None,
     *,
     compile_regex: bool = True,
 ):
     """
     Ensure *FAPROTAX.txt* is present and return the parsed dictionary.
+
+    Parameters
+    ----------
+    target_folder : str | Path | None
+        Custom folder where the FAPROTAX database should be stored.
+        If None, this function will search for 'workflow_16s/references'.
 
     Returns
     -------
@@ -191,6 +227,8 @@ def get_faprotax_parsed(
         Parsed FAPROTAX database or *None* on failure.
     """
     try:
+        if target_folder is None:
+            target_folder = find_references_dir()
         txt_path = download_latest_faprotax(target_folder)
     except Exception as exc:  # pragma: no cover
         print(f"Failed to obtain FAPROTAX – {exc}")
