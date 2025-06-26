@@ -21,7 +21,7 @@ from rich.progress import Progress, TaskID
 logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore")  # Suppress warnings
 
-FaprotaxDB = Dict[str, Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]]
+FaprotaxDB = Dict[str, Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]]]
 
 # ==================================== FUNCTIONS ===================================== #
 
