@@ -101,9 +101,7 @@ RESET = "\033[0m"
 DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 
-# ---------------------------------------------------------------------------
-# Helper utilities (verbatim – still handy in notebooks / debugging)
-# ---------------------------------------------------------------------------
+# ==================================== FUNCTIONS ===================================== #
 
 def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
     """Recursively pretty‑print the nested structure of *obj*."""
@@ -116,9 +114,7 @@ def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
     elif isinstance(obj, list) and obj:
         print_structure(obj[0], indent + 4, "[0]")
 
-# ---------------------------------------------------------------------------
-# Shared mix‑in with progress/logging helpers
-# ---------------------------------------------------------------------------
+# ===================================== CLASSES ====================================== #
 
 class _ProcessingMixin:
     """Tiny mix‑in to DRY out progress‑bar + verbose‑logging loops."""
@@ -161,9 +157,6 @@ class _ProcessingMixin:
         elif action:
             logger.info(f"{level} {action}")
 
-# ---------------------------------------------------------------------------
-# Statistical tests engine – unchanged from original
-# ---------------------------------------------------------------------------
 
 class StatisticalAnalyzer:
     """Handles all statistical analyses for amplicon data."""
@@ -203,7 +196,6 @@ class StatisticalAnalyzer:
         self.cfg = cfg
         self.verbose = verbose
 
-    # ------------------------------------------------------------------
     def run_tests(
         self,
         table: Table,
@@ -216,7 +208,11 @@ class StatisticalAnalyzer:
     ) -> Dict[str, Any]:
         results: Dict[str, Any] = {}
         if progress and task_id:
-            ptask = progress.add_task("[white]Running statistical tests", total=len(enabled_tests), parent=task_id)
+            ptask = progress.add_task(
+               "[white]Running statistical tests", 
+               total=len(enabled_tests), 
+               parent=task_id
+            )
         for tname in enabled_tests:
             if tname not in self.TEST_CONFIG:
                 continue
@@ -233,7 +229,6 @@ class StatisticalAnalyzer:
                 progress.update(ptask, advance=1)
         return results
 
-    # ------------------------------------------------------------------
     def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
         if test_name not in self.TEST_CONFIG:
             return None
@@ -640,7 +635,7 @@ class _AnalysisManager(_ProcessingMixin):
     # ------------------------------ stats -----------------------------------
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        grp_vals = self.cfg.get("group_values", ["contaminated", "pristine"])
+        grp_vals = self.cfg.get("group_values", [True, False])
         enabled = self.cfg["stats"].get("tests", ["fisher", "ttest"])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         tot = sum(len(lv) * len(enabled) for lv in self.tables.values())
