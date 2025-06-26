@@ -1236,3 +1236,68 @@ def manual_meta(dataset: str, metadata_dir: Union[str, Path]) -> pd.DataFrame:
     """
     path = Path(metadata_dir) / dataset / 'manual-metadata.tsv'
     return pd.read_csv(path, sep="\t") if path.exists() else pd.DataFrame()
+
+
+def filter_and_reorder_biom_and_metadata(
+    table: Table,
+    metadata_df: pd.DataFrame,
+    sample_column: str = '#sampleid'
+) -> tuple[Table, pd.DataFrame]:
+    """
+    Filters and reorders a BIOM table and metadata DataFrame so that sample IDs 
+    match exactly and are aligned.
+
+    Args:
+        table:         The BIOM table (features x samples).
+        metadata_df:   Metadata DataFrame with a sample ID column.
+        sample_column: Column name in metadata_df with sample IDs.
+
+    Returns:
+        Tuple containing the filtered table and metadata_df.
+    """
+    # Lowercase and deduplicate sample IDs in metadata
+    metadata_df = metadata_df.copy()
+    metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
+    metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
+
+    # Lowercase biom sample IDs, mapping to original IDs
+    original_sample_ids = table.ids(axis='sample')
+    lowercase_to_original = {}
+    for sid in original_sample_ids:
+        key = sid.lower()
+        if key in lowercase_to_original:
+            raise ValueError(
+                f"Duplicate lowercase sample ID found in BIOM table: "
+                f"'{key}' from '{sid}' and '{lowercase_to_original[key]}'"
+            )
+        lowercase_to_original[key] = sid
+
+    # Get shared sample IDs (in lowercase)
+    metadata_ids = metadata_df[sample_column].tolist()
+    shared_ids = [sid for sid in metadata_ids if sid in lowercase_to_original]
+
+    # Filter metadata by shared IDs
+    metadata_df = metadata_df.set_index(sample_column).loc[shared_ids].reset_index()
+
+    # Map back to original-case sample IDs for biom
+    ordered_biom_sample_ids = [lowercase_to_original[sid] 
+                               for sid in metadata_df[sample_column]]
+
+    # Filter and reorder BIOM table
+    table_filtered = table.filter(
+        ordered_biom_sample_ids, axis='sample', inplace=False
+    )
+    sample_index = {sid: i 
+                    for i, sid in enumerate(table_filtered.ids(axis='sample'))}
+    reordered_indices = [sample_index[sid] 
+                         for sid in ordered_biom_sample_ids]
+    data = table_filtered.matrix_data.toarray()
+    reordered_data = data[:, reordered_indices]
+
+    table_reordered = Table(
+        reordered_data,
+        observation_ids=table_filtered.ids(axis='observation'),
+        sample_ids=ordered_biom_sample_ids
+    )
+
+    return table_reordered, metadata_df
