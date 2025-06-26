@@ -1,62 +1,39 @@
 # ===================================== IMPORTS ====================================== #
-
-# Standard Library Imports
-import glob
+# Standard Library
 import logging
-import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-# Third-Party Imports
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np
+# Third-Party
 import pandas as pd
 from biom.table import Table
 from rich.progress import Progress, TaskID
 
-# ================================== LOCAL IMPORTS =================================== #
-
-from workflow_16s.utils.biom import (
+# Local
+from workflow_16s.utils import (
     collapse_taxa, 
     convert_to_biom, 
     export_h5py, 
-    presence_absence
-)
-from workflow_16s.utils.progress import create_progress
-from workflow_16s.utils.file_utils import (
+    presence_absence,
+    create_progress,
     import_merged_table_biom, 
-    import_merged_meta_tsv
+    import_merged_meta_tsv,
+    filter_and_reorder_biom_and_metadata
 )
-from workflow_16s.stats.utils import (
+from workflow_16s.stats import (
     clr_transform_table, 
     filter_table, 
     normalize_table, 
     merge_table_with_metadata, 
-    table_to_dataframe
-)
-from workflow_16s.stats.tests import (
+    table_to_dataframe,
     fisher_exact_bonferroni, 
     kruskal_bonferroni, 
     mwu_bonferroni, 
     ttest
 )
-from workflow_16s.stats.beta_diversity import (
-    pcoa as calculate_pcoa, 
-    pca as calculate_pca, 
-    tsne as calculate_tsne, 
-    umap as calculate_umap
-)
-from workflow_16s.figures.merged.merged import (
-    mds as plot_mds, 
-    pca as plot_pca, 
-    pcoa as plot_pcoa, 
-    sample_map_categorical
-)
-from workflow_16s.function.faprotax import ( 
-    get_faprotax_parsed, 
-    faprotax_functions_for_taxon 
-)
+from workflow_16s.stats.beta_diversity import pcoa, pca, tsne, umap
+from workflow_16s.figures.merged import mds, pca as plot_pca, pcoa as plot_pcoa, sample_map_categorical
+from workflow_16s.function.faprotax import get_faprotax_parsed, faprotax_functions_for_taxon
 from workflow_16s.models.feature_selection import (
     filter_data, 
     grid_search,
@@ -65,82 +42,35 @@ from workflow_16s.models.feature_selection import (
     catboost_feature_selection
 )
 
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-
+# ================================== CONFIGURATION =================================== #
 logger = logging.getLogger('workflow_16s')
-warnings.filterwarnings("ignore")  # Suppress warnings
-
-# ================================= DEFAULT VALUES =================================== #
-
-# ANSI color codes
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
-
-DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-def print_structure(obj, indent=0, _key='root'):
-    """
-    Recursively print the structural outline of a Python object.
-    
-    Parameters
-    ----------
-    obj : Any
-        The object to inspect (dict, list, or anything else).
-    indent : int, optional
-        Current indentation level (used internally by the function).
-    _key : str, optional
-        The name of the current branch (used internally).
-    """
-    spacer = ' ' * indent
-    type_name = type(obj).__name__
-    
-    # Show this level’s header
-    if indent == 0:
-        print(f'{_key} ({type_name})')
-    else:
-        print(f'{spacer}|-- {_key} ({type_name})')
-    
-    # Recurse into dictionaries
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            print_structure(v, indent + 4, k)
-    
-    # If it’s a list, show a single representative element (if any)
-    elif isinstance(obj, list) and obj:
-        print_structure(obj[0], indent + 4, '[0]')
-
-
-# ============================= STATISTICAL ANALYZER CLASS ============================ #
+# =============================== STATISTICAL ANALYZER ================================ #
 class StatisticalAnalyzer:
-    """Handles all statistical analyses for amplicon data"""
+    """Handles statistical analyses with standardized configuration"""
     
-    TEST_CONFIG = {
+    TEST_MAP = {
         'fisher': {
-            'key': 'fisher',
             'func': fisher_exact_bonferroni,
             'name': 'Fisher test (w/ Bonferroni)',
             'effect_col': 'proportion_diff',
             'alt_effect_col': 'odds_ratio'
         },
         'ttest': {
-            'key': 'ttest',
             'func': ttest,
             'name': 't-test',
             'effect_col': 'mean_difference',
             'alt_effect_col': 'cohens_d'
         },
         'mwu_bonferroni': {
-            'key': 'mwub',
             'func': mwu_bonferroni,
             'name': 'Mann-Whitney U test (w/ Bonferroni)',
             'effect_col': 'effect_size_r',
             'alt_effect_col': 'median_difference'
         },
         'kruskal_bonferroni': {
-            'key': 'kwb',
             'func': kruskal_bonferroni,
             'name': 'Kruskal-Wallis test (w/ Bonferroni)',
             'effect_col': 'epsilon_squared',
@@ -152,52 +82,20 @@ class StatisticalAnalyzer:
         self.cfg = cfg
         self.verbose = verbose
     
-    def run_tests(
-        self,
-        table: Table,
-        metadata: pd.DataFrame,
-        group_column: str,
-        group_values: List[Any],
-        enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
-    ) -> Dict[str, Any]:
-        """
-        Run statistical tests on a feature table
-        
-        Args:
-            table:         BIOM feature table
-            metadata:      Sample metadata
-            group_column:  Column in metadata to group by
-            group_values:  Values to compare in group_column
-            enabled_tests: List of tests to run
-            progress:      Rich progress object
-            task_id:       Parent task ID
-            
-        Returns:
-            Dictionary of test results keyed by test name
-        """
+    def run_tests(self, table: Table, metadata: pd.DataFrame, group_column: str, 
+                 group_values: List[str], enabled_tests: List[str], 
+                 progress: Optional[Progress] = None, task_id: Optional[TaskID] = None) -> Dict[str, Any]:
+        """Run configured statistical tests"""
         results = {}
-        total_tests = len(enabled_tests)
-        
-        if progress and task_id:
-            main_task = progress.add_task(
-                f"[white]Running statistical tests", 
-                total=total_tests,
-                parent=task_id
-            )
-        
         for test_name in enabled_tests:
-            if test_name not in self.TEST_CONFIG:
+            if test_name not in self.TEST_MAP:
                 continue
                 
-            config = self.TEST_CONFIG[test_name]
-            test_key = config['key']
-            
+            config = self.TEST_MAP[test_name]
             if self.verbose:
                 logger.info(f"Running {config['name']}...")
                 
-            results[test_key] = config['func'](
+            results[test_name] = config['func'](
                 table=table,
                 metadata=metadata,
                 group_column=group_column,
@@ -205,390 +103,253 @@ class StatisticalAnalyzer:
             )
             
             if progress and task_id:
-                progress.update(main_task, advance=1)
+                progress.update(task_id, advance=1)
                 
         return results
 
     def get_effect_size(self, test_name: str, result_row: pd.Series) -> Optional[float]:
-        """
-        Extract effect size from statistical test results
-        
-        Args:
-            test_name:  Name of statistical test
-            result_row: Row from results DataFrame
-            
-        Returns:
-            Effect size value or None if not found
-        """
-        if test_name not in self.TEST_CONFIG:
+        """Extract effect size from test results"""
+        if test_name not in self.TEST_MAP:
             return None
             
-        config = self.TEST_CONFIG[test_name]
-        effect_col = config['effect_col']
-        alt_effect_col = config['alt_effect_col']
-        
-        if effect_col in result_row:
-            return result_row[effect_col]
-        elif alt_effect_col and alt_effect_col in result_row:
-            return result_row[alt_effect_col]
+        config = self.TEST_MAP[test_name]
+        for col in [config['effect_col'], config['alt_effect_col']:
+            if col and col in result_row:
+                return result_row[col]
         return None
 
-# ============================= ORDINATION CLASS ============================ #
-class Ordination:
-    """Handles ordination analyses and plotting for all taxonomic levels"""
+# ================================= ORDINATION HANDLER ================================ #
+class OrdinationHandler:
+    """Manages ordination analyses and visualization"""
     
-    TEST_CONFIG = {
+    METHOD_MAP = {
         'pca': {
-            'key': 'pca',
-            'func': calculate_pca,
-            'plot_func': plot_pca,
+            'func': pca,
+            'plotter': plot_pca,
             'name': 'Principal Components Analysis'
         },
         'pcoa': {
-            'key': 'pcoa',
-            'func': calculate_pcoa,
-            'plot_func': plot_pcoa,
+            'func': pcoa,
+            'plotter': plot_pcoa,
             'name': 'Principal Coordinates Analysis',
         },
         'tsne': {
-            'key': 'tsne',
-            'func': calculate_tsne,
-            'plot_func': plot_mds,
-            'name': 't-distributed Stochastic Neighbor Embedding',
+            'func': tsne,
+            'plotter': mds,
+            'name': 't-SNE',
             'plot_kwargs': {'mode': 'TSNE'}
         },
         'umap': {
-            'key': 'umap',
-            'func': calculate_umap,
-            'plot_func': plot_mds,
-            'name': 'Uniform Manifold Approximation and Projection',
+            'func': umap,
+            'plotter': mds,
+            'name': 'UMAP',
             'plot_kwargs': {'mode': 'UMAP'}
         }
     }
     
-    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
-        self.cfg = cfg
-        self.verbose = verbose
-        self.figure_output_dir = Path(output_dir)
-        self.results = {}
-        self.figures = {}
-    
-    def run_tests(
-        self,
-        table: Table,
-        metadata: pd.DataFrame,
-        color_col: str,
-        symbol_col: str,
-        transformation: str,
-        enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Run ordination analyses and generate plots for a specific table
-        
-        Args:
-            table:         BIOM feature table for current taxonomic level
-            metadata:      Sample metadata
-            color_col:     Column for coloring points
-            symbol_col:    Column for point symbols
-            transformation: Data transformation applied + taxonomic level
-            enabled_tests: List of ordination methods to run
-            progress:      Rich progress object
-            task_id:       Parent task ID
-            
-        Returns:
-            Dictionary of ordination results keyed by method name
-        """
-        results = {}
-        figures = {}
-        # Calculate actual tests to run
-        tests_to_run = [test for test in enabled_tests if test in self.TEST_CONFIG]
-        total_tests_to_run = len(tests_to_run)  # Use filtered count
-        
-        if not tests_to_run:
-            return results, figures
-        
-        if progress and task_id:
-            main_task = progress.add_task(
-                f"[white]Running ordination for {transformation}", 
-                total=total_tests_to_run,  # Use filtered count
-                parent=task_id
-            )
-        
-        try:
-            # Filter and align table with metadata
-            if self.verbose:
-                logger.info(f"Aligning samples for {transformation}")
-            table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-            if self.verbose:
-                logger.info(f"Aligned table: {table.shape[0]} features × {table.shape[1]} samples")
-            
-            # Run each enabled ordination method
-            for test_name in tests_to_run:
-                config = self.TEST_CONFIG[test_name]
-                test_key = config['key']
-                
-                if self.verbose:
-                    logger.info(f"Running {config['name']} for {transformation}...")
-                    
-                try:
-                    # Compute ordination
-                    ordination_result = config['func'](table=table)
-                    results[test_key] = ordination_result
-                    
-                    # Prepare plot arguments
-                    plot_kwargs = config.get('plot_kwargs', {})
-                    plot_kwargs.update({
-                        'metadata': metadata,
-                        'color_col': color_col,
-                        'symbol_col': symbol_col,
-                        'transformation': transformation,
-                        'output_dir': self.figure_output_dir,
-                        **kwargs
-                    })
-                    
-                    # Handle different result types
-                    if test_key == 'pca':
-                        plot_kwargs.update({
-                            'components': ordination_result['components'],
-                            'proportion_explained': ordination_result['exp_var_ratio']
-                        })
-                    elif test_key == 'pcoa':
-                        plot_kwargs.update({
-                            'components': ordination_result.samples,
-                            'proportion_explained': ordination_result.proportion_explained
-                        })
-                    else:  # t-SNE or UMAP
-                        plot_kwargs['df'] = ordination_result
-                    
-                    # Generate plot and capture figure
-                    if self.verbose:
-                        logger.info(f"Generating {test_key} plot for {transformation}")
-                    fig, colordict = config['plot_func'](**plot_kwargs)
-                    figures[test_key] = fig
-                    
-                except Exception as e:
-                    if self.verbose:
-                        logger.error(f"Failed {test_name} for {transformation}: {str(e)}")
-                        logger.debug("Traceback:", exc_info=True)
-                    figures[test_key] = None  # Store placeholder for failed plot
-                    
-                finally:
-                    # Update progress after each test
-                    if progress and task_id:
-                        progress.update(main_task, advance=1)
-                        
-        except Exception as e:
-            if self.verbose:
-                logger.error(f"Ordination failed for {transformation}: {str(e)}")
-                logger.debug("Traceback:", exc_info=True)
-            # Advance progress by filtered test count
-            if progress and task_id:
-                progress.update(main_task, advance=total_tests_to_run)  # Use filtered count
-                
-        return results, figures
-
-# ================================= PLOTTER CLASS ================================== #
-class Plotter:
-    """Handles sample map visualization"""
-    
-    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
-        self.cfg = cfg
+    def __init__(self, output_dir: Path, verbose: bool = False):
         self.output_dir = output_dir
         self.verbose = verbose
         
-    def generate_sample_map(
-        self, 
-        metadata: pd.DataFrame,
-        color_columns: List[str] = ['dataset_name', 'nuclear_contamination_status'],
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Generate sample location maps
+    def run_analyses(self, table: Table, metadata: pd.DataFrame, color_col: str, symbol_col: str,
+                    transformation: str, methods: List[str], progress: Optional[Progress] = None,
+                    task_id: Optional[TaskID] = None) -> Tuple[Dict, Dict]:
+        """Run ordination methods and generate plots"""
+        results, figures = {}, {}
+        table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
         
-        Args:
-            metadata:      Sample metadata with location data
-            color_columns: Columns to use for coloring points
-            **kwargs:      Additional plot arguments
-            
-        Returns:
-            Dictionary of generated figures keyed by color column
-        """
-        figures = {}
-        for color_col in color_columns:
-            fig, _ = sample_map_categorical(
-                metadata=metadata,
-                output_dir=self.output_dir,
-                color_col=color_col,
-                **kwargs
-            )
-            figures[color_col] = fig
-        return figures
+        for method in methods:
+            if method not in self.METHOD_MAP:
+                continue
+                
+            config = self.METHOD_MAP[method]
+            try:
+                # Compute ordination
+                ord_result = config['func'](table=table)
+                results[method] = ord_result
+                
+                # Generate plot
+                fig = self._generate_plot(
+                    config, ord_result, metadata, color_col, 
+                    symbol_col, transformation, method
+                )
+                figures[method] = fig
+            except Exception as e:
+                if self.verbose:
+                    logger.error(f"Ordination failed for {method}: {str(e)}")
+                figures[method] = None
+            finally:
+                if progress and task_id:
+                    progress.update(task_id, advance=1)
+                    
+        return results, figures
 
-# ================================== TOP FEATURES ANALYZER ================================== #
+    def _generate_plot(self, config: Dict, result: Any, metadata: pd.DataFrame, 
+                      color_col: str, symbol_col: str, transformation: str, method: str):
+        """Generate visualization for ordination result"""
+        plot_kwargs = {
+            'metadata': metadata,
+            'color_col': color_col,
+            'symbol_col': symbol_col,
+            'transformation': transformation,
+            'output_dir': self.output_dir,
+            **config.get('plot_kwargs', {})
+        }
+        
+        if method == 'pca':
+            plot_kwargs.update({
+                'components': result['components'],
+                'proportion_explained': result['exp_var_ratio']
+            })
+        elif method == 'pcoa':
+            plot_kwargs.update({
+                'components': result.samples,
+                'proportion_explained': result.proportion_explained
+            })
+        else:  # t-SNE/UMAP
+            plot_kwargs['df'] = result
+            
+        return config['plotter'](**plot_kwargs)[0]
+
+# =============================== TOP FEATURES ANALYZER =============================== #
 class TopFeaturesAnalyzer:
-    """Identifies top features associated with experimental groups"""
-    
+    """Identifies significant features associated with groups"""
     def __init__(self, cfg: Dict, verbose: bool = False):
         self.cfg = cfg
         self.verbose = verbose
     
-    def analyze(
-        self, 
-        stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
-        group_column: str
-    ) -> Tuple[List[Dict], List[Dict]]:
-        """
-        Identify top features associated with group differences
-        
-        Args:
-            stats_results: Nested dictionary of statistical results
-            group_column:  Metadata column defining groups
-            
-        Returns:
-            Tuple of (contaminated_features, pristine_features)
-        """
-        contaminated_features = []
-        pristine_features = []
+    def analyze(self, stats_results: Dict, group_column: str) -> Tuple[List, List]:
+        """Identify top features from statistical results"""
+        contaminated, pristine = [], []
         analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
         
-        # Process each taxonomic level
         for level in ['phylum', 'class', 'order', 'family', 'genus']:
-            level_features = {}
-            
-            # Collect results across all table types and tests
-            for table_type, tests in stats_results.items():
-                for test_name, test_results in tests.items():
-                    if level not in test_results:
-                        continue
-                    
-                    # Process each feature in results
-                    for _, row in test_results[level].iterrows():
-                        feature = row['feature']
-                        p_value = row['p_value']
-                        
-                        # Skip non-significant results
-                        if pd.isna(p_value) or p_value > 0.05:
-                            continue
-                            
-                        # Get effect size
-                        effect = analyzer.get_effect_size(test_name, row)
-                        if effect is None:
-                            continue
-                            
-                        # Track best result per feature
-                        current = level_features.get(feature)
-                        if not current or p_value < current['p_value']:
-                            level_features[feature] = {
-                                'p_value': p_value,
-                                'effect': effect,
-                                'table_type': table_type,
-                                'test': test_name
-                            }
-            
-            # Classify features by effect direction
-            for feature, result in level_features.items():
-                feature_data = {
-                    'feature': feature,
-                    'level': level,
-                    'table_type': result['table_type'],
-                    'test': result['test'],
-                    'effect': result['effect'],
-                    'p_value': result['p_value']
-                }
-                
-                if result['effect'] > 0:
-                    contaminated_features.append(feature_data)
-                else:
-                    pristine_features.append(feature_data)
-        
-        # Sort by effect size magnitude and significance
-        key_func = lambda x: (-abs(x['effect']), x['p_value'])
-        contaminated_features.sort(key=key_func)
-        pristine_features.sort(key=key_func)
-        
-        return contaminated_features, pristine_features
-
-
-# ================================== UTILITY FUNCTIONS ================================== #    
-
-def filter_and_reorder_biom_and_metadata(
-    table: Table,
-    metadata_df: pd.DataFrame,
-    sample_column: str = '#sampleid'
-) -> tuple[Table, pd.DataFrame]:
-    """
-    Filters and reorders a BIOM table and metadata DataFrame so that sample IDs 
-    match exactly and are aligned.
-
-    Args:
-        table:         The BIOM table (features x samples).
-        metadata_df:   Metadata DataFrame with a sample ID column.
-        sample_column: Column name in metadata_df with sample IDs.
-
-    Returns:
-        Tuple containing the filtered table and metadata_df.
-    """
-    # Lowercase and deduplicate sample IDs in metadata
-    metadata_df = metadata_df.copy()
-    metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
-    metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
-
-    # Lowercase biom sample IDs, mapping to original IDs
-    original_sample_ids = table.ids(axis='sample')
-    lowercase_to_original = {}
-    for sid in original_sample_ids:
-        key = sid.lower()
-        if key in lowercase_to_original:
-            raise ValueError(
-                f"Duplicate lowercase sample ID found in BIOM table: "
-                f"'{key}' from '{sid}' and '{lowercase_to_original[key]}'"
+            level_features = self._process_level_features(
+                stats_results, level, analyzer
             )
-        lowercase_to_original[key] = sid
+            self._classify_features(level, level_features, contaminated, pristine)
+            
+        return self._sort_features(contaminated), self._sort_features(pristine)
 
-    # Get shared sample IDs (in lowercase)
-    metadata_ids = metadata_df[sample_column].tolist()
-    shared_ids = [sid for sid in metadata_ids if sid in lowercase_to_original]
+    def _process_level_features(self, stats_results, level, analyzer):
+        """Process features at a specific taxonomic level"""
+        features = {}
+        for table_type, tests in stats_results.items():
+            for test_name, test_results in tests.items():
+                if level not in test_results:
+                    continue
+                    
+                for _, row in test_results[level].iterrows():
+                    if not self._is_significant(row):
+                        continue
+                        
+                    feature = row['feature']
+                    effect = analyzer.get_effect_size(test_name, row)
+                    if effect is None:
+                        continue
+                        
+                    current = features.get(feature)
+                    if not current or row['p_value'] < current['p_value']:
+                        features[feature] = {
+                            'p_value': row['p_value'],
+                            'effect': effect,
+                            'table_type': table_type,
+                            'test': test_name
+                        }
+        return features
 
-    # Filter metadata by shared IDs
-    metadata_df = metadata_df.set_index(sample_column).loc[shared_ids].reset_index()
+    def _is_significant(self, row):
+        return not (pd.isna(row['p_value']) or row['p_value'] > 0.05)
 
-    # Map back to original-case sample IDs for biom
-    ordered_biom_sample_ids = [lowercase_to_original[sid] 
-                               for sid in metadata_df[sample_column]]
+    def _classify_features(self, level, features, contaminated, pristine):
+        """Classify features based on effect direction"""
+        for feature, data in features.items():
+            feature_data = {
+                'feature': feature,
+                'level': level,
+                **data
+            }
+            if data['effect'] > 0:
+                contaminated.append(feature_data)
+            else:
+                pristine.append(feature_data)
 
-    # Filter and reorder BIOM table
-    table_filtered = table.filter(
-        ordered_biom_sample_ids, axis='sample', inplace=False
-    )
-    sample_index = {sid: i 
-                    for i, sid in enumerate(table_filtered.ids(axis='sample'))}
-    reordered_indices = [sample_index[sid] 
-                         for sid in ordered_biom_sample_ids]
-    data = table_filtered.matrix_data.toarray()
-    reordered_data = data[:, reordered_indices]
+    def _sort_features(self, features):
+        return sorted(features, key=lambda x: (-abs(x['effect']), x['p_value'])
 
-    table_reordered = Table(
-        reordered_data,
-        observation_ids=table_filtered.ids(axis='observation'),
-        sample_ids=ordered_biom_sample_ids
-    )
-
-    return table_reordered, metadata_df
-
-
-# ================================== AMPLICON DATA CLASS ================================== #
-class AmpliconData:
-    """Main class for processing amplicon sequencing data"""
+# ================================== DATA PROCESSOR ================================== #
+class DataProcessor:
+    """Handles data processing pipeline"""
+    def __init__(self, cfg: Dict, verbose: bool = False):
+        self.cfg = cfg
+        self.verbose = verbose
+        self.tables = {}
+        
+    def process(self, table: Table) -> Dict:
+        """Execute full processing pipeline"""
+        self.tables["raw"] = table
+        self._apply_preprocessing()
+        self._collapse_taxa()
+        self._create_presence_absence()
+        return self.tables
     
-    MODE_CONFIG = {
+    def _apply_preprocessing(self):
+        """Apply filtering, normalization, and CLR transformation"""
+        current_table = self.tables["raw"]
+        
+        if self.cfg['features']['filter']:
+            current_table = self._process_step(
+                current_table, "Filtering", filter_table
+            )
+            self.tables["filtered"] = current_table
+            
+        if self.cfg['features']['normalize']:
+            current_table = self._process_step(
+                current_table, "Normalizing", 
+                lambda t: normalize_table(t, axis=1)
+            )
+            self.tables["normalized"] = current_table
+            
+        if self.cfg['features']['clr_transform']:
+            current_table = self._process_step(
+                current_table, "CLR Transforming", clr_transform_table
+            )
+            self.tables["clr_transformed"] = current_table
+            
+    def _process_step(self, table: Table, name: str, func: Callable) -> Table:
+        """Execute a processing step with progress tracking"""
+        if self.verbose:
+            logger.info(f"{name} table...")
+        return func(table)
+    
+    def _collapse_taxa(self):
+        """Collapse tables to different taxonomic levels"""
+        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
+        for table_type in list(self.tables.keys()):
+            self.tables[table_type] = {
+                level: collapse_taxa(self.tables[table_type], level)
+                for level in tax_levels
+            }
+    
+    def _create_presence_absence(self):
+        """Create presence/absence tables if configured"""
+        if not self.cfg['features']['presence_absence']:
+            return
+            
+        self.tables["presence_absence"] = {
+            level: presence_absence(self.tables["raw"][level])
+            for level in self.tables["raw"]
+        }
+
+# ================================== AMPLICON ANALYZER ================================== #
+class AmpliconAnalyzer:
+    """Main analysis controller"""
+    MODES = {
         'asv': ('table', 'asv'),
         'genus': ('table_6', 'l6')
     }
     
-    def __init__(self, cfg, project_dir, mode='genus', verbose=False):
+    def __init__(self, cfg: Dict, project_dir: Path, mode: str = 'genus', verbose: bool = False):
         self.cfg = cfg
         self.project_dir = project_dir
         self.mode = mode
@@ -596,503 +357,139 @@ class AmpliconData:
         self.meta = None
         self.table = None
         self.tables = {}
-        self.stats = {}
-        self.ordination = {}
-        self.models = {}
-        self.figures = {}
-        self.top_contaminated_features = []
-        self.top_pristine_features = []
-
-        if self.cfg.get("faprotax", False):
+        self.results = {
+            'stats': {},
+            'ordination': {},
+            'figures': {},
+            'top_features': {'contaminated': [], 'pristine': []}
+        }
+        
+        if mode not in self.MODES:
+            raise ValueError(f"Invalid mode: {mode}")
+        
+        table_dir, output_dir = self.MODES[mode]
+        self.paths = {
+            'figures': project_dir / 'figures',
+            'table': project_dir / 'data' / 'merged' / 'table' / output_dir / 'feature-table.biom',
+            'metadata': project_dir / 'data' / 'merged' / 'metadata' / 'sample-metadata.tsv'
+        }
+        
+        if cfg.get("faprotax", False):
             self.fdb = get_faprotax_parsed()
         
-        self._validate_mode()
-        self._set_output_paths()
         self._load_data()
         self._process_data()
         self._run_analyses()
-
-    def _biom_to_df(self, table: Table) -> pd.DataFrame:
-        """
-        Convert a BIOM table to a pandas DataFrame with samples as rows and features as columns.
         
-        Args:
-            table: BIOM table to convert
-            
-        Returns:
-            DataFrame with samples as rows and features as columns
-        """
-        # Transpose to get samples as rows and features as columns
-        data = table.matrix_data.toarray().T
-        sample_ids = table.ids(axis='sample')
-        feature_ids = table.ids(axis='observation')
-        return pd.DataFrame(data, index=sample_ids, columns=feature_ids)
-        
-    def _validate_mode(self):
-        """Validate processing mode"""
-        if self.mode not in self.MODE_CONFIG:
-            raise ValueError(f"Invalid processing mode: {self.mode}")
-    
-    def _set_output_paths(self):
-        """Set output paths for processed data"""
-        table_dir, output_dir = self.MODE_CONFIG[self.mode]
-        self.figure_output_dir = Path(self.project_dir.figures)
-        self.table_output_path = (
-            Path(self.project_dir.data) / 'merged' / 'table' / 
-            output_dir / 'feature-table.biom'
-        )
-        self.meta_output_path = (
-            Path(self.project_dir.data) / 'merged' / 'metadata' / 
-            'sample-metadata.tsv'
-        )
-    
     def _load_data(self):
-        """Load metadata and feature tables"""
-        self._load_metadata()
-        self._load_biom_table()
-        self._filter_and_align_data()
-    
-    def _load_metadata(self):
-        """Load and merge metadata from multiple sources"""
-        meta_paths = self._get_metadata_paths()
-        self.meta = import_merged_meta_tsv(
-            meta_paths, 
-            None,
-            self.verbose
+        """Load and align metadata and feature tables"""
+        self.meta = self._load_metadata()
+        self.table = self._load_biom_table()
+        self.table, self.meta = filter_and_reorder_biom_and_metadata(
+            self.table, self.meta, "#sampleid"
         )
+        
+    def _load_metadata(self) -> pd.DataFrame:
+        """Load metadata from project directory"""
+        meta_paths = [
+            self.project_dir / 'metadata_per_dataset' / p.parts[-6:-1] / "sample-metadata.tsv"
+            for p in self._get_biom_paths()
+        ]
+        return import_merged_meta_tsv(meta_paths, self.verbose)
     
-    def _get_metadata_paths(self) -> List[Path]:
-        """Get paths to metadata files corresponding to BIOM tables"""
-        meta_paths = []
-        for biom_path in self._get_biom_paths():
-            # Handle both file paths and directory paths
-            dataset_dir = biom_path.parent if biom_path.is_file() else biom_path
-            
-            # Extract relevant path components
-            tail_parts = dataset_dir.parts[-6:-1]
-            
-            # Construct metadata path
-            meta_path = Path(self.project_dir.metadata_per_dataset).joinpath(
-                *tail_parts, "sample-metadata.tsv"
-            )
-            if meta_path.exists():
-                meta_paths.append(meta_path)
-            
-        if self.verbose:
-            logger.info(f"Found {RED}{len(meta_paths)}{RESET} metadata files")
-        return meta_paths
-    
-    def _load_biom_table(self):
-        """Load and merge BIOM feature tables"""
+    def _load_biom_table(self) -> Table:
+        """Load BIOM table from project directory"""
         biom_paths = self._get_biom_paths()
         if not biom_paths:
-            error_text = "No BIOM files found matching pattern"
-            logger.error(error_text)
-            raise FileNotFoundError(error_text)   
-            
-        self.table = import_merged_table_biom(
-            biom_paths, 
-            'table',
-            self.verbose
-        )
+            raise FileNotFoundError("No BIOM files found")
+        return import_merged_table_biom(biom_paths, 'table', self.verbose)
     
     def _get_biom_paths(self) -> List[Path]:
-        """
-        Get paths to BIOM feature tables using a glob pattern.
-        
-        Returns:
-            List of Path objects to BIOM files
-        """
-        pattern = '/'.join(
-          ['*', '*', '*', '*', 'FWD_*_REV_*', self.MODE_CONFIG[self.mode][0], 
-           'feature-table.biom']
-        )
-        biom_paths = glob.glob(
-            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
-            recursive=True
-        )
-        if self.verbose:
-            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
-        return [Path(p) for p in biom_paths]
-    
-    def _filter_and_align_data(self):
-        """Filter and align BIOM table with metadata"""
-        original_n_samples = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(
-            table=self.table, metadata_df=self.meta, sample_column="#sampleid"
-        )
-        
-        logger.info(
-            f"Loaded (samples x features) metadata table with "
-            f"{RED}{self.meta.shape[0]}{RESET} samples "
-            f"and {RED}{self.meta.shape[1]}{RESET} columns"
-        )
-
-        if self.cfg["figures"]["map"]:
-            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
-            
-        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
-        logger.info(
-            f"Loaded (features x samples) feature table with "
-            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
-            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
-        )
+        """Discover BIOM file paths"""
+        pattern = self.project_dir / 'qiime_data_per_dataset' / '*' / '*' / '*' / '*' / 'FWD_*_REV_*' / self.MODES[self.mode][0] / 'feature-table.biom'
+        return list(pattern.parent.glob('feature-table.biom'))
     
     def _process_data(self):
-        """Process data through filtering and transformation pipeline"""
-        self._apply_preprocessing()
-        self._collapse_taxa()
-        self._create_presence_absence()
+        """Process data through transformation pipeline"""
+        processor = DataProcessor(self.cfg, self.verbose)
+        self.tables = processor.process(self.table)
         self._save_tables()
-    
-    def _apply_preprocessing(self):
-        """
-        Apply filtering, normalization, and CLR transformation to the table before 
-        collapsing.
-        """
-        # Start with the original table
-        table = self.table
-        self.tables["raw"] = {}
-        self.tables["raw"][self.mode] = table
         
-        filtering_enabled = self.cfg['features']['filter']
-        normalization_enabled = (
-            self.cfg['features']['filter'] and 
-            self.cfg['features']['normalize']
-        )
-        clr_transformation_enabled = (
-            self.cfg['features']['filter'] and 
-            self.cfg['features']['normalize'] and 
-            self.cfg['features']['clr_transform']
-        )
-        enabled_steps = [
-            filtering_enabled, normalization_enabled, clr_transformation_enabled
-        ]
-        n_enabled_steps = sum(enabled_steps)
-
-        with create_progress() as progress:
-            main_task = progress.add_task(
-                f"[white]Preprocessing {self.mode} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=n_enabled_steps
-            )
-            # Apply filtering if enabled
-            if filtering_enabled:
-                if self.verbose:
-                    logger.info("Applying filtering to table...")
-                filtered_table = filter_table(table)
-                self.tables["filtered"] = {}
-                self.tables["filtered"][self.mode] = filtered_table
-                progress.update(main_task, advance=1)
-                table = filtered_table  # Use filtered table for next steps
-            
-            # Apply normalization if enabled (requires prior filtering)
-            if normalization_enabled:
-                if self.verbose:
-                    logger.info("Applying normalization to table...")
-                normalized_table = normalize_table(table, axis=1)
-                self.tables["normalized"] = {}
-                self.tables["normalized"][self.mode] = normalized_table
-                progress.update(main_task, advance=1)
-                table = normalized_table  # Use normalized table for next step
-            
-            # Apply CLR transformation if enabled (requires prior normalization)
-            if clr_transformation_enabled:
-                if self.verbose:
-                    logger.info("Applying CLR transformation to table...")
-                clr_transformed_table = clr_transform_table(table)
-                self.tables["clr_transformed"] = {}
-                self.tables["clr_transformed"][self.mode] = clr_transformed_table
-                progress.update(main_task, advance=1)
-    
-    def _collapse_taxa(self):
-        """Generate tables by collapsing taxa at different levels"""
-        tax_levels = ['phylum', 'class', 'order', 'family', 'genus']
-        
-        # Process all table types
-        for table_type in list(self.tables.keys()):
-            if table_type not in self.tables:
-                continue
-                
-            current_table = self.tables[table_type][self.mode]
-            self.tables[table_type] = self._run_processing_step(
-                process_name=f"Collapsing {table_type} taxonomy",
-                process_func=collapse_taxa,
-                levels=tax_levels,
-                func_args=(),
-                get_source=lambda level: current_table,
-                log_template=f"Collapsed {table_type} to {{level}} level"
-            )
-    
-    def _create_presence_absence(self):
-        """Generate presence/absence tables if enabled in config"""
-        if not self.cfg['features']['presence_absence']:
-            return
-            
-        # Only create presence/absence for raw tables
-        self.tables["presence_absence"] = self._run_processing_step(
-            process_name="Converting to presence/absence",
-            process_func=presence_absence,
-            levels=['phylum', 'class', 'order', 'family', 'genus'],
-            func_args=(),
-            get_source=lambda level: self.tables["raw"][level]
-        )
-    
-    def _run_processing_step(
-        self,
-        process_name: str,
-        process_func: Callable,
-        levels: List[str],
-        func_args: tuple,
-        get_source: Callable,
-        log_template: Optional[str] = None,
-        log_action: Optional[str] = None
-    ) -> Dict[str, pd.DataFrame]:
-        """
-        Execute a processing step across multiple taxonomic levels.
-        
-        Args:
-            process_name: Name of the processing step for logging
-            process_func: Function to execute for each level
-            levels:       Taxonomic levels to process
-            func_args:    Additional arguments for process_func
-            get_source:   Function to get input table for a level
-            log_template: Template for logging messages
-            log_action:   Action name for simple logging
-            
-        Returns:
-            Dictionary of processed tables keyed by taxonomic level
-        """
-        processed_tables = {}
-        
-        if self.verbose:
-            # Verbose mode: Use logging
-            logger.info(f"{process_name}...")
-            for level in levels:
-                source_table = get_source(level)
-                processed = process_func(source_table, level, *func_args)
-                processed_tables[level] = processed
-                self._log_level_action(level, log_template, log_action)
-        else:
-            # Non-verbose mode: Use progress bars
-            with create_progress() as progress:
-                task = progress.add_task(
-                    f"[white]{process_name}...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                    total=len(levels)
-                )
-                for level in levels:
-                    source_table = get_source(level)
-                    processed = process_func(source_table, level, *func_args)
-                    processed_tables[level] = processed
-                    progress.update(task, advance=1)
-                    
-        return processed_tables
-
-    def _log_level_action(self, level: str, template: Optional[str] = None, 
-                         action: Optional[str] = None):
-        """
-        Log action for a specific taxonomic level.
-        
-        Args:
-            level:    Taxonomic level being processed
-            template: String template for logging (uses {level} placeholder)
-            action:   Simple action description
-        """
-        if template:
-            logger.info(template.format(level=level))
-        elif action:
-            logger.info(f"{level} {action}")
-    
     def _save_tables(self):
-        """Save all generated tables to appropriate directories"""
-        # Calculate total tables to save
-        total_tables = sum(len(level_tables) for level_tables in self.tables.values())
-        
-        with create_progress() as progress:
-            task = progress.add_task(
-                "[white]Saving tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=total_tables
-            )
-            base_dir = Path(self.project_dir.data) / 'merged' / 'table'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            for table_type, level_tables in self.tables.items():
-                type_dir = base_dir / table_type
-                type_dir.mkdir(parents=True, exist_ok=True)
-                for level, table in level_tables.items():
-                    level_dir = type_dir / level
-                    level_dir.mkdir(parents=True, exist_ok=True)
-                    output_path = level_dir / "feature-table.biom"
-                    # Save table
-                    export_h5py(table, output_path)
-                    if self.verbose:
-                        n_features, n_samples = table.shape
-                        shape_str = f"[{n_features}, {n_samples}]"
-                        logger.info(
-                            f"Wrote {table_type} {level} table {shape_str} to '{output_path}'"
-                        )
-                    # Update progress after each table save
-                    progress.update(task, advance=1)
+        """Save processed tables to appropriate locations"""
+        base_dir = self.project_dir / 'data' / 'merged' / 'table'
+        for table_type, level_data in self.tables.items():
+            for level, table in level_data.items():
+                output_path = base_dir / table_type / level / "feature-table.biom"
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                export_h5py(table, output_path)
     
     def _run_analyses(self):
-        """Run statistical analyses and visualizations"""
-        # Run statistical tests
+        """Execute statistical and ordination analyses"""
         self._run_statistical_tests()
-        # Identify top features from statistical t ests
+        self._run_ordination()
         self._identify_top_features()
-        print_structure(self.top_contaminated_features)
-        if self.cfg.get("faprotax", False) and self.top_contaminated_features:
-            # Use the actual attribute name (self.fdb)
-            functions_refs = faprotax_functions_for_taxon(
-                self.top_contaminated_features[0]['feature'], 
-                self.fdb,  # Use self.fdb instead of undefined 'fdb'
-                include_references=True
-            )
-            print(functions_refs)
-        #self._run_ml_feature_selection()
-        #self._run_ordination()
-        print_structure(self.stats)
-        print_structure(self.models)
-        print_structure(self.ordination)
-        print_structure(self.figures)
         
+        if self.cfg.get("run_ml", False):
+            self._run_ml_feature_selection()
+    
     def _run_statistical_tests(self):
-        """Run statistical tests for all table types and levels"""
-        group_column = self.cfg.get('group_column', DEFAULT_GROUP_COLUMN)
-        group_values = self.cfg.get('group_values', ['contaminated', 'pristine'])
-        enabled_tests = self.cfg['stats'].get('tests', ['fisher', 'ttest'])
-        
-        self.stats = {}
+        """Run configured statistical tests"""
+        group_col = self.cfg.get('group_column', DEFAULT_GROUP_COLUMN)
+        group_vals = self.cfg.get('group_values', DEFAULT_GROUP_COLUMN_VALUES)
+        tests = self.cfg['stats'].get('tests', ['fisher', 'ttest'])
         analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
         
-        with create_progress() as progress:
-            # Calculate total tests: (table_types × levels × tests)
-            total_tests = sum(
-                len(levels) * len(enabled_tests)
-                for table_type, levels in self.tables.items()
-            )
-            
-            main_task = progress.add_task(
-                "[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=total_tests
-            )
-            
-            for table_type, level_tables in self.tables.items():
-                self.stats[table_type] = {}
-                
-                for level, table in level_tables.items():
-                    # Align table and metadata
-                    table, meta = filter_and_reorder_biom_and_metadata(table, self.meta)
-                    
-                    # Run tests
-                    test_results = analyzer.run_tests(
-                        table=table,
-                        metadata=meta,
-                        group_column=group_column,
-                        group_values=group_values,
-                        enabled_tests=enabled_tests,
-                        progress=progress,
-                        task_id=main_task
-                    )
-                    
-                    # Store with correct structure: {test_name: {level: df}}
-                    for test_key, result_df in test_results.items():
-                        if test_key not in self.stats[table_type]:
-                            self.stats[table_type][test_key] = {}
-                        self.stats[table_type][test_key][level] = result_df
-                    
-                    progress.update(main_task, advance=len(enabled_tests))
-                    
+        for table_type, level_data in self.tables.items():
+            self.results['stats'][table_type] = {}
+            for level, table in level_data.items():
+                table, meta = filter_and_reorder_biom_and_metadata(table, self.meta)
+                self.results['stats'][table_type][level] = analyzer.run_tests(
+                    table, meta, group_col, group_vals, tests
+                )
+    
     def _run_ordination(self):
-        """Run ordination analyses for all table types and levels"""
-        # Define ordination methods to run
-        ordination_methods = ['pca', 'pcoa', 'tsne', 'umap']
+        """Run ordination analyses"""
+        methods = ['pca', 'pcoa', 'tsne', 'umap']
+        ord_handler = OrdinationHandler(self.paths['figures'], self.verbose)
         
-        # Calculate total plots: (table_types * levels * methods)
-        total_plots = 0
-        for table_type in self.tables:
-            for level in self.tables[table_type]:
-                total_plots += len(ordination_methods)
-        
-        logger.debug(f"Total ordination plots to generate: {total_plots}")
-        
-        with create_progress() as progress:
-            main_task = progress.add_task(
-                "[white]Running ordination analyses".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=total_plots
-            ) if total_plots > 0 else None
-            
-            # Initialize storage structures
-            self.ordination = {}
-            self.figures = {}
-            
-            for table_type, level_tables in self.tables.items():
-                self.ordination[table_type] = {}
-                self.figures[table_type] = {}
-                
-                for level, table in level_tables.items():
-                    # Create ordination instance with proper output directory
-                    ordination_output_dir = self.figure_output_dir / level / table_type
-                    ordination = Ordination(
-                        cfg=self.cfg,
-                        output_dir=ordination_output_dir,
-                        verbose=False#self.verbose
-                    )
-                    
-                    # Run ordination and capture results + figures
-                    results, figures = ordination.run_tests(
-                        table=table,
-                        metadata=self.meta,
-                        color_col='dataset_name',
-                        symbol_col='nuclear_contamination_status',
-                        transformation=table_type,
-                        enabled_tests=ordination_methods,
-                        progress=progress,
-                        task_id=main_task
-                    )
-                    
-                    # Store results
-                    self.ordination[table_type][level] = results
-                    self.figures[table_type][level] = figures
-                    
-                    # Additional debug logging
-                    if self.verbose:
-                        logger.info(f"Stored ordination results for {table_type}/{level}:")
-                        logger.info(f"  Methods: {list(results.keys())}")
-                        logger.info(f"  Figures: {list(figures.keys())}")
+        for table_type, level_data in self.tables.items():
+            self.results['ordination'][table_type] = {}
+            self.results['figures'][table_type] = {}
+            for level, table in level_data.items():
+                results, figures = ord_handler.run_analyses(
+                    table, self.meta, 'dataset_name', 
+                    'nuclear_contamination_status', f"{table_type}_{level}", 
+                    methods
+                )
+                self.results['ordination'][table_type][level] = results
+                self.results['figures'][table_type][level] = figures
     
     def _identify_top_features(self):
-        """Identify top features associated with contamination status"""
+        """Identify significant features"""
         analyzer = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = analyzer.analyze(
-            self.stats, DEFAULT_GROUP_COLUMN
+        contaminated, pristine = analyzer.analyze(
+            self.results['stats'], DEFAULT_GROUP_COLUMN
         )
-
+        self.results['top_features']['contaminated'] = contaminated
+        self.results['top_features']['pristine'] = pristine
+    
     def _run_ml_feature_selection(self):
-        if not self.cfg.get("run_ml", False):
-            return
-        for table_type, level_tables in self.tables.items():
-            self.models[table_type] = {}
-            for level, table in level_tables.items():
-                ml_cfg = self.cfg.get("ml", {})
-                for method in ml_cfg.get("methods", ['rfe']):
-                    # Get the table and convert to DataFrame
-                    X = table_to_dataframe(table)
-                    X.index = X.index.str.lower()
-            
-                    # Get labels and align with feature matrix
-                    y = self.meta.set_index('#sampleid')[[DEFAULT_GROUP_COLUMN]]  # contamination label
-                    
-                    # Align indices (crucial for correct sample-feature matching)
-                    common_samples = X.index.intersection(y.index)
-                    
-                    X = X.loc[common_samples]
-                    y = y.loc[common_samples]
-                    # Create ordination instance with proper output directory
-                    model_output_dir = self.project_dir.final / 'ml' / level / table_type 
-                    catboost_feature_selection(
-                        metadata=y,
-                        features=X,
-                        output_dir=model_output_dir,
-                        contamination_status_col=DEFAULT_GROUP_COLUMN,
-                        method=method
-                    )
+        """Execute machine learning feature selection"""
+        for table_type, level_data in self.tables.items():
+            for level, table in level_data.items():
+                X = table_to_dataframe(table)
+                y = self.meta.set_index('#sampleid')[[DEFAULT_GROUP_COLUMN]]
+                
+                # Align data
+                common_idx = X.index.intersection(y.index)
+                X, y = X.loc[common_idx], y.loc[common_idx]
+                
+                output_dir = self.project_dir / 'final' / 'ml' / level / table_type
+                catboost_feature_selection(
+                    metadata=y,
+                    features=X,
+                    output_dir=output_dir,
+                    contamination_status_col=DEFAULT_GROUP_COLUMN,
+                    method=self.cfg['ml'].get('method', 'rfe')
+                )
