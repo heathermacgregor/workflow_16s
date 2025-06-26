@@ -522,7 +522,11 @@ def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
 
     figures = {}
-        
+    if cfg.get("ml", {}).get("enable", False):
+        required = ["table_type", "level", "method", "num_features"]
+        if not all(k in cfg["ml"] for k in required):
+            logger.error("Missing required ML configuration - disabling ML")
+            cfg["ml"]["enable"] = False    
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
