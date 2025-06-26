@@ -670,6 +670,8 @@ class _AnalysisManager(_ProcessingMixin):
         print_structure(self.stats)
         self._identify_top_features()
         if self.faprotax_enabled and self.top_contaminated_features:
+            
+            
             for i in range(0, 20):
                 print(self.top_contaminated_features[i])
                 print(self.top_contaminated_features[i]["feature"])
@@ -810,6 +812,13 @@ class AmpliconData:
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
         print(self.fdb)
+        print(
+                    faprotax_functions_for_taxon(
+                        'd__Archaea; p__Crenarchaeota; c__Thaumarchaeota; o__Nitrososphaerales; f__Nitrososphaeraceae; g__Candidatus Nitrososphaera', 
+                        self.fdb, 
+                        #include_references=True
+                    )
+                )
         # Load
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
