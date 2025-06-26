@@ -95,8 +95,16 @@ figures:
     pcoa: True
     pcoa_metric: "braycurtis"
 
-
+run_ml: True
 ml:
+  methods:
+    - 'rfe'
+    - 'select_k_best'
+    - 'chi_squared'
+    - 'lasso'
+    - 'shap'
+    
+ml_dep:
   enable: true
   table_type: "clr_transformed"   # raw | normalized | clr_transformed | presence_absence
   level: "genus"                  # phylum | … | genus
