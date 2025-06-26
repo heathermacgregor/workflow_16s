@@ -389,9 +389,9 @@ class AmpliconData:
         
         table_dir, output_dir = self.MODES[mode]
         self.paths = {
-            'figures': project_dir / 'figures',
-            'table': project_dir / 'data' / 'merged' / 'table' / output_dir / 'feature-table.biom',
-            'metadata': project_dir / 'data' / 'merged' / 'metadata' / 'sample-metadata.tsv'
+            'figures': project_dir.figures,
+            'table': project_dir.data / 'merged' / 'table' / output_dir / 'feature-table.biom',
+            'metadata': project_dir.data / 'merged' / 'metadata' / 'sample-metadata.tsv'
         }
         
         if cfg.get("faprotax", False):
