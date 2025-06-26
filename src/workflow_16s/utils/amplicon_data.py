@@ -940,8 +940,9 @@ class AmpliconData:
         
         # Get the table and convert to DataFrame
         table = self.tables[tbl_type][level]
-        X = table_to_dataframe(table)
-        print(type(X))
+        X = table_to_dataframe(table).T
+        print(shape(X))
+        print(X.index)
         # Get labels and align with feature matrix
         y = self.meta[[DEFAULT_GROUP_COLUMN]]  # contamination label
         
