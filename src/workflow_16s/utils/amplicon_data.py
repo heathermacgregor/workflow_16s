@@ -301,12 +301,12 @@ class Ordination:
                    pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
 
                    # Handle different result types
-                   if test_key == 'pca':
+                   if key == 'pca':
                        pkwargs.update({
                             'components': ord_res['components'],
                             'proportion_explained': ord_res['exp_var_ratio']
                        })
-                   elif test_key == 'pcoa':
+                   elif key == 'pcoa':
                        pkwargs.update({
                             'components': ord_res.samples,
                             'proportion_explained': ord_res.proportion_explained
