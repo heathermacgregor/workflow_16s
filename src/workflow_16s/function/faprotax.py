@@ -239,21 +239,11 @@ def faprotax_functions_for_taxon(
     *,
     include_references: bool = False,
 ) -> Union[List[str], Dict[str, List[str]]]:
-    """
-    Find all FAPROTAX functions matching a taxonomy string.
+    """Find all FAPROTAX functions matching a taxonomy string."""
+    # Normalize taxon string by removing level markers and standardizing
+    taxon_norm = re.sub(r'\s*[a-z]__\s*', ';', taxon.strip().lower())
+    taxon_norm = re.sub(r'[;]+', ';', taxon_norm).strip(';')
     
-    Args:
-        taxon:              Semicolon-delimited taxonomy string
-        faprotax_db:        Parsed FAPROTAX dictionary
-        include_references: Return references along with traits
-        
-    Returns:
-        List of traits or dict mapping traits to references
-    """
-    # Enhanced normalization: handles any spacing and preserves underscores
-    taxon_norm = re.sub(r'([a-z])__(?=[^;\s])', r'\1__ ', taxon.strip().lower())
-    taxon_norm = re.sub(r';\s*', '; ', taxon_norm)  # Standardize spaces after semicolons
-
     if include_references:
         trait_to_refs: Dict[str, List[str]] = {}
     else:
@@ -264,7 +254,6 @@ def faprotax_functions_for_taxon(
             pat = rec["pat"]
             ref = rec["ref"]
 
-            # Handle uncomplied patterns if needed
             if isinstance(pat, str):
                 pat = re.compile(pat, re.IGNORECASE)
 
@@ -276,4 +265,5 @@ def faprotax_functions_for_taxon(
                 break  # One match per trait is sufficient
 
     return trait_to_refs if include_references else list(dict.fromkeys(traits))
+
     
