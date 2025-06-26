@@ -994,7 +994,7 @@ def catboost_feature_selection(
         filter_col:               Column to filter metadata by (optional).
         filter_val:               Value to filter metadata by (optional).
     """
-    output_dir = Path(output_dir) / 'ml' / 'catboost' / method
+    output_dir = Path(output_dir) / method
     os.makedirs(output_dir, exist_ok=True)
 
     if filter_col and filter_val:
@@ -1005,7 +1005,7 @@ def catboost_feature_selection(
         os.makedirs(output_dir, exist_ok=True)
 
     # Filter data
-    X, y = features.T, metadata[contamination_status_col]
+    X, y = features, metadata[contamination_status_col]
     X_train, X_test, y_train, y_test = filter_data(
         X, y, metadata, contamination_status_col
     )
@@ -1040,9 +1040,11 @@ def catboost_feature_selection(
     logger.info(f"Best Model Parameters: {best_params}, MCC: {best_mcc}")
 
     # Save feature importances
-    save_feature_importances(best_model, pd.DataFrame(
-        X_train_selected, columns=final_selected_features), output_dir
-                            )
+    save_feature_importances(
+        best_model, 
+        pd.DataFrame(X_train_selected, columns=final_selected_features), 
+        output_dir
+    )
 
     # Save model
     best_model_path = output_dir / "best_model.cbm"
