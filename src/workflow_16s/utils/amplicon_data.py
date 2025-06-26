@@ -76,8 +76,10 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 
-DEFAULT_PROGRESS_TEXT_N = 60
+DEFAULT_PROGRESS_TEXT_N = 65
+
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -424,7 +426,7 @@ class TopFeaturesAnalyzer:
                     "p_value": res["p_value"],
                 }
                 (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
-        keyf = lambda d: (-abs(d["effect"]), d["p_value"])  # noqa: E731
+        keyf = lambda d: (-abs(d["effect"]), d["p_value"])  
         cont_feats.sort(key=keyf)
         pris_feats.sort(key=keyf)
         return cont_feats, pris_feats
@@ -639,6 +641,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._run_statistical_tests()
+        print_structure(self.stats)
         self._identify_top_features()
         if self.faprotax_enabled and self.top_contaminated_features:
             print(
@@ -647,9 +650,10 @@ class _AnalysisManager(_ProcessingMixin):
                 )
             )
         self._run_ordination()
-        # self._run_ml_feature_selection()  # Uncomment when ML pipe stabilises
-
-    # ------------------------------ stats -----------------------------------
+        print_structure(self.ordination)
+        self._run_ml_feature_selection()  # Uncomment when ML pipe stabilises
+        print_structure(self.models)
+        
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
@@ -667,10 +671,11 @@ class _AnalysisManager(_ProcessingMixin):
                         self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
                     prog.update(task, advance=len(enabled))
 
-    # ------------------------- top feature discovery ------------------------
     def _identify_top_features(self) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(self.stats, DEFAULT_GROUP_COLUMN)
+        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
+            self.stats, DEFAULT_GROUP_COLUMN
+        )
         print_structure(self.top_contaminated_features)
 
     # ------------------------------ ordination ------------------------------
@@ -680,7 +685,10 @@ class _AnalysisManager(_ProcessingMixin):
         if not tot:
             return
         with create_progress() as prog:
-            task = prog.add_task("[white]Running ordination".ljust(DEFAULT_PROGRESS_TEXT_N), total=tot)
+            task = prog.add_task(
+                "[white]Running ordination...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                total=tot
+            )
             for ttype, lvls in self.tables.items():
                 self.ordination[ttype] = {}
                 self.figures[ttype] = {}
@@ -699,9 +707,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     self.ordination[ttype][lvl] = res
                     self.figures[ttype][lvl] = figs
-                    #prog.update(task, advance=len(methods))
 
-    # ----------------------- ML feature selection ---------------------------
     def _run_ml_feature_selection(self) -> None:
         if not self.cfg.get("run_ml", False):
             return
