@@ -658,19 +658,20 @@ class _AnalysisManager(_ProcessingMixin):
         print_structure(self.stats)
         self._identify_top_features()
         if self.faprotax_enabled and self.top_contaminated_features:
-            print(self.top_contaminated_features[0])
-            print(self.top_contaminated_features[0]["feature"])
-            print(
-                faprotax_functions_for_taxon(
-                    self.top_contaminated_features[0]["feature"], 
-                    self.fdb, 
-                    include_references=True
+            for i in range(0, 20):
+                print(self.top_contaminated_features[i])
+                print(self.top_contaminated_features[i]["feature"])
+                print(
+                    faprotax_functions_for_taxon(
+                        self.top_contaminated_features[i]["feature"], 
+                        self.fdb, 
+                        #include_references=True
+                    )
                 )
-            )
-        self._run_ordination()
-        print_structure(self.ordination)
-        self._run_ml_feature_selection() 
-        print_structure(self.models)
+        #self._run_ordination()
+        #print_structure(self.ordination)
+        #self._run_ml_feature_selection() 
+        #print_structure(self.models)
         
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
