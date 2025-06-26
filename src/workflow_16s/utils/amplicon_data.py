@@ -945,9 +945,11 @@ class AmpliconData:
         print(X.index)
         # Get labels and align with feature matrix
         y = self.meta[[DEFAULT_GROUP_COLUMN]]  # contamination label
-        
+        print(y.shape)
+        print(y.index)
         # Align indices (crucial for correct sample-feature matching)
         common_samples = X.index.intersection(y.index)
+        print(common_samples)
         X = X.loc[common_samples]
         y = y.loc[common_samples]
         
