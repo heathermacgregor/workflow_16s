@@ -34,7 +34,7 @@ DEFAULT_RANDOM_STATE = 0
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-debug_mode = True
+debug_mode = False
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
