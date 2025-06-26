@@ -23,6 +23,7 @@ from workflow_16s.utils.biom import collapse_taxa, convert_to_biom, export_h5py,
 from workflow_16s.utils.progress import create_progress
 from workflow_16s.utils.file_utils import import_merged_table_biom, import_merged_meta_tsv
 from workflow_16s.stats.utils import clr_transform_table, filter_table, normalize_table
+from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
 from workflow_16s.stats.tests import fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 from workflow_16s.stats.beta_diversity import pcoa as calculate_pcoa, pca as calculate_pca, tsne as calculate_tsne, umap as calculate_umap
 from workflow_16s.figures.merged.merged import mds, pca, pcoa, sample_map_categorical
@@ -939,7 +940,7 @@ class AmpliconData:
         
         # Get the table and convert to DataFrame
         table = self.tables[tbl_type][level]
-        X = table
+        X = table_to_dataframe(table)
         print(type(X))
         # Get labels and align with feature matrix
         y = self.meta[[DEFAULT_GROUP_COLUMN]]  # contamination label
