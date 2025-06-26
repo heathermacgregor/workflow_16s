@@ -25,28 +25,6 @@ warnings.filterwarnings("ignore")  # Suppress warnings
 
 # ==================================== FUNCTIONS ===================================== #
 
-# -----------------------------------------------------------------------------#
-# Imports
-# -----------------------------------------------------------------------------#
-from __future__ import annotations
-
-import logging
-import os
-import re
-import warnings
-import zipfile
-from pathlib import Path
-from typing import Dict, Iterator, List, Pattern, Tuple, Union
-from urllib.parse import urljoin
-
-import requests
-from bs4 import BeautifulSoup
-
-# -----------------------------------------------------------------------------#
-# Utilities
-# -----------------------------------------------------------------------------#
-
-
 def find_references_dir(project_name: str = "workflow_16s") -> Path:
     """
     Walk upward from CWD (or script dir) to locate '<project_name>/references'.
