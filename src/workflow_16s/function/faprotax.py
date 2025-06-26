@@ -133,28 +133,52 @@ def download_latest_faprotax(destination: Path) -> Path:
 
 
 def _yield_faprotax_records(fh) -> Iterator[Tuple[str, str]]:
+    """
+    Yield pairs of (header, line) from the FAPROTAX file handle.
+
+    Header lines do NOT start with '>' in your format.
+    Instead, treat lines containing metadata (like ';' or key:value pairs) as headers.
+    """
     header: str | None = None
     for raw in fh:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith(">"):
-            header = line[1:].strip()
+
+        # Heuristic for header line:
+        # If the line contains ';' or expected metadata keys and no leading spaces, treat as header
+        if (
+            (";" in line or "elements:" in line or "exclusively_prokaryotic" in line)
+            and not raw.startswith(" ")
+        ):
+            header = line
             yield header, "__HEADER__"
         else:
+            if header is None:
+                # Skip lines before any header (could log warning here)
+                continue
             yield header, line
 
 
 def _metadata_kv_iter(blob: str) -> Iterator[Tuple[str, str]]:
-    for item in blob.split():
-        if "=" in item:
-            k, v = item.split("=", 1)
+    """
+    Parse metadata blob into key, value pairs.
+    Metadata blob is expected to be a string like:
+    "elements:C,H; main_element:C; electron_donor:C; electron_acceptor:variable; ..."
+    """
+    # Split by semicolon or whitespace, then key:value or key=value
+    for part in re.split(r"[;\s]+", blob):
+        if not part.strip():
+            continue
+        if ":" in part:
+            k, v = part.split(":", 1)
             yield k.strip(), v.strip()
-
-
-# -----------------------------------------------------------------------------#
-# Parser
-# -----------------------------------------------------------------------------#
+        elif "=" in part:
+            k, v = part.split("=", 1)
+            yield k.strip(), v.strip()
+        else:
+            # No key-value separator; yield as key with empty value
+            yield part.strip(), ""
 
 
 def parse_faprotax_db(
@@ -165,6 +189,21 @@ def parse_faprotax_db(
     str,
     Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
 ]:
+    """
+    Parse a FAPROTAX.txt file into a structured, regex-ready dictionary.
+
+    Parameters
+    ----------
+    path : str | Path
+        Path to FAPROTAX.txt file.
+    compile_regex : bool
+        If True, compile patterns with re.compile() for faster matching.
+
+    Returns
+    -------
+    dict
+        Mapping from trait name to dict with metadata and taxa patterns.
+    """
     trait_dict: Dict[
         str,
         Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
@@ -189,18 +228,19 @@ def parse_faprotax_db(
                     f"Found FAPROTAX pattern line before any trait header: {line}"
                 )
 
-            pattern_raw, *rest = line.split(None, 1)
+            fields = line.split(None, 1)  # pattern [reference]
+            pattern_raw = fields[0]
             ref = (
-                rest[0][2:]
-                if rest and rest[0].startswith("//")
-                else (rest[0] if rest else "")
+                fields[1][2:]
+                if len(fields) > 1 and fields[1].startswith("//")
+                else (fields[1] if len(fields) > 1 else "")
             )
 
-            pat: str | Pattern[str] = f"{pattern_raw.replace('*', '.*')}.*"
+            regex_pat: str | Pattern[str] = pattern_raw.replace("*", ".*") + ".*"
             if compile_regex:
-                pat = re.compile(pat)
+                regex_pat = re.compile(regex_pat)
 
-            trait_dict[current_trait]["taxa"].append({"pat": pat, "ref": ref})
+            trait_dict[current_trait]["taxa"].append({"pat": regex_pat, "ref": ref})
 
     return trait_dict
 
