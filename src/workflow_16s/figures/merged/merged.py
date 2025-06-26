@@ -226,6 +226,7 @@ def sample_map_categorical(
     if output_dir:
         output_path = Path(output_dir)
         file_stem = f"sample_map.{color_col}"
+        print(file_stem)
         plotly_show_and_save(fig=fig, show=show, output_path=output_path / file_stem)
 
         # Save legend
