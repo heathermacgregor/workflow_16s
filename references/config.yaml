@@ -96,7 +96,7 @@ ordination:
     tsne: True
     umap: True
   presence_absence:
-    pca: True
+    pca: False
     pcoa: True
     pcoa_metric: "jaccard"
     tsne: True
