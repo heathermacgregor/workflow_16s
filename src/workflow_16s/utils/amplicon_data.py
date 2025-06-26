@@ -12,10 +12,8 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from biom import load_table
 from biom.table import Table
 from rich.progress import Progress, TaskID
-from skbio.stats.ordination import pcoa as PCoA
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -59,7 +57,8 @@ from workflow_16s.models.feature_selection import (
     filter_data, 
     grid_search,
     perform_feature_selection, 
-    save_feature_importances
+    save_feature_importances,
+    catboost_feature_selection
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -563,6 +562,7 @@ class AmpliconData:
         self.tables = {}
         self.stats = {}
         self.ordination = {}
+        self.models = {}
         self.figures = {}
         self.top_contaminated_features = []
         self.top_pristine_features = []
@@ -967,6 +967,38 @@ class AmpliconData:
         )
 
     def _run_ml_feature_selection(self):
+        if not self.cfg.get("run_ml", False):
+            return
+        for table_type, level_tables in self.tables.items():
+            self.models[table_type] = {}
+            for level, table in level_tables.items():
+                ml_cfg = self.cfg.get("ml", {})
+                for method in ml_cfg.get("methods", ['rfe']):
+                    # Get the table and convert to DataFrame
+                    X = table_to_dataframe(table)
+                    X.index = X.index.str.lower()
+            
+                    # Get labels and align with feature matrix
+                    y = self.meta.set_index('#sampleid')[[DEFAULT_GROUP_COLUMN]]  # contamination label
+                    
+                    # Align indices (crucial for correct sample-feature matching)
+                    common_samples = X.index.intersection(y.index)
+                    
+                    X = X.loc[common_samples]
+                    y = y.loc[common_samples]
+                    # Create ordination instance with proper output directory
+                    model_output_dir = self.project_dir / 'final' / 'ml' / level / table_type 
+                    catboost_feature_selection(
+                        metadata=y,
+                        features=X,
+                        output_dir=model_output_dir,
+                        contamination_status_col=DEFAULT_GROUP_COLUMN,
+                        method=method
+                    )
+                
+        
+
+    def _run_ml_feature_selection_dep(self):
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enable", False):
             return
@@ -979,17 +1011,12 @@ class AmpliconData:
         X = table_to_dataframe(table)
         X.index = X.index.str.lower()
 
-        print(X.shape)
-        print(X.index)
         # Get labels and align with feature matrix
-
-        
         y = self.meta.set_index('#sampleid')[[DEFAULT_GROUP_COLUMN]]  # contamination label
-        print(y.shape)
-        print(y.index)
+        
         # Align indices (crucial for correct sample-feature matching)
         common_samples = X.index.intersection(y.index)
-        print(common_samples.tolist())
+        
         X = X.loc[common_samples]
         y = y.loc[common_samples]
         
