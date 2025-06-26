@@ -59,7 +59,8 @@ def k_means(
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
     n_clusters: int = DEFAULT_N_CLUSTERS, 
-    random_state: int = DEFAULT_RANDOM_STATE
+    random_state: int = DEFAULT_RANDOM_STATE,
+    verbose: bool = False
 ) -> pd.Series:
     """
     Apply K-means clustering and return cluster labels.
@@ -85,7 +86,8 @@ def ttest(
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
     group_column_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES,
-    equal_var: bool = False
+    equal_var: bool = False,
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Performs independent t-tests for two groups.
@@ -144,12 +146,13 @@ def ttest(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(
-                f"{table.shape} {table_with_column.shape} "
-                f"{table.index} {table_with_column.index} "
-                f"No features passed for groups: {group_column_values} "
-                f"in column '{group_column}'"
-        )
+        if verbose:
+            logger.error(
+                    f"{table.shape} {table_with_column.shape} "
+                    f"{table.index} {table_with_column.index} "
+                    f"No features passed for groups: {group_column_values} "
+                    f"in column '{group_column}'"
+            )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
@@ -165,7 +168,8 @@ def mwu_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES
+    group_column_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES,
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Performs Mann-Whitney U tests with Bonferroni correction for two groups.
@@ -224,11 +228,12 @@ def mwu_bonferroni(
         
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(
-            f"No features passed Mann-Whitney U tests with Bonferroni correction "
-            f"for groups: {group_column_values} "
-            f"in column '{group_column}'"
-        )
+        if verbose:
+            logger.error(
+                f"No features passed Mann-Whitney U tests with Bonferroni correction "
+                f"for groups: {group_column_values} "
+                f"in column '{group_column}'"
+            )
         return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
@@ -247,7 +252,8 @@ def kruskal_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = None
+    group_column_values: List[Union[bool, int, str]] = None,
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Performs Kruskal-Wallis H-test with Bonferroni correction for ≥3 groups.
@@ -309,11 +315,12 @@ def kruskal_bonferroni(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(
-            f"No features passed Kruskal-Wallis H-test with Bonferroni correction "
-            f"for groups: {group_column_values} "
-            f"in column '{group_column}'"
-        )
+        if verbose:
+            logger.error(
+                f"No features passed Kruskal-Wallis H-test with Bonferroni correction "
+                f"for groups: {group_column_values} "
+                f"in column '{group_column}'"
+            )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
     # Filter invalid p-values and sort
@@ -332,7 +339,8 @@ def anova(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = None
+    group_column_values: List[Union[bool, int, str]] = None,
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Performs one-way ANOVA for ≥3 groups.
@@ -397,10 +405,11 @@ def anova(
     
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.error(
-            f"No features passed one-way ANOVA for groups: {group_column_values} "
-            f"in column '{group_column}'"
-        )
+        if verbose:
+            logger.error(
+                f"No features passed one-way ANOVA for groups: {group_column_values} "
+                f"in column '{group_column}'"
+            )
         return pd.DataFrame(columns=['feature', 'f_statistic', 'p_value'])
 
     # Filter and sort results
@@ -419,7 +428,8 @@ def fisher_exact_bonferroni(
     group_column_values: List[Union[bool, int, str]],
     alpha: float = 0.01,
     min_samples: int = 5,
-    debug_mode: bool = False
+    debug_mode: bool = False,
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Performs Fisher's Exact Tests with Bonferroni correction for 
@@ -505,7 +515,8 @@ def fisher_exact_bonferroni(
     # Create results DataFrame
     results_df = pd.DataFrame(results)
     if results_df.empty:
-        logger.warning("No significant features found after Fisher's Exact Tests with Bonferroni correction")
+        if verbose:
+            logger.warning("No significant features found after Fisher's Exact Tests with Bonferroni correction")
         return pd.DataFrame()
     
     # Apply Bonferroni correction
