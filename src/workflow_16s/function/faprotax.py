@@ -184,6 +184,11 @@ def parse_faprotax_db(
                 current_trait = trait
                 continue
 
+            if current_trait is None:
+                raise ValueError(
+                    f"Found FAPROTAX pattern line before any trait header: {line}"
+                )
+
             pattern_raw, *rest = line.split(None, 1)
             ref = (
                 rest[0][2:]
@@ -198,6 +203,7 @@ def parse_faprotax_db(
             trait_dict[current_trait]["taxa"].append({"pat": pat, "ref": ref})
 
     return trait_dict
+
 
 
 # -----------------------------------------------------------------------------#
