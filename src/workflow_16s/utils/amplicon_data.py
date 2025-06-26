@@ -371,7 +371,8 @@ class Plotter:
                 "dataset_name", 
                 "nuclear_contamination_status",
                 "env_feature", 
-                "env_material"
+                "env_material",
+                "country"
             ]
         )
 
@@ -397,6 +398,7 @@ class Plotter:
             )
             figs[col] = fig
         return figs
+        
 
 class TopFeaturesAnalyzer:
     """
