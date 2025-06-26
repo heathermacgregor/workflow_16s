@@ -657,19 +657,32 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
-        enabled = self.cfg["stats"].get("tests", ["fisher", "ttest"])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
-        tot = sum(len(lv) * len(enabled) for lv in self.tables.values())
+        
+        # Calculate total tests for progress bar: sum over [table levels × enabled tests per table type]
+        tot = 0
+        for ttype, lvls in self.tables.items():
+            # Get enabled tests for this table type from config; fallback to empty list if undefined
+            tests_config = self.cfg["stats"].get(ttype, {})
+            enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
+            tot += len(lvls) * len(enabled_for_ttype)
+        
         with create_progress() as prog:
             task = prog.add_task("[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N), total=tot)
             for ttype, lvls in self.tables.items():
                 self.stats[ttype] = {}
+                # Fetch enabled tests for current table type (skip if config missing)
+                tests_config = self.cfg["stats"].get(ttype, {})
+                enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
+                
                 for lvl, tbl in lvls.items():
                     tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
-                    res = san.run_tests(tbl, m, grp_col, grp_vals, enabled, prog, task)
+                    # Run only tests enabled for this table type
+                    res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, prog, task)
                     for key, df in res.items():
                         self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
-                    prog.update(task, advance=len(enabled))
+                    # Advance progress bar by number of tests run for this level
+                    prog.update(task, advance=len(enabled_for_ttype))
 
     def _identify_top_features(self) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
