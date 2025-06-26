@@ -77,6 +77,38 @@ RESET = "\033[0m"
 DEFAULT_PROGRESS_TEXT_N = 50
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 
+def print_structure(obj, indent=0, _key='root'):
+    """
+    Recursively print the structural outline of a Python object.
+    
+    Parameters
+    ----------
+    obj : Any
+        The object to inspect (dict, list, or anything else).
+    indent : int, optional
+        Current indentation level (used internally by the function).
+    _key : str, optional
+        The name of the current branch (used internally).
+    """
+    spacer = ' ' * indent
+    type_name = type(obj).__name__
+    
+    # Show this level’s header
+    if indent == 0:
+        print(f'{_key} ({type_name})')
+    else:
+        print(f'{spacer}|-- {_key} ({type_name})')
+    
+    # Recurse into dictionaries
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            print_structure(v, indent + 4, k)
+    
+    # If it’s a list, show a single representative element (if any)
+    elif isinstance(obj, list) and obj:
+        print_structure(obj[0], indent + 4, '[0]')
+
+
 # ============================= STATISTICAL ANALYZER CLASS ============================ #
 class StatisticalAnalyzer:
     """Handles all statistical analyses for amplicon data"""
@@ -899,6 +931,10 @@ class AmpliconData:
         self._identify_top_features()
         self._run_ml_feature_selection()
         self._run_ordination()
+        print_structure(self.stats)
+        print_structure(self.models)
+        print_structure(self.ordination)
+        print_structure(self.figures)
         
     
     def _run_ordination(self):
