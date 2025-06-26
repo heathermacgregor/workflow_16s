@@ -47,6 +47,49 @@ logger = logging.getLogger('workflow_16s')
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+def print_structure(obj, indent=0, _key='root'):
+    """
+    Recursively generate the structural outline of a Python object as a block of text.
+    
+    Parameters
+    ----------
+    obj : Any
+        The object to inspect (dict, list, or anything else).
+    indent : int, optional
+        Current indentation level (used internally by the function).
+    _key : str, optional
+        The name of the current branch (used internally).
+    
+    Returns
+    -------
+    str
+        A string representing the structural outline of the object.
+    """
+    spacer = ' ' * indent
+    type_name = type(obj).__name__
+    
+    # Create line for the current level
+    if indent == 0:
+        line = f'{_key} ({type_name})'
+    else:
+        line = f'{spacer}|-- {_key} ({type_name})'
+    
+    # Initialize the result with the current line
+    result = line
+    
+    # Recurse into dictionaries
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            child_result = print_structure(v, indent + 4, k)
+            result += '\n' + child_result
+    
+    # For non-empty lists, show the first element as representative
+    elif isinstance(obj, list) and obj:
+        child_result = print_structure(obj[0], indent + 4, '[0]')
+        result += '\n' + child_result
+    
+    return result
+
 # =============================== STATISTICAL ANALYZER ================================ #
 class StatisticalAnalyzer:
     """Handles statistical analyses with standardized configuration"""
@@ -426,12 +469,18 @@ class AmpliconAnalyzer:
     
     def _run_analyses(self):
         """Execute statistical and ordination analyses"""
+        logger.info(print_structure(self.tables))
+        
         self._run_statistical_tests()
+        logger.info(print_structure(self.results))
         self._run_ordination()
+        logger.info(print_structure(self.results))
         self._identify_top_features()
+        logger.info(print_structure(self.results))
         
         if self.cfg.get("run_ml", False):
             self._run_ml_feature_selection()
+            logger.info(print_structure(self.results))
     
     def _run_statistical_tests(self):
         """Run configured statistical tests"""
