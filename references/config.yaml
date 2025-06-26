@@ -88,6 +88,7 @@ stats:
     mwu_bonferroni: True
     kruskal_bonferroni: True
 
+faprotax: True
 
 figures:
   map: True
