@@ -98,9 +98,15 @@ figures:
 
 ml:
   enable: true
-  methods: ["catboost", "random_forest"]
-  table_types: ["clr_transformed", "normalized"]
-  levels: ["genus", "family"]
+  methods: 
+    - 'catboost'
+    - 'random_forest'
+  table_types: 
+    - 'clr_transformed'
+    - 'normalized'
+  levels: 
+    - 'genus'
+    - 'family'
   num_features: 100
   step_size: 100                  # only used by RFE
   permutation_importance: true
