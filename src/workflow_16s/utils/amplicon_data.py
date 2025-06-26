@@ -47,8 +47,13 @@ from workflow_16s.figures.merged.merged import (
     pcoa as plot_pcoa, 
     sample_map_categorical
 )
-from workflow_16s.function.faprotax import get_faprotax_parsed, faprotax_functions_for_taxon
-from workflow_16s.models.feature_selection import catboost_feature_selection
+from workflow_16s.function.faprotax import (
+    get_faprotax_parsed, 
+    faprotax_functions_for_taxon
+)
+from workflow_16s.models.feature_selection import (
+    catboost_feature_selection
+)
 # ================================== CONFIGURATION =================================== #
 logger = logging.getLogger('workflow_16s')
 warnings.filterwarnings("ignore")  # Suppress warnings
@@ -445,7 +450,7 @@ class AmpliconData:
         meta_paths = self._get_metadata_paths()
         if not meta_paths:
             raise FileNotFoundError("No metadata files found")
-        return import_merged_meta_tsv(meta_paths, self.verbose)
+        return import_merged_meta_tsv(meta_paths, None, self.verbose)
     
     def _load_biom_table(self) -> Table:
         """Load BIOM table from project directory"""
