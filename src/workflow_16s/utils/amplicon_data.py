@@ -50,9 +50,9 @@ from workflow_16s.stats.beta_diversity import (
     umap as calculate_umap
 )
 from workflow_16s.figures.merged.merged import (
-    mds, 
-    pca, 
-    pcoa, 
+    mds as plot_mds, 
+    pca as plot_pca, 
+    pcoa as plot_pcoa, 
     sample_map_categorical
 )
 from workflow_16s.models.feature_selection import (
@@ -206,27 +206,27 @@ class Ordination:
         'pca': {
             'key': 'pca',
             'func': calculate_pca,
-            'plot_func': pca,
+            'plot_func': plot_pca,
             'name': 'Principal Components Analysis'
         },
         'pcoa': {
             'key': 'pcoa',
             'func': calculate_pcoa,
-            'plot_func': pcoa,
+            'plot_func': plot_pcoa,
             'name': 'Principal Coordinates Analysis',
         },
         'tsne': {
             'key': 'tsne',
             'func': calculate_tsne,
-            'plot_func': mds,
-            'name': 'TSNE',
+            'plot_func': plot_mds,
+            'name': 't-distributed Stochastic Neighbor Embedding',
             'plot_kwargs': {'mode': 'TSNE'}
         },
         'umap': {
             'key': 'umap',
             'func': calculate_umap,
-            'plot_func': mds,
-            'name': 'UMAP',
+            'plot_func': plot_mds,
+            'name': 'Uniform Manifold Approximation and Projection',
             'plot_kwargs': {'mode': 'UMAP'}
         }
     }
@@ -268,24 +268,27 @@ class Ordination:
         """
         results = {}
         figures = {}
-        total_tests = len(enabled_tests)
+        # Calculate actual tests to run
         tests_to_run = [test for test in enabled_tests if test in self.TEST_CONFIG]
+        total_tests_to_run = len(tests_to_run)  # Use filtered count
         
         if not tests_to_run:
             return results, figures
-            
+        
         if progress and task_id:
             main_task = progress.add_task(
                 f"[white]Running ordination for {transformation}", 
-                total=total_tests,
+                total=total_tests_to_run,  # Use filtered count
                 parent=task_id
             )
         
         try:
             # Filter and align table with metadata
-            logger.info(f"Aligning samples for {transformation}")
+            if self.verbose:
+                logger.info(f"Aligning samples for {transformation}")
             table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-            logger.info(f"Aligned table: {table.shape[0]} features × {table.shape[1]} samples")
+            if self.verbose:
+                logger.info(f"Aligned table: {table.shape[0]} features × {table.shape[1]} samples")
             
             # Run each enabled ordination method
             for test_name in tests_to_run:
@@ -326,13 +329,15 @@ class Ordination:
                         plot_kwargs['df'] = ordination_result
                     
                     # Generate plot and capture figure
-                    logger.info(f"Generating {test_key} plot for {transformation}")
+                    if self.verbose:
+                        logger.info(f"Generating {test_key} plot for {transformation}")
                     fig, colordict = config['plot_func'](**plot_kwargs)
                     figures[test_key] = fig
                     
                 except Exception as e:
-                    logger.error(f"Failed {test_name} for {transformation}: {str(e)}")
-                    logger.debug("Traceback:", exc_info=True)
+                    if self.verbose:
+                        logger.error(f"Failed {test_name} for {transformation}: {str(e)}")
+                        logger.debug("Traceback:", exc_info=True)
                     figures[test_key] = None  # Store placeholder for failed plot
                     
                 finally:
@@ -341,11 +346,12 @@ class Ordination:
                         progress.update(main_task, advance=1)
                         
         except Exception as e:
-            logger.error(f"Ordination failed for {transformation}: {str(e)}")
-            logger.debug("Traceback:", exc_info=True)
-            # Advance progress even if alignment fails
+            if self.verbose:
+                logger.error(f"Ordination failed for {transformation}: {str(e)}")
+                logger.debug("Traceback:", exc_info=True)
+            # Advance progress by filtered test count
             if progress and task_id:
-                progress.update(main_task, advance=total_tests)
+                progress.update(main_task, advance=total_tests_to_run)  # Use filtered count
                 
         return results, figures
 
