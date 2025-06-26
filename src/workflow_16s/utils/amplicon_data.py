@@ -464,6 +464,13 @@ def filter_and_reorder_biom_and_metadata(
     metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
     metadata_df = metadata_df.drop_duplicates(subset=[sample_column])
 
+    # Store original case metadata IDs for later reference
+    original_meta_ids = metadata_df[sample_column].copy()
+    
+    # Lowercase and deduplicate sample IDs in metadata
+    metadata_df = metadata_df.copy()
+    metadata_df[sample_column] = metadata_df[sample_column].astype(str).str.lower()
+
     # Lowercase biom sample IDs, mapping to original IDs
     original_sample_ids = table.ids(axis='sample')
     lowercase_to_original = {}
@@ -504,6 +511,9 @@ def filter_and_reorder_biom_and_metadata(
         sample_ids=ordered_biom_sample_ids
     )
 
+    # Restore original case in metadata
+    metadata_df[sample_column] = original_meta_ids.loc[metadata_df.index]
+
     return table_reordered, metadata_df
 
 
@@ -539,16 +549,10 @@ class AmpliconData:
     def _biom_to_df(self, table: Table) -> pd.DataFrame:
         """
         Convert a BIOM table to a pandas DataFrame with samples as rows and features as columns.
-        
-        Args:
-            table: BIOM table to convert
-            
-        Returns:
-            DataFrame with samples as rows and features as columns
         """
         # Transpose to get samples as rows and features as columns
         data = table.matrix_data.toarray().T
-        sample_ids = table.ids(axis='sample')
+        sample_ids = [sid.lower() for sid in table.ids(axis='sample')]  # Convert to lowercase
         feature_ids = table.ids(axis='observation')
         return pd.DataFrame(data, index=sample_ids, columns=feature_ids)
         
@@ -641,27 +645,33 @@ class AmpliconData:
     
     def _filter_and_align_data(self):
         """Filter and align BIOM table with metadata"""
-        original_n_samples = self.table.shape[1]
+        original_biom_samples = set(self.table.ids(axis='sample'))
+        original_meta_samples = set(self.meta['#sampleid'])
+        
+        logger.info(f"Original BIOM samples: {len(original_biom_samples)}")
+        logger.info(f"Original metadata samples: {len(original_meta_samples)}")
+        logger.info(f"Original intersection: {len(original_biom_samples & original_meta_samples)}")
+    
+        # Perform alignment
         self.table, self.meta = filter_and_reorder_biom_and_metadata(
             table=self.table, metadata_df=self.meta, sample_column="#sampleid"
         )
         
-        logger.info(
-            f"Loaded (samples x features) metadata table with "
-            f"{RED}{self.meta.shape[0]}{RESET} samples "
-            f"and {RED}{self.meta.shape[1]}{RESET} columns"
-        )
-
-        if self.cfg["figures"]["map"]:
-            self.plotter = Plotter(self.cfg, self.figure_output_dir, self.verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
-            
-        feature_type = 'genera' if self.mode == 'genus' else 'ASVs'
-        logger.info(
-            f"Loaded (features x samples) feature table with "
-            f"{RED}{self.table.shape[1]} ({original_n_samples}){RESET} samples "
-            f"and {RED}{self.table.shape[0]}{RESET} {feature_type}"
-        )
+        # Log results
+        aligned_biom_samples = set(self.table.ids(axis='sample'))
+        aligned_meta_samples = set(self.meta['#sampleid'])
+        logger.info(f"Aligned BIOM samples: {len(aligned_biom_samples)}")
+        logger.info(f"Aligned metadata samples: {len(aligned_meta_samples)}")
+        logger.info(f"Aligned intersection: {len(aligned_biom_samples & aligned_meta_samples)}")
+        
+        # Check for mismatches
+        biom_only = aligned_biom_samples - aligned_meta_samples
+        meta_only = aligned_meta_samples - aligned_biom_samples
+        
+        if biom_only:
+            logger.warning(f"{len(biom_only)} samples only in BIOM table. First 5: {list(biom_only)[:5]}")
+        if meta_only:
+            logger.warning(f"{len(meta_only)} samples only in metadata. First 5: {list(meta_only)[:5]}")
     
     def _process_data(self):
         """Process data through filtering and transformation pipeline"""
@@ -859,9 +869,11 @@ class AmpliconData:
     
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
+        logger.info(f"Starting analyses with {self.table.shape[1]} samples")
         self._identify_top_features()
-        self._run_ml_feature_selection()
         self._run_ordination()
+        self._run_ml_feature_selection()
+        logger.info("Completed all analyses")
         
     
     def _run_ordination(self):
@@ -954,16 +966,17 @@ class AmpliconData:
                 logger.error(f"Metadata missing '{DEFAULT_GROUP_COLUMN}' column - skipping ML feature selection")
                 return
                 
-            y = self.meta[DEFAULT_GROUP_COLUMN]
+            # Convert metadata sample IDs to lowercase for consistent matching
+            self.meta['#sampleid_lower'] = self.meta['#sampleid'].str.lower()
+            y = self.meta.set_index('#sampleid_lower')[DEFAULT_GROUP_COLUMN]
             
             # Find common samples
             common_samples = X.index.intersection(y.index)
-            if len(common_samples) == 0:
-                logger.error(
-                    f"No common samples between features ({X.shape[0]} samples) "
-                    f"and metadata ({y.shape[0]} samples) - skipping ML feature selection"
+            if not common_samples.empty:
+                logger.info(
+                    f"Found {len(common_samples)} common samples between features "
+                    f"and metadata for ML feature selection"
                 )
-                return
                 
             # Filter to common samples
             X = X.loc[common_samples]
