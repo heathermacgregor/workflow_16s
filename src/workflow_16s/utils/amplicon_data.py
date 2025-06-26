@@ -287,7 +287,9 @@ class Ordination:
    
        try:
            # Align samples once per table/level
-           table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
+           table, metadata = filter_and_reorder_biom_and_metadata(
+               table, metadata
+           )
            
            for tname in tests_to_run:
                cfg = self.TEST_CONFIG[tname]
@@ -299,6 +301,21 @@ class Ordination:
                    
                    # Generate plot
                    pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+
+                   # Handle different result types
+                   if test_key == 'pca':
+                       pkwargs.update({
+                            'components': ord_res['components'],
+                            'proportion_explained': ord_res['exp_var_ratio']
+                       })
+                   elif test_key == 'pcoa':
+                       pkwargs.update({
+                            'components': ord_res.samples,
+                            'proportion_explained': ord_res.proportion_explained
+                       })
+                   else:  # t-SNE or UMAP
+                       pkwargs['df'] = ord_res
+                        
                    fig, _ = cfg["plot_func"](
                        metadata=metadata,
                        color_col=color_col,
@@ -309,12 +326,14 @@ class Ordination:
                    )
                    figures[key] = fig
                except Exception as e:
-                   logger.error(f"Failed {tname} for {transformation}: {e}")
+                   logger.error(
+                       f"Failed {tname} for {transformation}: {e}"
+                   )
                    figures[key] = None
                finally:
                    # Update parent task after EACH method completion
                    if progress and task_id:
-                       progress.update(task_id, advance=1)  # Critical fix
+                       progress.update(task_id, advance=1)  
        finally:
            return results, figures
               
@@ -503,7 +522,6 @@ class _DataLoader(_ProcessingMixin):
             f"samples × {RED}{self.table.shape[0]}{RESET} {ftype}"
         )
 
-# ---------------------------------------------------------------------------
 
 class _TableProcessor(_ProcessingMixin):
     def __init__(
@@ -526,7 +544,6 @@ class _TableProcessor(_ProcessingMixin):
         self._create_presence_absence()
         self._save_tables()
 
-    # ---------------------- preprocessing pipeline -------------------------
     def _apply_preprocessing(self) -> None:
         feat_cfg = self.cfg["features"]
         filtering = feat_cfg["filter"]
@@ -537,7 +554,7 @@ class _TableProcessor(_ProcessingMixin):
         tbl = self.tables["raw"][self.mode]
         with create_progress() as prog:
             task = prog.add_task(
-               f"[white]Preprocessing {self.mode}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+               f"[white]Preprocessing feature tables at the {self.mode} level...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                total=n_steps
             )
             if filtering:
@@ -553,13 +570,12 @@ class _TableProcessor(_ProcessingMixin):
                 self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
                 prog.update(task, advance=1)
 
-    # --------------------------- taxon collapse ----------------------------
     def _collapse_taxa(self) -> None:
         lvls = ["phylum", "class", "order", "family", "genus"]
         for ttype in list(self.tables.keys()):
             base_tbl = self.tables[ttype][self.mode]
             self.tables[ttype] = self._run_processing_step(
-                f"Collapsing {ttype} taxonomy",
+                f"Collapsing taxonomy for {ttype.replace('_', ' ')} feature tables...",
                 collapse_taxa,
                 lvls,
                 (),
@@ -567,27 +583,28 @@ class _TableProcessor(_ProcessingMixin):
                 log_template=f"Collapsed {ttype} to {{level}}",
             )
 
-    # --------------------- presence / absence tables -----------------------
     def _create_presence_absence(self) -> None:
         if not self.cfg["features"]["presence_absence"]:
             return
         lvls = ["phylum", "class", "order", "family", "genus"]
         raw_tbl = self.tables["raw"][self.mode]
         self.tables["presence_absence"] = self._run_processing_step(
-            "Converting to presence/absence",
+            "Converting raw features to presence/absence...",
             presence_absence,
             lvls,
             (),
             lambda lvl: raw_tbl,
         )
 
-    # ------------------------------ export ---------------------------------
     def _save_tables(self) -> None:
         tot = sum(len(v) for v in self.tables.values())
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
         with create_progress() as prog:
-            task = prog.add_task("[white]Saving tables".ljust(DEFAULT_PROGRESS_TEXT_N), total=tot)
+            task = prog.add_task(
+                "[white]Exporting feature tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                total=tot
+            )
             for ttype, lvls in self.tables.items():
                 tdir = base / ttype
                 tdir.mkdir(parents=True, exist_ok=True)
