@@ -1,23 +1,3 @@
-"""
-Modular re‑implementation of the original workflow_16s analysis script.
-
-The refactor separates the pipeline into three focused internal helpers
-while **leaving every public class, function, import and side‑effect
-unchanged**:
-
-1. **_DataLoader** – scans disk, reads metadata & BIOM tables, aligns
-   samples.
-2. **_TableProcessor** – executes filtering, normalisation, CLR, taxon
-   collapse, presence/absence conversion, and persists all generated
-   tables.
-3. **_AnalysisManager** – runs statistics, ordination, top‑feature
-   discovery, (optionally) machine‑learning feature selection.
-
-The key public façade **`AmpliconData`** now simply orchestrates these
-three stages.  As promised, *all* original class/method names continue
-working, so external notebooks/tests require no edits.
-"""
-
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
@@ -275,87 +255,79 @@ class Ordination:
         },
     }
 
-    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
+    def __init__(
+       self, 
+       cfg: Dict, 
+       output_dir: Union[str, Path], 
+       verbose: bool = False
+    ):
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
         self.results: Dict[str, Any] = {}
         self.figures: Dict[str, Any] = {}
 
-    # ------------------------------------------------------------------
     def run_tests(
-        self,
-        table: Table,
-        metadata: pd.DataFrame,
-        color_col: str,
-        symbol_col: str,
-        transformation: str,
-        enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-        **kwargs,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        results: Dict[str, Any] = {}
-        figures: Dict[str, Any] = {}
-        tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
-        if not tests_to_run:
-            return results, figures
-        if progress and task_id:
-            ptask = progress.add_task(
-                f"[white]Running ordination for {transformation}".ljust(DEFAULT_PROGRESS_TEXT_N), 
-               total=len(tests_to_run), 
-               parent=task_id
-            )
-        try:
-            if self.verbose:
-                logger.info(f"Aligning samples for {transformation}")
-            table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-            for tname in tests_to_run:
-                cfg = self.TEST_CONFIG[tname]
-                key = cfg["key"]
-                if self.verbose:
-                    logger.info(f"Running {cfg['name']} for {transformation}…")
-                try:
-                    ord_res = cfg["func"](table=table)
-                    results[key] = ord_res
-                    pkwargs = cfg.get("plot_kwargs", {}).copy()
-                    pkwargs.update(
-                        metadata=metadata,
-                        color_col=color_col,
-                        symbol_col=symbol_col,
-                        transformation=transformation,
-                        output_dir=self.figure_output_dir,
-                        **kwargs,
-                    )
-                    if key == "pca":
-                        pkwargs.update(
-                            components=ord_res["components"],
-                            proportion_explained=ord_res["exp_var_ratio"],
-                        )
-                    elif key == "pcoa":
-                        pkwargs.update(
-                            components=ord_res.samples,
-                            proportion_explained=ord_res.proportion_explained,
-                        )
-                    else:
-                        pkwargs["df"] = ord_res
-                    fig, _ = cfg["plot_func"](**pkwargs)
-                    figures[key] = fig
-                except Exception as e:  # noqa: BLE001 – intentional broad catch
-                    logger.error(f"Failed {tname} for {transformation}: {e}")
-                    logger.debug("Traceback:", exc_info=True)
-                    figures[key] = None
-                finally:
-                    if progress and task_id:
-                        progress.update(ptask, advance=1)
-        finally:
-            return results, figures
+       self,
+       table: Table,
+       metadata: pd.DataFrame,
+       color_col: str,
+       symbol_col: str,
+       transformation: str,
+       enabled_tests: List[str],
+       progress: Optional[Progress] = None,
+       task_id: Optional[TaskID] = None,
+       **kwargs,
+   ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+       results = {}
+       figures = {}
+       tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
+       if not tests_to_run:
+           return results, figures
+   
+       try:
+           # Align samples once per table/level
+           table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
            
+           for tname in tests_to_run:
+               cfg = self.TEST_CONFIG[tname]
+               key = cfg["key"]
+               try:
+                   # Run ordination method
+                   ord_res = cfg["func"](table=table)
+                   results[key] = ord_res
+                   
+                   # Generate plot
+                   pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+                   fig, _ = cfg["plot_func"](
+                       metadata=metadata,
+                       color_col=color_col,
+                       symbol_col=symbol_col,
+                       transformation=transformation,
+                       output_dir=self.figure_output_dir,
+                       **pkwargs
+                   )
+                   figures[key] = fig
+               except Exception as e:
+                   logger.error(f"Failed {tname} for {transformation}: {e}")
+                   figures[key] = None
+               finally:
+                   # Update parent task after EACH method completion
+                   if progress and task_id:
+                       progress.update(task_id, advance=1)  # Critical fix
+       finally:
+           return results, figures
+              
 
 class Plotter:
     """Generates sample‑location maps coloured by arbitrary metadata cols."""
 
-    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
+    def __init__(
+       self, 
+       cfg: Dict, 
+       output_dir: Path, 
+       verbose: bool = False
+    ):
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
@@ -382,7 +354,10 @@ class Plotter:
 
 
 class TopFeaturesAnalyzer:
-    """Detects strongest positive/negative associations across taxonomic levels."""
+    """
+    Detects strongest positive/negative associations across 
+    taxonomic levels.
+    """
 
     def __init__(
        self, 
@@ -399,7 +374,8 @@ class TopFeaturesAnalyzer:
         cont_feats: List[Dict] = []
         pris_feats: List[Dict] = []
         san = StatisticalAnalyzer(self.cfg, self.verbose)
-        for level in ["phylum", "class", "order", "family", "genus"]:
+        levels = ["phylum", "class", "order", "family", "genus"]
+        for level in levels:
             lvl_best: Dict[str, Dict] = {}
             for tbl_type, tests in stats_results.items():
                 for tname, t_res in tests.items():
@@ -438,9 +414,18 @@ class TopFeaturesAnalyzer:
        
 
 class _DataLoader(_ProcessingMixin):
-    MODE_CONFIG = {"asv": ("table", "asv"), "genus": ("table_6", "l6")}
+    MODE_CONFIG = {
+       "asv": ("table", "asv"), 
+       "genus": ("table_6", "l6")
+    }
 
-    def __init__(self, cfg: Dict, project_dir: Any, mode: str, verbose: bool):
+    def __init__(
+       self, 
+       cfg: Dict, 
+       project_dir: Any, 
+       mode: str, 
+       verbose: bool = False
+    ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self._validate_mode()
         self._load_metadata()
@@ -460,7 +445,9 @@ class _DataLoader(_ProcessingMixin):
         for bi in self._get_biom_paths():
             ds_dir = bi.parent if bi.is_file() else bi
             tail = ds_dir.parts[-6:-1]
-            mp = Path(self.project_dir.metadata_per_dataset).joinpath(*tail, "sample-metadata.tsv")
+            mp = Path(
+               self.project_dir.metadata_per_dataset
+            ).joinpath(*tail, "sample-metadata.tsv")
             if mp.exists():
                 paths.append(mp)
         if self.verbose:
@@ -468,17 +455,19 @@ class _DataLoader(_ProcessingMixin):
         return paths
 
     def _load_metadata(self) -> None:
-        self.meta = import_merged_meta_tsv(self._get_metadata_paths(), None, self.verbose)
+        self.meta = import_merged_meta_tsv(
+           self._get_metadata_paths(), None, self.verbose
+        )
 
     def _get_biom_paths(self) -> List[Path]:
-        tbl_dir, _ = self.MODE_CONFIG[self.mode]
+        table_dir, _ = self.MODE_CONFIG[self.mode]
         pattern = "/".join([
             "*",
             "*",
             "*",
             "*",
             "FWD_*_REV_*",
-            tbl_dir,
+            table_dir,
             "feature-table.biom",
         ])
         globbed = glob.glob(
@@ -486,14 +475,18 @@ class _DataLoader(_ProcessingMixin):
            recursive=True
         )
         if self.verbose:
-            logger.info(f"Found {RED}{len(globbed)}{RESET} feature tables")
+            logger.info(
+               f"Found {RED}{len(globbed)}{RESET} feature tables"
+            )
         return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
-        bi = self._get_biom_paths()
-        if not bi:
+        biom_paths = self._get_biom_paths()
+        if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
-        self.table = import_merged_table_biom(bi, "table", self.verbose)
+        self.table = import_merged_table_biom(
+           biom_paths, "table", self.verbose
+        )
 
     def _filter_and_align(self) -> None:
         orig_n = self.table.shape[1]
@@ -691,7 +684,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     self.ordination[ttype][lvl] = res
                     self.figures[ttype][lvl] = figs
-                    prog.update(task, advance=len(methods))
+                    #prog.update(task, advance=len(methods))
 
     # ----------------------- ML feature selection ---------------------------
     def _run_ml_feature_selection(self) -> None:
@@ -715,31 +708,56 @@ class _AnalysisManager(_ProcessingMixin):
                         contamination_status_col=DEFAULT_GROUP_COLUMN,
                         method=method,
                     )
+                   
 
-# ---------------------------------------------------------------------------
-# Main façade class (public API unchanged)
-# ---------------------------------------------------------------------------
+class AmpliconData:  
+    """
+    End‑user class that orchestrates loading, processing, and analysis.
+    """
 
-class AmpliconData:  # noqa: RUF100 – do not rename
-    """End‑user class that orchestrates loading, processing, and analysis."""
-
-    def __init__(self, cfg: Dict, project_dir: Any, mode: str = "genus", verbose: bool = False):
+    def __init__(
+       self, 
+       cfg: Dict, 
+       project_dir: Any, 
+       mode: str = "genus", 
+       verbose: bool = False
+    ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
-        # --------------------------- load -----------------------------------
+       
+        # Load
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
-        # -------------------------- process ---------------------------------
+       
+        # Process
         self.figure_output_dir = Path(self.project_dir.figures)
-        tp = _TableProcessor(cfg, self.table, mode, self.meta, self.figure_output_dir, project_dir, verbose)
+        tp = _TableProcessor(
+           cfg, 
+           self.table, 
+           mode, 
+           self.meta, 
+           self.figure_output_dir, 
+           project_dir, 
+           verbose
+        )
         self.tables = tp.tables
-        # -------------------------- figures ---------------------------------
+       
+        # Figures
         self.figures: Dict[str, Any] = {}
         if cfg["figures"].get("map", False):
             self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
             self.figures["map"] = self.plotter.generate_sample_map(self.meta)
-        # -------------------------- analyse ---------------------------------
-        am = _AnalysisManager(cfg, self.tables, self.meta, self.figure_output_dir, verbose, cfg.get("faprotax", False), self.fdb)
+           
+        # Analysis
+        am = _AnalysisManager(
+           cfg, 
+           self.tables, 
+           self.meta, 
+           self.figure_output_dir, 
+           verbose, 
+           cfg.get("faprotax", False), 
+           self.fdb
+        )
         self.stats = am.stats
         self.ordination = am.ordination
         self.models = am.models
@@ -747,4 +765,4 @@ class AmpliconData:  # noqa: RUF100 – do not rename
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
         if verbose:
-            logger.info(GREEN + "AmpliconData initialisation finished." + RESET)
+            logger.info(GREEN + "AmpliconData analysis finished." + RESET)
