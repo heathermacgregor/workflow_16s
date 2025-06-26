@@ -935,10 +935,19 @@ class AmpliconData:
     
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
+        # Run statistical tests
+        self._run_statistical_tests()
+        # Identify top features from statistical t ests
         self._identify_top_features()
         print_structure(self.top_contaminated_features)
-        functions_refs = faprotax_functions_for_taxon(self.top_contaminated_features[0], fdb, include_references=True)
-        print(functions_refs)
+        if self.cfg.get("faprotax", False) and self.top_contaminated_features:
+            # Use the actual attribute name (self.fdb)
+            functions_refs = faprotax_functions_for_taxon(
+                self.top_contaminated_features[0]['feature'], 
+                self.fdb,  # Use self.fdb instead of undefined 'fdb'
+                include_references=True
+            )
+            print(functions_refs)
         #self._run_ml_feature_selection()
         #self._run_ordination()
         print_structure(self.stats)
@@ -946,7 +955,53 @@ class AmpliconData:
         print_structure(self.ordination)
         print_structure(self.figures)
         
-    
+    def _run_statistical_tests(self):
+        """Run statistical tests for all table types and levels"""
+        group_column = self.cfg.get('group_column', DEFAULT_GROUP_COLUMN)
+        group_values = self.cfg.get('group_values', ['contaminated', 'pristine'])
+        enabled_tests = self.cfg['stats'].get('tests', ['fisher', 'ttest'])
+        
+        self.stats = {}
+        analyzer = StatisticalAnalyzer(self.cfg, self.verbose)
+        
+        with create_progress() as progress:
+            # Calculate total tests: (table_types × levels × tests)
+            total_tests = sum(
+                len(levels) * len(enabled_tests)
+                for table_type, levels in self.tables.items()
+            )
+            
+            main_task = progress.add_task(
+                "[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=total_tests
+            )
+            
+            for table_type, level_tables in self.tables.items():
+                self.stats[table_type] = {}
+                
+                for level, table in level_tables.items():
+                    # Align table and metadata
+                    table, meta = filter_and_reorder_biom_and_metadata(table, self.meta)
+                    
+                    # Run tests
+                    test_results = analyzer.run_tests(
+                        table=table,
+                        metadata=meta,
+                        group_column=group_column,
+                        group_values=group_values,
+                        enabled_tests=enabled_tests,
+                        progress=progress,
+                        task_id=main_task
+                    )
+                    
+                    # Store with correct structure: {test_name: {level: df}}
+                    for test_key, result_df in test_results.items():
+                        if test_key not in self.stats[table_type]:
+                            self.stats[table_type][test_key] = {}
+                        self.stats[table_type][test_key][level] = result_df
+                    
+                    progress.update(main_task, advance=len(enabled_tests))
+                    
     def _run_ordination(self):
         """Run ordination analyses for all table types and levels"""
         # Define ordination methods to run
@@ -1041,69 +1096,3 @@ class AmpliconData:
                         contamination_status_col=DEFAULT_GROUP_COLUMN,
                         method=method
                     )
-                
-        
-
-    def _run_ml_feature_selection_dep(self):
-        ml_cfg = self.cfg.get("ml", {})
-        if not ml_cfg.get("enable", False):
-            return
-    
-        tbl_type = ml_cfg["table_type"]
-        level = ml_cfg["level"]
-        
-        # Get the table and convert to DataFrame
-        table = self.tables[tbl_type][level]
-        X = table_to_dataframe(table)
-        X.index = X.index.str.lower()
-
-        # Get labels and align with feature matrix
-        y = self.meta.set_index('#sampleid')[[DEFAULT_GROUP_COLUMN]]  # contamination label
-        
-        # Align indices (crucial for correct sample-feature matching)
-        common_samples = X.index.intersection(y.index)
-        
-        X = X.loc[common_samples]
-        y = y.loc[common_samples]
-        
-        # Stratified split preserving class balance
-        X_tr, X_te, y_tr, y_te = filter_data(
-            X, y, self.meta.set_index('#sampleid').loc[common_samples.tolist()], DEFAULT_GROUP_COLUMN,
-            test_size=0.3, random_state=42
-        )
-        
-        # Feature selection
-        X_tr_sel, X_te_sel, selected = perform_feature_selection(
-            X_tr, y_tr, X_te, y_te,
-            feature_selection=ml_cfg["method"],
-            num_features=ml_cfg["num_features"],
-            step_size=ml_cfg.get("step_size", 100),
-            thread_count=ml_cfg["catboost_threads"],
-            random_state=42,
-            use_permutation_importance=ml_cfg["permutation_importance"],
-        )
-        
-        # Hyperparameter tuning
-        params_grid = {
-            "iterations": [1000],
-            "learning_rate": [0.1],
-            "depth": [4],
-            "loss_function": ["Logloss"],
-            "thread_count": [ml_cfg["catboost_threads"]],
-        }
-        best_model, best_params, best_mcc = grid_search(
-            X_tr_sel, y_tr, X_te_sel, y_te,
-            params_grid,
-            output_dir=self.figure_output_dir / "ml"
-        )
-        
-        # Save feature importances
-        save_feature_importances(
-            best_model,
-            pd.DataFrame(X_tr_sel, columns=selected),
-            self.figure_output_dir / "ml"
-        )
-        
-        # Store results for later use
-        self.ml_selected_features = selected
-        self.ml_model = best_model
