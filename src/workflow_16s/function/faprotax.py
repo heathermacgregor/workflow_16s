@@ -25,96 +25,142 @@ warnings.filterwarnings("ignore")  # Suppress warnings
 
 # ==================================== FUNCTIONS ===================================== #
 
-def _scrape_latest_zip_url(base_url: str) -> Tuple[str, str]:
+# -----------------------------------------------------------------------------#
+# Imports
+# -----------------------------------------------------------------------------#
+from __future__ import annotations
+
+import logging
+import os
+import re
+import warnings
+import zipfile
+from pathlib import Path
+from typing import Dict, Iterator, List, Pattern, Tuple, Union
+from urllib.parse import urljoin
+
+import requests
+from bs4 import BeautifulSoup
+
+# -----------------------------------------------------------------------------#
+# Utilities
+# -----------------------------------------------------------------------------#
+
+
+def find_references_dir(project_name: str = "workflow_16s") -> Path:
     """
-    Return *(zip_url, version_str)* for the newest *FAPROTAX_*.zip on the page.
-    """
-    soup = BeautifulSoup(requests.get(base_url, timeout=30).text, "html.parser")
-
-    # collect all links of the form ".../FAPROTAX_<ver>.zip"
-    zip_links: list[Tuple[str, Tuple[int, ...]]] = []
-    regex = re.compile(r"FAPROTAX_(\d+(?:\.\d+)*)\.zip$", re.I)
-
-    for a in soup.find_all("a", href=True):
-        m = regex.search(a["href"])
-        if m:
-            ver_tuple = tuple(int(p) for p in m.group(1).split("."))
-            zip_links.append((urljoin(base_url, a["href"]), ver_tuple))
-
-    if not zip_links:  # pragma: no cover
-        raise RuntimeError("No FAPROTAX *.zip links found on the download page.")
-
-    # pick the link with the highest version tuple
-    zip_links.sort(key=lambda x: x[1], reverse=True)
-    latest_url, latest_ver = zip_links[0]
-    return latest_url, ".".join(map(str, latest_ver))
-
-
-def _extract_faprotax_txt(zip_path: Path, out_folder: Path) -> Path:
-    """
-    Extract *FAPROTAX.txt* from *zip_path* into *out_folder*.
-    Returns the path of the extracted file.
-    """
-    with zipfile.ZipFile(zip_path) as zf:
-        txt_members = [m for m in zf.namelist() if m.endswith("FAPROTAX.txt")]
-        if not txt_members:  # pragma: no cover
-            raise RuntimeError("FAPROTAX.txt not found inside ZIP archive.")
-        member = txt_members[0]
-        extracted_path = zf.extract(member, path=out_folder)
-        dst = out_folder / "FAPROTAX.txt"
-        Path(extracted_path).replace(dst)  # move/overwrite for consistent name
-        return dst
-
-
-def download_latest_faprotax(
-    target_folder: str | Path = "../../../references/faprotax",
-) -> Path:
-    """
-    Ensure the newest *FAPROTAX.txt* is present locally.
-
-    The file is placed at *<target_folder>/FAPROTAX.txt* (overwriting older ones
-    so the wrapper always parses the freshest database).
+    Walk upward from CWD (or script dir) to locate '<project_name>/references'.
 
     Returns
     -------
     Path
-        Path to *FAPROTAX.txt*.
+        Absolute path to the references directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the directory cannot be found.
+    """
+    start = (
+        Path(__file__).resolve().parent
+        if "__file__" in globals()
+        else Path.cwd().resolve()
+    )
+
+    for parent in [start] + list(start.parents):
+        if parent.name == project_name:
+            ref_dir = parent / "references"
+            if ref_dir.is_dir():
+                return ref_dir
+
+    raise FileNotFoundError(
+        f"Could not locate '{project_name}/references' directory starting from {start}"
+    )
+
+
+# -----------------------------------------------------------------------------#
+# Download helpers
+# -----------------------------------------------------------------------------#
+
+
+def _scrape_latest_zip_url(base_url: str) -> Tuple[str, str]:
+    """Return (zip_url, version_str) for the newest *FAPROTAX_*.zip."""
+    soup = BeautifulSoup(requests.get(base_url, timeout=30).text, "html.parser")
+
+    zip_links: list[Tuple[str, Tuple[int, ...]]] = []
+    rgx = re.compile(r"FAPROTAX_(\d+(?:\.\d+)*)\.zip$", re.I)
+
+    for a in soup.find_all("a", href=True):
+        if (m := rgx.search(a["href"])) is not None:
+            version_tuple = tuple(int(p) for p in m.group(1).split("."))
+            zip_links.append((urljoin(base_url, a["href"]), version_tuple))
+
+    if not zip_links:
+        raise RuntimeError("No FAPROTAX *.zip links found on the download page.")
+
+    zip_links.sort(key=lambda x: x[1], reverse=True)
+    url, ver = zip_links[0]
+    return url, ".".join(map(str, ver))
+
+
+def _extract_faprotax_txt(zip_path: Path, out_folder: Path) -> Path:
+    """Extract FAPROTAX.txt from *zip_path* into *out_folder* and return its path."""
+    with zipfile.ZipFile(zip_path) as zf:
+        txt_members = [m for m in zf.namelist() if m.endswith("FAPROTAX.txt")]
+        if not txt_members:
+            raise RuntimeError("FAPROTAX.txt not found inside ZIP archive.")
+        extracted = zf.extract(txt_members[0], path=out_folder)
+        dst = out_folder / "FAPROTAX.txt"
+        Path(extracted).replace(dst)  # overwrite / standardise name
+        return dst
+
+
+def download_latest_faprotax(destination: Path) -> Path:
+    """
+    Ensure *FAPROTAX.txt* in **destination**/<file>. Creates *destination*.
+
+    Parameters
+    ----------
+    destination : Path
+        Folder where FAPROTAX files should reside (e.g. .../references/faprotax).
+
+    Returns
+    -------
+    Path
+        Path to the up-to-date *FAPROTAX.txt*.
     """
     base_url = (
         "https://pages.uoregon.edu/slouca/LoucaLab/archive/"
         "FAPROTAX/lib/php/index.php?section=Download"
     )
-    folder = Path(target_folder).expanduser().resolve()
-    folder.mkdir(parents=True, exist_ok=True)
+    destination.mkdir(parents=True, exist_ok=True)
 
-    txt_path = folder / "FAPROTAX.txt"
+    txt_path = destination / "FAPROTAX.txt"
     if txt_path.exists():
         return txt_path  # already cached
 
     zip_url, version = _scrape_latest_zip_url(base_url)
-    zip_name = Path(zip_url.split("?")[0]).name
-    zip_path = folder / zip_name
+    zip_path = destination / Path(zip_url.split("?")[0]).name
 
-    print(f"Downloading FAPROTAX v{version}: {zip_url}")
-    resp = requests.get(zip_url, timeout=120)
-    resp.raise_for_status()
-    zip_path.write_bytes(resp.content)
+    logging.info("Downloading FAPROTAX v%s from %s", version, zip_url)
+    zip_path.write_bytes(requests.get(zip_url, timeout=120).content)
 
-    print(f"Extracting FAPROTAX.txt from {zip_name}")
-    txt_path = _extract_faprotax_txt(zip_path, folder)
+    logging.info("Extracting FAPROTAX.txt to %s", destination)
+    return _extract_faprotax_txt(zip_path, destination)
 
-    # keep the ZIP so the version can be inspected later if desired
-    return txt_path
+
+# -----------------------------------------------------------------------------#
+# Parsing helpers
+# -----------------------------------------------------------------------------#
 
 
 def _yield_faprotax_records(fh) -> Iterator[Tuple[str, str]]:
-    """Yield *(header, line)* pairs from a *FAPROTAX.txt* file handle."""
     header: str | None = None
     for raw in fh:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith(">"):  # trait header
+        if line.startswith(">"):
             header = line[1:].strip()
             yield header, "__HEADER__"
         else:
@@ -122,118 +168,89 @@ def _yield_faprotax_records(fh) -> Iterator[Tuple[str, str]]:
 
 
 def _metadata_kv_iter(blob: str) -> Iterator[Tuple[str, str]]:
-    """Yield *key*, *value* pairs from the metadata blob of a header line."""
-    for part in blob.split():
-        if "=" in part:
-            k, v = part.split("=", 1)
+    for item in blob.split():
+        if "=" in item:
+            k, v = item.split("=", 1)
             yield k.strip(), v.strip()
 
 
-def parse_faprotax_db(
-    path: str | Path, *, compile_regex: bool = True
-) -> Dict[
-    str, Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]]
-]:
-    """
-    Parse *FAPROTAX.txt* into a structured, regex-ready dictionary.
+# -----------------------------------------------------------------------------#
+# Parser
+# -----------------------------------------------------------------------------#
 
-    Returns
-    -------
-    Dict[trait, Dict]
-        ``trait → {"metadata": {...}, "taxa": [{"pat": pattern, "ref": str}]}``
-    """
+
+def parse_faprotax_db(
+    path: str | Path,
+    *,
+    compile_regex: bool = True,
+) -> Dict[
+    str,
+    Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
+]:
     trait_dict: Dict[
-        str, Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]]
+        str,
+        Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
     ] = {}
 
     current_trait: str | None = None
     path = Path(path)
 
-    with path.open("rt", encoding="utf-8") as fh:
+    with path.open(encoding="utf-8") as fh:
         for header, line in _yield_faprotax_records(fh):
             if line == "__HEADER__":
                 trait, meta_blob = (header.split(maxsplit=1) + [""])[:2]
                 trait_dict[trait] = {
-                    "metadata": {k: v for k, v in _metadata_kv_iter(meta_blob)},
+                    "metadata": dict(_metadata_kv_iter(meta_blob)),
                     "taxa": [],
                 }
                 current_trait = trait
                 continue
 
-            fields = line.split(None, 1)
-            pattern_raw = fields[0]
+            pattern_raw, *rest = line.split(None, 1)
             ref = (
-                fields[1][2:]
-                if len(fields) > 1 and fields[1].startswith("//")
-                else (fields[1] if len(fields) > 1 else "")
+                rest[0][2:]
+                if rest and rest[0].startswith("//")
+                else (rest[0] if rest else "")
             )
 
-            regex_pat: str | Pattern[str] = f"{pattern_raw.replace('*', '.*')}.*"
+            pat: str | Pattern[str] = f"{pattern_raw.replace('*', '.*')}.*"
             if compile_regex:
-                regex_pat = re.compile(regex_pat)
+                pat = re.compile(pat)
 
-            trait_dict[current_trait]["taxa"].append({"pat": regex_pat, "ref": ref})
+            trait_dict[current_trait]["taxa"].append({"pat": pat, "ref": ref})
 
     return trait_dict
 
-def find_references_dir(project_name: str = "workflow_16s") -> Path:
-    """
-    Search upward from the current file or working directory to find the
-    '<project_name>/references' folder.
 
-    Parameters
-    ----------
-    project_name : str
-        Name of the root folder containing 'references/'.
-
-    Returns
-    -------
-    Path
-        Path to the references directory.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the directory cannot be found.
-    """
-    current = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
-
-    for parent in [current] + list(current.parents):
-        if parent.name == project_name:
-            ref_dir = parent / "references"
-            if ref_dir.exists() and ref_dir.is_dir():
-                return ref_dir
-
-    raise FileNotFoundError(f"Could not locate '{project_name}/references' directory.")
+# -----------------------------------------------------------------------------#
+# Public convenience wrapper
+# -----------------------------------------------------------------------------#
 
 
 def get_faprotax_parsed(
-    target_folder: str | Path | None = None,
     *,
     compile_regex: bool = True,
-):
+) -> Dict[
+    str,
+    Dict[str, Union[Dict[str, str], List[Dict[str, Union[str, Pattern[str]]]]]],
+] | None:
     """
-    Ensure *FAPROTAX.txt* is present and return the parsed dictionary.
-
-    Parameters
-    ----------
-    target_folder : str | Path | None
-        Custom folder where the FAPROTAX database should be stored.
-        If None, this function will search for 'workflow_16s/references'.
+    Locate workflow_16s/references/, ensure a **faprotax/** subdir, download /
+    parse the latest FAPROTAX database, and return it.
 
     Returns
     -------
     dict | None
-        Parsed FAPROTAX database or *None* on failure.
+        Parsed FAPROTAX or *None* if anything fails.
     """
     try:
-        if target_folder is None:
-            target_folder = find_references_dir()
-        txt_path = download_latest_faprotax(target_folder)
+        references_dir = find_references_dir()
+        faprotax_dir = references_dir / "faprotax"
+        faprotax_txt = download_latest_faprotax(faprotax_dir)
+        return parse_faprotax_db(faprotax_txt, compile_regex=compile_regex)
     except Exception as exc:  # pragma: no cover
-        print(f"Failed to obtain FAPROTAX – {exc}")
+        logging.error("Failed to prepare FAPROTAX database: %s", exc)
         return None
-    return parse_faprotax_db(txt_path, compile_regex=compile_regex)
 
 
 def faprotax_functions_for_taxon(
