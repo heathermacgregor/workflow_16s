@@ -209,7 +209,7 @@ class StatisticalAnalyzer:
         results: Dict[str, Any] = {}
         if progress and task_id:
             ptask = progress.add_task(
-               "[white]Running statistical tests", 
+               "[white]Running statistical tests…".ljust(DEFAULT_PROGRESS_TEXT_N), 
                total=len(enabled_tests), 
                parent=task_id
             )
@@ -229,7 +229,11 @@ class StatisticalAnalyzer:
                 progress.update(ptask, advance=1)
         return results
 
-    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
+    def get_effect_size(
+       self, 
+       test_name: str, 
+       row: pd.Series
+    ) -> Optional[float]:
         if test_name not in self.TEST_CONFIG:
             return None
         cfg = self.TEST_CONFIG[test_name]
@@ -238,9 +242,6 @@ class StatisticalAnalyzer:
                 return row[col]
         return None
 
-# ---------------------------------------------------------------------------
-# Ordination class – full implementation from original script
-# ---------------------------------------------------------------------------
 
 class Ordination:
     """Runs PCA/PCoA/t‑SNE/UMAP and produces figures."""
@@ -301,7 +302,9 @@ class Ordination:
             return results, figures
         if progress and task_id:
             ptask = progress.add_task(
-                f"[white]Running ordination for {transformation}", total=len(tests_to_run), parent=task_id
+                f"[white]Running ordination for {transformation}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+               total=len(tests_to_run), 
+               parent=task_id
             )
         try:
             if self.verbose:
@@ -347,10 +350,7 @@ class Ordination:
                         progress.update(ptask, advance=1)
         finally:
             return results, figures
-
-# ---------------------------------------------------------------------------
-# Plotter – unchanged but full code
-# ---------------------------------------------------------------------------
+           
 
 class Plotter:
     """Generates sample‑location maps coloured by arbitrary metadata cols."""
@@ -363,7 +363,10 @@ class Plotter:
     def generate_sample_map(
         self,
         metadata: pd.DataFrame,
-        color_columns: List[str] = ("dataset_name", "nuclear_contamination_status"),
+        color_columns: List[str] = (
+           "dataset_name", 
+           "nuclear_contamination_status"
+        ),
         **kwargs,
     ) -> Dict[str, Any]:
         figs: Dict[str, Any] = {}
@@ -377,14 +380,14 @@ class Plotter:
             figs[col] = fig
         return figs
 
-# ---------------------------------------------------------------------------
-# Top‑features analyser – unchanged full implementation
-# ---------------------------------------------------------------------------
 
 class TopFeaturesAnalyzer:
     """Detects strongest positive/negative associations across taxonomic levels."""
 
-    def __init__(self, cfg: Dict, verbose: bool = False):
+    def __init__(
+       self, 
+       cfg: Dict, verbose: bool = False
+    ):
         self.cfg = cfg
         self.verbose = verbose
 
@@ -432,10 +435,7 @@ class TopFeaturesAnalyzer:
         cont_feats.sort(key=keyf)
         pris_feats.sort(key=keyf)
         return cont_feats, pris_feats
-
-# ---------------------------------------------------------------------------
-# Internal helper components – _DataLoader/_TableProcessor/_AnalysisManager
-# ---------------------------------------------------------------------------
+       
 
 class _DataLoader(_ProcessingMixin):
     MODE_CONFIG = {"asv": ("table", "asv"), "genus": ("table_6", "l6")}
@@ -455,7 +455,6 @@ class _DataLoader(_ProcessingMixin):
         if self.mode not in self.MODE_CONFIG:
             raise ValueError(f"Invalid mode: {self.mode}")
 
-    # ------------------------------ metadata ---------------------------------
     def _get_metadata_paths(self) -> List[Path]:
         paths: List[Path] = []
         for bi in self._get_biom_paths():
@@ -471,7 +470,6 @@ class _DataLoader(_ProcessingMixin):
     def _load_metadata(self) -> None:
         self.meta = import_merged_meta_tsv(self._get_metadata_paths(), None, self.verbose)
 
-    # ------------------------------- BIOM ------------------------------------
     def _get_biom_paths(self) -> List[Path]:
         tbl_dir, _ = self.MODE_CONFIG[self.mode]
         pattern = "/".join([
@@ -483,7 +481,10 @@ class _DataLoader(_ProcessingMixin):
             tbl_dir,
             "feature-table.biom",
         ])
-        globbed = glob.glob(str(Path(self.project_dir.qiime_data_per_dataset) / pattern), recursive=True)
+        globbed = glob.glob(
+           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+           recursive=True
+        )
         if self.verbose:
             logger.info(f"Found {RED}{len(globbed)}{RESET} feature tables")
         return [Path(p) for p in globbed]
@@ -494,16 +495,19 @@ class _DataLoader(_ProcessingMixin):
             raise FileNotFoundError("No BIOM files found")
         self.table = import_merged_table_biom(bi, "table", self.verbose)
 
-    # ----------------------------- alignment ---------------------------------
     def _filter_and_align(self) -> None:
         orig_n = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(self.table, self.meta, "#sampleid")
+        self.table, self.meta = filter_and_reorder_biom_and_metadata(
+           self.table, self.meta, "#sampleid"
+        )
         logger.info(
-            f"Loaded metadata: {RED}{self.meta.shape[0]}{RESET} samples × {RED}{self.meta.shape[1]}{RESET} cols"
+            f"Loaded metadata: {RED}{self.meta.shape[0]}{RESET} "
+            f"samples × {RED}{self.meta.shape[1]}{RESET} cols"
         )
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
-            f"Loaded feature table: {RED}{self.table.shape[1]} ({orig_n}){RESET} samples × {RED}{self.table.shape[0]}{RESET} {ftype}"
+            f"Loaded feature table: {RED}{self.table.shape[1]} ({orig_n}){RESET} "
+            f"samples × {RED}{self.table.shape[0]}{RESET} {ftype}"
         )
 
 # ---------------------------------------------------------------------------
@@ -539,7 +543,10 @@ class _TableProcessor(_ProcessingMixin):
         n_steps = sum(enabled)
         tbl = self.tables["raw"][self.mode]
         with create_progress() as prog:
-            task = prog.add_task(f"[white]Preprocessing {self.mode}".ljust(DEFAULT_PROGRESS_TEXT_N), total=n_steps)
+            task = prog.add_task(
+               f"[white]Preprocessing {self.mode}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+               total=n_steps
+            )
             if filtering:
                 tbl = filter_table(tbl)
                 self.tables.setdefault("filtered", {})[self.mode] = tbl
@@ -596,10 +603,12 @@ class _TableProcessor(_ProcessingMixin):
                     out.parent.mkdir(parents=True, exist_ok=True)
                     export_h5py(tbl, out)
                     if self.verbose:
-                        logger.info(f"Wrote {ttype} {lvl} table [{tbl.shape[0]}, {tbl.shape[1]}] to '{out}'")
+                        logger.info(
+                           f"Wrote {ttype} {lvl} table [{tbl.shape[0]}, "
+                           f"{tbl.shape[1]}] to '{out}'"
+                        )
                     prog.update(task, advance=1)
 
-# ---------------------------------------------------------------------------
 
 class _AnalysisManager(_ProcessingMixin):
     def __init__(
@@ -682,6 +691,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     self.ordination[ttype][lvl] = res
                     self.figures[ttype][lvl] = figs
+                    prog.update(task, advance=len(methods))
 
     # ----------------------- ML feature selection ---------------------------
     def _run_ml_feature_selection(self) -> None:
