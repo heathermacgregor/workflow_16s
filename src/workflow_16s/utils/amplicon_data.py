@@ -362,7 +362,7 @@ class DataProcessor:
         }
 
 # ================================== AMPLICON ANALYZER ================================== #
-class AmpliconAnalyzer:
+class AmpliconData:
     """Main analysis controller"""
     MODES = {
         'asv': ('table', 'asv'),
