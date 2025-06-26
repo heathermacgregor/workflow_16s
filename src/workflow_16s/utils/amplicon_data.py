@@ -318,7 +318,7 @@ class TopFeaturesAnalyzer:
                 pristine.append(feature_data)
 
     def _sort_features(self, features):
-        return sorted(features, key=lambda x: (-abs(x['effect']), x['p_value'])
+        return sorted(features, key=lambda x: (-abs(x['effect']), x['p_value']))
 
 # ================================== DATA PROCESSOR ================================== #
 class DataProcessor:
