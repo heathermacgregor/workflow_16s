@@ -156,7 +156,7 @@ class StatisticalAnalyzer:
             return None
             
         config = self.TEST_MAP[test_name]
-        for col in [config['effect_col'], config['alt_effect_col']:
+        for col in [config['effect_col'], config['alt_effect_col']]:
             if col and col in result_row:
                 return result_row[col]
         return None
