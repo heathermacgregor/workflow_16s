@@ -941,6 +941,8 @@ class AmpliconData:
         # Get the table and convert to DataFrame
         table = self.tables[tbl_type][level]
         X = table_to_dataframe(table)
+        X.index = X.index.str.lower()
+
         print(X.shape)
         print(X.index)
         # Get labels and align with feature matrix
