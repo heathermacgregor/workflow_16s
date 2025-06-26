@@ -62,7 +62,7 @@ logger = logging.getLogger('workflow_16s')
 
 # ================================= DEFAULT VALUES =================================== #
 
-DEFAULT_PROGRESS_TEXT_N = 50
+DEFAULT_PROGRESS_TEXT_N = 65
 
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
