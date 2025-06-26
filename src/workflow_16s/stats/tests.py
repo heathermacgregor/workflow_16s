@@ -223,7 +223,7 @@ def mwu_bonferroni(
         })
         
     results_df = pd.DataFrame(results)
-    if results_df.empty:=
+    if results_df.empty:
         logger.error(
             f"No features passed Mann-Whitney U tests with Bonferroni correction "
             f"for groups: {group_column_values} "
@@ -308,7 +308,7 @@ def kruskal_bonferroni(
         })
     
     results_df = pd.DataFrame(results)
-    if results_df.empty:=
+    if results_df.empty:
         logger.error(
             f"No features passed Kruskal-Wallis H-test with Bonferroni correction "
             f"for groups: {group_column_values} "
@@ -396,7 +396,7 @@ def anova(
         })
     
     results_df = pd.DataFrame(results)
-    if results_df.empty:=
+    if results_df.empty:
         logger.error(
             f"No features passed one-way ANOVA for groups: {group_column_values} "
             f"in column '{group_column}'"
