@@ -307,7 +307,8 @@ def pca(
             raise ValueError(f"Column {y_col} not found in PCA components")
         
         # Create plot
-        logger.info(f"Creating PCA plot with {len(data)} samples")
+        if verbose:
+            logger.info(f"Creating PCA plot with {len(data)} samples")
         fig = px.scatter(
             data,
             x=x_col,
@@ -327,7 +328,8 @@ def pca(
             x_title = f"PC{x} ({x_pct:.1f}%)"
             y_title = f"PC{y} ({y_pct:.1f}%)"
         else:
-            logger.warning("Proportion explained array missing or too short")
+            if verbose:
+                logger.warning("Proportion explained array missing or too short")
             x_title = f"PC{x}"
             y_title = f"PC{y}"
 
@@ -352,7 +354,8 @@ def pca(
             output_path.mkdir(parents=True, exist_ok=True)
             file_stem = f"pca.{transformation or 'raw'}.{x}-{y}.{color_col}.{symbol_col}"
             plotly_show_and_save(fig, show, output_path / file_stem, ['png', 'html'], verbose)
-            logger.info(f"Saved PCA plot to {output_path / file_stem}")
+            if verbose:
+                logger.info(f"Saved PCA plot to {output_path / file_stem}")
             
             # Save legend
             legend_path = output_path / f"{file_stem}.legend.png"
@@ -361,7 +364,8 @@ def pca(
         return fig, colordict
     
     except Exception as e:
-        logger.exception(f"Critical error generating PCA plot: {str(e)}")
+        if verbose:
+            logger.exception(f"Critical error generating PCA plot: {str(e)}")
         # Create error figure
         fig = go.Figure()
         fig.add_annotation(
