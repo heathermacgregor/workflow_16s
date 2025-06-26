@@ -204,9 +204,14 @@ def parse_faprotax_db(path: str | Path, *, compile_regex: bool = True) -> Faprot
             pattern_raw = fields[0]
             ref = fields[1][2:] if len(fields) > 1 and fields[1].startswith("//") else ""
 
-            regex_pat: str | Pattern[str] = pattern_raw.replace("*", ".*") + ".*"
+            # FIXED: Proper pattern conversion with wildcard handling
+            regex_str = pattern_raw.replace("*", ".*")
+            regex_str = re.sub(r'(\.\*)+', '.*', regex_str)  # Collapse redundant wildcards
+            
+            # FIXED: Compile with IGNORECASE flag for case-insensitive matching
+            regex_pat: str | Pattern[str] = regex_str
             if compile_regex:
-                regex_pat = re.compile(regex_pat)
+                regex_pat = re.compile(regex_str, re.IGNORECASE)
 
             trait_dict[current_trait]["taxa"].append({"pat": regex_pat, "ref": ref})
 
@@ -254,9 +259,11 @@ def faprotax_functions_for_taxon(
             pat = rec["pat"]
             ref = rec["ref"]
 
+            # FIXED: Handle both compiled patterns and strings consistently
             if isinstance(pat, str):
                 pat = re.compile(pat, re.IGNORECASE)
 
+            # FIXED: Use search() with normalized taxon string
             if pat.search(taxon_norm):
                 if include_references:
                     trait_to_refs.setdefault(trait, []).append(ref)
@@ -265,5 +272,3 @@ def faprotax_functions_for_taxon(
                 break  # One match per trait is sufficient
 
     return trait_to_refs if include_references else list(dict.fromkeys(traits))
-
-    
