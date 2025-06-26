@@ -934,60 +934,101 @@ class AmpliconData:
         if not ml_cfg.get("enable", False):
             return
     
-        tbl_type = ml_cfg["table_type"]
-        level = ml_cfg["level"]
-        
-        # Get the table and convert to DataFrame
-        table = self.tables[tbl_type][level]
-        X = self._biom_to_df(table)
-        
-        # Get labels and align with feature matrix
-        y = self.meta[DEFAULT_GROUP_COLUMN]  # contamination label
-        
-        # Align indices (crucial for correct sample-feature matching)
-        common_samples = X.index.intersection(y.index)
-        X = X.loc[common_samples]
-        y = y.loc[common_samples]
-        
-        # Stratified split preserving class balance
-        X_tr, X_te, y_tr, y_te = filter_data(
-            X, y, self.meta.loc[common_samples], DEFAULT_GROUP_COLUMN,
-            test_size=0.3, random_state=42
-        )
-        
-        # Feature selection
-        X_tr_sel, X_te_sel, selected = perform_feature_selection(
-            X_tr, y_tr, X_te, y_te,
-            feature_selection=ml_cfg["method"],
-            num_features=ml_cfg["num_features"],
-            step_size=ml_cfg.get("step_size", 100),
-            thread_count=ml_cfg["catboost_threads"],
-            random_state=42,
-            use_permutation_importance=ml_cfg["permutation_importance"],
-        )
-        
-        # Hyperparameter tuning
-        params_grid = {
-            "iterations": [1000],
-            "learning_rate": [0.1],
-            "depth": [4],
-            "loss_function": ["Logloss"],
-            "thread_count": [ml_cfg["catboost_threads"]],
-        }
-        best_model, best_params, best_mcc = grid_search(
-            X_tr_sel, y_tr, X_te_sel, y_te,
-            params_grid,
-            output_dir=self.figure_output_dir / "ml"
-        )
-        
-        # Save feature importances
-        save_feature_importances(
-            best_model,
-            pd.DataFrame(X_tr_sel, columns=selected),
-            self.figure_output_dir / "ml"
-        )
-        
-        # Store results for later use
-        self.ml_selected_features = selected
-        self.ml_model = best_model
+        try:
+            # Get table configuration
+            tbl_type = ml_cfg["table_type"]
+            level = ml_cfg["level"]
+            
+            # Verify table exists
+            if tbl_type not in self.tables or level not in self.tables[tbl_type]:
+                logger.error(f"Missing table: {tbl_type}/{level} - skipping ML feature selection")
+                return
+                
+            table = self.tables[tbl_type][level]
+            
+            # Convert to DataFrame
+            X = self._biom_to_df(table)
+            
+            # Verify group column exists
+            if DEFAULT_GROUP_COLUMN not in self.meta.columns:
+                logger.error(f"Metadata missing '{DEFAULT_GROUP_COLUMN}' column - skipping ML feature selection")
+                return
+                
+            y = self.meta[DEFAULT_GROUP_COLUMN]
+            
+            # Find common samples
+            common_samples = X.index.intersection(y.index)
+            if len(common_samples) == 0:
+                logger.error(
+                    f"No common samples between features ({X.shape[0]} samples) "
+                    f"and metadata ({y.shape[0]} samples) - skipping ML feature selection"
+                )
+                return
+                
+            # Filter to common samples
+            X = X.loc[common_samples]
+            y = y.loc[common_samples]
+            
+            # Check class balance
+            class_counts = y.value_counts()
+            logger.info(f"Class distribution for ML: {class_counts.to_dict()}")
+            min_samples = max(10, ml_cfg.get("min_samples", 20))
+            if len(y) < min_samples:
+                logger.warning(
+                    f"Insufficient samples ({len(y)} < {min_samples}) - skipping ML feature selection"
+                )
+                return
+            # Verify we have enough samples
+            if len(class_counts) < 2:
+                logger.error(f"Only one class present: {class_counts.index[0]} - skipping ML feature selection")
+                return
+                
+            # Stratified split preserving class balance
+            X_tr, X_te, y_tr, y_te = filter_data(
+                X, y, self.meta.loc[common_samples], DEFAULT_GROUP_COLUMN,
+                test_size=0.3, random_state=42
+            )
+            
+            # Feature selection
+            X_tr_sel, X_te_sel, selected = perform_feature_selection(
+                X_tr, y_tr, X_te, y_te,
+                feature_selection=ml_cfg["method"],
+                num_features=ml_cfg["num_features"],
+                step_size=ml_cfg.get("step_size", 100),
+                thread_count=ml_cfg["catboost_threads"],
+                random_state=42,
+                use_permutation_importance=ml_cfg["permutation_importance"],
+            )
+            
+            # Hyperparameter tuning
+            params_grid = {
+                "iterations": [1000],
+                "learning_rate": [0.1],
+                "depth": [4],
+                "loss_function": ["Logloss"],
+                "thread_count": [ml_cfg["catboost_threads"]],
+            }
+            output_dir = self.figure_output_dir / "ml"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            best_model, best_params, best_mcc = grid_search(
+                X_tr_sel, y_tr, X_te_sel, y_te,
+                params_grid,
+                output_dir=output_dir
+            )
+            
+            # Save feature importances
+            save_feature_importances(
+                best_model,
+                pd.DataFrame(X_tr_sel, columns=selected),
+                output_dir
+            )
+            
+            # Store results
+            self.ml_selected_features = selected
+            self.ml_model = best_model
+            
+        except Exception as e:
+            logger.error(f"Machine learning feature selection failed: {str(e)}")
+            logger.debug("Traceback:", exc_info=True)
 
