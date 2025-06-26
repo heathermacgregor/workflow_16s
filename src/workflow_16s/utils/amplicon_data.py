@@ -53,6 +53,10 @@ from workflow_16s.figures.merged.merged import (
     pcoa as plot_pcoa, 
     sample_map_categorical
 )
+from workflow_16s.function.faprotax import ( 
+    get_faprotax_parsed, 
+    faprotax_functions_for_taxon 
+)
 from workflow_16s.models.feature_selection import (
     filter_data, 
     grid_search,
@@ -598,6 +602,9 @@ class AmpliconData:
         self.figures = {}
         self.top_contaminated_features = []
         self.top_pristine_features = []
+
+        if self.cfg.get("faprotax", False):
+            self.fdb = get_faprotax_parsed()
         
         self._validate_mode()
         self._set_output_paths()
@@ -929,8 +936,11 @@ class AmpliconData:
     def _run_analyses(self):
         """Run statistical analyses and visualizations"""
         self._identify_top_features()
-        self._run_ml_feature_selection()
-        self._run_ordination()
+        print_structure(self.top_contaminated_features)
+        functions_refs = faprotax_functions_for_taxon(self.top_contaminated_features[0], fdb, include_references=True)
+        print(functions_refs)
+        #self._run_ml_feature_selection()
+        #self._run_ordination()
         print_structure(self.stats)
         print_structure(self.models)
         print_structure(self.ordination)
