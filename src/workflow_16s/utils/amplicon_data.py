@@ -364,18 +364,31 @@ class Plotter:
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
+        # Get color columns from config with fallback to defaults
+        self.color_columns = cfg["figures"].get(
+            "map_columns", 
+            [
+                "dataset_name", 
+                "nuclear_contamination_status",
+                "env_feature", 
+                "env_material"
+            ]
+        )
 
     def generate_sample_map(
         self,
         metadata: pd.DataFrame,
-        color_columns: List[str] = (
-           "dataset_name", 
-           "nuclear_contamination_status"
-        ),
         **kwargs,
     ) -> Dict[str, Any]:
         figs: Dict[str, Any] = {}
-        for col in color_columns:
+        # Only keep columns that exist in metadata
+        valid_columns = [col for col in self.color_columns if col in metadata]
+        missing = set(self.color_columns) - set(valid_columns)
+        
+        if missing and self.verbose:
+            logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
+        
+        for col in valid_columns:
             fig, _ = sample_map_categorical(
                 metadata=metadata,
                 output_dir=self.output_dir,
@@ -384,7 +397,6 @@ class Plotter:
             )
             figs[col] = fig
         return figs
-
 
 class TopFeaturesAnalyzer:
     """
