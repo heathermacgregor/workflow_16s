@@ -262,7 +262,8 @@ def pca(
             raise ValueError(f"Missing columns: {', '.join(missing)}")
         
         # Prepare visualization data
-        logger.info("Preparing PCA visualization data...")
+        if verbose:
+            logger.info("Preparing PCA visualization data...")
         data = _prepare_visualization_data(components, metadata, color_col, symbol_col, verbose)
         
         # Handle empty data case
