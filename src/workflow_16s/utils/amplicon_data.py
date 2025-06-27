@@ -224,7 +224,7 @@ class StatisticalAnalyzer:
 
 
 class Ordination:
-    """Runs PCA/PCoA/t‑SNE/UMAP and produces figures with optimizations."""
+    """Runs PCA/PCoA/t‑SNE/UMAP and produces figures."""
 
     TEST_CONFIG = {
         "pca": {
@@ -289,76 +289,67 @@ class Ordination:
         if not tests_to_run:
             return results, figures
 
-        # Align samples once per table/level
-        table, metadata = filter_and_reorder_biom_and_metadata(
-            table, metadata
-        )
-        
-        # Precompute common parameters
-        pcoa_metric = trans_cfg.get("pcoa_metric", "braycurtis")
-        
-        for tname in tests_to_run:
-            cfg = self.TEST_CONFIG[tname]
-            key = cfg["key"]
+        try:
+            # Align samples once per table/level
+            table, metadata = filter_and_reorder_biom_and_metadata(
+                table, metadata
+            )
             
-            # Skip if specifically disabled in config
-            if not trans_cfg.get(tname, True):
-                if self.verbose:
-                    logger.info(f"Skipping {tname} for {transformation} (disabled in config)")
-                continue
-                
-            try:
-                # Prepare method-specific parameters
-                method_params = {}
-                
-                # Handle PCoA metric from config
-                if tname == "pcoa":
-                    method_params["metric"] = pcoa_metric
-                
-                # Run ordination method with parameters
-                if self.verbose:
-                    logger.info(f"Running {tname} for {transformation}...")
-                ord_res = cfg["func"](table=table, **method_params)
-                results[key] = ord_res
-                
-                # Prepare plot parameters
-                pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+            for tname in tests_to_run:
+                cfg = self.TEST_CONFIG[tname]
+                key = cfg["key"]
+                try:
+                    # Prepare method-specific parameters
+                    method_params = {}
+                    
+                    # Handle PCoA metric from config
+                    if tname == "pcoa":
+                        method_params["metric"] = trans_cfg.get(
+                            "pcoa_metric", "braycurtis"  # Default metric
+                        )
+                    
+                    # Run ordination method with parameters
+                    ord_res = cfg["func"](table=table, **method_params)
+                    results[key] = ord_res
+                    
+                    # Prepare plot parameters
+                    pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
 
-                # Handle different result types for plotting
-                if key == 'pca':
-                    pkwargs.update({
-                        'components': ord_res['components'],
-                        'proportion_explained': ord_res['exp_var_ratio']
-                    })
-                elif key == 'pcoa':
-                    pkwargs.update({
-                        'components': ord_res.samples,
-                        'proportion_explained': ord_res.proportion_explained
-                    })
-                else:  # t-SNE or UMAP
-                    pkwargs['df'] = ord_res
-                    
-                # Generate plot
-                fig, _ = cfg["plot_func"](
-                    metadata=metadata,
-                    color_col=color_col,
-                    symbol_col=symbol_col,
-                    transformation=transformation,
-                    output_dir=self.figure_output_dir,
-                    **pkwargs
-                )
-                figures[key] = fig
-            except Exception as e:
-                logger.error(
-                    f"Failed {tname} for {transformation}: {e}"
-                )
-                figures[key] = None
-            finally:
-                # Update parent task after EACH method completion
-                if progress and task_id:
-                    progress.update(task_id, advance=1)  
-                    
-        return results, figures
+                    # Handle different result types for plotting
+                    if key == 'pca':
+                        pkwargs.update({
+                            'components': ord_res['components'],
+                            'proportion_explained': ord_res['exp_var_ratio']
+                        })
+                    elif key == 'pcoa':
+                        pkwargs.update({
+                            'components': ord_res.samples,
+                            'proportion_explained': ord_res.proportion_explained
+                        })
+                    else:  # t-SNE or UMAP
+                        pkwargs['df'] = ord_res
+                        
+                    # Generate plot
+                    fig, _ = cfg["plot_func"](
+                        metadata=metadata,
+                        color_col=color_col,
+                        symbol_col=symbol_col,
+                        transformation=transformation,
+                        output_dir=self.figure_output_dir,
+                        **pkwargs
+                    )
+                    figures[key] = fig
+                except Exception as e:
+                    logger.error(
+                        f"Failed {tname} for {transformation}: {e}"
+                    )
+                    figures[key] = None
+                finally:
+                    # Update parent task after EACH method completion
+                    if progress and task_id:
+                        progress.update(task_id, advance=1)  
+        finally:
+            return results, figures
               
 
 class Plotter:
@@ -718,13 +709,9 @@ class _AnalysisManager(_ProcessingMixin):
             if self.verbose:
                 logger.info("Annotating top features with FAPROTAX...")
             self._annotate_top_features()
+        self._run_ordination()
+        self._run_ml_feature_selection()
         
-        # Conditionally run ordination
-        if self.cfg.get("ordination", {}).get("run", False):
-            if self.verbose:
-                logger.info("Running ordination...")
-            self._run_ordination()
-
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         """Cached FAPROTAX lookup with memoization"""
         if taxon not in self._faprotax_cache:
@@ -799,12 +786,7 @@ class _AnalysisManager(_ProcessingMixin):
             tot += len(lvls) * len(enabled_methods)
         
         if not tot:
-            if self.verbose:
-                logger.info("No ordination methods enabled in config")
             return
-        
-        if self.verbose:
-            logger.info(f"Running {tot} ordination calculations")
         
         with create_progress() as prog:
             task = prog.add_task(
@@ -819,21 +801,11 @@ class _AnalysisManager(_ProcessingMixin):
                 ord_config = self.cfg.get("ordination", {}).get(ttype, {})
                 enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                 
-                # Skip if no methods enabled for this table type
-                if not enabled_methods:
-                    if self.verbose:
-                        logger.info(f"Skipping {ttype} - no ordination methods enabled")
-                    continue
-                    
                 for lvl, tbl in lvls.items():
                     ordir = self.figure_output_dir / lvl / ttype
-                    ordir.mkdir(parents=True, exist_ok=True)
-                    ordn = Ordination(self.cfg, ordir, self.verbose)
+                    ordn = Ordination(self.cfg, ordir, False)
                     
                     # Run only enabled methods for this table type
-                    if self.verbose:
-                        logger.info(f"Running ordination for {ttype} at {lvl} level")
-                        
                     res, figs = ordn.run_tests(
                         table=tbl,
                         metadata=self.meta,
@@ -864,7 +836,6 @@ class _AnalysisManager(_ProcessingMixin):
                     idx = X.index.intersection(y.index)
                     X, y = X.loc[idx], y.loc[idx]
                     mdir = Path(self.figure_output_dir).parent / "ml" / lvl / ttype
-                    mdir.mkdir(parents=True, exist_ok=True)
                     catboost_feature_selection(
                         metadata=y,
                         features=X,
