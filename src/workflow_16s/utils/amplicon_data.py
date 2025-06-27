@@ -709,7 +709,9 @@ class _AnalysisManager(_ProcessingMixin):
             if self.verbose:
                 logger.info("Annotating top features with FAPROTAX...")
             self._annotate_top_features()
-
+        self._run_ordination()
+        self._run_ml_feature_selection()
+        
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         """Cached FAPROTAX lookup with memoization"""
         if taxon not in self._faprotax_cache:
