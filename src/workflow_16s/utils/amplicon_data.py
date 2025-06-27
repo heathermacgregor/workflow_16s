@@ -1138,7 +1138,7 @@ class AmpliconData:
            project_dir, 
            verbose,
            progress,
-           process_task_id
+           process_task_id  # CORRECTED: Using process_task_id not process_task
         )
         self.tables = tp.tables
         if progress:
