@@ -1123,7 +1123,7 @@ class AmpliconData:
     ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
-        self.log_config(cfg)
+        
         # Create parent task for entire pipeline
         parent_task = task_id
         if progress and task_id is None:
@@ -1132,9 +1132,15 @@ class AmpliconData:
                 total=3  # Loading, processing, analysis
             )
             
+        # Initialize task variables
+        load_task_id = None
+        process_task_id = None
+        map_task_id = None
+        analysis_task_id = None
+            
         # Data loading
         if progress:
-            load_task = progress.add_task(
+            load_task_id = progress.add_task(
                 "[cyan]Loading data",
                 total=1,
                 parent=parent_task
@@ -1142,11 +1148,11 @@ class AmpliconData:
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
         if progress:
-            progress.update(load_task, advance=1, visible=False)
+            progress.update(load_task_id, advance=1, visible=False)
        
         # Processing
         if progress:
-            process_task = progress.add_task(
+            process_task_id = progress.add_task(
                 "[cyan]Processing tables",
                 total=1,
                 parent=parent_task
@@ -1161,31 +1167,31 @@ class AmpliconData:
            project_dir, 
            verbose,
            progress,
-           process_task
+           process_task_id  # Pass the task ID, not the task object
         )
         self.tables = tp.tables
         if progress:
-            progress.update(process_task, advance=1, visible=False)
+            progress.update(process_task_id, advance=1, visible=False)
        
         # Figures
         self.figures: Dict[str, Any] = {}
         if cfg["figures"].get("map", False):
             if progress:
-                map_task = progress.add_task(
+                map_task_id = progress.add_task(
                     "[cyan]Generating maps",
                     total=1,
                     parent=parent_task
                 )
             self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
             self.figures["map"] = self.plotter.generate_sample_map(
-                self.meta, progress, map_task
+                self.meta, progress, map_task_id
             )
             if progress:
-                progress.update(map_task, advance=1, visible=False)
+                progress.update(map_task_id, advance=1, visible=False)
            
         # Analysis
         if progress:
-            analysis_task = progress.add_task(
+            analysis_task_id = progress.add_task(
                 "[cyan]Running analysis",
                 total=1,
                 parent=parent_task
@@ -1199,7 +1205,7 @@ class AmpliconData:
            cfg.get("faprotax", False), 
            self.fdb,
            progress,
-           analysis_task
+           analysis_task_id  # Pass the task ID
         )
         self.stats = am.stats
         self.ordination = am.ordination
@@ -1209,7 +1215,7 @@ class AmpliconData:
         self.figures.update(am.figures)
         
         if progress:
-            progress.update(analysis_task, advance=1, visible=False)
+            progress.update(analysis_task_id, advance=1, visible=False)
             
         # Complete parent task
         if progress and task_id is None:
