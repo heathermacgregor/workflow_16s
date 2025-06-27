@@ -214,6 +214,7 @@ class StatisticalAnalyzer:
             parent_task = progress.add_task(
                 "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(enabled_tests)
+            )
         
         for tname in enabled_tests:
             if tname not in self.TEST_CONFIG:
