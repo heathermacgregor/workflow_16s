@@ -11,11 +11,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np 
 import pandas as pd
 from biom.table import Table
-from rich import box
-from rich.console import Console
 from rich.progress import Progress, TaskID
 from rich.table import Table as RichTable
+from rich.console import Console
 from rich.text import Text
+from rich import box
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -140,7 +140,7 @@ class _ProcessingMixin:
                     )
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 if progress:
-                    progress.update(child_task, advance=1, visible=False)  # Hide after completion
+                    progress.update(child_task, advance=1)  # Keep visible
                 if log_template:
                     logger.info(log_template.format(level=lvl))
                 elif log_action:
@@ -218,7 +218,6 @@ class StatisticalAnalyzer:
             parent_task = progress.add_task(
                 "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(enabled_tests)
-            )
         
         for tname in enabled_tests:
             if tname not in self.TEST_CONFIG:
@@ -243,7 +242,7 @@ class StatisticalAnalyzer:
             )
             
             if progress:
-                progress.update(child_task, advance=1, visible=False)  # Hide after completion
+                progress.update(child_task, advance=1)  # Keep visible
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(enabled_tests))
@@ -340,8 +339,8 @@ class Ordination:
             if progress and task_id is None:
                 parent_task = progress.add_task(
                     f"[white]Running {transformation} ordination...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                    total=len(tests_to_run)
-                )
+                    total=len(tests_to_run))
+            
             for tname in tests_to_run:
                 cfg = self.TEST_CONFIG[tname]
                 key = cfg["key"]
@@ -403,7 +402,7 @@ class Ordination:
                 finally:
                     # Update child task after EACH method completion
                     if progress:
-                        progress.update(method_task, advance=1, visible=False)
+                        progress.update(method_task, advance=1)  # Keep visible
             
             # Update parent task if we created it
             if progress and task_id is None:
@@ -476,7 +475,7 @@ class Plotter:
             figs[col] = fig
             
             if progress:
-                progress.update(map_task, advance=1, visible=False)
+                progress.update(map_task, advance=1)  # Keep visible
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(valid_columns))
@@ -580,7 +579,7 @@ class TopFeaturesAnalyzer:
                 (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
                 
             if progress:
-                progress.update(level_task, advance=1, visible=False)
+                progress.update(level_task, advance=1)  # Keep visible
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(levels))
@@ -702,17 +701,15 @@ class _TableProcessor(_ProcessingMixin):
         self.meta = meta
         self.figure_output_dir = figure_output_dir
         self.project_dir = project_dir
+        self.progress = progress
+        self.task_id = task_id
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
-        self._apply_preprocessing(progress, task_id)
-        self._collapse_taxa(progress, task_id)
-        self._create_presence_absence(progress, task_id)
-        self._save_tables(progress, task_id)
+        self._apply_preprocessing()
+        self._collapse_taxa()
+        self._create_presence_absence()
+        self._save_tables()
 
-    def _apply_preprocessing(
-        self, 
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
-    ) -> None:
+    def _apply_preprocessing(self) -> None:
         feat_cfg = self.cfg["features"]
         filtering = feat_cfg["filter"]
         norm = filtering and feat_cfg["normalize"]
@@ -722,55 +719,51 @@ class _TableProcessor(_ProcessingMixin):
         tbl = self.tables["raw"][self.mode]
         
         # Create parent task
-        parent_task = task_id
-        if progress and task_id is None:
-            parent_task = progress.add_task(
+        parent_task = self.task_id
+        if self.progress and self.task_id is None:
+            parent_task = self.progress.add_task(
                 f"[white]Preprocessing feature tables at the {self.mode} level...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=n_steps
             )
             
         if filtering:
-            if progress:
-                filter_task = progress.add_task(
+            if self.progress:
+                filter_task = self.progress.add_task(
                     "[cyan]Filtering table",
                     total=1,
                     parent=parent_task
                 )
             tbl = filter_table(tbl)
             self.tables.setdefault("filtered", {})[self.mode] = tbl
-            if progress:
-                progress.update(filter_task, advance=1, visible=False)
+            if self.progress:
+                self.progress.update(filter_task, advance=1)  # Keep visible
         if norm:
-            if progress:
-                norm_task = progress.add_task(
+            if self.progress:
+                norm_task = self.progress.add_task(
                     "[cyan]Normalizing table",
                     total=1,
                     parent=parent_task
                 )
             tbl = normalize_table(tbl, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = tbl
-            if progress:
-                progress.update(norm_task, advance=1, visible=False)
+            if self.progress:
+                self.progress.update(norm_task, advance=1)  # Keep visible
         if clr:
-            if progress:
-                clr_task = progress.add_task(
+            if self.progress:
+                clr_task = self.progress.add_task(
                     "[cyan]Applying CLR transform",
                     total=1,
                     parent=parent_task
                 )
             tbl = clr_transform_table(tbl)
             self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
-            if progress:
-                progress.update(clr_task, advance=1, visible=False)
+            if self.progress:
+                self.progress.update(clr_task, advance=1)  # Keep visible
                 
-        if progress and task_id is None:
-            progress.update(parent_task, completed=n_steps)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, completed=n_steps)
 
-    def _collapse_taxa(
-        self, 
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
-    ) -> None:
+    def _collapse_taxa(self) -> None:
         lvls = ["phylum", "class", "order", "family", "genus"]
         for ttype in list(self.tables.keys()):
             base_tbl = self.tables[ttype][self.mode]
@@ -781,15 +774,11 @@ class _TableProcessor(_ProcessingMixin):
                 (),
                 lambda lvl, _tbl=base_tbl: _tbl,
                 log_template=f"Collapsed {ttype} to {{level}}",
-                progress=progress,
-                task_id=task_id
+                progress=self.progress,
+                task_id=self.task_id
             )
 
-    def _create_presence_absence(
-        self, 
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
-    ) -> None:
+    def _create_presence_absence(self) -> None:
         if not self.cfg["features"]["presence_absence"]:
             return
         lvls = ["phylum", "class", "order", "family", "genus"]
@@ -800,23 +789,19 @@ class _TableProcessor(_ProcessingMixin):
             lvls,
             (),
             lambda lvl: raw_tbl,
-            progress=progress,
-            task_id=task_id
+            progress=self.progress,
+            task_id=self.task_id
         )
 
-    def _save_tables(
-        self, 
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
-    ) -> None:
+    def _save_tables(self) -> None:
         tot = sum(len(v) for v in self.tables.values())
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
         
         # Create parent task
-        parent_task = task_id
-        if progress and task_id is None:
-            parent_task = progress.add_task(
+        parent_task = self.task_id
+        if self.progress and self.task_id is None:
+            parent_task = self.progress.add_task(
                 "[white]Exporting feature tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
             )
@@ -826,8 +811,8 @@ class _TableProcessor(_ProcessingMixin):
             tdir.mkdir(parents=True, exist_ok=True)
             for lvl, tbl in lvls.items():
                 # Create child task for each table
-                if progress:
-                    table_task = progress.add_task(
+                if self.progress:
+                    table_task = self.progress.add_task(
                         f"[cyan]{ttype} {lvl}",
                         total=1,
                         parent=parent_task
@@ -842,11 +827,11 @@ class _TableProcessor(_ProcessingMixin):
                        f"{tbl.shape[1]}] to '{out}'"
                     )
                     
-                if progress:
-                    progress.update(table_task, advance=1, visible=False)
+                if self.progress:
+                    self.progress.update(table_task, advance=1)  # Keep visible
                     
-        if progress and task_id is None:
-            progress.update(parent_task, completed=tot)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, completed=tot)
            
 
 class _AnalysisManager(_ProcessingMixin):
@@ -872,29 +857,31 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {} if faprotax_enabled else None
+        self.progress = progress
+        self.task_id = task_id
         
         # Create parent task for analysis
-        parent_task = task_id
-        if progress and task_id is None:
-            parent_task = progress.add_task(
+        parent_task = self.task_id
+        if self.progress and self.task_id is None:
+            parent_task = self.progress.add_task(
                 "[white]Running analysis pipeline...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=4  # Stats, top features, ordination, ML
             )
             
-        self._run_statistical_tests(progress, parent_task)
+        self._run_statistical_tests()
         
         # Update progress
-        if progress and task_id is None:
-            progress.update(parent_task, advance=1)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, advance=1)
             
         if self.verbose:
             logger.info("Identifying top features...")
             
-        self._identify_top_features(progress, parent_task)
+        self._identify_top_features()
         
         # Update progress
-        if progress and task_id is None:
-            progress.update(parent_task, advance=1)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, advance=1)
             
         # Add FAPROTAX annotations only to top features
         if self.faprotax_enabled and self.top_contaminated_features:
@@ -902,17 +889,17 @@ class _AnalysisManager(_ProcessingMixin):
                 logger.info("Annotating top features with FAPROTAX...")
             self._annotate_top_features()
             
-        self._run_ordination(progress, parent_task)
+        self._run_ordination()
         
         # Update progress
-        if progress and task_id is None:
-            progress.update(parent_task, advance=1)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, advance=1)
             
-        self._run_ml_feature_selection(progress, parent_task)
+        self._run_ml_feature_selection()
         
         # Complete parent task
-        if progress and task_id is None:
-            progress.update(parent_task, completed=4)
+        if self.progress and self.task_id is None:
+            self.progress.update(parent_task, completed=4)
         
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         """Cached FAPROTAX lookup with memoization"""
@@ -932,11 +919,7 @@ class _AnalysisManager(_ProcessingMixin):
         for feat in self.top_pristine_features:
             feat['faprotax_functions'] = self._get_cached_faprotax(feat['feature'])
 
-    def _run_statistical_tests(
-        self,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> None:
+    def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
@@ -949,12 +932,12 @@ class _AnalysisManager(_ProcessingMixin):
             tot += len(lvls) * len(enabled_for_ttype)
         
         # Create parent task for stats tests
-        stats_task = task_id
-        if progress and task_id is None:
-            stats_task = progress.add_task(
+        stats_task = self.task_id
+        if self.progress and self.task_id is None:
+            stats_task = self.progress.add_task(
                 "[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot,
-                parent=task_id
+                parent=self.task_id
             )
             
         for ttype, lvls in self.tables.items():
@@ -967,35 +950,27 @@ class _AnalysisManager(_ProcessingMixin):
                     logger.info(f"Processing {ttype} table at {lvl} level")
                 
                 tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
-                res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, progress, stats_task)
+                res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, self.progress, stats_task)
                 
                 # Store results
                 for key, df in res.items():
                     self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
                     
         # Complete stats task if we created it
-        if progress and task_id is None:
-            progress.update(stats_task, completed=tot)
+        if self.progress and self.task_id is None:
+            self.progress.update(stats_task, completed=tot)
 
-    def _identify_top_features(
-        self,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> None:
+    def _identify_top_features(self) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
-            self.stats, DEFAULT_GROUP_COLUMN, progress, task_id
+            self.stats, DEFAULT_GROUP_COLUMN, self.progress, self.task_id
         )
         
         if self.verbose:
             logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
             logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
 
-    def _run_ordination(
-        self,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> None:
+    def _run_ordination(self) -> None:
         # Define known ordination methods
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
         
@@ -1012,12 +987,12 @@ class _AnalysisManager(_ProcessingMixin):
             return
         
         # Create parent task for ordination
-        ord_task = task_id
-        if progress and task_id is None:
-            ord_task = progress.add_task(
+        ord_task = self.task_id
+        if self.progress and self.task_id is None:
+            ord_task = self.progress.add_task(
                 "[white]Running ordination...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot,
-                parent=task_id
+                parent=self.task_id
             )
             
         for ttype, lvls in self.tables.items():
@@ -1040,21 +1015,17 @@ class _AnalysisManager(_ProcessingMixin):
                     symbol_col="nuclear_contamination_status",
                     transformation=ttype,
                     enabled_tests=enabled_methods,
-                    progress=progress,
+                    progress=self.progress,
                     task_id=ord_task,
                 )
                 self.ordination[ttype][lvl] = res
                 self.figures[ttype][lvl] = figs
                 
         # Complete ordination task if we created it
-        if progress and task_id is None:
-            progress.update(ord_task, completed=tot)
+        if self.progress and self.task_id is None:
+            self.progress.update(ord_task, completed=tot)
                 
-    def _run_ml_feature_selection(
-        self,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> None:
+    def _run_ml_feature_selection(self) -> None:
         if not self.cfg.get("run_ml", False):
             return
             
@@ -1065,12 +1036,12 @@ class _AnalysisManager(_ProcessingMixin):
             tot += len(lvls) * len(ml_cfg.get("methods", ["rfe"]))
             
         # Create parent task for ML
-        ml_task = task_id
-        if progress and task_id is None:
-            ml_task = progress.add_task(
+        ml_task = self.task_id
+        if self.progress and self.task_id is None:
+            ml_task = self.progress.add_task(
                 "[white]Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot,
-                parent=task_id
+                parent=self.task_id
             )
             
         for ttype, lvls in self.tables.items():
@@ -1079,8 +1050,8 @@ class _AnalysisManager(_ProcessingMixin):
                 ml_cfg = self.cfg.get("ml", {})
                 for method in ml_cfg.get("methods", ["rfe"]):
                     # Create child task for each model
-                    if progress:
-                        model_task = progress.add_task(
+                    if self.progress:
+                        model_task = self.progress.add_task(
                             f"[cyan]{ttype} {lvl} {method}",
                             total=1,
                             parent=ml_task
@@ -1100,11 +1071,11 @@ class _AnalysisManager(_ProcessingMixin):
                         method=method,
                     )
                     
-                    if progress:
-                        progress.update(model_task, advance=1, visible=False)
+                    if self.progress:
+                        self.progress.update(model_task, advance=1)  # Keep visible
                         
-        if progress and task_id is None:
-            progress.update(ml_task, completed=tot)
+        if self.progress and self.task_id is None:
+            self.progress.update(ml_task, completed=tot)
            
 
 class AmpliconData:  
@@ -1132,7 +1103,7 @@ class AmpliconData:
                 total=3  # Loading, processing, analysis
             )
             
-        # Initialize task variables
+        # Initialize task IDs
         load_task_id = None
         process_task_id = None
         map_task_id = None
@@ -1148,7 +1119,7 @@ class AmpliconData:
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
         if progress:
-            progress.update(load_task_id, advance=1, visible=False)
+            progress.update(load_task_id, advance=1)  # Keep visible
        
         # Processing
         if progress:
@@ -1167,11 +1138,11 @@ class AmpliconData:
            project_dir, 
            verbose,
            progress,
-           process_task_id  # Pass the task ID, not the task object
+           process_task_id
         )
         self.tables = tp.tables
         if progress:
-            progress.update(process_task_id, advance=1, visible=False)
+            progress.update(process_task_id, advance=1)  # Keep visible
        
         # Figures
         self.figures: Dict[str, Any] = {}
@@ -1187,7 +1158,7 @@ class AmpliconData:
                 self.meta, progress, map_task_id
             )
             if progress:
-                progress.update(map_task_id, advance=1, visible=False)
+                progress.update(map_task_id, advance=1)  # Keep visible
            
         # Analysis
         if progress:
@@ -1205,7 +1176,7 @@ class AmpliconData:
            cfg.get("faprotax", False), 
            self.fdb,
            progress,
-           analysis_task_id  # Pass the task ID
+           analysis_task_id
         )
         self.stats = am.stats
         self.ordination = am.ordination
@@ -1215,15 +1186,16 @@ class AmpliconData:
         self.figures.update(am.figures)
         
         if progress:
-            progress.update(analysis_task_id, advance=1, visible=False)
+            progress.update(analysis_task_id, advance=1)  # Keep visible
             
         # Complete parent task
         if progress and task_id is None:
             progress.update(parent_task, completed=3)
             
         if verbose:
+            self.log_config(cfg)
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
-
+            
     def log_config(self, cfg: Dict) -> None:
         """Logs amplicon configuration settings in a visually appealing format"""
         console = Console()
