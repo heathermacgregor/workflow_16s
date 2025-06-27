@@ -674,29 +674,29 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_contaminated_features: List[Dict] = []
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
+        self._faprotax_cache = {} if faprotax_enabled else None  # Caching layer
+        
         self._run_statistical_tests()
         self._identify_top_features()
         
-        # Add FAPROTAX annotations to top features
-        if self.faprotax_enabled:
-            for feat_list in [self.top_contaminated_features, self.top_pristine_features]:
-                for feat in feat_list:
-                    feat['faprotax_functions'] = faprotax_functions_for_taxon(
-                        feat['feature'], 
-                        self.fdb,
-                        include_references=False
-                    )
+        # Add FAPROTAX annotations only to top features
+        if self.faprotax_enabled and self.top_contaminated_features:
+            self._annotate_top_features()
     
-    def _annotate_with_faprotax(self, df: pd.DataFrame, level: str) -> pd.DataFrame:
-        """Adds FAPROTAX functional annotations to a stats DataFrame."""
-        if not self.faprotax_enabled or 'feature' not in df.columns:
-            return df
-        
-        # Add functional annotations
-        df['faprotax_functions'] = df['feature'].apply(
-            lambda taxon: faprotax_functions_for_taxon(taxon, self.fdb, include_references=False)
-        )
-        return df
+    def _get_cached_faprotax(self, taxon: str) -> List[str]:
+        """Cached FAPROTAX lookup with memoization"""
+        if taxon not in self._faprotax_cache:
+            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
+                taxon, self.fdb, include_references=False
+            )
+        return self._faprotax_cache[taxon]
+    
+    def _annotate_top_features(self) -> None:
+        """Annotate top features using cached lookups"""
+        for feat in self.top_contaminated_features:
+            feat['faprotax_functions'] = self._get_cached_faprotax(feat['feature'])
+        for feat in self.top_pristine_features:
+            feat['faprotax_functions'] = self._get_cached_faprotax(feat['feature'])
 
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -721,10 +721,9 @@ class _AnalysisManager(_ProcessingMixin):
                     tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
                     res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, prog, task)
                     
-                    # Add FAPROTAX annotations to results
+                    # Store results without FAPROTAX annotations
                     for key, df in res.items():
-                        annotated_df = self._annotate_with_faprotax(df, lvl)
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = annotated_df
+                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
                     
                     prog.update(task, advance=len(enabled_for_ttype))
 
