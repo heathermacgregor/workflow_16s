@@ -140,7 +140,7 @@ class _ProcessingMixin:
                     )
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 if progress:
-                    progress.update(child_task, advance=1)  # Keep visible
+                    progress.update(child_task, advance=1)
                 if log_template:
                     logger.info(log_template.format(level=lvl))
                 elif log_action:
@@ -217,8 +217,8 @@ class StatisticalAnalyzer:
         if progress and task_id is None:
             parent_task = progress.add_task(
                 "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=len(enabled_tests)
-            )
+                total=len(enabled_tests))
+        
         for tname in enabled_tests:
             if tname not in self.TEST_CONFIG:
                 continue
@@ -242,7 +242,7 @@ class StatisticalAnalyzer:
             )
             
             if progress:
-                progress.update(child_task, advance=1)  # Keep visible
+                progress.update(child_task, advance=1)
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(enabled_tests))
@@ -402,7 +402,7 @@ class Ordination:
                 finally:
                     # Update child task after EACH method completion
                     if progress:
-                        progress.update(method_task, advance=1)  # Keep visible
+                        progress.update(method_task, advance=1)
             
             # Update parent task if we created it
             if progress and task_id is None:
@@ -475,7 +475,7 @@ class Plotter:
             figs[col] = fig
             
             if progress:
-                progress.update(map_task, advance=1)  # Keep visible
+                progress.update(map_task, advance=1)
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(valid_columns))
@@ -579,7 +579,7 @@ class TopFeaturesAnalyzer:
                 (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
                 
             if progress:
-                progress.update(level_task, advance=1)  # Keep visible
+                progress.update(level_task, advance=1)
                 
         if progress and task_id is None:
             progress.update(parent_task, completed=len(levels))
@@ -736,7 +736,7 @@ class _TableProcessor(_ProcessingMixin):
             tbl = filter_table(tbl)
             self.tables.setdefault("filtered", {})[self.mode] = tbl
             if self.progress:
-                self.progress.update(filter_task, advance=1)  # Keep visible
+                self.progress.update(filter_task, advance=1)
         if norm:
             if self.progress:
                 norm_task = self.progress.add_task(
@@ -747,7 +747,7 @@ class _TableProcessor(_ProcessingMixin):
             tbl = normalize_table(tbl, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = tbl
             if self.progress:
-                self.progress.update(norm_task, advance=1)  # Keep visible
+                self.progress.update(norm_task, advance=1)
         if clr:
             if self.progress:
                 clr_task = self.progress.add_task(
@@ -758,7 +758,7 @@ class _TableProcessor(_ProcessingMixin):
             tbl = clr_transform_table(tbl)
             self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
             if self.progress:
-                self.progress.update(clr_task, advance=1)  # Keep visible
+                self.progress.update(clr_task, advance=1)
                 
         if self.progress and self.task_id is None:
             self.progress.update(parent_task, completed=n_steps)
@@ -828,7 +828,7 @@ class _TableProcessor(_ProcessingMixin):
                     )
                     
                 if self.progress:
-                    self.progress.update(table_task, advance=1)  # Keep visible
+                    self.progress.update(table_task, advance=1)
                     
         if self.progress and self.task_id is None:
             self.progress.update(parent_task, completed=tot)
@@ -1072,7 +1072,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     
                     if self.progress:
-                        self.progress.update(model_task, advance=1)  # Keep visible
+                        self.progress.update(model_task, advance=1)
                         
         if self.progress and self.task_id is None:
             self.progress.update(ml_task, completed=tot)
@@ -1103,7 +1103,7 @@ class AmpliconData:
                 total=3  # Loading, processing, analysis
             )
             
-        # Initialize task IDs
+        # Initialize ALL task ID variables to None
         load_task_id = None
         process_task_id = None
         map_task_id = None
@@ -1119,7 +1119,7 @@ class AmpliconData:
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
         if progress:
-            progress.update(load_task_id, advance=1)  # Keep visible
+            progress.update(load_task_id, advance=1)
        
         # Processing
         if progress:
@@ -1142,7 +1142,7 @@ class AmpliconData:
         )
         self.tables = tp.tables
         if progress:
-            progress.update(process_task_id, advance=1)  # Keep visible
+            progress.update(process_task_id, advance=1)
        
         # Figures
         self.figures: Dict[str, Any] = {}
@@ -1158,7 +1158,7 @@ class AmpliconData:
                 self.meta, progress, map_task_id
             )
             if progress:
-                progress.update(map_task_id, advance=1)  # Keep visible
+                progress.update(map_task_id, advance=1)
            
         # Analysis
         if progress:
@@ -1186,7 +1186,7 @@ class AmpliconData:
         self.figures.update(am.figures)
         
         if progress:
-            progress.update(analysis_task_id, advance=1)  # Keep visible
+            progress.update(analysis_task_id, advance=1)
             
         # Complete parent task
         if progress and task_id is None:
