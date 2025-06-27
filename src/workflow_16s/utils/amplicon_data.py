@@ -12,10 +12,6 @@ import numpy as np
 import pandas as pd
 from biom.table import Table
 from rich.progress import Progress, TaskID
-from rich.table import Table as RichTable
-from rich.console import Console
-from rich.text import Text
-from rich import box
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -112,8 +108,6 @@ class _ProcessingMixin:
         get_source: Callable[[str], Table],
         log_template: Optional[str] = None,
         log_action: Optional[str] = None,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
     ) -> Dict[str, Table]:
         processed: Dict[str, Table] = {}
         if getattr(self, "verbose", False):
@@ -122,32 +116,22 @@ class _ProcessingMixin:
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 self._log_level_action(lvl, log_template, log_action)
         else:
-            # Create parent task if not provided
-            parent_task = task_id
-            if progress and task_id is None:
+            with create_progress() as progress:
+                # Create parent task for entire process
                 parent_task = progress.add_task(
                     f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
                     total=len(levels),
                 )
-            
-            # Create child tasks for each level
-            for lvl in levels:
-                if progress:
+                for lvl in levels:
+                    # Add child task for current level
                     child_task = progress.add_task(
-                        f"[cyan]Processing {lvl}",
-                        total=1,
-                        parent=parent_task
+                        f"Processing {lvl} level",
+                        parent=parent_task,
+                        total=1
                     )
-                processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
-                if progress:
-                    progress.update(child_task, advance=1)
-                if log_template:
-                    logger.info(log_template.format(level=lvl))
-                elif log_action:
-                    logger.info(f"{lvl} {log_action}")
-                    
-            if progress and task_id is None:
-                progress.update(parent_task, completed=len(levels))
+                    processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
+                    progress.update(child_task, completed=1)
+                    progress.update(parent_task, advance=1)
         return processed
 
     def _log_level_action(
@@ -211,41 +195,54 @@ class StatisticalAnalyzer:
         task_id: Optional[TaskID] = None,
     ) -> Dict[str, Any]:
         results: Dict[str, Any] = {}
-        parent_task = task_id
-        
-        # Create parent task if needed
-        if progress and task_id is None:
-            parent_task = progress.add_task(
-                "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=len(enabled_tests))
+        if not (progress and task_id):
+            # Fallback to simple loop if no progress bar
+            for tname in enabled_tests:
+                if tname not in self.TEST_CONFIG:
+                    continue
+                cfg = self.TEST_CONFIG[tname]
+                if self.verbose:
+                    logger.info(f"Running {cfg['name']}...")
+                results[cfg["key"]] = cfg["func"](
+                    table=table,
+                    metadata=metadata,
+                    group_column=group_column,
+                    group_column_values=group_values,
+                )
+            return results
+
+        # Create parent task for all tests
+        parent_task = progress.add_task(
+            "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            total=len(enabled_tests), 
+            parent=task_id
+        )
         
         for tname in enabled_tests:
             if tname not in self.TEST_CONFIG:
                 continue
             cfg = self.TEST_CONFIG[tname]
             
-            # Create child task for each test
-            if progress:
-                child_task = progress.add_task(
-                    f"[cyan]{cfg['name']}",
-                    total=1,
-                    parent=parent_task
-                )
-                
-            if self.verbose:
-                logger.info(f"Running {cfg['name']}...")
-            results[cfg["key"]] = cfg["func"](
-                table=table,
-                metadata=metadata,
-                group_column=group_column,
-                group_column_values=group_values,
+            # Create child task for current test
+            child_task = progress.add_task(
+                f"[cyan]{cfg['name']}",
+                parent=parent_task,
+                total=1
             )
             
-            if progress:
-                progress.update(child_task, advance=1)
+            try:
+                if self.verbose:
+                    logger.info(f"Running {cfg['name']}...")
+                results[cfg["key"]] = cfg["func"](
+                    table=table,
+                    metadata=metadata,
+                    group_column=group_column,
+                    group_column_values=group_values,
+                )
+            finally:
+                progress.update(child_task, completed=1)
+                progress.update(parent_task, advance=1)
                 
-        if progress and task_id is None:
-            progress.update(parent_task, completed=len(enabled_tests))
         return results
 
     def get_effect_size(
@@ -334,25 +331,30 @@ class Ordination:
                 table, metadata
             )
             
+            if not (progress and task_id):
+                # Fallback to simple loop if no progress bar
+                for tname in tests_to_run:
+                    # ... (run ordination without progress) ...
+                return results, figures
+
             # Create parent task for all ordination methods
-            parent_task = task_id
-            if progress and task_id is None:
-                parent_task = progress.add_task(
-                    f"[white]Running {transformation} ordination...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                    total=len(tests_to_run))
+            parent_task = progress.add_task(
+                f"[white]Running {transformation} ordination".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(tests_to_run),
+                parent=task_id
+            )
             
             for tname in tests_to_run:
                 cfg = self.TEST_CONFIG[tname]
                 key = cfg["key"]
                 
-                # Create child task for each method
-                if progress:
-                    method_task = progress.add_task(
-                        f"[cyan]{cfg['name']}",
-                        total=1,
-                        parent=parent_task
-                    )
-                    
+                # Create child task for current method
+                child_task = progress.add_task(
+                    f"[cyan]{cfg['name']}",
+                    parent=parent_task,
+                    total=1
+                )
+                
                 try:
                     # Prepare method-specific parameters
                     method_params = {}
@@ -400,13 +402,8 @@ class Ordination:
                     )
                     figures[key] = None
                 finally:
-                    # Update child task after EACH method completion
-                    if progress:
-                        progress.update(method_task, advance=1)
-            
-            # Update parent task if we created it
-            if progress and task_id is None:
-                progress.update(parent_task, completed=len(tests_to_run))
+                    progress.update(child_task, completed=1)
+                    progress.update(parent_task, advance=1)
         finally:
             return results, figures
               
@@ -438,8 +435,6 @@ class Plotter:
     def generate_sample_map(
         self,
         metadata: pd.DataFrame,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         figs: Dict[str, Any] = {}
@@ -450,35 +445,28 @@ class Plotter:
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
         
-        # Create parent task if needed
-        parent_task = task_id
-        if progress and task_id is None:
+        with create_progress() as progress:
             parent_task = progress.add_task(
-                "[white]Generating sample maps...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(valid_columns))
-        
-        for col in valid_columns:
-            # Create child task for each map
-            if progress:
-                map_task = progress.add_task(
-                    f"[cyan]{col} map",
-                    total=1,
-                    parent=parent_task
-                )
-                
-            fig, _ = sample_map_categorical(
-                metadata=metadata,
-                output_dir=self.output_dir,
-                color_col=col,
-                **kwargs,
+                "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(valid_columns)
             )
-            figs[col] = fig
             
-            if progress:
-                progress.update(map_task, advance=1)
+            for col in valid_columns:
+                child_task = progress.add_task(
+                    f"[cyan]Mapping {col}",
+                    parent=parent_task,
+                    total=1
+                )
+                fig, _ = sample_map_categorical(
+                    metadata=metadata,
+                    output_dir=self.output_dir,
+                    color_col=col,
+                    **kwargs,
+                )
+                figs[col] = fig
+                progress.update(child_task, completed=1)
+                progress.update(parent_task, advance=1)
                 
-        if progress and task_id is None:
-            progress.update(parent_task, completed=len(valid_columns))
         return figs
         
 
@@ -499,8 +487,6 @@ class TopFeaturesAnalyzer:
         self,
         stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
         group_column: str,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
     ) -> Tuple[List[Dict], List[Dict]]:
         cont_feats: List[Dict] = []
         pris_feats: List[Dict] = []
@@ -518,71 +504,65 @@ class TopFeaturesAnalyzer:
                     if not sig_df.empty:
                         sig_results[tbl_type][tname][lvl] = sig_df
         
-        # Create parent task for feature analysis
-        parent_task = task_id
-        if progress and task_id is None:
+        with create_progress() as progress:
             parent_task = progress.add_task(
-                "[white]Identifying top features...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(levels))
-        
-        for level in levels:
-            # Create child task per level
-            if progress:
-                level_task = progress.add_task(
-                    f"[cyan]{level} features",
-                    total=1,
-                    parent=parent_task
+                "[white]Analyzing top features".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(levels)
+            )
+            
+            for level in levels:
+                child_task = progress.add_task(
+                    f"[cyan]{level.title()}",
+                    parent=parent_task,
+                    total=1
                 )
                 
-            lvl_best: Dict[str, Dict] = {}
-            for tbl_type, tests in sig_results.items():
-                for tname, t_res in tests.items():
-                    if level not in t_res:
-                        continue
-                    # Vectorized effect size calculation
-                    t_res[level]["effect"] = t_res[level].apply(
-                        lambda row: san.get_effect_size(tname, row), axis=1
-                    )
-                    # Drop rows with no effect size
-                    t_res[level] = t_res[level].dropna(subset=["effect"])
+                lvl_best: Dict[str, Dict] = {}
+                for tbl_type, tests in sig_results.items():
+                    for tname, t_res in tests.items():
+                        if level not in t_res:
+                            continue
+                        # Vectorized effect size calculation
+                        t_res[level]["effect"] = t_res[level].apply(
+                            lambda row: san.get_effect_size(tname, row), axis=1
+                        )
+                        # Drop rows with no effect size
+                        t_res[level] = t_res[level].dropna(subset=["effect"])
+                        
+                        for _, row in t_res[level].iterrows():
+                            feat = row["feature"]
+                            pval = row["p_value"]
+                            eff = row["effect"]
+                            
+                            # Capture effect direction
+                            effect_dir = "positive" if eff > 0 else "negative"
+                            
+                            cur = lvl_best.get(feat)
+                            if not cur or pval < cur["p_value"]:
+                                lvl_best[feat] = {
+                                    "p_value": pval,
+                                    "effect": eff,
+                                    "effect_dir": effect_dir,
+                                    "table_type": tbl_type,
+                                    "test": tname,
+                                    "level": level,
+                                }
+                
+                # Convert to list of features
+                for feat, res in lvl_best.items():
+                    entry = {
+                        "feature": feat,
+                        "level": res["level"],
+                        "table_type": res["table_type"],
+                        "test": res["test"],
+                        "effect": res["effect"],
+                        "p_value": res["p_value"],
+                        "effect_dir": res["effect_dir"],
+                    }
+                    (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
                     
-                    for _, row in t_res[level].iterrows():
-                        feat = row["feature"]
-                        pval = row["p_value"]
-                        eff = row["effect"]
-                        
-                        # Capture effect direction
-                        effect_dir = "positive" if eff > 0 else "negative"
-                        
-                        cur = lvl_best.get(feat)
-                        if not cur or pval < cur["p_value"]:
-                            lvl_best[feat] = {
-                                "p_value": pval,
-                                "effect": eff,
-                                "effect_dir": effect_dir,
-                                "table_type": tbl_type,
-                                "test": tname,
-                                "level": level,
-                            }
-            
-            # Convert to list of features
-            for feat, res in lvl_best.items():
-                entry = {
-                    "feature": feat,
-                    "level": res["level"],
-                    "table_type": res["table_type"],
-                    "test": res["test"],
-                    "effect": res["effect"],
-                    "p_value": res["p_value"],
-                    "effect_dir": res["effect_dir"],
-                }
-                (cont_feats if res["effect"] > 0 else pris_feats).append(entry)
-                
-            if progress:
-                progress.update(level_task, advance=1)
-                
-        if progress and task_id is None:
-            progress.update(parent_task, completed=len(levels))
+                progress.update(child_task, completed=1)
+                progress.update(parent_task, advance=1)
                 
         # Sort with efficient key function
         keyf = lambda d: (-abs(d["effect"]), d["p_value"])  
@@ -694,15 +674,11 @@ class _TableProcessor(_ProcessingMixin):
         figure_output_dir: Path,
         project_dir: Any,
         verbose: bool,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
     ) -> None:
         self.cfg, self.mode, self.verbose = cfg, mode, verbose
         self.meta = meta
         self.figure_output_dir = figure_output_dir
         self.project_dir = project_dir
-        self.progress = progress
-        self.task_id = task_id
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
         self._apply_preprocessing()
         self._collapse_taxa()
@@ -717,51 +693,48 @@ class _TableProcessor(_ProcessingMixin):
         enabled = [filtering, norm, clr]
         n_steps = sum(enabled)
         tbl = self.tables["raw"][self.mode]
-        
-        # Create parent task
-        parent_task = self.task_id
-        if self.progress and self.task_id is None:
-            parent_task = self.progress.add_task(
-                f"[white]Preprocessing feature tables at the {self.mode} level...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with create_progress() as prog:
+            # Create parent task for entire preprocessing
+            parent_task = prog.add_task(
+                f"[white]Preprocessing {self.mode} tables".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=n_steps
             )
             
-        if filtering:
-            if self.progress:
-                filter_task = self.progress.add_task(
-                    "[cyan]Filtering table",
-                    total=1,
-                    parent=parent_task
+            if filtering:
+                # Add child task for filtering
+                child_task = prog.add_task(
+                    "[cyan]Filtering features",
+                    parent=parent_task,
+                    total=1
                 )
-            tbl = filter_table(tbl)
-            self.tables.setdefault("filtered", {})[self.mode] = tbl
-            if self.progress:
-                self.progress.update(filter_task, advance=1)
-        if norm:
-            if self.progress:
-                norm_task = self.progress.add_task(
-                    "[cyan]Normalizing table",
-                    total=1,
-                    parent=parent_task
-                )
-            tbl = normalize_table(tbl, axis=1)
-            self.tables.setdefault("normalized", {})[self.mode] = tbl
-            if self.progress:
-                self.progress.update(norm_task, advance=1)
-        if clr:
-            if self.progress:
-                clr_task = self.progress.add_task(
-                    "[cyan]Applying CLR transform",
-                    total=1,
-                    parent=parent_task
-                )
-            tbl = clr_transform_table(tbl)
-            self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
-            if self.progress:
-                self.progress.update(clr_task, advance=1)
+                tbl = filter_table(tbl)
+                self.tables.setdefault("filtered", {})[self.mode] = tbl
+                prog.update(child_task, completed=1)
+                prog.update(parent_task, advance=1)
                 
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, completed=n_steps)
+            if norm:
+                # Add child task for normalization
+                child_task = prog.add_task(
+                    "[cyan]Normalizing features",
+                    parent=parent_task,
+                    total=1
+                )
+                tbl = normalize_table(tbl, axis=1)
+                self.tables.setdefault("normalized", {})[self.mode] = tbl
+                prog.update(child_task, completed=1)
+                prog.update(parent_task, advance=1)
+                
+            if clr:
+                # Add child task for CLR transform
+                child_task = prog.add_task(
+                    "[cyan]Applying CLR transform",
+                    parent=parent_task,
+                    total=1
+                )
+                tbl = clr_transform_table(tbl)
+                self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
+                prog.update(child_task, completed=1)
+                prog.update(parent_task, advance=1)
 
     def _collapse_taxa(self) -> None:
         lvls = ["phylum", "class", "order", "family", "genus"]
@@ -774,8 +747,6 @@ class _TableProcessor(_ProcessingMixin):
                 (),
                 lambda lvl, _tbl=base_tbl: _tbl,
                 log_template=f"Collapsed {ttype} to {{level}}",
-                progress=self.progress,
-                task_id=self.task_id
             )
 
     def _create_presence_absence(self) -> None:
@@ -789,50 +760,37 @@ class _TableProcessor(_ProcessingMixin):
             lvls,
             (),
             lambda lvl: raw_tbl,
-            progress=self.progress,
-            task_id=self.task_id
         )
 
     def _save_tables(self) -> None:
         tot = sum(len(v) for v in self.tables.values())
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
-        
-        # Create parent task
-        parent_task = self.task_id
-        if self.progress and self.task_id is None:
-            parent_task = self.progress.add_task(
-                "[white]Exporting feature tables...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with create_progress() as prog:
+            parent_task = prog.add_task(
+                "[white]Exporting feature tables".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
             )
-            
-        for ttype, lvls in self.tables.items():
-            tdir = base / ttype
-            tdir.mkdir(parents=True, exist_ok=True)
-            for lvl, tbl in lvls.items():
-                # Create child task for each table
-                if self.progress:
-                    table_task = self.progress.add_task(
-                        f"[cyan]{ttype} {lvl}",
-                        total=1,
-                        parent=parent_task
+            for ttype, lvls in self.tables.items():
+                tdir = base / ttype
+                tdir.mkdir(parents=True, exist_ok=True)
+                for lvl, tbl in lvls.items():
+                    child_task = prog.add_task(
+                        f"[cyan]{ttype}/{lvl}",
+                        parent=parent_task,
+                        total=1
                     )
-                    
-                out = tdir / lvl / "feature-table.biom"
-                out.parent.mkdir(parents=True, exist_ok=True)
-                export_h5py(tbl, out)
-                if self.verbose:
-                    logger.info(
-                       f"Wrote {ttype} {lvl} table [{tbl.shape[0]}, "
-                       f"{tbl.shape[1]}] to '{out}'"
-                    )
-                    
-                if self.progress:
-                    self.progress.update(table_task, advance=1)
-                    
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, completed=tot)
-           
+                    out = tdir / lvl / "feature-table.biom"
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    export_h5py(tbl, out)
+                    if self.verbose:
+                        logger.info(
+                           f"Wrote {ttype} {lvl} table [{tbl.shape[0]}, "
+                           f"{tbl.shape[1]}] to '{out}'"
+                        )
+                    prog.update(child_task, completed=1)
+                    prog.update(parent_task, advance=1)
+
 
 class _AnalysisManager(_ProcessingMixin):
     def __init__(
@@ -844,8 +802,6 @@ class _AnalysisManager(_ProcessingMixin):
         verbose: bool,
         faprotax_enabled: bool = False,
         fdb: Optional[Dict] = None,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
     ) -> None:
         self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
         self.figure_output_dir = figure_output_dir
@@ -857,49 +813,20 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {} if faprotax_enabled else None
-        self.progress = progress
-        self.task_id = task_id
         
-        # Create parent task for analysis
-        parent_task = self.task_id
-        if self.progress and self.task_id is None:
-            parent_task = self.progress.add_task(
-                "[white]Running analysis pipeline...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=4  # Stats, top features, ordination, ML
-            )
-            
         self._run_statistical_tests()
         
-        # Update progress
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, advance=1)
-            
         if self.verbose:
             logger.info("Identifying top features...")
-            
         self._identify_top_features()
         
-        # Update progress
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, advance=1)
-            
         # Add FAPROTAX annotations only to top features
         if self.faprotax_enabled and self.top_contaminated_features:
             if self.verbose:
                 logger.info("Annotating top features with FAPROTAX...")
             self._annotate_top_features()
-            
         self._run_ordination()
-        
-        # Update progress
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, advance=1)
-            
         self._run_ml_feature_selection()
-        
-        # Complete parent task
-        if self.progress and self.task_id is None:
-            self.progress.update(parent_task, completed=4)
         
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         """Cached FAPROTAX lookup with memoization"""
@@ -931,39 +858,47 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
             tot += len(lvls) * len(enabled_for_ttype)
         
-        # Create parent task for stats tests
-        stats_task = self.task_id
-        if self.progress and self.task_id is None:
-            stats_task = self.progress.add_task(
-                "[white]Running statistical tests".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=tot,
-                parent=self.task_id
+        with create_progress() as prog:
+            parent_task = prog.add_task(
+                "[white]Statistical testing".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=tot
             )
             
-        for ttype, lvls in self.tables.items():
-            self.stats[ttype] = {}
-            tests_config = self.cfg["stats"].get(ttype, {})
-            enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
-            
-            for lvl, tbl in lvls.items():
-                if self.verbose:
-                    logger.info(f"Processing {ttype} table at {lvl} level")
+            for ttype, lvls in self.tables.items():
+                self.stats[ttype] = {}
+                tests_config = self.cfg["stats"].get(ttype, {})
+                enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
                 
-                tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
-                res = san.run_tests(tbl, m, grp_col, grp_vals, enabled_for_ttype, self.progress, stats_task)
-                
-                # Store results
-                for key, df in res.items():
-                    self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
+                for lvl, tbl in lvls.items():
+                    if self.verbose:
+                        logger.info(f"Processing {ttype} table at {lvl} level")
                     
-        # Complete stats task if we created it
-        if self.progress and self.task_id is None:
-            self.progress.update(stats_task, completed=tot)
+                    tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
+                    
+                    # Create child task for this table/level
+                    level_task = prog.add_task(
+                        f"[cyan]{ttype}/{lvl}",
+                        parent=parent_task,
+                        total=len(enabled_for_ttype)
+                    )
+                    
+                    res = san.run_tests(
+                        tbl, m, grp_col, grp_vals, 
+                        enabled_for_ttype, prog, level_task
+                    )
+                    
+                    # Store results
+                    for key, df in res.items():
+                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
+                    
+                    # Update parent task through children completion
+                    prog.update(level_task, completed=len(enabled_for_ttype))
+                    prog.update(parent_task, advance=len(enabled_for_ttype))
 
     def _identify_top_features(self) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
-            self.stats, DEFAULT_GROUP_COLUMN, self.progress, self.task_id
+            self.stats, DEFAULT_GROUP_COLUMN
         )
         
         if self.verbose:
@@ -986,97 +921,95 @@ class _AnalysisManager(_ProcessingMixin):
         if not tot:
             return
         
-        # Create parent task for ordination
-        ord_task = self.task_id
-        if self.progress and self.task_id is None:
-            ord_task = self.progress.add_task(
-                "[white]Running ordination...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=tot,
-                parent=self.task_id
+        with create_progress() as prog:
+            parent_task = prog.add_task(
+                "[white]Ordination analysis".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                total=tot
             )
             
-        for ttype, lvls in self.tables.items():
-            self.ordination[ttype] = {}
-            self.figures[ttype] = {}
-            
-            # Get enabled methods for current table type from config
-            ord_config = self.cfg.get("ordination", {}).get(ttype, {})
-            enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
-            
-            for lvl, tbl in lvls.items():
-                ordir = self.figure_output_dir / lvl / ttype
-                ordn = Ordination(self.cfg, ordir, False)
+            for ttype, lvls in self.tables.items():
+                self.ordination[ttype] = {}
+                self.figures[ttype] = {}
                 
-                # Run only enabled methods for this table type
-                res, figs = ordn.run_tests(
-                    table=tbl,
-                    metadata=self.meta,
-                    color_col="dataset_name",
-                    symbol_col="nuclear_contamination_status",
-                    transformation=ttype,
-                    enabled_tests=enabled_methods,
-                    progress=self.progress,
-                    task_id=ord_task,
-                )
-                self.ordination[ttype][lvl] = res
-                self.figures[ttype][lvl] = figs
+                # Get enabled methods for current table type from config
+                ord_config = self.cfg.get("ordination", {}).get(ttype, {})
+                enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                 
-        # Complete ordination task if we created it
-        if self.progress and self.task_id is None:
-            self.progress.update(ord_task, completed=tot)
+                for lvl, tbl in lvls.items():
+                    ordir = self.figure_output_dir / lvl / ttype
+                    ordn = Ordination(self.cfg, ordir, False)
+                    
+                    # Create child task for this table/level
+                    level_task = prog.add_task(
+                        f"[cyan]{ttype}/{lvl}",
+                        parent=parent_task,
+                        total=len(enabled_methods)
+                    )
+                    
+                    # Run only enabled methods for this table type
+                    res, figs = ordn.run_tests(
+                        table=tbl,
+                        metadata=self.meta,
+                        color_col="dataset_name",
+                        symbol_col="nuclear_contamination_status",
+                        transformation=ttype,
+                        enabled_tests=enabled_methods,
+                        progress=prog,
+                        task_id=level_task,
+                    )
+                    self.ordination[ttype][lvl] = res
+                    self.figures[ttype][lvl] = figs
+                    
+                    # Update progress
+                    prog.update(level_task, completed=len(enabled_methods))
+                    prog.update(parent_task, advance=len(enabled_methods))
                 
     def _run_ml_feature_selection(self) -> None:
         if not self.cfg.get("run_ml", False):
             return
-            
-        # Calculate total models
+        
+        # Calculate total ML runs
         tot = 0
         for ttype, lvls in self.tables.items():
             ml_cfg = self.cfg.get("ml", {})
             tot += len(lvls) * len(ml_cfg.get("methods", ["rfe"]))
             
-        # Create parent task for ML
-        ml_task = self.task_id
-        if self.progress and self.task_id is None:
-            ml_task = self.progress.add_task(
-                "[white]Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=tot,
-                parent=self.task_id
+        with create_progress() as prog:
+            parent_task = prog.add_task(
+                "[white]ML feature selection".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=tot
             )
             
-        for ttype, lvls in self.tables.items():
-            self.models[ttype] = {}
-            for lvl, tbl in lvls.items():
+            for ttype, lvls in self.tables.items():
+                self.models[ttype] = {}
                 ml_cfg = self.cfg.get("ml", {})
-                for method in ml_cfg.get("methods", ["rfe"]):
-                    # Create child task for each model
-                    if self.progress:
-                        model_task = self.progress.add_task(
-                            f"[cyan]{ttype} {lvl} {method}",
-                            total=1,
-                            parent=ml_task
+                methods = ml_cfg.get("methods", ["rfe"])
+                
+                for lvl, tbl in lvls.items():
+                    for method in methods:
+                        # Create child task for this ML run
+                        child_task = prog.add_task(
+                            f"[cyan]{ttype}/{lvl}/{method}",
+                            parent=parent_task,
+                            total=1
                         )
                         
-                    X = table_to_dataframe(tbl)
-                    X.index = X.index.str.lower()
-                    y = self.meta.set_index("#sampleid")[[DEFAULT_GROUP_COLUMN]]
-                    idx = X.index.intersection(y.index)
-                    X, y = X.loc[idx], y.loc[idx]
-                    mdir = Path(self.figure_output_dir).parent / "ml" / lvl / ttype
-                    catboost_feature_selection(
-                        metadata=y,
-                        features=X,
-                        output_dir=mdir,
-                        contamination_status_col=DEFAULT_GROUP_COLUMN,
-                        method=method,
-                    )
-                    
-                    if self.progress:
-                        self.progress.update(model_task, advance=1)
-                        
-        if self.progress and self.task_id is None:
-            self.progress.update(ml_task, completed=tot)
-           
+                        X = table_to_dataframe(tbl)
+                        X.index = X.index.str.lower()
+                        y = self.meta.set_index("#sampleid")[[DEFAULT_GROUP_COLUMN]]
+                        idx = X.index.intersection(y.index)
+                        X, y = X.loc[idx], y.loc[idx]
+                        mdir = Path(self.figure_output_dir).parent / "ml" / lvl / ttype
+                        catboost_feature_selection(
+                            metadata=y,
+                            features=X,
+                            output_dir=mdir,
+                            contamination_status_col=DEFAULT_GROUP_COLUMN,
+                            method=method,
+                        )
+                        prog.update(child_task, completed=1)
+                        prog.update(parent_task, advance=1)
+                   
 
 class AmpliconData:  
     """
@@ -1088,46 +1021,15 @@ class AmpliconData:
        cfg: Dict, 
        project_dir: Any, 
        mode: str = "genus", 
-       verbose: bool = False,
-       progress: Optional[Progress] = None,
-       task_id: Optional[TaskID] = None,
+       verbose: bool = False
     ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
         
-        # Create parent task for entire pipeline
-        parent_task = task_id
-        if progress and task_id is None:
-            parent_task = progress.add_task(
-                "[white]Processing amplicon data...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=3  # Loading, processing, analysis
-            )
-            
-        # Initialize ALL task ID variables to None
-        load_task_id = None
-        process_task_id = None
-        map_task_id = None
-        analysis_task_id = None
-            
-        # Data loading
-        if progress:
-            load_task_id = progress.add_task(
-                "[cyan]Loading data",
-                total=1,
-                parent=parent_task
-            )
         dl = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = dl.meta, dl.table
-        if progress:
-            progress.update(load_task_id, advance=1)
        
-        # Processing
-        if progress:
-            process_task_id = progress.add_task(
-                "[cyan]Processing tables",
-                total=1,
-                parent=parent_task
-            )
+        # Process
         self.figure_output_dir = Path(self.project_dir.figures)
         tp = _TableProcessor(
            cfg, 
@@ -1136,37 +1038,17 @@ class AmpliconData:
            self.meta, 
            self.figure_output_dir, 
            project_dir, 
-           verbose,
-           progress,
-           process_task_id  # CORRECTED: Using process_task_id not process_task
+           verbose
         )
         self.tables = tp.tables
-        if progress:
-            progress.update(process_task_id, advance=1)
        
         # Figures
         self.figures: Dict[str, Any] = {}
         if cfg["figures"].get("map", False):
-            if progress:
-                map_task_id = progress.add_task(
-                    "[cyan]Generating maps",
-                    total=1,
-                    parent=parent_task
-                )
             self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(
-                self.meta, progress, map_task_id
-            )
-            if progress:
-                progress.update(map_task_id, advance=1)
+            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
            
         # Analysis
-        if progress:
-            analysis_task_id = progress.add_task(
-                "[cyan]Running analysis",
-                total=1,
-                parent=parent_task
-            )
         am = _AnalysisManager(
            cfg, 
            self.tables, 
@@ -1174,9 +1056,7 @@ class AmpliconData:
            self.figure_output_dir, 
            verbose, 
            cfg.get("faprotax", False), 
-           self.fdb,
-           progress,
-           analysis_task_id
+           self.fdb
         )
         self.stats = am.stats
         self.ordination = am.ordination
@@ -1184,116 +1064,5 @@ class AmpliconData:
         self.top_contaminated_features = am.top_contaminated_features
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
-        
-        if progress:
-            progress.update(analysis_task_id, advance=1)
-            
-        # Complete parent task
-        if progress and task_id is None:
-            progress.update(parent_task, completed=3)
-            
         if verbose:
-            self.log_config(cfg)
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
-            
-    def log_config(self, cfg: Dict) -> None:
-        """Logs amplicon configuration settings in a visually appealing format"""
-        console = Console()
-        console.print("\n[bold cyan]AMPLICON ANALYSIS CONFIGURATION[/bold cyan]")
-        console.print("[yellow]═" * 60, style="dim yellow")
-        
-        # Features section
-        features = cfg.get("features", {})
-        ftable = RichTable(show_header=False, box=box.ROUNDED, style="blue")
-        ftable.add_row("[bold]Features Configuration[/bold]")
-        ftable.add_row(f"Filtering: [green]{features.get('filter', False)}")
-        ftable.add_row(f"Normalization: [green]{features.get('normalize', False)}")
-        ftable.add_row(f"CLR Transformation: [green]{features.get('clr_transform', False)}")
-        ftable.add_row(f"Presence/Absence: [green]{features.get('presence_absence', False)}")
-        console.print(ftable)
-        
-        # Statistical Tests
-        stats = cfg.get("stats", {})
-        stable = RichTable(
-            title="[bold]Statistical Tests[/bold]", 
-            box=box.ROUNDED, 
-            style="magenta",
-            title_style="bold magenta",
-            header_style="bold"
-        )
-        stable.add_column("Table Type")
-        stable.add_column("Enabled Tests")
-        
-        for table_type, tests in stats.items():
-            enabled = [f"[green]{t}" for t, enabled in tests.items() if enabled]
-            if not enabled:
-                enabled = ["[dim]None"]
-            stable.add_row(
-                f"[cyan]{table_type}", 
-                ", ".join(enabled)
-            )
-        console.print(stable)
-        
-        # Ordination Methods
-        ordination = cfg.get("ordination", {})
-        otable = RichTable(
-            title="[bold]Ordination Methods[/bold]", 
-            box=box.ROUNDED, 
-            style="green",
-            title_style="bold green",
-            header_style="bold"
-        )
-        otable.add_column("Table Type")
-        otable.add_column("PCA")
-        otable.add_column("PCoA")
-        otable.add_column("t-SNE")
-        otable.add_column("UMAP")
-        
-        for table_type, methods in ordination.items():
-            otable.add_row(
-                f"[cyan]{table_type}",
-                "[green]✓" if methods.get("pca", False) else "[red]✗",
-                "[green]✓" if methods.get("pcoa", False) else "[red]✗",
-                "[green]✓" if methods.get("tsne", False) else "[red]✗",
-                "[green]✓" if methods.get("umap", False) else "[red]✗"
-            )
-        console.print(otable)
-        
-        # Figures Configuration
-        figures = cfg.get("figures", {})
-        fig_table = RichTable(show_header=False, box=box.ROUNDED, style="yellow")
-        fig_table.add_row("[bold]Figures Configuration[/bold]")
-        fig_table.add_row(f"Sample Maps: [green]{figures.get('map', False)}")
-        
-        map_cols = figures.get("map_columns", [
-            "dataset_name", 
-            "nuclear_contamination_status",
-            "env_feature", 
-            "env_material",
-            "country"
-        ])
-        fig_table.add_row(f"Map Columns: [cyan]{', '.join(map_cols)}")
-        console.print(fig_table)
-        
-        # ML Configuration
-        ml = cfg.get("ml", {})
-        mtable = RichTable(show_header=False, box=box.ROUNDED, style="cyan")
-        mtable.add_row("[bold]Machine Learning[/bold]")
-        mtable.add_row(f"Enabled: [green]{ml.get('run_ml', False)}")
-        
-        if ml.get("run_ml", False):
-            methods = ml.get("methods", ["rfe"])
-            mtable.add_row(f"Methods: [cyan]{', '.join(methods)}")
-            mtable.add_row(f"Top Features: [cyan]{ml.get('top_n_features', 20)}")
-        console.print(mtable)
-        
-        # Miscellaneous
-        misc_table = RichTable(show_header=False, box=box.ROUNDED, style="dim")
-        misc_table.add_row("[bold]Miscellaneous Settings[/bold]")
-        misc_table.add_row(f"FAPROTAX Enabled: [green]{cfg.get('faprotax', False)}")
-        misc_table.add_row(f"Group Column: [cyan]{cfg.get('group_column', DEFAULT_GROUP_COLUMN)}")
-        group_vals = cfg.get("group_values", DEFAULT_GROUP_COLUMN_VALUES)
-        misc_table.add_row(f"Group Values: [cyan]{', '.join(map(str, group_vals))}")
-        console.print(misc_table)
-        
-        console.print("[yellow]═" * 60, style="dim yellow")
