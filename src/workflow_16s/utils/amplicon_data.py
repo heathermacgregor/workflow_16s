@@ -11,7 +11,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np 
 import pandas as pd
 from biom.table import Table
+from rich import box
+from rich.console import Console
 from rich.progress import Progress, TaskID
+from rich.table import Table as RichTable
+from rich.text import Text
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -337,7 +341,7 @@ class Ordination:
                 parent_task = progress.add_task(
                     f"[white]Running {transformation} ordination...".ljust(DEFAULT_PROGRESS_TEXT_N),
                     total=len(tests_to_run)
-            
+                )
             for tname in tests_to_run:
                 cfg = self.TEST_CONFIG[tname]
                 key = cfg["key"]
@@ -1119,7 +1123,7 @@ class AmpliconData:
     ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
-        
+        self.log_config(cfg)
         # Create parent task for entire pipeline
         parent_task = task_id
         if progress and task_id is None:
@@ -1213,3 +1217,105 @@ class AmpliconData:
             
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
+
+    def log_config(self, cfg: Dict) -> None:
+        """Logs amplicon configuration settings in a visually appealing format"""
+        console = Console()
+        console.print("\n[bold cyan]AMPLICON ANALYSIS CONFIGURATION[/bold cyan]")
+        console.print("[yellow]═" * 60, style="dim yellow")
+        
+        # Features section
+        features = cfg.get("features", {})
+        ftable = RichTable(show_header=False, box=box.ROUNDED, style="blue")
+        ftable.add_row("[bold]Features Configuration[/bold]")
+        ftable.add_row(f"Filtering: [green]{features.get('filter', False)}")
+        ftable.add_row(f"Normalization: [green]{features.get('normalize', False)}")
+        ftable.add_row(f"CLR Transformation: [green]{features.get('clr_transform', False)}")
+        ftable.add_row(f"Presence/Absence: [green]{features.get('presence_absence', False)}")
+        console.print(ftable)
+        
+        # Statistical Tests
+        stats = cfg.get("stats", {})
+        stable = RichTable(
+            title="[bold]Statistical Tests[/bold]", 
+            box=box.ROUNDED, 
+            style="magenta",
+            title_style="bold magenta",
+            header_style="bold"
+        )
+        stable.add_column("Table Type")
+        stable.add_column("Enabled Tests")
+        
+        for table_type, tests in stats.items():
+            enabled = [f"[green]{t}" for t, enabled in tests.items() if enabled]
+            if not enabled:
+                enabled = ["[dim]None"]
+            stable.add_row(
+                f"[cyan]{table_type}", 
+                ", ".join(enabled)
+            )
+        console.print(stable)
+        
+        # Ordination Methods
+        ordination = cfg.get("ordination", {})
+        otable = RichTable(
+            title="[bold]Ordination Methods[/bold]", 
+            box=box.ROUNDED, 
+            style="green",
+            title_style="bold green",
+            header_style="bold"
+        )
+        otable.add_column("Table Type")
+        otable.add_column("PCA")
+        otable.add_column("PCoA")
+        otable.add_column("t-SNE")
+        otable.add_column("UMAP")
+        
+        for table_type, methods in ordination.items():
+            otable.add_row(
+                f"[cyan]{table_type}",
+                "[green]✓" if methods.get("pca", False) else "[red]✗",
+                "[green]✓" if methods.get("pcoa", False) else "[red]✗",
+                "[green]✓" if methods.get("tsne", False) else "[red]✗",
+                "[green]✓" if methods.get("umap", False) else "[red]✗"
+            )
+        console.print(otable)
+        
+        # Figures Configuration
+        figures = cfg.get("figures", {})
+        fig_table = RichTable(show_header=False, box=box.ROUNDED, style="yellow")
+        fig_table.add_row("[bold]Figures Configuration[/bold]")
+        fig_table.add_row(f"Sample Maps: [green]{figures.get('map', False)}")
+        
+        map_cols = figures.get("map_columns", [
+            "dataset_name", 
+            "nuclear_contamination_status",
+            "env_feature", 
+            "env_material",
+            "country"
+        ])
+        fig_table.add_row(f"Map Columns: [cyan]{', '.join(map_cols)}")
+        console.print(fig_table)
+        
+        # ML Configuration
+        ml = cfg.get("ml", {})
+        mtable = RichTable(show_header=False, box=box.ROUNDED, style="cyan")
+        mtable.add_row("[bold]Machine Learning[/bold]")
+        mtable.add_row(f"Enabled: [green]{ml.get('run_ml', False)}")
+        
+        if ml.get("run_ml", False):
+            methods = ml.get("methods", ["rfe"])
+            mtable.add_row(f"Methods: [cyan]{', '.join(methods)}")
+            mtable.add_row(f"Top Features: [cyan]{ml.get('top_n_features', 20)}")
+        console.print(mtable)
+        
+        # Miscellaneous
+        misc_table = RichTable(show_header=False, box=box.ROUNDED, style="dim")
+        misc_table.add_row("[bold]Miscellaneous Settings[/bold]")
+        misc_table.add_row(f"FAPROTAX Enabled: [green]{cfg.get('faprotax', False)}")
+        misc_table.add_row(f"Group Column: [cyan]{cfg.get('group_column', DEFAULT_GROUP_COLUMN)}")
+        group_vals = cfg.get("group_values", DEFAULT_GROUP_COLUMN_VALUES)
+        misc_table.add_row(f"Group Values: [cyan]{', '.join(map(str, group_vals))}")
+        console.print(misc_table)
+        
+        console.print("[yellow]═" * 60, style="dim yellow")
