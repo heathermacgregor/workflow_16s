@@ -334,7 +334,54 @@ class Ordination:
             if not (progress and task_id):
                 # Fallback to simple loop if no progress bar
                 for tname in tests_to_run:
-                    # ... (run ordination without progress) ...
+                    cfg = self.TEST_CONFIG[tname]
+                    key = cfg["key"]
+                    try:
+                        # Prepare method-specific parameters
+                        method_params = {}
+                        
+                        # Handle PCoA metric from config
+                        if tname == "pcoa":
+                            method_params["metric"] = trans_cfg.get(
+                                "pcoa_metric", "braycurtis"  # Default metric
+                            )
+                        
+                        # Run ordination method with parameters
+                        ord_res = cfg["func"](table=table, **method_params)
+                        results[key] = ord_res
+                        
+                        # Prepare plot parameters
+                        pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+
+                        # Handle different result types for plotting
+                        if key == 'pca':
+                            pkwargs.update({
+                                'components': ord_res['components'],
+                                'proportion_explained': ord_res['exp_var_ratio']
+                            })
+                        elif key == 'pcoa':
+                            pkwargs.update({
+                                'components': ord_res.samples,
+                                'proportion_explained': ord_res.proportion_explained
+                            })
+                        else:  # t-SNE or UMAP
+                            pkwargs['df'] = ord_res
+                            
+                        # Generate plot
+                        fig, _ = cfg["plot_func"](
+                            metadata=metadata,
+                            color_col=color_col,
+                            symbol_col=symbol_col,
+                            transformation=transformation,
+                            output_dir=self.figure_output_dir,
+                            **pkwargs
+                        )
+                        figures[key] = fig
+                    except Exception as e:
+                        logger.error(
+                            f"Failed {tname} for {transformation}: {e}"
+                        )
+                        figures[key] = None
                 return results, figures
 
             # Create parent task for all ordination methods
@@ -448,8 +495,7 @@ class Plotter:
         with create_progress() as progress:
             parent_task = progress.add_task(
                 "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(valid_columns)
-            )
+                total=len(valid_columns))
             
             for col in valid_columns:
                 child_task = progress.add_task(
@@ -507,8 +553,7 @@ class TopFeaturesAnalyzer:
         with create_progress() as progress:
             parent_task = progress.add_task(
                 "[white]Analyzing top features".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(levels)
-            )
+                total=len(levels))
             
             for level in levels:
                 child_task = progress.add_task(
@@ -879,8 +924,7 @@ class _AnalysisManager(_ProcessingMixin):
                     level_task = prog.add_task(
                         f"[cyan]{ttype}/{lvl}",
                         parent=parent_task,
-                        total=len(enabled_for_ttype)
-                    )
+                        total=len(enabled_for_ttype))
                     
                     res = san.run_tests(
                         tbl, m, grp_col, grp_vals, 
@@ -943,8 +987,7 @@ class _AnalysisManager(_ProcessingMixin):
                     level_task = prog.add_task(
                         f"[cyan]{ttype}/{lvl}",
                         parent=parent_task,
-                        total=len(enabled_methods)
-                    )
+                        total=len(enabled_methods))
                     
                     # Run only enabled methods for this table type
                     res, figs = ordn.run_tests(
