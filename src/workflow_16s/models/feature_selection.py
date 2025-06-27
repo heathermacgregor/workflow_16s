@@ -1,78 +1,91 @@
 # ===================================== IMPORTS ====================================== #
 
-import warnings
-
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple, Union
-import logging
-from argparse import Namespace as Args
-
+# Standard Library Imports
 import itertools
+import logging
 import os
 import re
+import warnings
+from argparse import Namespace as Args
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Tuple, Union
 
+# Third‑Party Imports
 import numpy as np
 import pandas as pd
+import shap
 from biom import load_table
-
-from sklearn.model_selection import train_test_split
-from sklearn.inspection import permutation_importance
+from catboost import (
+    CatBoostClassifier, 
+    cv,
+    Pool    
+)
+import matplotlib.pyplot as plt
+from scipy.stats import kendalltau
+from skbio.stats.composition import clr
 from sklearn.feature_selection import (
-    RFE, 
-    SelectKBest, 
     chi2, 
     f_classif, 
-    VarianceThreshold, 
-    SelectFromModel
+    RFE, 
+    SelectFromModel,
+    SelectKBest, 
+    VarianceThreshold
 )
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import (
+    StratifiedKFold,
+    train_test_split    
+)
 from sklearn.metrics import (
     accuracy_score, 
+    auc,
+    average_precision_score,
     confusion_matrix, 
     f1_score, 
     matthews_corrcoef, 
     make_scorer,
-    roc_curve, 
-    auc, 
-    precision_recall_curve, 
-    average_precision_score
-)
-import shap
-
-# Statistics
-from scipy.stats import kendalltau
-from skbio.stats.composition import clr
-
-# Modeling
-from sklearn.model_selection import (
-    train_test_split, 
-    StratifiedKFold
-)
-from sklearn.metrics import (
-    confusion_matrix, 
-    roc_auc_score, 
-    roc_curve
-)
-from catboost import (
-    CatBoostClassifier, 
-    Pool, 
-    cv
+    precision_recall_curve,
+    roc_auc_score,
+    roc_curve 
 )
 
-# Plotting
+# ================================== LOCAL IMPORTS =================================== #
+
 from workflow_16s.figures.models.models import (
     plot_confusion_matrix, 
     plot_roc_curve,  
     plot_precision_recall_curve
 )
-import matplotlib.pyplot as plt
+
+# ========================== INITIALISATION & CONFIGURATION ========================== #
+
+warnings.filterwarnings("ignore") # Hide all warnings
+logger = logging.getLogger('workflow_16s')
 
 # ================================= GLOBAL VARIABLES ================================= #
 
-# Hide all warnings
-warnings.filterwarnings("ignore")
+DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
+DEFAULT_TEST_SIZE = 0.3
+DEFAULT_RANDOM_STATE = 42
 
-logger = logging.getLogger('workflow_16s')
+DEFAULT_METHOD = 'rfe'
+DEFAULT_USE_PERMUTATION_IMPORTANCE = True
+DEFAULT_THREAD_COUNT = 4
+DEFAULT_STEP_SIZE = 1000
+DEFAULT_NUM_FEATURES = 500
+
+DEFAULT_ITERATIONS_RFE = 500
+DEFAULT_LEARNING_RATE_RFE = 0.1
+DEFAULT_DEPTH_RFE = 4
+
+DEFAULT_PENALTY_LASSO = 'l1'
+DEFAULT_SOLVER_LASSO = 'liblinear'
+DEFAULT_MAX_ITER_LASSO = 1000
+
+DEFAULT_ITERATIONS_SHAP = 1000
+DEFAULT_LEARNING_RATE_SHAP = 0.1
+DEFAULT_DEPTH_SHAP = 4
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -81,11 +94,17 @@ def _validate_inputs(X_train, y_train, X_test, y_test):
     """Helper function to validate input alignment"""
     if X_train.shape[0] != y_train.shape[0] or X_test.shape[0] != y_test.shape[0]:
         raise ValueError(
-          "X_train, y_train, X_test, and y_test must have the same number of samples"
+          f"X_train [{X_train.shape[0]}], y_train [{y_train.shape[0]}], "
+          f"X_test [{X_test.shape[0]}], and y_test [{y_test.shape[0]}] "
+          f"must have the same number of samples"
         )
 
 
-def _save_dataframe(df: pd.DataFrame, output_path: Path, file_format: str = 'csv'):
+def _save_dataframe(
+    df: pd.DataFrame, 
+    output_path: Union[str, Path], 
+    file_format: str = 'csv'
+):
     """Helper function to save a DataFrame to a file."""
     if file_format == 'csv':
         df.to_csv(output_path, index=False)
@@ -101,7 +120,7 @@ def _check_shap_installed():
         import shap
     except ImportError:
         raise ImportError(
-          "SHAP library is not installed. Install it using `pip install shap`"
+          "SHAP library is not installed"
         )
 
 
@@ -110,9 +129,9 @@ def filter_data(
     X: pd.DataFrame,
     y: pd.Series,
     metadata: pd.DataFrame,
-    contamination_status_col: str,
-    test_size: float = 0.3,
-    random_state: int = 42
+    contamination_status_col: str = DEFAULT_GROUP_COLUMN,
+    test_size: float = DEFAULT_TEST_SIZE,
+    random_state: int = DEFAULT_RANDOM_STATE
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Splits the data into training and testing sets while maintaining the proportion of 
@@ -161,9 +180,9 @@ def rfe_feature_selection(
     step_size: int,
     threads: int,
     random_state: int,
-    iterations: int = 500,
-    learning_rate: float = 0.1,
-    depth: int = 4,
+    iterations: int = DEFAULT_ITERATIONS_RFE,
+    learning_rate: float = DEFAULT_LEARNING_RATE_RFE,
+    depth: int = DEFAULT_DEPTH_RFE,
     verbose: int = 1,
     catboost_params: Union[Dict, None] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
@@ -383,11 +402,11 @@ def lasso_feature_selection(
     X_test: pd.DataFrame,
     y_test: pd.Series,
     num_features: int,
-    penalty: str = 'l1',
-    solver: str = 'liblinear',
+    penalty: str = DEFAULT_PENALTY_LASSO,
+    solver: str = DEFAULT_SOLVER_LASSO,
     max_iter: int = 1000,
-    random_state: int = 42,
-    verbose: int = 1,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    verbose: int = DEFAULT_MAX_ITER_LASSO,
     lasso_params: Union[Dict, None] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
@@ -400,11 +419,13 @@ def lasso_feature_selection(
         y_test:            Testing target Series.
         num_features:      Number of top features to select.
         penalty:           Type of regularization ('l1' or 'l2').
-        solver:            Optimization algorithm to use (e.g., 'liblinear', 'saga').
+        solver:            Optimization algorithm to use (e.g., 'liblinear', 
+                           'saga').
         max_iter:          Maximum number of iterations for the solver.
         random_state:      Random seed for reproducibility.
         verbose:           Controls verbosity (0 for silent, 1 for progress).
-        lasso_params:      Dictionary of additional LogisticRegression parameters (optional).
+        lasso_params:      Dictionary of additional LogisticRegression 
+                           parameters (optional).
 
     Returns:
         X_train_selected:  Training data with selected features.
@@ -479,9 +500,9 @@ def shap_feature_selection(
     y_test: pd.Series,
     num_features: int,
     threads: int,
-    iterations: int = 1000,
-    learning_rate: float = 0.1,
-    depth: int = 4,
+    iterations: int = DEFAULT_ITERATIONS_SHAP,
+    learning_rate: float = DEFAULT_LEARNING_RATE_SHAP,
+    depth: int = DEFAULT_DEPTH_SHAP,
     verbose: int = 1,
     catboost_params: Union[Dict, None] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
@@ -573,12 +594,12 @@ def perform_feature_selection(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
-    feature_selection: str = 'rfe',
-    use_permutation_importance: bool = True,
-    thread_count: int = 4,
-    step_size: int = 1000,
-    num_features: int = 500,
-    random_state: int = 42,
+    feature_selection: str = DEFAULT_METHOD,
+    use_permutation_importance: bool = DEFAULT_USE_PERMUTATION_IMPORTANCE,
+    thread_count: int = DEFAULT_THREAD_COUNT,
+    step_size: int = DEFAULT_STEP_SIZE,
+    num_features: int = DEFAULT_NUM_FEATURES,
+    random_state: int = DEFAULT_RANDOM_STATE,
     verbose: int = 1,
     feature_selection_params: Union[Dict, None] = None,
     perm_importance_scorer: Callable = make_scorer(matthews_corrcoef),
