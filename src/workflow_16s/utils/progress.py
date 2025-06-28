@@ -7,11 +7,12 @@ from rich.progress import (
     Progress,
     ProgressColumn,
     SpinnerColumn,
+    Task,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    track,
-    TaskID
+    track, 
 )
 
 # ==================================== FUNCTIONS ===================================== #
