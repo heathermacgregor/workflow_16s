@@ -116,6 +116,7 @@ class _ProcessingMixin:
                 )
                 self._log_level_action(level, log_template, log_action)
         else:
+            logger.info(f"{process_name}")
             with get_progress_bar() as progress:
                 parent_task = progress.add_task(
                     process_name,
@@ -133,6 +134,8 @@ class _ProcessingMixin:
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
+                    self._log_level_action(level, log_template, log_action)
+                    
         return processed
 
     def _log_level_action(
@@ -697,7 +700,7 @@ class _TableProcessor(_ProcessingMixin):
         levels = ["phylum", "class", "order", "family", "genus"]
         raw_table = self.tables["raw"][self.mode]
         self.tables["presence_absence"] = self._run_processing_step(
-            "Converting to presence/absence...",
+            "Converting to presence/absence...".ljust(DEFAULT_PROGRESS_TEXT_N),
             presence_absence,
             levels,
             (),
