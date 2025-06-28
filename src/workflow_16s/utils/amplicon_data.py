@@ -37,7 +37,7 @@ from workflow_16s.utils.progress import get_progress_bar
 from workflow_16s.utils.file_utils import (
     import_merged_table_biom,
     import_merged_meta_tsv,
-    filter_and_reorder_biom_and_metadata,
+    filter_and_reorder_biom_and_metadata as update_tables,
 )
 from workflow_16s.utils.misc_utils import print_structure
 from workflow_16s.stats.utils import (
@@ -195,7 +195,7 @@ class StatisticalAnalyzer:
     ) -> Dict[str, Any]:
         results: Dict[str, Any] = {}
         # Pre-align samples once instead of in each test
-        table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
+        table, metadata = update_tables(table, metadata)
         
         if not (progress and task_id):
             for test_name in enabled_tests:
@@ -240,11 +240,16 @@ class StatisticalAnalyzer:
                 )
             finally:
                 progress.update(child_task, completed=1)
+                progress.remove_task(child_task)
                 progress.update(parent_task, advance=1)
                 
         return results
 
-    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
+    def get_effect_size(
+        self, 
+        test_name: str, 
+        row: pd.Series
+    ) -> Optional[float]:
         if test_name not in self.TEST_CONFIG:
             return None
         cfg = self.TEST_CONFIG[test_name]
@@ -252,16 +257,44 @@ class StatisticalAnalyzer:
             if col and col in row:
                 return row[col]
         return None
+        
 
 class Ordination:
     TEST_CONFIG = {
-        "pca": {"key": "pca", "func": calculate_pca, "plot_func": plot_pca, "name": "PCA"},
-        "pcoa": {"key": "pcoa", "func": calculate_pcoa, "plot_func": plot_pcoa, "name": "PCoA"},
-        "tsne": {"key": "tsne", "func": calculate_tsne, "plot_func": plot_mds, "name": "t‑SNE", "plot_kwargs": {"mode": "TSNE"}},
-        "umap": {"key": "umap", "func": calculate_umap, "plot_func": plot_mds, "name": "UMAP", "plot_kwargs": {"mode": "UMAP"}},
+        "pca": {
+            "key": "pca", 
+            "func": calculate_pca, 
+            "plot_func": plot_pca, 
+            "name": "PCA"
+        },
+        "pcoa": {
+            "key": "pcoa", 
+            "func": calculate_pcoa, 
+            "plot_func": plot_pcoa, 
+            "name": "PCoA"
+        },
+        "tsne": {
+            "key": "tsne", 
+            "func": calculate_tsne, 
+            "plot_func": plot_mds, 
+            "name": "t‑SNE", 
+            "plot_kwargs": {"mode": "TSNE"}
+        },
+        "umap": {
+            "key": "umap", 
+            "func": calculate_umap, 
+            "plot_func": plot_mds, 
+            "name": "UMAP", 
+            "plot_kwargs": {"mode": "UMAP"}
+        },
     }
 
-    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
+    def __init__(
+        self, 
+        cfg: Dict, 
+        output_dir: Union[str, Path], 
+        verbose: bool = False
+    ):
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
@@ -286,14 +319,16 @@ class Ordination:
             return {}, {}
 
         try:
-            table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
+            table, metadata = update_tables(table, metadata)
             
             if not (progress and task_id):
-                return self._run_without_progress(table, metadata, color_col, symbol_col, 
-                                                transformation, tests_to_run, trans_cfg, kwargs)
+                return self._run_without_progress(
+                    table, metadata, color_col, symbol_col, 
+                    transformation, tests_to_run, trans_cfg, kwargs
+                )
 
             parent_task = progress.add_task(
-                f"[white]Running {transformation} ordination".ljust(DEFAULT_PROGRESS_TEXT_N),
+                f"Running {transformation} ordination...",
                 total=len(tests_to_run),
                 parent=task_id
             )
@@ -308,40 +343,70 @@ class Ordination:
                 )
                 
                 try:
-                    res, fig = self._run_ordination_method(cfg, table, metadata, color_col, 
-                                                        symbol_col, transformation, trans_cfg, kwargs)
+                    res, fig = self._run_ordination_method(
+                        cfg, table, metadata, color_col,
+                        symbol_col, transformation, trans_cfg, kwargs
+                    )
                     results[cfg["key"]] = res
                     figures[cfg["key"]] = fig
                 except Exception as e:
-                    logger.error(f"Failed {tname} for {transformation}: {e}")
+                    logger.error(
+                        f"Failed {tname} for {transformation}: {e}"
+                    )
                     figures[cfg["key"]] = None
                 finally:
                     progress.update(child_task, completed=1)
+                    progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
             return results, figures
         finally:
             pass  # Cleanup if needed
             
-    def _run_without_progress(self, table, metadata, color_col, symbol_col, 
-                            transformation, tests_to_run, trans_cfg, kwargs):
+    def _run_without_progress(
+        self, 
+        table, 
+        metadata, 
+        color_col, 
+        symbol_col, 
+        transformation, 
+        tests_to_run, 
+        trans_cfg, 
+        kwargs
+    ):
         results, figures = {}, {}
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
-                res, fig = self._run_ordination_method(cfg, table, metadata, color_col, 
-                                                    symbol_col, transformation, trans_cfg, kwargs)
+                res, fig = self._run_ordination_method(
+                    cfg, table, metadata, color_col, 
+                    symbol_col, transformation, trans_cfg, kwargs
+                )
                 results[cfg["key"]] = res
                 figures[cfg["key"]] = fig
             except Exception as e:
-                logger.error(f"Failed {tname} for {transformation}: {e}")
+                logger.error(
+                    f"Failed {tname} for {transformation}: {e}"
+                )
                 figures[cfg["key"]] = None
         return results, figures
         
-    def _run_ordination_method(self, cfg, table, metadata, color_col, symbol_col, 
-                            transformation, trans_cfg, kwargs):
+    def _run_ordination_method(
+        self, 
+        cfg, 
+        table, 
+        metadata, 
+        color_col, 
+        symbol_col, 
+        transformation, 
+        trans_cfg, 
+        kwargs
+    ):
         method_params = {}
         if cfg["key"] == "pcoa":
-            method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+            method_params["metric"] = trans_cfg.get(
+                "pcoa_metric", 
+                "braycurtis"
+            )
         
         ord_res = cfg["func"](table=table, **method_params)
         
@@ -368,32 +433,52 @@ class Ordination:
             **pkwargs
         )
         return ord_res, fig
+                                
 
 class Plotter:
-    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
+    def __init__(
+        self, 
+        cfg: Dict, 
+        output_dir: Path, 
+        verbose: bool = False
+    ):
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
-        self.color_columns = cfg["figures"].get("map_columns", [
-            "dataset_name", "nuclear_contamination_status",
-            "env_feature", "env_material", "country"
-        ])
+        self.color_columns = cfg["figures"].get(
+            "map_columns", 
+            [
+                "dataset_name", 
+                "nuclear_contamination_status",
+                "env_feature", 
+                "env_material", 
+                "country"
+            ]
+        )
 
-    def generate_sample_map(self, metadata: pd.DataFrame, **kwargs) -> Dict[str, Any]:
-        valid_columns = [col for col in self.color_columns if col in metadata]
+    def generate_sample_map(
+        self, 
+        metadata: pd.DataFrame, 
+        **kwargs
+    ) -> Dict[str, Any]:
+        valid_columns = [col 
+                         for col in self.color_columns if col in metadata]
         missing = set(self.color_columns) - set(valid_columns)
         if missing and self.verbose:
-            logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
+            logger.warning(
+                f"Missing columns in metadata: {', '.join(missing)}"
+            )
         
         with get_progress_bar() as progress:
             parent_task = progress.add_task(
-                "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(valid_columns))
+                "Generating sample maps...",
+                total=len(valid_columns)
+            )
             
             figs = {}
             for col in valid_columns:
                 child_task = progress.add_task(
-                    f"[cyan]Mapping {col}",
+                    f"[cyan]Mapping {col}...",
                     parent=parent_task,
                     total=1
                 )
@@ -405,11 +490,17 @@ class Plotter:
                 )
                 figs[col] = fig
                 progress.update(child_task, completed=1)
+                progress.remove_task(child_task)
                 progress.update(parent_task, advance=1)
         return figs
 
+
 class TopFeaturesAnalyzer:
-    def __init__(self, cfg: Dict, verbose: bool = False):
+    def __init__(
+        self, 
+        cfg: Dict, 
+        verbose: bool = False
+    ):
         self.cfg = cfg
         self.verbose = verbose
 
@@ -422,16 +513,18 @@ class TopFeaturesAnalyzer:
         all_features = []
         
         # Collect all significant features efficiently
-        for tbl_type, tests in stats_results.items():
-            for tname, t_res in tests.items():
-                for lvl, df in t_res.items():
+        for table_type, tests in stats_results.items():
+            for test_name, test_results in tests.items():
+                for level, df in test_results.items():
                     sig_df = df[df["p_value"] < 0.05].copy()
                     if sig_df.empty:
                         continue
                     
                     # Vectorized effect size calculation
                     sig_df["effect"] = sig_df.apply(
-                        lambda row: san.get_effect_size(tname, row), axis=1
+                        lambda row: san.get_effect_size(
+                            test_name, row
+                        ), axis=1
                     )
                     sig_df = sig_df.dropna(subset=["effect"])
                     
@@ -439,9 +532,9 @@ class TopFeaturesAnalyzer:
                     for _, row in sig_df.iterrows():
                         all_features.append({
                             "feature": row["feature"],
-                            "level": lvl,
-                            "table_type": tbl_type,
-                            "test": tname,
+                            "level": level,
+                            "table_type": table_type,
+                            "test": test_name,
                             "effect": row["effect"],
                             "p_value": row["p_value"],
                             "effect_dir": "positive" if row["effect"] > 0 else "negative"
@@ -456,10 +549,20 @@ class TopFeaturesAnalyzer:
         
         return cont_feats[:100], pris_feats[:100]
 
-class _DataLoader(_ProcessingMixin):
-    MODE_CONFIG = {"asv": ("table", "asv"), "genus": ("table_6", "l6")}
 
-    def __init__(self, cfg: Dict, project_dir: Any, mode: str, verbose: bool = False):
+class _DataLoader(_ProcessingMixin):
+    MODE_CONFIG = {
+        "asv": ("table", "asv"), 
+        "genus": ("table_6", "l6")
+    }
+
+    def __init__(
+        self, 
+        cfg: Dict, 
+        project_dir: Any, 
+        mode: str, 
+        verbose: bool = False
+    ):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self._validate_mode()
         self._load_metadata()
@@ -521,12 +624,21 @@ class _DataLoader(_ProcessingMixin):
 
     def _filter_and_align(self) -> None:
         orig_n = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(
+        self.table, self.meta = update_tables(
             self.table, self.meta, "#sampleid"
         )
         ftype = "genera" if self.mode == "genus" else "ASVs"
-        logger.info(f"Loaded metadata: {RED}{self.meta.shape[0]}{RESET} samples × {RED}{self.meta.shape[1]}{RESET} cols")
-        logger.info(f"Loaded feature table: {RED}{self.table.shape[1]} ({orig_n}){RESET} samples × {RED}{self.table.shape[0]}{RESET} {ftype}")
+        logger.info(
+            f"Loaded metadata: "
+            f"{RED}{self.meta.shape[0]}{RESET} samples × "
+            f"{RED}{self.meta.shape[1]}{RESET} cols"
+        )
+        logger.info(
+            f"Loaded feature table: "
+            f"{RED}{self.table.shape[1]} ({orig_n}){RESET} samples × "
+            f"{RED}{self.table.shape[0]}{RESET} {ftype}"
+        )
+        
 
 class _TableProcessor(_ProcessingMixin):
     def __init__(
@@ -551,45 +663,45 @@ class _TableProcessor(_ProcessingMixin):
 
     def _apply_preprocessing(self) -> None:
         feat_cfg = self.cfg["features"]
-        tbl = self.tables["raw"][self.mode]
+        table = self.tables["raw"][self.mode]
         
         # Pipeline processing to avoid intermediate copies
         if feat_cfg["filter"]:
-            tbl = filter_table(tbl)
-            self.tables.setdefault("filtered", {})[self.mode] = tbl
+            table = filter_table(table)
+            self.tables.setdefault("filtered", {})[self.mode] = table
         
         if feat_cfg["normalize"]:
-            tbl = normalize_table(tbl, axis=1)
-            self.tables.setdefault("normalized", {})[self.mode] = tbl
+            table = normalize_table(table, axis=1)
+            self.tables.setdefault("normalized", {})[self.mode] = table
         
         if feat_cfg["clr_transform"]:
-            tbl = clr_transform_table(tbl)
-            self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
+            table = clr_transform_table(table)
+            self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
     def _collapse_taxa(self) -> None:
-        lvls = ["phylum", "class", "order", "family", "genus"]
-        for ttype in list(self.tables.keys()):
-            base_tbl = self.tables[ttype][self.mode]
-            self.tables[ttype] = self._run_processing_step(
-                f"Collapsing taxonomy for {ttype.replace('_', ' ')} tables...",
+        levels = ["phylum", "class", "order", "family", "genus"]
+        for table_type in list(self.tables.keys()):
+            base_table = self.tables[table_type][self.mode]
+            self.tables[table_type] = self._run_processing_step(
+                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...",
                 collapse_taxa,
-                lvls,
+                levels,
                 (),
-                lambda lvl, _tbl=base_tbl: _tbl,
-                log_template=f"Collapsed {ttype} to {{level}}",
+                lambda level, _table=base_table: _table,
+                log_template=f"Collapsed {table_type} to {{level}}",
             )
 
     def _create_presence_absence(self) -> None:
         if not self.cfg["features"]["presence_absence"]:
             return
-        lvls = ["phylum", "class", "order", "family", "genus"]
-        raw_tbl = self.tables["raw"][self.mode]
+        levels = ["phylum", "class", "order", "family", "genus"]
+        raw_table = self.tables["raw"][self.mode]
         self.tables["presence_absence"] = self._run_processing_step(
             "Converting to presence/absence...",
             presence_absence,
-            lvls,
+            levels,
             (),
-            lambda lvl: raw_tbl,
+            lambda level: raw_table,
         )
 
     def _save_tables(self) -> None:
@@ -598,23 +710,24 @@ class _TableProcessor(_ProcessingMixin):
         
         # Prepare all export tasks
         export_tasks = []
-        for ttype, lvls in self.tables.items():
-            tdir = base / ttype
+        for table_type, levels in self.tables.items():
+            tdir = base / table_type
             tdir.mkdir(parents=True, exist_ok=True)
-            for lvl, tbl in lvls.items():
-                out = tdir / lvl / "feature-table.biom"
+            for level, table in levels.items():
+                out = tdir / level / "feature-table.biom"
                 out.parent.mkdir(parents=True, exist_ok=True)
-                export_tasks.append((tbl, out, ttype, lvl))
+                export_tasks.append((table, out, table_type, level))
         
         # Parallel export
         with ThreadPoolExecutor() as executor:
             futures = []
-            for tbl, out, ttype, lvl in export_tasks:
-                futures.append(executor.submit(export_h5py, tbl, out))
+            for table, out, table_type, level in export_tasks:
+                futures.append(executor.submit(export_h5py, table, out))
             
             # Wait for completion
             for future in futures:
                 future.result()
+                
 
 class _AnalysisManager(_ProcessingMixin):
     def __init__(
@@ -647,7 +760,9 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ordination()
         
         # Keep only necessary tables for ML
-        ml_tables = {t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}}
+        ml_tables = {
+            t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}
+        }
         self._run_ml_feature_selection(ml_tables)
         del ml_tables
         
@@ -664,7 +779,10 @@ class _AnalysisManager(_ProcessingMixin):
     
     def _annotate_top_features(self) -> None:
         """Batch process annotations to minimize DB lookups"""
-        all_taxa = {f['feature'] for f in self.top_contaminated_features + self.top_pristine_features}
+        all_taxa = {
+            f['feature'] 
+            for f in self.top_contaminated_features + self.top_pristine_features
+        }
         
         # Batch lookup
         with ThreadPoolExecutor() as executor:
@@ -685,42 +803,46 @@ class _AnalysisManager(_ProcessingMixin):
         
         # Calculate total tests
         tot = sum(
-            len(lvls) * len([t for t, flag in self.cfg["stats"].get(ttype, {}).items() if flag])
-            for ttype, lvls in self.tables.items()
+            len(levels) * len(
+                [t 
+                 for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
+            )
+            for table_type, levels in self.tables.items()
         )
         
         with get_progress_bar() as prog:
             parent_task = prog.add_task(
-                "[white]Statistical testing".ljust(DEFAULT_PROGRESS_TEXT_N),
+                "Statistical testing...",
                 total=tot
             )
             
-            for ttype, lvls in self.tables.items():
-                self.stats[ttype] = {}
-                tests_config = self.cfg["stats"].get(ttype, {})
-                enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
+            for table_type, levels in self.tables.items():
+                self.stats[table_type] = {}
+                tests_config = self.cfg["stats"].get(table_type, {})
+                enabled_for_table_type = [test 
+                                     for test, flag in tests_config.items() if flag]
                 
-                for lvl, tbl in lvls.items():
+                for level, table in levels.items():
                     if self.verbose:
-                        logger.info(f"Processing {ttype} table at {lvl} level")
+                        logger.info(f"Processing {table_type} table at {level} level")
                     
-                    tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
+                    table, m = update_tables(table, self.meta)
                     
                     level_task = prog.add_task(
-                        f"[cyan]{ttype}/{lvl}",
+                        f"[cyan]{table_type}/{level}",
                         parent=parent_task,
-                        total=len(enabled_for_ttype))
+                        total=len(enabled_for_table_type))
                     
                     res = san.run_tests(
-                        tbl, m, grp_col, grp_vals, 
-                        enabled_for_ttype, prog, level_task
+                        table, m, grp_col, grp_vals, 
+                        enabled_for_table_type, prog, level_task
                     )
                     
                     for key, df in res.items():
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
+                        self.stats.setdefault(table_type, {}).setdefault(key, {})[level] = df
                     
-                    prog.update(level_task, completed=len(enabled_for_ttype))
-                    prog.update(parent_task, advance=len(enabled_for_ttype))
+                    prog.update(level_task, completed=len(enabled_for_table_type))
+                    prog.update(parent_task, advance=len(enabled_for_table_type))
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
@@ -735,8 +857,8 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
         tot = sum(
-            len(lvls) * len([m for m in KNOWN_METHODS if self.cfg.get("ordination", {}).get(ttype, {}).get(m, False)])
-            for ttype, lvls in self.tables.items()
+            len(levels) * len([m for m in KNOWN_METHODS if self.cfg.get("ordination", {}).get(table_type, {}).get(m, False)])
+            for table_type, levels in self.tables.items()
         )
         if not tot:
             return
@@ -747,41 +869,42 @@ class _AnalysisManager(_ProcessingMixin):
                 total=tot
             )
             
-            for ttype, lvls in self.tables.items():
-                self.ordination[ttype] = {}
-                self.figures[ttype] = {}
-                ord_config = self.cfg.get("ordination", {}).get(ttype, {})
+            for table_type, levels in self.tables.items():
+                self.ordination[table_type] = {}
+                self.figures[table_type] = {}
+                ord_config = self.cfg.get("ordination", {}).get(table_type, {})
                 enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                 
-                for lvl, tbl in lvls.items():
-                    ordir = self.figure_output_dir / lvl / ttype
+                for level, table in levels.items():
+                    ordir = self.figure_output_dir / level / table_type
                     ordn = Ordination(self.cfg, ordir, False)
                     
                     level_task = prog.add_task(
-                        f"[cyan]{ttype}/{lvl}",
+                        f"[cyan]{table_type}/{level}",
                         parent=parent_task,
                         total=len(enabled_methods))
                     
                     res, figs = ordn.run_tests(
-                        table=tbl,
+                        table=table,
                         metadata=self.meta,
                         color_col="dataset_name",
                         symbol_col="nuclear_contamination_status",
-                        transformation=ttype,
+                        transformation=table_type,
                         enabled_tests=enabled_methods,
                         progress=prog,
                         task_id=level_task,
                     )
-                    self.ordination[ttype][lvl] = res
-                    self.figures[ttype][lvl] = figs
+                    self.ordination[table_type][level] = res
+                    self.figures[table_type][level] = figs
                     
                     prog.update(level_task, completed=len(enabled_methods))
+                    prog.remove_task(level_task)
                     prog.update(parent_task, advance=len(enabled_methods))
                 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         tot = sum(
-            len(lvls) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
-            for ttype, lvls in ml_tables.items()
+            len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
+            for table_type, levels in ml_tables.items()
         )
         if not tot:
             return
@@ -792,25 +915,25 @@ class _AnalysisManager(_ProcessingMixin):
                 total=tot
             )
             
-            for ttype, lvls in ml_tables.items():
-                self.models[ttype] = {}
+            for table_type, levels in ml_tables.items():
+                self.models[table_type] = {}
                 ml_cfg = self.cfg.get("ml", {})
                 methods = ml_cfg.get("methods", ["rfe"])
                 
-                for lvl, tbl in lvls.items():
+                for level, table in levels.items():
                     for method in methods:
                         child_task = prog.add_task(
-                            f"[cyan]{ttype}/{lvl}/{method}",
+                            f"[cyan]{table_type}/{level}/{method}",
                             parent=parent_task,
                             total=1
                         )
                         
-                        X = table_to_dataframe(tbl)
+                        X = table_to_dataframe(table)
                         X.index = X.index.str.lower()
                         y = self.meta.set_index("#sampleid")[[DEFAULT_GROUP_COLUMN]]
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
-                        mdir = Path(self.figure_output_dir).parent / "ml" / lvl / ttype
+                        mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
                         catboost_feature_selection(
                             metadata=y,
                             features=X,
@@ -819,6 +942,7 @@ class _AnalysisManager(_ProcessingMixin):
                             method=method,
                         )
                         prog.update(child_task, completed=1)
+                        prog.remove_task(child_task)
                         prog.update(parent_task, advance=1)
 
 class AmpliconData:  
