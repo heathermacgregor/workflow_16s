@@ -61,8 +61,8 @@ class MofNCompleteColumn(ProgressColumn):
     def render(self, task: Task) -> Text:
         """Render the progress count as 'completed/total'"""
         return Text(
-            f"{task.completed}/{task.total}".ljust(10),
-            style="aqua",
+            f"{task.completed}/{task.total}".rjust(10),
+            style="cyan",
             justify="right"
         )
         
@@ -72,7 +72,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
     return Progress(
         SpinnerColumn(
             "dots", 
-            style="lime", 
+            style="bright_green", 
             speed=0.75
         ),
         TextColumn(
@@ -83,16 +83,23 @@ def get_progress_bar(transient: bool = False) -> Progress:
         BarColumn(
             bar_width=40,
             style="black", # Background color
-            complete_style="yellow",
+            complete_style="bright_yellow",
             finished_style="green",
             #pulse_style="yellow"
         ),
         TextColumn(
             "[progress.percentage]{task.percentage:>3.0f}%".rjust(5), 
-            style="lime"
+            style="bright_green"
+        ),
+        TextColumn(
+            "E".rjust(2), 
+            style="yellow"
         ),
         TimeElapsedColumn(),
-        #TextColumn("⏱️", style="bold deep_sky_blue1"),
+        TextColumn(
+            "R".rjust(2), 
+            style="cyan"
+        ),
         TimeRemainingColumn(),
         transient=transient,
         expand=False
