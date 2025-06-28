@@ -961,8 +961,8 @@ class AmpliconData:
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
         
-        dl = _DataLoader(cfg, project_dir, mode, verbose)
-        self.meta, self.table = dl.meta, dl.table
+        data = _DataLoader(cfg, project_dir, mode, verbose)
+        self.meta, self.table = data.meta, data.table
        
         # Process
         self.figure_output_dir = Path(self.project_dir.figures)
@@ -979,6 +979,7 @@ class AmpliconData:
        
         # Figures
         self.figures: Dict[str, Any] = {}
+        
         if cfg["figures"].get("map", False):
             self.plotter = Plotter(
                 cfg, 
@@ -1005,5 +1006,6 @@ class AmpliconData:
         self.top_contaminated_features = am.top_contaminated_features
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
+        
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
