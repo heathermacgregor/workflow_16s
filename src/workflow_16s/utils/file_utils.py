@@ -982,7 +982,7 @@ def import_merged_meta_tsv(
     else:
         with get_progress_bar() as progress:
             task = progress.add_task(
-                "[white]Loading metadata files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                "Loading metadata files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(meta_paths)
             )
             for path in meta_paths:
@@ -1065,7 +1065,7 @@ def import_merged_table_biom(
     else:
         with get_progress_bar() as progress:
             task = progress.add_task(
-                "[white]Loading BIOM files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                "Loading BIOM files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(biom_paths)
             )
             for path in biom_paths:
