@@ -42,6 +42,19 @@ def create_progress() -> Progress:
         expand=False
     )
 
+# ============================== CUSTOM PROGRESS COLUMN ============================== #
+
+class MofNCompleteColumn(ProgressColumn):
+    """Renders completed count/total (e.g., '3/10') with bold styling"""
+    
+    def render(self, task: Task) -> Text:
+        """Render the progress count as 'completed/total'"""
+        return Text(
+            f"{task.completed}/{task.total}",
+            style="bold deep_sky_blue1",
+            justify="right"
+        )
+
 def get_progress_bar() -> Progress:
     """Return a customized progress bar with consistent styling"""
     return Progress(
