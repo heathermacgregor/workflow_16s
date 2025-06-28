@@ -88,7 +88,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
             #pulse_style="yellow"
         ),
         TextColumn(
-            "[progress.percentage]{task.percentage:>3.0f}%", 
+            "[progress.percentage]{task.percentage:>3.0f}%".rjust(5), 
             style="lime"
         ),
         TimeElapsedColumn(),
