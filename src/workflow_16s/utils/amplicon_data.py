@@ -824,7 +824,7 @@ class _AnalysisManager(_ProcessingMixin):
         for feat in self.top_pristine_features:
             feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
 
-    def _run_statistical_tests(self) -> None:
+        def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
