@@ -123,7 +123,7 @@ class _ProcessingMixin:
                 )
                 for level in levels:
                     child_task = progress.add_task(
-                        f"Processing {level} level",
+                        f"Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
                         parent=parent_task,
                         total=1
                     )
@@ -213,7 +213,7 @@ class StatisticalAnalyzer:
             return results
 
         parent_task = progress.add_task(
-            "Running statistical tests...", 
+            "Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
             total=len(enabled_tests), 
             parent=task_id
         )
@@ -242,7 +242,7 @@ class StatisticalAnalyzer:
                 progress.update(child_task, completed=1)
                 progress.remove_task(child_task)
                 progress.update(parent_task, advance=1)
-                
+        progress.remove_task(parent_task)        
         return results
 
     def get_effect_size(
@@ -328,7 +328,7 @@ class Ordination:
                 )
 
             parent_task = progress.add_task(
-                f"Running {transformation} ordination...",
+                f"Running {transformation} ordination...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(tests_to_run),
                 parent=task_id
             )
@@ -471,7 +471,7 @@ class Plotter:
         
         with get_progress_bar() as progress:
             parent_task = progress.add_task(
-                "Generating sample maps...",
+                "Generating sample maps...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(valid_columns)
             )
             
@@ -579,43 +579,46 @@ class _DataLoader(_ProcessingMixin):
 
     def _get_metadata_paths(self) -> List[Path]:
         paths: List[Path] = []
-        for bi in self._get_biom_paths():
-            ds_dir = bi.parent if bi.is_file() else bi
-            tail = ds_dir.parts[-6:-1]
-            mp = Path(
-               self.project_dir.metadata_per_dataset
-            ).joinpath(*tail, "sample-metadata.tsv")
+        metadata_base = Path(self.project_dir.metadata_per_dataset)
+        qiime_base = Path(self.project_dir.qiime_data_per_dataset)
+        
+        for biom_path in self._get_biom_paths():
+            # Go up 3 levels from the BIOM file
+            region_dir = biom_path.parent.parent.parent
+            try:
+                # Compute relative path from qiime_base to region_dir
+                rel_path = region_dir.relative_to(qiime_base)
+            except ValueError:
+                continue  # Skip if not under qiime_base
+            
+            # Construct metadata path directly
+            mp = metadata_base / rel_path / "sample-metadata.tsv"
             if mp.exists():
                 paths.append(mp)
+        
         if self.verbose:
             logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
         return paths
-
+    
     def _load_metadata(self) -> None:
-        paths = self._get_metadata_paths()
-        self.meta = import_merged_meta_tsv(paths, None, self.verbose)
-
+        self.meta = import_merged_meta_tsv(
+            self._get_metadata_paths(), 
+            None, 
+            self.verbose
+        )
+    
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = "/".join([
-            "*",
-            "*",
-            "*",
-            "*",
-            "FWD_*_REV_*",
-            table_dir,
-            "feature-table.biom",
-        ])
-        globbed = glob.glob(
-           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
-           recursive=True
-        )
+        base_path = Path(self.project_dir.qiime_data_per_dataset)
+        
+        # Construct pattern using pathlib for efficient globbing
+        pattern = base_path / "**" / "*" / "*" / "*" / "*" / "FWD_*_REV_*" / table_dir / "feature-table.biom"
+        paths = list(base_path.glob(str(pattern.relative_to(base_path))))
+        
         if self.verbose:
-            logger.info(
-               f"Found {RED}{len(globbed)}{RESET} feature tables"
-            )
-        return [Path(p) for p in globbed]
-
+            logger.info(f"Found {RED}{len(paths)}{RESET} feature tables")
+        return paths
+    
     def _load_biom_table(self) -> None:
         biom_paths = self._get_biom_paths()
         if not biom_paths:
@@ -683,7 +686,7 @@ class _TableProcessor(_ProcessingMixin):
         for table_type in list(self.tables.keys()):
             base_table = self.tables[table_type][self.mode]
             self.tables[table_type] = self._run_processing_step(
-                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...",
+                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 collapse_taxa,
                 levels,
                 (),
@@ -842,6 +845,7 @@ class _AnalysisManager(_ProcessingMixin):
                         self.stats.setdefault(table_type, {}).setdefault(key, {})[level] = df
                     
                     prog.update(level_task, completed=len(enabled_for_table_type))
+                    prog.remove_task(level_task)
                     prog.update(parent_task, advance=len(enabled_for_table_type))
 
     def _identify_top_features(self, stats_results: Dict) -> None:
@@ -865,7 +869,7 @@ class _AnalysisManager(_ProcessingMixin):
         
         with get_progress_bar() as prog:
             parent_task = prog.add_task(
-                "[white]Ordination analysis".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                "Ordination analysis...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
             )
             
@@ -911,7 +915,7 @@ class _AnalysisManager(_ProcessingMixin):
             
         with get_progress_bar() as prog:
             parent_task = prog.add_task(
-                "[white]ML feature selection".ljust(DEFAULT_PROGRESS_TEXT_N),
+                "Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot
             )
             
@@ -944,6 +948,7 @@ class _AnalysisManager(_ProcessingMixin):
                         prog.update(child_task, completed=1)
                         prog.remove_task(child_task)
                         prog.update(parent_task, advance=1)
+                        
 
 class AmpliconData:  
     def __init__(
@@ -975,8 +980,14 @@ class AmpliconData:
         # Figures
         self.figures: Dict[str, Any] = {}
         if cfg["figures"].get("map", False):
-            self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
+            self.plotter = Plotter(
+                cfg, 
+                self.figure_output_dir, 
+                verbose
+            )
+            self.figures["map"] = self.plotter.generate_sample_map(
+                self.meta
+            )
            
         # Analysis
         am = _AnalysisManager(
