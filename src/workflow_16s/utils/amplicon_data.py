@@ -1,4 +1,5 @@
 # ===================================== IMPORTS ====================================== #
+
 import glob
 import logging
 import warnings
@@ -25,12 +26,14 @@ from rich.progress import (
 from rich.text import Text
 
 # ================================== LOCAL IMPORTS =================================== #
+
 from workflow_16s.utils.biom import (
     collapse_taxa,
     convert_to_biom,
     export_h5py,
     presence_absence,
 )
+from workflow_16s.utils.progress import get_progress_bar
 from workflow_16s.utils.file_utils import (
     import_merged_table_biom,
     import_merged_meta_tsv,
@@ -74,10 +77,12 @@ from workflow_16s.models.feature_selection import (
 )
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore")
 
 # ================================= DEFAULT VALUES =================================== #
+
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -85,40 +90,6 @@ RESET = "\033[0m"
 DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
-
-# ============================== CUSTOM PROGRESS COLUMN ============================== #
-class MofNCompleteColumn(ProgressColumn):
-    """Renders completed count/total (e.g., '3/10') with bold styling"""
-    
-    def render(self, task: Task) -> Text:
-        """Render the progress count as 'completed/total'"""
-        return Text(
-            f"{task.completed}/{task.total}",
-            style="bold deep_sky_blue1",
-            justify="right"
-        )
-
-# ============================== PROGRESS BAR HELPER ================================ #
-def get_progress_bar() -> Progress:
-    """Return a customized progress bar with consistent styling"""
-    return Progress(
-        SpinnerColumn("dots", style="bold yellow", speed=0.5),
-        TextColumn("[bold cyan]{task.description}", justify="right"),
-        MofNCompleteColumn(),
-        BarColumn(
-            bar_width=None,
-            style="blue",
-            complete_style="bold reverse green",
-            finished_style="bold reverse blue",
-            pulse_style="yellow"
-        ),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%", style="bright_magenta"),
-        TimeElapsedColumn(),
-        TextColumn("⏱️", style="bold deep_sky_blue1"),
-        TimeRemainingColumn(),
-        transient=True,
-        expand=True
-    )
 
 # ==================================== FUNCTIONS ===================================== #
 def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
