@@ -18,8 +18,11 @@ from rich.progress import (
     BarColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    TaskID
+    TaskID,
+    ProgressColumn,
+    Task
 )
+from rich.text import Text
 
 # ================================== LOCAL IMPORTS =================================== #
 from workflow_16s.utils.biom import (
@@ -83,6 +86,40 @@ DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+# ============================== CUSTOM PROGRESS COLUMN ============================== #
+class MofNCompleteColumn(ProgressColumn):
+    """Renders completed count/total (e.g., '3/10') with bold styling"""
+    
+    def render(self, task: Task) -> Text:
+        """Render the progress count as 'completed/total'"""
+        return Text(
+            f"{task.completed}/{task.total}",
+            style="bold deep_sky_blue1",
+            justify="right"
+        )
+
+# ============================== PROGRESS BAR HELPER ================================ #
+def get_progress_bar() -> Progress:
+    """Return a customized progress bar with consistent styling"""
+    return Progress(
+        SpinnerColumn("dots", style="bold yellow", speed=0.5),
+        TextColumn("[bold cyan]{task.description}", justify="right"),
+        MofNCompleteColumn(),
+        BarColumn(
+            bar_width=None,
+            style="blue",
+            complete_style="bold reverse green",
+            finished_style="bold reverse blue",
+            pulse_style="yellow"
+        ),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%", style="bright_magenta"),
+        TimeElapsedColumn(style="bold italic cyan"),
+        TextColumn("⏱️", style="bold deep_sky_blue1"),
+        TimeRemainingColumn(style="bold italic green"),
+        transient=True,
+        expand=True
+    )
+
 # ==================================== FUNCTIONS ===================================== #
 def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
     spacer = " " * indent
@@ -113,23 +150,14 @@ class _ProcessingMixin:
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 self._log_level_action(lvl, log_template, log_action)
         else:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeElapsedColumn(),
-                TimeRemainingColumn(),
-                transient=True,
-                expand=True,
-            ) as progress:
+            with get_progress_bar() as progress:
                 parent_task = progress.add_task(
                     f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
                     total=len(levels),
                 )
                 for lvl in levels:
                     child_task = progress.add_task(
-                        f"Processing {lvl} level",
+                        f"[gold1]Processing {lvl} level",
                         parent=parent_task,
                         total=1
                     )
@@ -387,16 +415,7 @@ class Plotter:
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            expand=True,
-        ) as progress:
+        with get_progress_bar() as progress:
             parent_task = progress.add_task(
                 "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(valid_columns))
@@ -486,9 +505,15 @@ class _DataLoader(_ProcessingMixin):
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def _get_metadata_paths(self) -> List[Path]:
-        # Optimized path search using pathlib
-        pattern = Path(self.project_dir.metadata_per_dataset) / "**" / "sample-metadata.tsv"
-        paths = list(pattern.parent.glob(pattern.name))
+        paths: List[Path] = []
+        for bi in self._get_biom_paths():
+            ds_dir = bi.parent if bi.is_file() else bi
+            tail = ds_dir.parts[-6:-1]
+            mp = Path(
+               self.project_dir.metadata_per_dataset
+            ).joinpath(*tail, "sample-metadata.tsv")
+            if mp.exists():
+                paths.append(mp)
         if self.verbose:
             logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
         return paths
@@ -499,8 +524,24 @@ class _DataLoader(_ProcessingMixin):
 
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = Path(self.project_dir.qiime_data_per_dataset) / "*/*/*/*/FWD_*_REV_*" / table_dir / "feature-table.biom"
-        return list(pattern.parent.glob(pattern.name))
+        pattern = "/".join([
+            "*",
+            "*",
+            "*",
+            "*",
+            "FWD_*_REV_*",
+            table_dir,
+            "feature-table.biom",
+        ])
+        globbed = glob.glob(
+           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+           recursive=True
+        )
+        if self.verbose:
+            logger.info(
+               f"Found {RED}{len(globbed)}{RESET} feature tables"
+            )
+        return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
         biom_paths = self._get_biom_paths()
@@ -678,16 +719,7 @@ class _AnalysisManager(_ProcessingMixin):
             for ttype, lvls in self.tables.items()
         )
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            expand=True,
-        ) as prog:
+        with get_progress_bar() as prog:
             parent_task = prog.add_task(
                 "[white]Statistical testing".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot
@@ -739,16 +771,7 @@ class _AnalysisManager(_ProcessingMixin):
         if not tot:
             return
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            expand=True,
-        ) as prog:
+        with get_progress_bar() as prog:
             parent_task = prog.add_task(
                 "[white]Ordination analysis".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
@@ -793,16 +816,7 @@ class _AnalysisManager(_ProcessingMixin):
         if not tot:
             return
             
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            expand=True,
-        ) as prog:
+        with get_progress_bar() as prog:
             parent_task = prog.add_task(
                 "[white]ML feature selection".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot
