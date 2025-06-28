@@ -11,7 +11,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np 
 import pandas as pd
 from biom.table import Table
-from rich.progress import Progress, TaskID
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    TaskID
+)
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -21,7 +29,6 @@ from workflow_16s.utils.biom import (
     export_h5py,
     presence_absence,
 )
-from workflow_16s.utils.progress import create_progress
 from workflow_16s.utils.file_utils import (
     import_merged_table_biom,
     import_merged_meta_tsv,
@@ -116,7 +123,16 @@ class _ProcessingMixin:
                 processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
                 self._log_level_action(lvl, log_template, log_action)
         else:
-            with create_progress(transient=True) as progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                transient=True,
+                expand=True,
+            ) as progress:
                 # Create parent task for entire process
                 parent_task = progress.add_task(
                     f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
@@ -492,7 +508,16 @@ class Plotter:
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
         
-        with create_progress(transient=True) as progress:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as progress:
             parent_task = progress.add_task(
                 "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(valid_columns))
@@ -550,7 +575,16 @@ class TopFeaturesAnalyzer:
                     if not sig_df.empty:
                         sig_results[tbl_type][tname][lvl] = sig_df
         
-        with create_progress(transient=True) as progress:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as progress:
             parent_task = progress.add_task(
                 "[white]Analyzing top features".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(levels))
@@ -738,7 +772,16 @@ class _TableProcessor(_ProcessingMixin):
         enabled = [filtering, norm, clr]
         n_steps = sum(enabled)
         tbl = self.tables["raw"][self.mode]
-        with create_progress(transient=True) as prog:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as prog:
             # Create parent task for entire preprocessing
             parent_task = prog.add_task(
                 f"[white]Preprocessing {self.mode} tables".ljust(DEFAULT_PROGRESS_TEXT_N), 
@@ -811,7 +854,16 @@ class _TableProcessor(_ProcessingMixin):
         tot = sum(len(v) for v in self.tables.values())
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
-        with create_progress(transient=True) as prog:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as prog:
             parent_task = prog.add_task(
                 "[white]Exporting feature tables".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
@@ -903,7 +955,16 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
             tot += len(lvls) * len(enabled_for_ttype)
         
-        with create_progress(transient=True) as prog:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as prog:
             parent_task = prog.add_task(
                 "[white]Statistical testing".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot
@@ -965,7 +1026,16 @@ class _AnalysisManager(_ProcessingMixin):
         if not tot:
             return
         
-        with create_progress(transient=True) as prog:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as prog:
             parent_task = prog.add_task(
                 "[white]Ordination analysis".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
@@ -1017,7 +1087,16 @@ class _AnalysisManager(_ProcessingMixin):
             ml_cfg = self.cfg.get("ml", {})
             tot += len(lvls) * len(ml_cfg.get("methods", ["rfe"]))
             
-        with create_progress(transient=True) as prog:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            expand=True,
+        ) as prog:
             parent_task = prog.add_task(
                 "[white]ML feature selection".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=tot
