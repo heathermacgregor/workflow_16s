@@ -2,6 +2,7 @@
 
 import glob
 import logging
+import time
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -111,18 +112,21 @@ class _ProcessingMixin:
         if getattr(self, "verbose", False):
             logger.info(f"{process_name}")
             for level in levels:
+                start_time = time.time()  # Start timer
                 processed[level] = process_func(
                     get_source(level), level, *func_args
                 )
-                self._log_level_action(level, log_template, log_action)
+                duration = time.time() - start_time  # Calculate duration
+                self._log_level_action(level, log_template, log_action, duration)
         else:
-            logger.info(f"{process_name}")
+            logger.debug(f"{process_name}")
             with get_progress_bar() as progress:
                 parent_task = progress.add_task(
                     process_name,
                     total=len(levels),
                 )
                 for level in levels:
+                    start_time = time.time()  # Start timer
                     child_task = progress.add_task(
                         f"Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
                         parent=parent_task,
@@ -131,10 +135,11 @@ class _ProcessingMixin:
                     processed[level] = process_func(
                         get_source(level), level, *func_args
                     )
+                    duration = time.time() - start_time  # Calculate duration
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
-                    self._log_level_action(level, log_template, log_action)
+                    self._log_level_action(level, log_template, log_action, duration)
                     
         return processed
 
@@ -143,11 +148,19 @@ class _ProcessingMixin:
         level: str,
         template: Optional[str] = None,
         action: Optional[str] = None,
+        duration: Optional[float] = None,  # Add duration parameter
     ) -> None:
+        message = ""
         if template:
-            logger.info(template.format(level=level))
+            message = template.format(level=level)
         elif action:
-            logger.info(f"{level} {action}")
+            message = f"{level} {action}"
+            
+        if message:
+            if duration is not None:
+                # Append duration to the message
+                message += f" in {duration:.2f} seconds"
+            logger.debug(message)
             
 
 class StatisticalAnalyzer:
