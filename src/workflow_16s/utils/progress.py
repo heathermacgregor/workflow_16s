@@ -41,3 +41,34 @@ def create_progress() -> Progress:
         TimeRemainingColumn(),#style="red"),
         expand=False
     )
+
+def get_progress_bar() -> Progress:
+    """Return a customized progress bar with consistent styling"""
+    return Progress(
+        SpinnerColumn(
+            "dots", 
+            style="lime", 
+            speed=0.75
+        ),
+        TextColumn(
+            "[white]{task.description}", 
+            justify="left"
+        ),
+        MofNCompleteColumn(),
+        BarColumn(
+            bar_width=40,
+            style="black", # Background color
+            complete_style="aqua",
+            finished_style="green",
+            #pulse_style="yellow"
+        ),
+        TextColumn(
+            "[progress.percentage]{task.percentage:>3.0f}%", 
+            style="lime"
+        ),
+        TimeElapsedColumn(),
+        #TextColumn("⏱️", style="bold deep_sky_blue1"),
+        TimeRemainingColumn(),
+        transient=True,
+        expand=True
+    )
