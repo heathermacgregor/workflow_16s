@@ -505,8 +505,24 @@ class _DataLoader(_ProcessingMixin):
 
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = Path(self.project_dir.qiime_data_per_dataset) / "*/*/*/*/FWD_*_REV_*" / table_dir / "feature-table.biom"
-        return list(pattern.parent.glob(pattern.name))
+        pattern = "/".join([
+            "*",
+            "*",
+            "*",
+            "*",
+            "FWD_*_REV_*",
+            table_dir,
+            "feature-table.biom",
+        ])
+        globbed = glob.glob(
+           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+           recursive=True
+        )
+        if self.verbose:
+            logger.info(
+               f"Found {RED}{len(globbed)}{RESET} feature tables"
+            )
+        return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
         biom_paths = self._get_biom_paths()
