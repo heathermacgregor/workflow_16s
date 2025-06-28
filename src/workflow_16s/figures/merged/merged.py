@@ -215,8 +215,22 @@ def sample_map_categorical(
         margin=dict(l=5, r=5, t=5, b=5),
         showlegend=False, 
         font_size=40,
-        xaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True),
-        yaxis=dict(showticklabels=False, zeroline=True, showline=True, linewidth=2, linecolor='black', mirror=True)
+        xaxis=dict(
+            showticklabels=False, 
+            zeroline=True, 
+            showline=True, 
+            linewidth=2, 
+            linecolor='black', 
+            mirror=True
+        ),
+        yaxis=dict(
+            showticklabels=False, 
+            zeroline=True, 
+            showline=True, 
+            linewidth=2, 
+            linecolor='black', 
+            mirror=True
+        )
     )  
     
     # Update marker appearance
@@ -226,8 +240,11 @@ def sample_map_categorical(
     if output_dir:
         output_path = Path(output_dir)
         file_stem = f"sample_map.{color_col}"
-        print(file_stem)
-        plotly_show_and_save(fig=fig, show=show, output_path=output_path / file_stem)
+        plotly_show_and_save(
+            fig=fig, 
+            show=show, 
+            output_path=output_path / file_stem
+        )
 
         # Save legend
         legend_path = output_path / f"{file_stem}.legend.png"
