@@ -14,6 +14,7 @@ from rich.progress import (
     TimeRemainingColumn,
     track, 
 )
+from rich.text import Text
 
 # ==================================== FUNCTIONS ===================================== #
 
