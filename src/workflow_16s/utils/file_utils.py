@@ -38,7 +38,7 @@ from workflow_16s.utils.biom import (
     presence_absence, 
     filter_presence_absence
 )
-from workflow_16s.utils.progress import create_progress
+from workflow_16s.utils.progress import get_progress_bar
 
 from workflow_16s.utils import df_utils
 from workflow_16s.utils.dir_utils import SubDirs
@@ -587,7 +587,7 @@ class AmpliconData:
         }
         
         # Execute configured tests
-        with create_progress() as progress:
+        with get_progress_bar() as progress:
             main_task = progress.add_task(
                 f"[white]Analyzing {table_type} tables".ljust(DEFAULT_PROGRESS_TEXT_N),
                 total=len(enabled_tests)
@@ -980,7 +980,7 @@ def import_merged_meta_tsv(
             except Exception as e:
                 logger.error(f"Failed to load {path}: {e!r}")
     else:
-        with create_progress() as progress:
+        with get_progress_bar() as progress:
             task = progress.add_task(
                 "[white]Loading metadata files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(meta_paths)
@@ -1063,7 +1063,7 @@ def import_merged_table_biom(
             except Exception as e:
                 logger.error(f"Failed to load {path}: {str(e)}")
     else:
-        with create_progress() as progress:
+        with get_progress_bar() as progress:
             task = progress.add_task(
                 "[white]Loading BIOM files...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(biom_paths)
