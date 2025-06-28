@@ -579,46 +579,43 @@ class _DataLoader(_ProcessingMixin):
 
     def _get_metadata_paths(self) -> List[Path]:
         paths: List[Path] = []
-        metadata_base = Path(self.project_dir.metadata_per_dataset)
-        qiime_base = Path(self.project_dir.qiime_data_per_dataset)
-        
-        for biom_path in self._get_biom_paths():
-            # Go up 3 levels from the BIOM file
-            region_dir = biom_path.parent.parent.parent
-            try:
-                # Compute relative path from qiime_base to region_dir
-                rel_path = region_dir.relative_to(qiime_base)
-            except ValueError:
-                continue  # Skip if not under qiime_base
-            
-            # Construct metadata path directly
-            mp = metadata_base / rel_path / "sample-metadata.tsv"
+        for bi in self._get_biom_paths():
+            ds_dir = bi.parent if bi.is_file() else bi
+            tail = ds_dir.parts[-6:-1]
+            mp = Path(
+               self.project_dir.metadata_per_dataset
+            ).joinpath(*tail, "sample-metadata.tsv")
             if mp.exists():
                 paths.append(mp)
-        
         if self.verbose:
             logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
         return paths
-    
+
     def _load_metadata(self) -> None:
-        self.meta = import_merged_meta_tsv(
-            self._get_metadata_paths(), 
-            None, 
-            self.verbose
-        )
-    
+        paths = self._get_metadata_paths()
+        self.meta = import_merged_meta_tsv(paths, None, self.verbose)
+
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        base_path = Path(self.project_dir.qiime_data_per_dataset)
-        
-        # Construct pattern using pathlib for efficient globbing
-        pattern = base_path / "**" / "*" / "*" / "*" / "*" / "FWD_*_REV_*" / table_dir / "feature-table.biom"
-        paths = list(base_path.glob(str(pattern.relative_to(base_path))))
-        
+        pattern = "/".join([
+            "*",
+            "*",
+            "*",
+            "*",
+            "FWD_*_REV_*",
+            table_dir,
+            "feature-table.biom",
+        ])
+        globbed = glob.glob(
+           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+           recursive=True
+        )
         if self.verbose:
-            logger.info(f"Found {RED}{len(paths)}{RESET} feature tables")
-        return paths
-    
+            logger.info(
+               f"Found {RED}{len(globbed)}{RESET} feature tables"
+            )
+        return [Path(p) for p in globbed]
+
     def _load_biom_table(self) -> None:
         biom_paths = self._get_biom_paths()
         if not biom_paths:
