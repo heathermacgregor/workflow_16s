@@ -1,903 +1,594 @@
+"""
+16S rRNA Analysis Pipeline 
+Full Implementation
+Comprehensive workflow for microbial community analysis from raw data to processed 
+results.
+"""
 # ===================================== IMPORTS ====================================== #
-import glob
-import logging
-import warnings
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 
-# Third‑Party Imports
-import numpy as np 
+# Standard Library Imports
+import itertools
+import logging
+import os
+import re
+import shutil
+import subprocess
+import sys
+import warnings
+from collections import Counter
+from pathlib import Path
+from pprint import pprint
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+# Third-Party Imports
 import pandas as pd
-from biom.table import Table
 from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    TaskID,
-    ProgressColumn
 )
-from rich.text import Text
 
 # ================================== LOCAL IMPORTS =================================== #
-from workflow_16s.utils.biom import (
-    collapse_taxa,
-    convert_to_biom,
-    export_h5py,
-    presence_absence,
-)
-from workflow_16s.utils.file_utils import (
-    import_merged_table_biom,
-    import_merged_meta_tsv,
-    filter_and_reorder_biom_and_metadata,
-)
-from workflow_16s.stats.utils import (
-    clr_transform_table,
-    filter_table,
-    normalize_table,
-    merge_table_with_metadata,
-    table_to_dataframe,
-)
-from workflow_16s.stats.tests import (
-    fisher_exact_bonferroni,
-    kruskal_bonferroni,
-    mwu_bonferroni,
-    ttest,
-)
-from workflow_16s.stats.beta_diversity import (
-    pcoa as calculate_pcoa,
-    pca as calculate_pca,
-    tsne as calculate_tsne,
-    umap as calculate_umap,
-)
-from workflow_16s.figures.merged.merged import (
-    mds as plot_mds,
-    pca as plot_pca,
-    pcoa as plot_pcoa,
-    sample_map_categorical,
-)
-from workflow_16s.function.faprotax import (
-    get_faprotax_parsed,
-    faprotax_functions_for_taxon,
-)
-from workflow_16s.models.feature_selection import (
-    filter_data,
-    grid_search,
-    perform_feature_selection,
-    save_feature_importances,
-    catboost_feature_selection,
-)
 
-# ========================== INITIALISATION & CONFIGURATION ========================== #
-logger = logging.getLogger("workflow_16s")
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+from workflow_16s import ena
+from workflow_16s.config import get_config
+from workflow_16s.figures.html_report import HTMLReport
+from workflow_16s.logger import setup_logging 
+from workflow_16s.metadata.per_dataset import SubsetDataset
+from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
+from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
+from workflow_16s.utils.amplicon_data import AmpliconData
+
+# ================================ CUSTOM TMP CONFIG ================================= #
+
+import workflow_16s.custom_tmp_config
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+# Suppress warnings
 warnings.filterwarnings("ignore")
+# Set Pandas options
+pd.set_option('display.max_colwidth', None)
+pd.set_option('future.no_silent_downcasting', True)
 
 # ================================= DEFAULT VALUES =================================== #
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
-DEFAULT_PROGRESS_TEXT_N = 65
-DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
-DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-# ============================== CUSTOM PROGRESS COLUMN ============================== #
-class MofNCompleteColumn(ProgressColumn):
-    """Renders completed count/total (e.g., '3/10') with bold styling"""
-    
-    def render(self, task: "Task") -> Text:
-        """Render the progress count as 'completed/total'"""
-        return Text(
-            f"{task.completed}/{task.total}",
-            style="bold deep_sky_blue1",
-            justify="right"
-        )
-
-# ============================== PROGRESS BAR HELPER ================================ #
-def get_progress_bar() -> Progress:
-    """Return a customized progress bar with consistent styling"""
-    return Progress(
-        SpinnerColumn("dots", style="bold yellow", speed=0.5),
-        TextColumn("[bold cyan]{task.description}", justify="right"),
-        MofNCompleteColumn(),  # New count column
-        BarColumn(
-            bar_width=None,
-            style="blue",
-            complete_style="bold reverse green",
-            finished_style="bold reverse blue",
-            pulse_style="yellow"
-        ),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%", style="bright_magenta"),
-        TimeElapsedColumn(style="bold italic cyan"),
-        TextColumn("⏱️", style="bold deep_sky_blue1"),
-        TimeRemainingColumn(style="bold italic green"),
-        transient=True,
-        expand=True
-    )
+DEFAULT_CONFIG = (
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+    / "references"
+    / "config.yaml"
+)
+DEFAULT_PER_DATASET = (
+    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))) 
+    / "src" / "workflow_16s" / "qiime" / "workflows" / "per_dataset_run.py"
+)
+DEFAULT_CLASSIFIER = "silva-138-99-515-806"
+DEFAULT_N = 20
+DEFAULT_MAX_WORKERS_ENA = 16
+DEFAULT_MAX_WORKERS_SEQKIT = 8
+ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # ==================================== FUNCTIONS ===================================== #
-def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
-    spacer = " " * indent
-    tname = type(obj).__name__
-    print(f"{spacer}{'|-- ' if indent else ''}{_key} ({tname})")
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            print_structure(v, indent + 4, k)
-    elif isinstance(obj, list) and obj:
-        print_structure(obj[0], indent + 4, "[0]")
 
-# ===================================== CLASSES ====================================== #
-class _ProcessingMixin:
-    def _run_processing_step(
-        self,
-        process_name: str,
-        process_func: Callable,
-        levels: List[str],
-        func_args: tuple,
-        get_source: Callable[[str], Table],
-        log_template: Optional[str] = None,
-        log_action: Optional[str] = None,
-    ) -> Dict[str, Table]:
-        processed: Dict[str, Table] = {}
-        if getattr(self, "verbose", False):
-            logger.info(f"{process_name}")
-            for lvl in levels:
-                processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
-                self._log_level_action(lvl, log_template, log_action)
-        else:
-            with get_progress_bar() as progress:
-                parent_task = progress.add_task(
-                    f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
-                    total=len(levels),
-                )
-                for lvl in levels:
-                    child_task = progress.add_task(
-                        f"[gold1]Processing {lvl} level",
-                        parent=parent_task,
-                        total=1
-                    )
-                    processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
-                    progress.update(child_task, completed=1)
-                    progress.update(parent_task, advance=1)
-        return processed
-
-    def _log_level_action(
-        self,
-        level: str,
-        template: Optional[str] = None,
-        action: Optional[str] = None,
-    ) -> None:
-        if template:
-            logger.info(template.format(level=level))
-        elif action:
-            logger.info(f"{level} {action}")
-
-class StatisticalAnalyzer:
-    TEST_CONFIG = {
-        "fisher": {
-            "key": "fisher",
-            "func": fisher_exact_bonferroni,
-            "name": "Fisher exact (Bonferroni)",
-            "effect_col": "proportion_diff",
-            "alt_effect_col": "odds_ratio",
-        },
-        "ttest": {
-            "key": "ttest",
-            "func": ttest,
-            "name": "Student t‑test",
-            "effect_col": "mean_difference",
-            "alt_effect_col": "cohens_d",
-        },
-        "mwu_bonferroni": {
-            "key": "mwub",
-            "func": mwu_bonferroni,
-            "name": "Mann–Whitney U (Bonferroni)",
-            "effect_col": "effect_size_r",
-            "alt_effect_col": "median_difference",
-        },
-        "kruskal_bonferroni": {
-            "key": "kwb",
-            "func": kruskal_bonferroni,
-            "name": "Kruskal–Wallis (Bonferroni)",
-            "effect_col": "epsilon_squared",
-            "alt_effect_col": None,
-        },
-    }
-
-    def __init__(self, cfg: Dict, verbose: bool = False):
-        self.cfg = cfg
-        self.verbose = verbose
-
-    def run_tests(
-        self,
-        table: Table,
-        metadata: pd.DataFrame,
-        group_column: str,
-        group_values: List[Any],
-        enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> Dict[str, Any]:
-        results: Dict[str, Any] = {}
-        # Pre-align samples once instead of in each test
-        table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-        
-        if not (progress and task_id):
-            for tname in enabled_tests:
-                if tname not in self.TEST_CONFIG:
-                    continue
-                cfg = self.TEST_CONFIG[tname]
-                if self.verbose:
-                    logger.info(f"Running {cfg['name']}...")
-                results[cfg["key"]] = cfg["func"](
-                    table=table,
-                    metadata=metadata,
-                    group_column=group_column,
-                    group_column_values=group_values,
-                )
-            return results
-
-        parent_task = progress.add_task(
-            "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-            total=len(enabled_tests), 
-            parent=task_id
-        )
-        
-        for tname in enabled_tests:
-            if tname not in self.TEST_CONFIG:
-                continue
-            cfg = self.TEST_CONFIG[tname]
-            
-            child_task = progress.add_task(
-                f"[cyan]{cfg['name']}",
-                parent=parent_task,
-                total=1
-            )
-            
-            try:
-                if self.verbose:
-                    logger.info(f"Running {cfg['name']}...")
-                results[cfg["key"]] = cfg["func"](
-                    table=table,
-                    metadata=metadata,
-                    group_column=group_column,
-                    group_column_values=group_values,
-                )
-            finally:
-                progress.update(child_task, completed=1)
-                progress.update(parent_task, advance=1)
-                
-        return results
-
-    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
-        if test_name not in self.TEST_CONFIG:
-            return None
-        cfg = self.TEST_CONFIG[test_name]
-        for col in (cfg["effect_col"], cfg["alt_effect_col"]):
-            if col and col in row:
-                return row[col]
-        return None
-
-class Ordination:
-    TEST_CONFIG = {
-        "pca": {"key": "pca", "func": calculate_pca, "plot_func": plot_pca, "name": "PCA"},
-        "pcoa": {"key": "pcoa", "func": calculate_pcoa, "plot_func": plot_pcoa, "name": "PCoA"},
-        "tsne": {"key": "tsne", "func": calculate_tsne, "plot_func": plot_mds, "name": "t‑SNE", "plot_kwargs": {"mode": "TSNE"}},
-        "umap": {"key": "umap", "func": calculate_umap, "plot_func": plot_mds, "name": "UMAP", "plot_kwargs": {"mode": "UMAP"}},
-    }
-
-    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
-        self.cfg = cfg
-        self.verbose = verbose
-        self.figure_output_dir = Path(output_dir)
-        self.results: Dict[str, Any] = {}
-        self.figures: Dict[str, Any] = {}
-
-    def run_tests(
-        self,
-        table: Table,
-        metadata: pd.DataFrame,
-        color_col: str,
-        symbol_col: str,
-        transformation: str,
-        enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-        **kwargs,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        trans_cfg = self.cfg.get("ordination", {}).get(transformation, {})
-        tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
-        if not tests_to_run:
-            return {}, {}
-
-        try:
-            table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
-            
-            if not (progress and task_id):
-                return self._run_without_progress(table, metadata, color_col, symbol_col, 
-                                                transformation, tests_to_run, trans_cfg, kwargs)
-
-            parent_task = progress.add_task(
-                f"[white]Running {transformation} ordination".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(tests_to_run),
-                parent=task_id
-            )
-            
-            results, figures = {}, {}
-            for tname in tests_to_run:
-                cfg = self.TEST_CONFIG[tname]
-                child_task = progress.add_task(
-                    f"[cyan]{cfg['name']}",
-                    parent=parent_task,
-                    total=1
-                )
-                
-                try:
-                    res, fig = self._run_ordination_method(cfg, table, metadata, color_col, 
-                                                        symbol_col, transformation, trans_cfg, kwargs)
-                    results[cfg["key"]] = res
-                    figures[cfg["key"]] = fig
-                except Exception as e:
-                    logger.error(f"Failed {tname} for {transformation}: {e}")
-                    figures[cfg["key"]] = None
-                finally:
-                    progress.update(child_task, completed=1)
-                    progress.update(parent_task, advance=1)
-            return results, figures
-        finally:
-            pass  # Cleanup if needed
-            
-    def _run_without_progress(self, table, metadata, color_col, symbol_col, 
-                            transformation, tests_to_run, trans_cfg, kwargs):
-        results, figures = {}, {}
-        for tname in tests_to_run:
-            cfg = self.TEST_CONFIG[tname]
-            try:
-                res, fig = self._run_ordination_method(cfg, table, metadata, color_col, 
-                                                    symbol_col, transformation, trans_cfg, kwargs)
-                results[cfg["key"]] = res
-                figures[cfg["key"]] = fig
-            except Exception as e:
-                logger.error(f"Failed {tname} for {transformation}: {e}")
-                figures[cfg["key"]] = None
-        return results, figures
-        
-    def _run_ordination_method(self, cfg, table, metadata, color_col, symbol_col, 
-                            transformation, trans_cfg, kwargs):
-        method_params = {}
-        if cfg["key"] == "pcoa":
-            method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
-        
-        ord_res = cfg["func"](table=table, **method_params)
-        
-        pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
-        if cfg["key"] == 'pca':
-            pkwargs.update({
-                'components': ord_res['components'],
-                'proportion_explained': ord_res['exp_var_ratio']
-            })
-        elif cfg["key"] == 'pcoa':
-            pkwargs.update({
-                'components': ord_res.samples,
-                'proportion_explained': ord_res.proportion_explained
-            })
-        else:  # t-SNE or UMAP
-            pkwargs['df'] = ord_res
-            
-        fig, _ = cfg["plot_func"](
-            metadata=metadata,
-            color_col=color_col,
-            symbol_col=symbol_col,
-            transformation=transformation,
-            output_dir=self.figure_output_dir,
-            **pkwargs
-        )
-        return ord_res, fig
-
-class Plotter:
-    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
-        self.cfg = cfg
-        self.output_dir = output_dir
-        self.verbose = verbose
-        self.color_columns = cfg["figures"].get("map_columns", [
-            "dataset_name", "nuclear_contamination_status",
-            "env_feature", "env_material", "country"
-        ])
-
-    def generate_sample_map(self, metadata: pd.DataFrame, **kwargs) -> Dict[str, Any]:
-        valid_columns = [col for col in self.color_columns if col in metadata]
-        missing = set(self.color_columns) - set(valid_columns)
-        if missing and self.verbose:
-            logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
-        
-        with get_progress_bar() as progress:
-            parent_task = progress.add_task(
-                "[white]Generating sample maps".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(valid_columns))
-            
-            figs = {}
-            for col in valid_columns:
-                child_task = progress.add_task(
-                    f"[cyan]Mapping {col}",
-                    parent=parent_task,
-                    total=1
-                )
-                fig, _ = sample_map_categorical(
-                    metadata=metadata,
-                    output_dir=self.output_dir,
-                    color_col=col,
-                    **kwargs,
-                )
-                figs[col] = fig
-                progress.update(child_task, completed=1)
-                progress.update(parent_task, advance=1)
-        return figs
-
-class TopFeaturesAnalyzer:
-    def __init__(self, cfg: Dict, verbose: bool = False):
-        self.cfg = cfg
-        self.verbose = verbose
-
-    def analyze(
-        self,
-        stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
-        group_column: str,
-    ) -> Tuple[List[Dict], List[Dict]]:
-        san = StatisticalAnalyzer(self.cfg, self.verbose)
-        all_features = []
-        
-        # Collect all significant features efficiently
-        for tbl_type, tests in stats_results.items():
-            for tname, t_res in tests.items():
-                for lvl, df in t_res.items():
-                    sig_df = df[df["p_value"] < 0.05].copy()
-                    if sig_df.empty:
-                        continue
-                    
-                    # Vectorized effect size calculation
-                    sig_df["effect"] = sig_df.apply(
-                        lambda row: san.get_effect_size(tname, row), axis=1
-                    )
-                    sig_df = sig_df.dropna(subset=["effect"])
-                    
-                    # Collect features in a list
-                    for _, row in sig_df.iterrows():
-                        all_features.append({
-                            "feature": row["feature"],
-                            "level": lvl,
-                            "table_type": tbl_type,
-                            "test": tname,
-                            "effect": row["effect"],
-                            "p_value": row["p_value"],
-                            "effect_dir": "positive" if row["effect"] > 0 else "negative"
-                        })
-        
-        # Efficient sorting and filtering
-        cont_feats = [f for f in all_features if f["effect"] > 0]
-        pris_feats = [f for f in all_features if f["effect"] < 0]
-        
-        cont_feats.sort(key=lambda d: (-d["effect"], d["p_value"]))
-        pris_feats.sort(key=lambda d: (d["effect"], d["p_value"]))  # More negative is stronger
-        
-        return cont_feats[:100], pris_feats[:100]
-
-class _DataLoader(_ProcessingMixin):
-    MODE_CONFIG = {"asv": ("table", "asv"), "genus": ("table_6", "l6")}
-
-    def __init__(self, cfg: Dict, project_dir: Any, mode: str, verbose: bool = False):
-        self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
-        self._validate_mode()
-        self._load_metadata()
-        self._load_biom_table()
-        self._filter_and_align()
-
-    # Public after run
-    meta: pd.DataFrame
-    table: Table
-
-    def _validate_mode(self) -> None:
-        if self.mode not in self.MODE_CONFIG:
-            raise ValueError(f"Invalid mode: {self.mode}")
-
-    def _get_metadata_paths(self) -> List[Path]:
-        paths: List[Path] = []
-        for bi in self._get_biom_paths():
-            ds_dir = bi.parent if bi.is_file() else bi
-            tail = ds_dir.parts[-6:-1]
-            mp = Path(
-               self.project_dir.metadata_per_dataset
-            ).joinpath(*tail, "sample-metadata.tsv")
-            if mp.exists():
-                paths.append(mp)
-        if self.verbose:
-            logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
-        return paths
-
-    def _load_metadata(self) -> None:
-        paths = self._get_metadata_paths()
-        self.meta = import_merged_meta_tsv(paths, None, self.verbose)
-
-    def _get_biom_paths(self) -> List[Path]:
-        table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = "/".join([
-            "*",
-            "*",
-            "*",
-            "*",
-            "FWD_*_REV_*",
-            table_dir,
-            "feature-table.biom",
-        ])
-        globbed = glob.glob(
-           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
-           recursive=True
-        )
-        if self.verbose:
-            logger.info(
-               f"Found {RED}{len(globbed)}{RESET} feature tables"
-            )
-        return [Path(p) for p in globbed]
-
-    def _load_biom_table(self) -> None:
-        biom_paths = self._get_biom_paths()
-        if not biom_paths:
-            raise FileNotFoundError("No BIOM files found")
-        self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
-
-    def _filter_and_align(self) -> None:
-        orig_n = self.table.shape[1]
-        self.table, self.meta = filter_and_reorder_biom_and_metadata(
-            self.table, self.meta, "#sampleid"
-        )
-        ftype = "genera" if self.mode == "genus" else "ASVs"
-        logger.info(f"Loaded metadata: {RED}{self.meta.shape[0]}{RESET} samples × {RED}{self.meta.shape[1]}{RESET} cols")
-        logger.info(f"Loaded feature table: {RED}{self.table.shape[1]} ({orig_n}){RESET} samples × {RED}{self.table.shape[0]}{RESET} {ftype}")
-
-class _TableProcessor(_ProcessingMixin):
-    def __init__(
-        self,
-        cfg: Dict,
-        table: Table,
-        mode: str,
-        meta: pd.DataFrame,
-        figure_output_dir: Path,
-        project_dir: Any,
-        verbose: bool,
-    ) -> None:
-        self.cfg, self.mode, self.verbose = cfg, mode, verbose
-        self.meta = meta
-        self.figure_output_dir = figure_output_dir
-        self.project_dir = project_dir
-        self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
-        self._apply_preprocessing()
-        self._collapse_taxa()
-        self._create_presence_absence()
-        self._save_tables()
-
-    def _apply_preprocessing(self) -> None:
-        feat_cfg = self.cfg["features"]
-        tbl = self.tables["raw"][self.mode]
-        
-        # Pipeline processing to avoid intermediate copies
-        if feat_cfg["filter"]:
-            tbl = filter_table(tbl)
-            self.tables.setdefault("filtered", {})[self.mode] = tbl
-        
-        if feat_cfg["normalize"]:
-            tbl = normalize_table(tbl, axis=1)
-            self.tables.setdefault("normalized", {})[self.mode] = tbl
-        
-        if feat_cfg["clr_transform"]:
-            tbl = clr_transform_table(tbl)
-            self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
-
-    def _collapse_taxa(self) -> None:
-        lvls = ["phylum", "class", "order", "family", "genus"]
-        for ttype in list(self.tables.keys()):
-            base_tbl = self.tables[ttype][self.mode]
-            self.tables[ttype] = self._run_processing_step(
-                f"Collapsing taxonomy for {ttype.replace('_', ' ')} tables...",
-                collapse_taxa,
-                lvls,
-                (),
-                lambda lvl, _tbl=base_tbl: _tbl,
-                log_template=f"Collapsed {ttype} to {{level}}",
-            )
-
-    def _create_presence_absence(self) -> None:
-        if not self.cfg["features"]["presence_absence"]:
-            return
-        lvls = ["phylum", "class", "order", "family", "genus"]
-        raw_tbl = self.tables["raw"][self.mode]
-        self.tables["presence_absence"] = self._run_processing_step(
-            "Converting to presence/absence...",
-            presence_absence,
-            lvls,
-            (),
-            lambda lvl: raw_tbl,
-        )
-
-    def _save_tables(self) -> None:
-        base = Path(self.project_dir.data) / "merged" / "table"
-        base.mkdir(parents=True, exist_ok=True)
-        
-        # Prepare all export tasks
-        export_tasks = []
-        for ttype, lvls in self.tables.items():
-            tdir = base / ttype
-            tdir.mkdir(parents=True, exist_ok=True)
-            for lvl, tbl in lvls.items():
-                out = tdir / lvl / "feature-table.biom"
-                out.parent.mkdir(parents=True, exist_ok=True)
-                export_tasks.append((tbl, out, ttype, lvl))
-        
-        # Parallel export
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            for tbl, out, ttype, lvl in export_tasks:
-                futures.append(executor.submit(export_h5py, tbl, out))
-            
-            # Wait for completion
-            for future in futures:
-                future.result()
-
-class _AnalysisManager(_ProcessingMixin):
-    def __init__(
-        self,
-        cfg: Dict,
-        tables: Dict[str, Dict[str, Table]],
-        meta: pd.DataFrame,
-        figure_output_dir: Path,
-        verbose: bool,
-        faprotax_enabled: bool = False,
-        fdb: Optional[Dict] = None,
-    ) -> None:
-        self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
-        self.figure_output_dir = figure_output_dir
-        self.stats: Dict[str, Any] = {}
-        self.ordination: Dict[str, Any] = {}
-        self.models: Dict[str, Any] = {}
-        self.top_contaminated_features: List[Dict] = []
-        self.top_pristine_features: List[Dict] = []
-        self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
-        self._faprotax_cache = {}
-        
-        # Process in stages and clear intermediates
-        self._run_statistical_tests()
-        stats_copy = deepcopy(self.stats)
-        
-        self._identify_top_features(stats_copy)
-        del stats_copy  # Free memory
-        
-        self._run_ordination()
-        
-        # Keep only necessary tables for ML
-        ml_tables = {t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}}
-        self._run_ml_feature_selection(ml_tables)
-        del ml_tables
-        
-        # Add FAPROTAX annotations only to top features
-        if self.faprotax_enabled and self.top_contaminated_features:
-            self._annotate_top_features()
-        
-    def _get_cached_faprotax(self, taxon: str) -> List[str]:
-        if taxon not in self._faprotax_cache:
-            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
-                taxon, self.fdb, include_references=False
-            )
-        return self._faprotax_cache[taxon]
+def find_required_files(test):
+    """Check for required output files in QIIME directories"""
+    targets = [
+        ("feature-table.biom", "table"),
+        ("feature-table.biom", "table_6"),
+        ("dna-sequences.fasta", "rep-seqs"),
+        ("taxonomy.tsv", "taxonomy"),
+        ("sample-metadata.tsv", None)
+    ]
+    qiime_base = test.get('qiime')
+    metadata_base = test.get('metadata')
+    found = {}
     
-    def _annotate_top_features(self) -> None:
-        """Batch process annotations to minimize DB lookups"""
-        all_taxa = {f['feature'] for f in self.top_contaminated_features + self.top_pristine_features}
-        
-        # Batch lookup
-        with ThreadPoolExecutor() as executor:
-            results = list(executor.map(self._get_cached_faprotax, all_taxa))
-        
-        taxon_map = dict(zip(all_taxa, results))
-        
-        for feat in self.top_contaminated_features:
-            feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
-        
-        for feat in self.top_pristine_features:
-            feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
+    for fname, subdir in targets:
+        if subdir:
+            base = qiime_base
+            pattern = f"{subdir}/{fname}"
+        else:
+            base = metadata_base
+            pattern = fname
+            
+        if not base:
+            continue
+            
+        for p in Path(base).rglob(pattern):
+            if p.is_file():
+                key = f"{subdir}/{fname}" if subdir else fname
+                found[key] = p.resolve()
+                break
+                
+    required_keys = [f"{subdir}/{fname}" if subdir else fname 
+                    for fname, subdir in targets]
+    return found if all(k in found for k in required_keys) else None
 
-    def _run_statistical_tests(self) -> None:
-        grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        grp_vals = self.cfg.get("group_values", [True, False])
-        san = StatisticalAnalyzer(self.cfg, self.verbose)
-        
-        # Calculate total tests
-        tot = sum(
-            len(lvls) * len([t for t, flag in self.cfg["stats"].get(ttype, {}).items() if flag])
-            for ttype, lvls in self.tables.items()
+# ================================= QIIME EXECUTION ================================== #
+
+def get_conda_env_path(env_name_substring):
+    """"""
+    try:
+        result = subprocess.run(["conda", "env", "list"], capture_output=True, 
+                                text=True, check=True)
+        for line in result.stdout.splitlines():
+            if env_name_substring in line:
+                return line.split()[-1]
+        raise ValueError(
+            f"Conda environment containing '{env_name_substring}' not found."
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error finding conda environment: {e}")
+
+def execute_per_dataset_qiime_workflow(
+    qiime_dir: Union[str, Path],
+    metadata_path: Union[str, Path],
+    manifest_path: Union[str, Path],
+    subset: Dict[str, Union[str, Path, bool, dict]],
+    cfg: Dict[str, Any],
+    seq_paths: List[Path],
+    logger: logging.Logger,
+) -> Dict[str, Path]:
+    """
+    Execute QIIME2 workflow with comprehensive error handling.
+    """
+    qiime_env_path = get_conda_env_path("qiime2-amplicon-2024.10")
+    qiime_config = cfg["qiime2"]["per_dataset"]
+    
+    # Get configured script path and check existence
+    script_path = Path(qiime_config["script_path"])
+    if not script_path.exists():
+        logger.warning(f"Script not found at '{script_path}', using default")
+        script_path = DEFAULT_PER_DATASET
+    
+    command = [
+        "conda", "run",
+        "--prefix", qiime_env_path,
+        "python", str(script_path),  
+        "--qiime_dir", str(qiime_dir),
+        "--metadata_tsv", str(metadata_path),
+        "--manifest_tsv", str(manifest_path),
+        "--library_layout", str(subset["library_layout"]).lower(),
+        "--instrument_platform", str(subset["instrument_platform"]).lower(),
+        "--fwd_primer", str(subset["pcr_primer_fwd_seq"]),
+        "--rev_primer", str(subset["pcr_primer_rev_seq"]),
+        "--classifier_dir", str(qiime_config["taxonomy"]["classifier_dir"]),
+        "--classifier", str(qiime_config["taxonomy"]["classifier"]),
+        "--classify_method", 
+        str(qiime_config["taxonomy"]["classify_method"]).lower(),
+        "--retain_threshold", str(qiime_config["filter"]["retain_threshold"]),
+        "--chimera_method", str(qiime_config["denoise"]["chimera_method"]),
+        "--denoise_algorithm", str(qiime_config["denoise"]["denoise_algorithm"]),
+    ]
+    
+    if qiime_config.get("hard_rerun", False):
+        command.append("--hard_rerun")
+    if qiime_config.get("trim", {}).get("run", False):
+        command.append("--trim_sequences")
+
+    try:
+        command_str = str(' '.join(command)).replace(" --", " \\\n--")
+        command_str = command_str.replace(" python ", " \\\npython ")
+        logger.info(
+            f"\nExecuting QIIME2 command:\n"
+            f"{command_str}"
+        )
+        result = subprocess.run(
+            command, 
+            check=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True
+        )
+        logger.debug("QIIME STDOUT:\n%s", result.stdout)
+        logger.debug("QIIME STDERR:\n%s", result.stderr)
+    except subprocess.CalledProcessError as e:
+        error_msg = (
+            f"QIIME2 execution failed with code {e.returncode}:\n"
+            f"Command: {e.cmd}\n"
+            f"Error output:\n{e.stderr}"
+        )
+        logger.error(error_msg)
+        raise RuntimeError("QIIME2 workflow failure") from e
+
+    expected_outputs = [
+        metadata_path,
+        manifest_path,
+        qiime_dir / "table" / "feature-table.biom",
+        qiime_dir / "rep-seqs" / "dna-sequences.fasta",
+        qiime_dir / qiime_config["taxonomy"]["classifier"] / "taxonomy" 
+        / "taxonomy.tsv",
+        qiime_dir / "table_6" / "feature-table.biom",
+    ]
+    missing_outputs = file_utils.missing_output_files(expected_outputs)
+    if missing_outputs:
+        missing_outputs_txt = '\n'.join(['  • ' + str(item) for item in missing_outputs])
+        raise RuntimeError(
+            f"Missing required QIIME outputs: \n"
+            f"{missing_outputs_txt}"
+        )
+    return {
+        "metadata": metadata_path,
+        "manifest": manifest_path,
+        "table": expected_outputs[2],
+        "rep_seqs": expected_outputs[3],
+        "taxonomy": expected_outputs[4],
+        "table_6": expected_outputs[5],
+    }
+
+# ================================ SEQUENCE PROCESSING =============================== #
+
+def process_sequences(
+    cfg: Dict[str, Any],
+    subset_dirs: Dict[str, Path],
+    subset: Dict[str, Any],
+    info: Any,
+    logger: logging.Logger,
+) -> Tuple[List[Path], pd.DataFrame]:
+    """Handle ENA sequence processing pipeline."""
+    run_fastqc = cfg.get("run_fastqc", False)
+    run_seqkit = cfg.get("run_seqkit", False)
+    run_cutadapt = cfg.get("run_cutadapt", False)
+
+    dataset_type = info.get('dataset_type', '').upper()
+
+    if dataset_type == 'ENA':
+        # Initialize ENA sequence fetcher
+        fetcher = ena.api.SequenceFetcher(
+            fastq_dir=subset_dirs["raw_seqs"], 
+            max_workers=cfg.get("max_workers", DEFAULT_MAX_WORKERS_ENA)
+        )
+    
+        # Download sequences and process them if samples are pooled
+        if not subset["sample_pooling"]:
+            raw_seqs_paths = fetcher.download_run_fastq_concurrent(
+                subset["metadata"].set_index("run_accession", drop=False)
+            )
+        elif subset["sample_pooling"]:
+            raw_seqs_paths = fetcher.download_run_fastq_concurrent(
+                subset["ena_runs"]
+            )
+            processor = ena.api.PooledSamplesProcessor(
+                metadata_df=subset["metadata"],
+                output_dir=Path(subset_dirs["raw_seqs"]) / 'sorted'
+            )
+            processor.process_all(subset_dirs["raw_seqs"])
+            raw_seqs_paths = processor.sample_file_map    
+    else:
+        raise ValueError(
+            f"Dataset type '{dataset_type}' not recognized. "
+            f"Expected 'ENA'."
         )
         
-        with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                "[white]Statistical testing".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=tot
+    if run_cutadapt:    
+        seq_analyzer = BasicStats()
+        raw_stats = seq_analyzer.calculate_statistics(raw_seqs_paths)
+        raw_df = pd.DataFrame(
+            [{"Metric": k, "Raw": v} for k, v in raw_stats["overall"].items()]
+        )
+
+    if run_fastqc:
+        FastQC(
+            fastq_paths=raw_seqs_paths, output_dir=subset_dirs["raw_seqs"]
+        ).run_pipeline()
+
+    if run_seqkit:
+        raw_stats_seqkit = SeqKit(
+            max_workers=DEFAULT_MAX_WORKERS_SEQKIT
+        ).analyze_samples(raw_seqs_paths)
+        stats = raw_stats_seqkit["overall"]
+        report = (
+            f"\n=== Summary ===\n"
+            f"{'Total Samples'.ljust(DEFAULT_N)}: {stats['total_samples']}\n"
+            f"{'Total Files'.ljust(DEFAULT_N)}: {stats['total_files']}\n"
+            f"{'Total Sequences'.ljust(DEFAULT_N)}: {stats['total_sequences']:,}\n"
+            f"{'Total Bases'.ljust(DEFAULT_N)}: {stats['total_bases']:,}\n\n"
+            "=== Length Distribution ===\n"
+            f"{'Average Length'.ljust(DEFAULT_N)}: {stats['avg_length']:.2f}\n"
+            f"{'Minimum Length'.ljust(DEFAULT_N)}: {stats['min_length']}\n"
+            f"{'Maximum Length'.ljust(DEFAULT_N)}: {stats['max_length']}\n\n"
+            "=== Most Common Lengths ===\n"
+            + "".join(
+                f"{rank:>2}. {length:3} bp - {count:>9,} sequences\n"
+                for rank, (length, count) in enumerate(
+                    stats["most_common_lengths"], start=1
+                )
             )
-            
-            for ttype, lvls in self.tables.items():
-                self.stats[ttype] = {}
-                tests_config = self.cfg["stats"].get(ttype, {})
-                enabled_for_ttype = [test for test, flag in tests_config.items() if flag]
-                
-                for lvl, tbl in lvls.items():
-                    if self.verbose:
-                        logger.info(f"Processing {ttype} table at {lvl} level")
+        )
+        logger.info(report)
+        
+    # Set final paths
+    processed_paths = raw_seqs_paths
+    
+    stats_df = pd.DataFrame()
+    if run_cutadapt:
+        trimmed_seqs_paths, cutadapt_results, cutadapt_proc_time = CutAdapt(
+            fastq_dir=subset_dirs["raw_seqs"],
+            trimmed_fastq_dir=subset_dirs["trimmed_seqs"],
+            primer_fwd=subset["pcr_primer_fwd_seq"],
+            primer_rev=subset["pcr_primer_rev_seq"],
+            start_trim=cfg["cutadapt"]["start_trim"],
+            end_trim=cfg["cutadapt"]["end_trim"],
+            start_q_cutoff=cfg["cutadapt"]["start_q_cutoff"],
+            end_q_cutoff=cfg["cutadapt"]["end_q_cutoff"],
+            min_seq_length=cfg["cutadapt"]["min_seq_length"],
+            cores=cfg["cutadapt"]["n_cores"],
+            rerun=True,
+            region=subset["target_subfragment"],
+        ).run(fastq_paths=raw_seqs_paths)
+        # Update final paths
+        processed_paths = trimmed_seqs_paths
+        trimmed_stats = seq_analyzer.calculate_statistics(trimmed_seqs_paths)
+        trimmed_df = pd.DataFrame(
+            [{"Metric": k, "Trimmed": v} for k, v in trimmed_stats["overall"].items()]
+        )
+        stats_df = pd.merge(raw_df, trimmed_df, on="Metric")
+        stats_df["Percent Change"] = (
+            (stats_df["Trimmed"] - stats_df["Raw"]) / stats_df["Raw"]
+        ) * 100
+        numeric_cols = ["Raw", "Trimmed", "Percent Change"]
+        stats_df[numeric_cols] = stats_df[numeric_cols].applymap(
+            lambda x: (f"{x:.2f}%" if isinstance(x, float) and x != x
+                       else f"{x:.2f}" if x else ""))
+        stats_df = stats_df.dropna(axis=1, how="all")
+
+    if run_cutadapt and run_fastqc:
+        FastQC(
+            fastq_paths=processed_paths, 
+            output_dir=subset_dirs["trimmed_seqs"]
+        ).run_pipeline()
+
+    if run_cutadapt and run_seqkit:
+        SeqKit(
+            max_workers=DEFAULT_MAX_WORKERS_SEQKIT
+        ).analyze_samples(processed_paths)
+
+    if run_cutadapt:
+        return processed_paths, stats_df
+        
+    else:
+        return raw_seqs_paths, pd.DataFrame()
+
+# =================================== MAIN WORKFLOW ================================== #
+
+def upstream(cfg, logger) -> None:
+    """Orchestrate entire analysis workflow."""    
+    try:
+        per_dataset_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
+        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+        
+        project_dir = dir_utils.SubDirs(cfg["project_dir"])
+        
+        datasets = file_utils.load_datasets_list(cfg["dataset_list"])
+        datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
+        try:
+            success_subsets = []
+            success_subsets_qiime_outputs = {}
+            failed_subsets = []
+
+            # Iterate through datasets
+            for dataset in datasets:
+                try:
+                    # Break the datasets into subsets that need to be processed 
+                    # differentially 
+                    info = file_utils.fetch_first_match(datasets_info, dataset)
+                    dataset_type = info.get('dataset_type', '').upper()
                     
-                    tbl, m = filter_and_reorder_biom_and_metadata(tbl, self.meta)
+                    subsets = SubsetDataset(cfg)
+                    subsets.process(dataset, info)
                     
-                    level_task = prog.add_task(
-                        f"[cyan]{ttype}/{lvl}",
-                        parent=parent_task,
-                        total=len(enabled_for_ttype))
-                    
-                    res = san.run_tests(
-                        tbl, m, grp_col, grp_vals, 
-                        enabled_for_ttype, prog, level_task
+                    for subset in subsets.success:
+                        try:
+                            sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
+                            subset_name = (
+                                subset["dataset"] + '.' 
+                                + subset["instrument_platform"].lower() + '.' 
+                                + subset["library_layout"].lower() + '.' 
+                                + subset["target_subfragment"].lower() + '.' 
+                                + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
+                                + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
+                            )
+                            
+                            subset_dirs = project_dir.subset_dirs(subset=subset)
+
+                            metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
+                            manifest_path = subset_dirs["qiime"] / "manifest.tsv"
+
+                            # Write the sample metadata file
+                            file_utils.write_metadata_tsv(subset["metadata"], metadata_path)
+                            logger.info(f"Wrote metadata tsv to: {metadata_path}")
+
+                            # If QIIME2 is not in hard rerun mode, check whether 
+                            # the necessary outputs for downstream processing already exist.
+                            # If they do, we can skip this step.
+                            if not per_dataset_hard_rerun:
+                                required_paths = {
+                                    "metadata": metadata_path,
+                                    "manifest": manifest_path,
+                                    "table": subset_dirs["qiime"] / "table" 
+                                    / "feature-table.biom",
+                                    "rep_seqs": subset_dirs["qiime"] / "rep-seqs" 
+                                    / "dna-sequences.fasta",
+                                    "taxonomy": subset_dirs["qiime"] / classifier 
+                                    / "taxonomy" / "taxonomy.tsv",
+                                    "table_6": subset_dirs["qiime"] / "table_6" 
+                                    / "feature-table.biom",
+                                }
+                                if all(p.exists() for p in required_paths.values()):
+                                    success_subsets_qiime_outputs[subset_name] = required_paths
+                                    success_subsets.append(subset_name)
+                                    logger.info(
+                                        f"⏭️  Skipping processing for "
+                                        f"{subset_name.replace('.', '/')} "
+                                        f"- existing outputs found"
+                                    )
+                                    continue
+                                    
+                            seq_paths, stats = process_sequences(
+                                cfg, subset_dirs, subset, info, logger
+                            )
+
+                            # Write the manifest file
+                            file_utils.write_manifest_tsv(seq_paths, manifest_path)
+
+                            qiime_outputs = execute_per_dataset_qiime_workflow(
+                                subset_dirs["qiime"], metadata_path, manifest_path, 
+                                subset, cfg, seq_paths, logger
+                            )
+
+                            success_subsets_qiime_outputs[subset["dataset"]] = qiime_outputs
+                            success_subsets.append(subset["dataset"])
+
+                            def safe_delete(file_path):
+                                try:
+                                    file_path.unlink(missing_ok=True)
+                                except Exception as e:
+                                    logger.warning(f"Error deleting {file_path}: {e}")
+
+                            
+                            if cfg.get("clean_fastq", True) and dataset_type == 'ENA':
+                                dir_types = ["raw_seqs", "trimmed_seqs"]
+                                for dir_type in dir_types:
+                                    dir_path = subset_dirs[dir_type]
+                                    if not dir_path.exists():
+                                        continue
+                                    for fastq_file in dir_path.glob("*.fastq.gz"):
+                                        safe_delete(fastq_file)
+                                logger.info(
+                                    f"Cleaned up intermediate files for subset: "
+                                    f"{subset['dataset']}"
+                                    )
+
+                        except Exception as subset_error:
+                            logger.error(
+                                f"❌ Failed processing subset {subset['dataset']}: "
+                                f"{str(subset_error)}"
+                            )
+                            failed_subsets.append((subset["dataset"], str(subset_error)))
+
+                except Exception as dataset_error:
+                    logger.error(
+                        f"❌ Failed processing dataset {dataset}: {str(dataset_error)}"
                     )
-                    
-                    for key, df in res.items():
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
-                    
-                    prog.update(level_task, completed=len(enabled_for_ttype))
-                    prog.update(parent_task, advance=len(enabled_for_ttype))
+                    failed_subsets.append((dataset, str(dataset_error)))
 
-    def _identify_top_features(self, stats_results: Dict) -> None:
-        tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
-            stats_results, DEFAULT_GROUP_COLUMN
-        )
-        
-        if self.verbose:
-            logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
-            logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
+            logger.info(
+                f"📢 Processing complete!\n"
+                f"    Success: {len(success_subsets)}\n"
+                f"    Failure: {len(failed_subsets)}"
+            )
+            if failed_subsets:
+                failed_subsets_report = '\n'.join(
+                    ["ℹ️ Failure details:"] 
+                    + [f"    • {dataset}: {error}" 
+                       for dataset, error in failed_subsets]
+                )
+                logger.info(failed_subsets_report)
 
-    def _run_ordination(self) -> None:
-        KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
-        tot = sum(
-            len(lvls) * len([m for m in KNOWN_METHODS if self.cfg.get("ordination", {}).get(ttype, {}).get(m, False)])
-            for ttype, lvls in self.tables.items()
-        )
-        if not tot:
-            return
-        
-        with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                "[white]Ordination analysis".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=tot
+            metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
+                            for i in success_subsets_qiime_outputs.values()]
+            metadata_df = pd.concat(metadata_dfs)
+            
+            # Sort the DataFrame columns alphabetically
+            metadata_df = metadata_df.sort_index(axis=1)
+            # Calculate the percentage of non-null values for each column
+            completeness = metadata_df.notna().mean() * 100
+            logger.info(f"\n{completeness}")
+
+            table_dfs = [file_utils.import_table_biom(i['table_6']) 
+                         for i in success_subsets_qiime_outputs.values()]
+            table_df = pd.concat(table_dfs)
+            logger.info(f"Feature table shape: {table_df.shape}")
+            #for df in table_dfs: 
+            #    logger.info(f"Feature table shape: {df.shape}")
+
+        except Exception as global_error:
+            logger.critical(
+                f"❌ Fatal pipeline error: {str(global_error)}", 
+                exc_info=True
+            )
+            raise
+    except Exception as e:
+        print(f"Critical initialization error: {str(e)}")
+
+
+def downstream(cfg, logger) -> None:
+    project_dir = dir_utils.SubDirs(cfg["project_dir"])
+
+    figures = {}
+    if cfg.get("ml", {}).get("enable", False):
+        required = ["table_type", "level", "method", "num_features"]
+        if not all(k in cfg["ml"] for k in required):
+            logger.error("Missing required ML configuration - disabling ML")
+            cfg["ml"]["enable"] = False    
+    data = AmpliconData(
+        cfg=cfg,
+        project_dir=project_dir,
+        mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
+        verbose=False
+    )
+    print(data.figures.keys())
+    #print(data.meta['nuclear_contamination_status'].value_counts())
+    #print(data.stats)
+    #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
+    
+
+    '''
+    for level in ["phylum"]:
+        figures["pcoa"][level] = {}
+        for metric in ["braycurtis"]:
+            figures["pcoa"][level][metric] = {}
+            logger.info("Calculating PCoA...")
+
+            meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
+            
+            pcoa_results = beta_diversity.pcoa(
+                table=table,
+                metric=metric,
+                n_dimensions=3
             )
             
-            for ttype, lvls in self.tables.items():
-                self.ordination[ttype] = {}
-                self.figures[ttype] = {}
-                ord_config = self.cfg.get("ordination", {}).get(ttype, {})
-                enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
-                
-                for lvl, tbl in lvls.items():
-                    ordir = self.figure_output_dir / lvl / ttype
-                    ordn = Ordination(self.cfg, ordir, False)
-                    
-                    level_task = prog.add_task(
-                        f"[cyan]{ttype}/{lvl}",
-                        parent=parent_task,
-                        total=len(enabled_methods))
-                    
-                    res, figs = ordn.run_tests(
-                        table=tbl,
-                        metadata=self.meta,
-                        color_col="dataset_name",
-                        symbol_col="nuclear_contamination_status",
-                        transformation=ttype,
-                        enabled_tests=enabled_methods,
-                        progress=prog,
-                        task_id=level_task,
-                    )
-                    self.ordination[ttype][lvl] = res
-                    self.figures[ttype][lvl] = figs
-                    
-                    prog.update(level_task, completed=len(enabled_methods))
-                    prog.update(parent_task, advance=len(enabled_methods))
-                
-    def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
-        tot = sum(
-            len(lvls) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
-            for ttype, lvls in ml_tables.items()
-        )
-        if not tot:
-            return
+            logger.info("Plotting PCoA...")
             
-        with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                "[white]ML feature selection".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=tot
+            pcoa_plot = pcoa(
+                components = pcoa_results.samples, 
+                proportion_explained = pcoa_results.proportion_explained, 
+                metadata=meta,
+                metric=metric,
+                color_col='dataset_name', 
+                color_map=color_maps['dataset_name'],
+                symbol_col='nuclear_contamination_status',
+                show=False,
+                output_dir=Path(project_dir.figures) / 'merged' / 'l2', 
+                transformation=None,
+                x=1, 
+                y=2
             )
-            
-            for ttype, lvls in ml_tables.items():
-                self.models[ttype] = {}
-                ml_cfg = self.cfg.get("ml", {})
-                methods = ml_cfg.get("methods", ["rfe"])
-                
-                for lvl, tbl in lvls.items():
-                    for method in methods:
-                        child_task = prog.add_task(
-                            f"[cyan]{ttype}/{lvl}/{method}",
-                            parent=parent_task,
-                            total=1
-                        )
-                        
-                        X = table_to_dataframe(tbl)
-                        X.index = X.index.str.lower()
-                        y = self.meta.set_index("#sampleid")[[DEFAULT_GROUP_COLUMN]]
-                        idx = X.index.intersection(y.index)
-                        X, y = X.loc[idx], y.loc[idx]
-                        mdir = Path(self.figure_output_dir).parent / "ml" / lvl / ttype
-                        catboost_feature_selection(
-                            metadata=y,
-                            features=X,
-                            output_dir=mdir,
-                            contamination_status_col=DEFAULT_GROUP_COLUMN,
-                            method=method,
-                        )
-                        prog.update(child_task, completed=1)
-                        prog.update(parent_task, advance=1)
+            figures["pcoa"][level][metric][color_col] = pcoa_plot
+    
+    '''
+    #print(figures)
+    #writer = HTMLReport(figures)
+    #writer.write_report()
 
-class AmpliconData:  
-    def __init__(
-        self, 
-        cfg: Dict, 
-        project_dir: Any, 
-        mode: str = "genus", 
-        verbose: bool = False
-    ):
-        self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
-        self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
+def main(config_path: Path = DEFAULT_CONFIG) -> None:
+    """Orchestrate entire analysis workflow."""    
+    cfg = get_config(config_path)
+    project_dir = dir_utils.SubDirs(cfg["project_dir"])
+    logger = setup_logging(project_dir.logs)
         
-        dl = _DataLoader(cfg, project_dir, mode, verbose)
-        self.meta, self.table = dl.meta, dl.table
-       
-        # Process
-        self.figure_output_dir = Path(self.project_dir.figures)
-        tp = _TableProcessor(
-            cfg, 
-            self.table, 
-            mode, 
-            self.meta, 
-            self.figure_output_dir, 
-            project_dir, 
-            verbose
-        )
-        self.tables = tp.tables
-       
-        # Figures
-        self.figures: Dict[str, Any] = {}
-        if cfg["figures"].get("map", False):
-            self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
-           
-        # Analysis
-        am = _AnalysisManager(
-            cfg, 
-            self.tables, 
-            self.meta, 
-            self.figure_output_dir, 
-            verbose, 
-            cfg.get("faprotax", False), 
-            self.fdb
-        )
-        self.stats = am.stats
-        self.ordination = am.ordination
-        self.models = am.models
-        self.top_contaminated_features = am.top_contaminated_features
-        self.top_pristine_features = am.top_pristine_features
-        self.figures.update(am.figures)
-        if verbose:
-            logger.info(GREEN + "AmpliconData analysis finished." + RESET)
+    upstream_enabled = cfg["upstream"]
+    downstream_enabled = cfg["downstream"]
+    if upstream_enabled:
+        upstream(cfg, logger)
+    if downstream_enabled:
+        downstream(cfg, logger)
+        
+if __name__ == "__main__":
+    main()
