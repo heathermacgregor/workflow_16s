@@ -113,9 +113,9 @@ def get_progress_bar() -> Progress:
             pulse_style="yellow"
         ),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%", style="bright_magenta"),
-        TimeElapsedColumn(style="bold italic cyan"),
+        TimeElapsedColumn(),
         TextColumn("⏱️", style="bold deep_sky_blue1"),
-        TimeRemainingColumn(style="bold italic green"),
+        TimeRemainingColumn(),
         transient=True,
         expand=True
     )
@@ -592,7 +592,7 @@ class _TableProcessor(_ProcessingMixin):
             tbl = normalize_table(tbl, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = tbl
         
-        if feat_cfg["clr_transform"]:
+        if feat极fg["clr_transform"]:
             tbl = clr_transform_table(tbl)
             self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
 
@@ -630,7 +630,7 @@ class _TableProcessor(_ProcessingMixin):
         export_tasks = []
         for ttype, lvls in self.tables.items():
             tdir = base / ttype
-            tdir.mkdir(parents=True, exist_ok=True)
+            t极ir.mkdir(parents=True, exist_ok=True)
             for lvl, tbl in lvls.items():
                 out = tdir / lvl / "feature-table.biom"
                 out.parent.mkdir(parents=True, exist_ok=True)
@@ -747,7 +747,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     
                     for key, df in res.items():
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
+                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl极] = df
                     
                     prog.update(level_task, completed=len(enabled_for_ttype))
                     prog.update(parent_task, advance=len(enabled_for_ttype))
