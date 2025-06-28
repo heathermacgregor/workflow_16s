@@ -119,7 +119,9 @@ class _ProcessingMixin:
                 duration = time.perf_counter() - start_time
                 # Only log if we have a template or action
                 if log_template or log_action:
-                    self._log_level_action(level, log_template, log_action, duration)
+                    self._log_level_action(
+                        level, log_template, log_action, duration
+                    )
         else:
             logger.debug(f"{process_name}")
             with get_progress_bar() as progress:
@@ -141,7 +143,9 @@ class _ProcessingMixin:
                     
                     # Only log if we have a template or action
                     if log_template or log_action:
-                        self._log_level_action(level, log_template, log_action, duration)
+                        self._log_level_action(
+                            level, log_template, log_action, duration
+                        )
                     
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
@@ -247,7 +251,7 @@ class StatisticalAnalyzer:
             cfg = self.TEST_CONFIG[test_name]
             
             child_task = progress.add_task(
-                f"[cyan]{cfg['name']}",
+                f"{cfg['name']}",
                 parent=parent_task,
                 total=1
             )
@@ -828,7 +832,7 @@ class _AnalysisManager(_ProcessingMixin):
         tot = sum(
             len(levels) * len(
                 [t 
-                 for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
+                 for t, flag in self.cfg["stats"].get(, {}).items() if flag]
             )
             for table_type, levels in self.tables.items()
         )
@@ -852,7 +856,7 @@ class _AnalysisManager(_ProcessingMixin):
                     table, m = update_tables(table, self.meta)
                     
                     level_task = prog.add_task(
-                        f"[cyan]{table_type}/{level}",
+                        f"{table_type.ljust(15)} + {level.ljust(10)}",
                         parent=parent_task,
                         total=len(enabled_for_table_type))
                     
@@ -862,11 +866,21 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     
                     for key, df in res.items():
-                        self.stats.setdefault(table_type, {}).setdefault(key, {})[level] = df
+                        self.stats.setdefault(
+                            table_type, {}
+                        ).setdefault(
+                            key, {}
+                        )[level] = df
                     
-                    prog.update(level_task, completed=len(enabled_for_table_type))
+                    prog.update(
+                        level_task, 
+                        completed=len(enabled_for_table_type)
+                    )
                     prog.remove_task(level_task)
-                    prog.update(parent_task, advance=len(enabled_for_table_type))
+                    prog.update(
+                        parent_task, 
+                        advance=len(enabled_for_table_type)
+                    )
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
@@ -875,13 +889,29 @@ class _AnalysisManager(_ProcessingMixin):
         )
         
         if self.verbose:
-            logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
-            logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
+            logger.info(
+                f"Found {len(self.top_contaminated_features)} "
+                f"top contaminated features"
+            )
+            logger.info(
+                f"Found {len(self.top_pristine_features)} "
+                f"top pristine features"
+            )
 
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
         tot = sum(
-            len(levels) * len([m for m in KNOWN_METHODS if self.cfg.get("ordination", {}).get(table_type, {}).get(m, False)])
+            len(levels) * len(
+                [m 
+                 for m in KNOWN_METHODS if self.cfg.get(
+                     "ordination", {}
+                 ).get(
+                     table_type, {}
+                 ).get(
+                     m, False
+                 )
+                ]
+            )
             for table_type, levels in self.tables.items()
         )
         if not tot:
@@ -947,7 +977,7 @@ class _AnalysisManager(_ProcessingMixin):
                 for level, table in levels.items():
                     for method in methods:
                         child_task = prog.add_task(
-                            f"[cyan]{table_type}/{level}/{method}",
+                            f"{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
                             parent=parent_task,
                             total=1
                         )
