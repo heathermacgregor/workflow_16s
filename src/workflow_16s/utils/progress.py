@@ -58,7 +58,7 @@ class MofNCompleteColumn(ProgressColumn):
             justify="right"
         )
 
-def get_progress_bar() -> Progress:
+def get_progress_bar(transient: bool = True) -> Progress:
     """Return a customized progress bar with consistent styling"""
     return Progress(
         SpinnerColumn(
@@ -85,6 +85,6 @@ def get_progress_bar() -> Progress:
         TimeElapsedColumn(),
         #TextColumn("⏱️", style="bold deep_sky_blue1"),
         TimeRemainingColumn(),
-        transient=True,
-        expand=True
+        transient=transient,
+        expand=False
     )
