@@ -19,6 +19,8 @@ from rich.progress import (
 )
 from rich.text import Text
 
+DEFAULT_PROGRESS_TEXT_N = 65
+
 # ==================================== FUNCTIONS ===================================== #
 
 def create_progress() -> Progress:
@@ -27,7 +29,7 @@ def create_progress() -> Progress:
         SpinnerColumn(style="green"),
         
         # White task description text
-        TextColumn("[progress.description]{task.description}", style="white"),
+        TextColumn("[progress.description]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), style="white"),
         
         # Bar: yellow filling, green when complete, black background
         BarColumn(
@@ -70,7 +72,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
             speed=0.75
         ),
         TextColumn(
-            "[white]{task.description}", 
+            "[white]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
             justify="left"
         ),
         MofNCompleteColumn(),
