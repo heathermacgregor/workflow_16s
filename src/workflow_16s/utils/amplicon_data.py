@@ -592,7 +592,7 @@ class _TableProcessor(_ProcessingMixin):
             tbl = normalize_table(tbl, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = tbl
         
-        if feat极fg["clr_transform"]:
+        if feat_cfg["clr_transform"]:
             tbl = clr_transform_table(tbl)
             self.tables.setdefault("clr_transformed", {})[self.mode] = tbl
 
