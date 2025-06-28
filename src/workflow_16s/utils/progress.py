@@ -54,11 +54,11 @@ class MofNCompleteColumn(ProgressColumn):
         """Render the progress count as 'completed/total'"""
         return Text(
             f"{task.completed}/{task.total}",
-            style="bold deep_sky_blue1",
-            justify="right"
+            style="aqua",
+            justify="left"
         )
 
-def get_progress_bar(transient: bool = True) -> Progress:
+def get_progress_bar(transient: bool = False) -> Progress:
     """Return a customized progress bar with consistent styling"""
     return Progress(
         SpinnerColumn(
