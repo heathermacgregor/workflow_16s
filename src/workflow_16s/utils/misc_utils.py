@@ -27,3 +27,13 @@ def get_citation(doi_url, style: str = 'apa', email: str = DEFAULT_EMAIL):
     except requests.exceptions.RequestException as e:
         return f"Request failed: {e}"
         return None
+
+def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
+    spacer = " " * indent
+    tname = type(obj).__name__
+    print(f"{spacer}{'|-- ' if indent else ''}{_key} ({tname})")
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            print_structure(v, indent + 4, k)
+    elif isinstance(obj, list) and obj:
+        print_structure(obj[0], indent + 4, "[0]")
