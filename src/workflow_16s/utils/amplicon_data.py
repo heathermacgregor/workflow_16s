@@ -825,62 +825,62 @@ class _AnalysisManager(_ProcessingMixin):
             feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
 
         def _run_statistical_tests(self) -> None:
-        grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        grp_vals = self.cfg.get("group_values", [True, False])
-        san = StatisticalAnalyzer(self.cfg, self.verbose)
-        
-        # Calculate total tests - FIXED syntax error
-        tot = sum(
-            len(levels) * len(
-                [t for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
-            )
-            for table_type, levels in self.tables.items()
-        )
-        
-        with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                "Statistical testing...",
-                total=tot
+            grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+            grp_vals = self.cfg.get("group_values", [True, False])
+            san = StatisticalAnalyzer(self.cfg, self.verbose)
+            
+            # Calculate total tests - FIXED syntax error
+            tot = sum(
+                len(levels) * len(
+                    [t for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
+                )
+                for table_type, levels in self.tables.items()
             )
             
-            for table_type, levels in self.tables.items():
-                self.stats[table_type] = {}
-                tests_config = self.cfg["stats"].get(table_type, {})
-                enabled_for_table_type = [test 
-                                     for test, flag in tests_config.items() if flag]
+            with get_progress_bar() as prog:
+                parent_task = prog.add_task(
+                    "Statistical testing...",
+                    total=tot
+                )
                 
-                for level, table in levels.items():
-                    if self.verbose:
-                        logger.info(f"Processing {table_type} table at {level} level")
+                for table_type, levels in self.tables.items():
+                    self.stats[table_type] = {}
+                    tests_config = self.cfg["stats"].get(table_type, {})
+                    enabled_for_table_type = [test 
+                                         for test, flag in tests_config.items() if flag]
                     
-                    table, m = update_tables(table, self.meta)
-                    
-                    level_task = prog.add_task(
-                        f"{table_type.ljust(15)} + {level.ljust(10)}",
-                        parent=parent_task,
-                        total=len(enabled_for_table_type))
-                    
-                    res = san.run_tests(
-                        table, m, grp_col, grp_vals, 
-                        enabled_for_table_type, prog, level_task
-                    )
-                    
-                    for key, df in res.items():
-                        self.stats.setdefault(
-                            table_type, {}
-                        ).setdefault(
-                            key, {}
-                        )[level] = df
-                    
-                    prog.update(
-                        level_task, 
-                        completed=len(enabled_for_table_type)
-                    )
-                    prog.remove_task(level_task)
-                    prog.update(
-                        parent_task, 
-                        advance=len(enabled_for_table_type)
-                    )
+                    for level, table in levels.items():
+                        if self.verbose:
+                            logger.info(f"Processing {table_type} table at {level} level")
+                        
+                        table, m = update_tables(table, self.meta)
+                        
+                        level_task = prog.add_task(
+                            f"{table_type.ljust(15)} + {level.ljust(10)}",
+                            parent=parent_task,
+                            total=len(enabled_for_table_type))
+                        
+                        res = san.run_tests(
+                            table, m, grp_col, grp_vals, 
+                            enabled_for_table_type, prog, level_task
+                        )
+                        
+                        for key, df in res.items():
+                            self.stats.setdefault(
+                                table_type, {}
+                            ).setdefault(
+                                key, {}
+                            )[level] = df
+                        
+                        prog.update(
+                            level_task, 
+                            completed=len(enabled_for_table_type)
+                        )
+                        prog.remove_task(level_task)
+                        prog.update(
+                            parent_task, 
+                            advance=len(enabled_for_table_type)
+                        )
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
