@@ -486,15 +486,9 @@ class _DataLoader(_ProcessingMixin):
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def _get_metadata_paths(self) -> List[Path]:
-        paths: List[Path] = []
-        for bi in self._get_biom_paths():
-            ds_dir = bi.parent if bi.is_file() else bi
-            tail = ds_dir.parts[-6:-1]
-            mp = Path(
-               self.project_dir.metadata_per_dataset
-            ).joinpath(*tail, "sample-metadata.tsv")
-            if mp.exists():
-                paths.append(mp)
+        # Optimized path search using pathlib
+        pattern = Path(self.project_dir.metadata_per_dataset) / "**" / "sample-metadata.tsv"
+        paths = list(pattern.parent.glob(pattern.name))
         if self.verbose:
             logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
         return paths
