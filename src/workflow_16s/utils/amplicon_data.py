@@ -747,7 +747,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     
                     for key, df in res.items():
-                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvls] = df
+                        self.stats.setdefault(ttype, {}).setdefault(key, {})[lvl] = df
                     
                     prog.update(level_task, completed=len(enabled_for_ttype))
                     prog.update(parent_task, advance=len(enabled_for_ttype))
