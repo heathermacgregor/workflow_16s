@@ -29,7 +29,10 @@ def create_progress() -> Progress:
         SpinnerColumn(style="green"),
         
         # White task description text
-        TextColumn("[progress.description]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), style="white"),
+        TextColumn(
+            "[progress.description]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            style="white"
+        ),
         
         # Bar: yellow filling, green when complete, black background
         BarColumn(
@@ -58,7 +61,7 @@ class MofNCompleteColumn(ProgressColumn):
     def render(self, task: Task) -> Text:
         """Render the progress count as 'completed/total'"""
         return Text(
-            f"{task.completed}/{task.total}",
+            f"{task.completed}/{task.total}".ljust(10),
             style="aqua",
             justify="right"
         )
