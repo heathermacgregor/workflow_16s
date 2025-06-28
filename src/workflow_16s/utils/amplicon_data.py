@@ -39,6 +39,7 @@ from workflow_16s.utils.file_utils import (
     import_merged_meta_tsv,
     filter_and_reorder_biom_and_metadata,
 )
+from workflow_16s.utils.misc_utils import print_structure
 from workflow_16s.stats.utils import (
     clr_transform_table,
     filter_table,
@@ -91,18 +92,8 @@ DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
-# ==================================== FUNCTIONS ===================================== #
-def print_structure(obj: Any, indent: int = 0, _key: str = "root") -> None:
-    spacer = " " * indent
-    tname = type(obj).__name__
-    print(f"{spacer}{'|-- ' if indent else ''}{_key} ({tname})")
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            print_structure(v, indent + 4, k)
-    elif isinstance(obj, list) and obj:
-        print_structure(obj[0], indent + 4, "[0]")
-
 # ===================================== CLASSES ====================================== #
+
 class _ProcessingMixin:
     def _run_processing_step(
         self,
@@ -114,26 +105,29 @@ class _ProcessingMixin:
         log_template: Optional[str] = None,
         log_action: Optional[str] = None,
     ) -> Dict[str, Table]:
+        
         processed: Dict[str, Table] = {}
+        
         if getattr(self, "verbose", False):
             logger.info(f"{process_name}")
-            for lvl in levels:
-                processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
-                self._log_level_action(lvl, log_template, log_action)
+            for level in levels:
+                processed[level] = process_func(get_source(level), level, *func_args)
+                self._log_level_action(level, log_template, log_action)
         else:
             with get_progress_bar() as progress:
                 parent_task = progress.add_task(
-                    f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
+                    process_name, #f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
                     total=len(levels),
                 )
-                for lvl in levels:
+                for level in levels:
                     child_task = progress.add_task(
-                        f"[gold1]Processing {lvl} level",
+                        f"Processing {level} level",
                         parent=parent_task,
                         total=1
                     )
-                    processed[lvl] = process_func(get_source(lvl), lvl, *func_args)
+                    processed[level] = process_func(get_source(level), level, *func_args)
                     progress.update(child_task, completed=1)
+                    progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
         return processed
 
@@ -147,6 +141,7 @@ class _ProcessingMixin:
             logger.info(template.format(level=level))
         elif action:
             logger.info(f"{level} {action}")
+            
 
 class StatisticalAnalyzer:
     TEST_CONFIG = {
