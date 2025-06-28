@@ -77,7 +77,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
         BarColumn(
             bar_width=40,
             style="black", # Background color
-            complete_style="aqua",
+            complete_style="yellow",
             finished_style="green",
             #pulse_style="yellow"
         ),
