@@ -111,12 +111,14 @@ class _ProcessingMixin:
         if getattr(self, "verbose", False):
             logger.info(f"{process_name}")
             for level in levels:
-                processed[level] = process_func(get_source(level), level, *func_args)
+                processed[level] = process_func(
+                    get_source(level), level, *func_args
+                )
                 self._log_level_action(level, log_template, log_action)
         else:
             with get_progress_bar() as progress:
                 parent_task = progress.add_task(
-                    process_name, #f"[white]{process_name}".ljust(DEFAULT_PROGRESS_TEXT_N),
+                    process_name,
                     total=len(levels),
                 )
                 for level in levels:
@@ -125,7 +127,9 @@ class _ProcessingMixin:
                         parent=parent_task,
                         total=1
                     )
-                    processed[level] = process_func(get_source(level), level, *func_args)
+                    processed[level] = process_func(
+                        get_source(level), level, *func_args
+                    )
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
@@ -194,10 +198,10 @@ class StatisticalAnalyzer:
         table, metadata = filter_and_reorder_biom_and_metadata(table, metadata)
         
         if not (progress and task_id):
-            for tname in enabled_tests:
-                if tname not in self.TEST_CONFIG:
+            for test_name in enabled_tests:
+                if test_name not in self.TEST_CONFIG:
                     continue
-                cfg = self.TEST_CONFIG[tname]
+                cfg = self.TEST_CONFIG[test_name]
                 if self.verbose:
                     logger.info(f"Running {cfg['name']}...")
                 results[cfg["key"]] = cfg["func"](
@@ -209,15 +213,15 @@ class StatisticalAnalyzer:
             return results
 
         parent_task = progress.add_task(
-            "[white]Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            "Running statistical tests...", 
             total=len(enabled_tests), 
             parent=task_id
         )
         
-        for tname in enabled_tests:
-            if tname not in self.TEST_CONFIG:
+        for test_name in enabled_tests:
+            if test_name not in self.TEST_CONFIG:
                 continue
-            cfg = self.TEST_CONFIG[tname]
+            cfg = self.TEST_CONFIG[test_name]
             
             child_task = progress.add_task(
                 f"[cyan]{cfg['name']}",
