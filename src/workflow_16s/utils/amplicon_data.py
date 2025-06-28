@@ -112,12 +112,14 @@ class _ProcessingMixin:
         if getattr(self, "verbose", False):
             logger.info(f"{process_name}")
             for level in levels:
-                start_time = time.time()  # Start timer
+                start_time = time.perf_counter()  # More precise timing
                 processed[level] = process_func(
                     get_source(level), level, *func_args
                 )
-                duration = time.time() - start_time  # Calculate duration
-                self._log_level_action(level, log_template, log_action, duration)
+                duration = time.perf_counter() - start_time
+                # Only log if we have a template or action
+                if log_template or log_action:
+                    self._log_level_action(level, log_template, log_action, duration)
         else:
             logger.debug(f"{process_name}")
             with get_progress_bar() as progress:
@@ -126,7 +128,7 @@ class _ProcessingMixin:
                     total=len(levels),
                 )
                 for level in levels:
-                    start_time = time.time()  # Start timer
+                    start_time = time.perf_counter()  # More precise timing
                     child_task = progress.add_task(
                         f"Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
                         parent=parent_task,
@@ -135,11 +137,15 @@ class _ProcessingMixin:
                     processed[level] = process_func(
                         get_source(level), level, *func_args
                     )
-                    duration = time.time() - start_time  # Calculate duration
+                    duration = time.perf_counter() - start_time
+                    
+                    # Only log if we have a template or action
+                    if log_template or log_action:
+                        self._log_level_action(level, log_template, log_action, duration)
+                    
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
-                    self._log_level_action(level, log_template, log_action, duration)
                     
         return processed
 
@@ -148,18 +154,19 @@ class _ProcessingMixin:
         level: str,
         template: Optional[str] = None,
         action: Optional[str] = None,
-        duration: Optional[float] = None,  # Add duration parameter
+        duration: Optional[float] = None,
     ) -> None:
         message = ""
         if template:
             message = template.format(level=level)
         elif action:
             message = f"{level} {action}"
-            
+        
+        # Only append duration if we have a message to log
+        if message and duration is not None:
+            message += f" in {duration:.2f}s"
+        
         if message:
-            if duration is not None:
-                # Append duration to the message
-                message += f" in {duration:.2f} seconds"
             logger.debug(message)
             
 
