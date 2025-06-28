@@ -630,7 +630,7 @@ class _TableProcessor(_ProcessingMixin):
         export_tasks = []
         for ttype, lvls in self.tables.items():
             tdir = base / ttype
-            t极ir.mkdir(parents=True, exist_ok=True)
+            tdir.mkdir(parents=True, exist_ok=True)
             for lvl, tbl in lvls.items():
                 out = tdir / lvl / "feature-table.biom"
                 out.parent.mkdir(parents=True, exist_ok=True)
