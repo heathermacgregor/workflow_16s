@@ -60,8 +60,9 @@ class MofNCompleteColumn(ProgressColumn):
         return Text(
             f"{task.completed}/{task.total}",
             style="aqua",
-            justify="left"
+            justify="right"
         )
+        
 
 def get_progress_bar(transient: bool = False) -> Progress:
     """Return a customized progress bar with consistent styling"""
