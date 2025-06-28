@@ -772,6 +772,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.stats: Dict[str, Any] = {}
         self.ordination: Dict[str, Any] = {}
         self.models: Dict[str, Any] = {}
+        self.figures: Dict[str, Any] = {}  # Initialize figures dictionary
         self.top_contaminated_features: List[Dict] = []
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
@@ -828,11 +829,10 @@ class _AnalysisManager(_ProcessingMixin):
         grp_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         
-        # Calculate total tests
+        # Calculate total tests - FIXED syntax error
         tot = sum(
             len(levels) * len(
-                [t 
-                 for t, flag in self.cfg["stats"].get(, {}).items() if flag]
+                [t for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
             )
             for table_type, levels in self.tables.items()
         )
@@ -956,6 +956,8 @@ class _AnalysisManager(_ProcessingMixin):
                     prog.update(parent_task, advance=len(enabled_methods))
                 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
+        # Use configurable group column - FIXED hardcoded value
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         tot = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
             for table_type, levels in ml_tables.items()
@@ -984,7 +986,9 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         X = table_to_dataframe(table)
                         X.index = X.index.str.lower()
-                        y = self.meta.set_index("#sampleid")[[DEFAULT_GROUP_COLUMN]]
+                        y = self.meta.set_index("#sampleid")[[group_col]]
+                        # FIXED index mismatch - lowercase y index to match X
+                        y.index = y.index.astype(str).str.lower()
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
@@ -992,7 +996,8 @@ class _AnalysisManager(_ProcessingMixin):
                             metadata=y,
                             features=X,
                             output_dir=mdir,
-                            contamination_status_col=DEFAULT_GROUP_COLUMN,
+                            # Use configurable group column
+                            contamination_status_col=group_col,
                             method=method,
                         )
                         prog.update(child_task, completed=1)
