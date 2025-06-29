@@ -1192,7 +1192,7 @@ class _AnalysisManager(_ProcessingMixin):
                         X, y = X.loc[idx], y.loc[idx]
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
                         try:
-                            catboost_feature_selection(
+                            best_model = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
                                 output_dir=mdir,
@@ -1200,8 +1200,8 @@ class _AnalysisManager(_ProcessingMixin):
                                 contamination_status_col=group_col,
                                 method=method,
                             )
-                        except  Exception as e:
-            logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
+                        except Exception as e:
+                            logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
                         progress.update(child_task, completed=1)
                         progress.remove_task(child_task)
                         progress.update(parent_task, advance=1)
