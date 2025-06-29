@@ -15,6 +15,11 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
+
+# Set thread environment variables BEFORE importing UMAP
+import os
+os.environ['NUMBA_NUM_THREADS'] = '1'  # Default safe value
+os.environ['OMP_NUM_THREADS'] = '1'
 from umap import UMAP
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -60,6 +65,10 @@ def table_to_dataframe(table: Union[Dict[Any, Any], Table]) -> pd.DataFrame:
         df = table
     else:
         raise ValueError("Unsupported input type for table conversion")
+    
+    # Validate dataframe
+    if df.empty:
+        raise ValueError("Input table is empty")
     return df
 
 
@@ -87,8 +96,8 @@ def distance_matrix(
     if df.shape[0] < 2:
         raise ValueError("At least 2 samples required for distance calculation")
     
-    # Compute condensed distance vector and convert to square form
-    dm = squareform(pdist(df.values, metric=metric))
+    # Use more efficient pairwise_distances instead of pdist+squareform
+    dm = pairwise_distances(df.values, metric=metric)
     return dm
 
 
@@ -122,6 +131,19 @@ def pcoa(
     
     sample_ids = df.index.tolist()
     
+    # Fix for duplicate sample IDs
+    if len(set(sample_ids)) != len(sample_ids):
+        seen = {}
+        new_ids = []
+        for id_ in sample_ids:
+            if id_ in seen:
+                seen[id_] += 1
+                new_ids.append(f"{id_}_{seen[id_]}")
+            else:
+                seen[id_] = 1
+                new_ids.append(id_)
+        sample_ids = new_ids
+    
     # Compute pairwise distances using optimized method
     dist_matrix = pairwise_distances(df.values, metric=metric)
     
@@ -129,7 +151,7 @@ def pcoa(
     dist_matrix = DistanceMatrix(dist_matrix, ids=sample_ids)
     
     # Set safe dimension limit
-    max_dims = min(df.shape[0] - 1, df.shape[1] - 1)
+    max_dims = min(df.shape[0] - 1, df.shape[1])
     if n_dimensions is None:
         n_dimensions = max_dims
     else:
@@ -237,6 +259,12 @@ def tsne(
     # Set safe component limit
     n_components = min(n_components, df.shape[0] - 1)
 
+    # Validate data quality
+    if np.isnan(df.values).any():
+        raise ValueError("Input data contains NaNs")
+    if not np.isfinite(df.values).all():
+        raise ValueError("Input data contains infinite values")
+    
     tsne_arr = TSNE(
         n_components=n_components, 
         random_state=random_state,
@@ -246,7 +274,7 @@ def tsne(
     tsne_df = pd.DataFrame(
         tsne_arr,
         index=df.index,
-        columns=[f"tSNE{i+1}" for i in range(n_components)]
+        columns=[f"TSNE{i+1}" for i in range(n_components)]  # Fixed to uppercase
     )
     return tsne_df
 
@@ -285,12 +313,28 @@ def umap(
     # Set safe component limit
     n_components = min(n_components, df.shape[0] - 1)
 
-    umap_arr = UMAP(
-        n_components=n_components,
-        init='random',
-        random_state=random_state,
-        n_jobs=n_jobs
-    ).fit_transform(df.values)
+    # Handle threading conflicts gracefully
+    try:
+        # Match n_jobs to environment threads
+        numba_threads = int(os.environ.get('NUMBA_NUM_THREADS', '1'))
+        reducer = UMAP(
+            n_components=n_components,
+            init='random',
+            random_state=random_state,
+            n_jobs=min(n_jobs, numba_threads)
+        umap_arr = reducer.fit_transform(df.values)
+    except RuntimeError as e:
+        if "Cannot set NUMBA_NUM_THREADS" in str(e):
+            # Graceful fallback to single-threaded
+            warnings.warn(f"Threading conflict: {str(e)}. Falling back to single-thread")
+            reducer = UMAP(
+                n_components=n_components,
+                init='random',
+                random_state=random_state,
+                n_jobs=1)
+            umap_arr = reducer.fit_transform(df.values)
+        else:
+            raise
     
     umap_df = pd.DataFrame(
         umap_arr,
@@ -298,3 +342,4 @@ def umap(
         columns=[f"UMAP{i+1}" for i in range(n_components)]
     )
     return umap_df
+    
