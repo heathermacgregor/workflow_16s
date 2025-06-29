@@ -322,6 +322,7 @@ def umap(
             init='random',
             random_state=random_state,
             n_jobs=min(n_jobs, numba_threads)
+        )
         umap_arr = reducer.fit_transform(df.values)
     except RuntimeError as e:
         if "Cannot set NUMBA_NUM_THREADS" in str(e):
