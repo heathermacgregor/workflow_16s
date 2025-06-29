@@ -4,6 +4,7 @@ import glob
 import logging
 import time
 import warnings
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -324,6 +325,12 @@ class Ordination:
         method_params = {}
         if cfg["key"] == "pcoa":
             method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+        
+        # Add CPU limiting parameters
+        if cfg["key"] in ["tsne", "umap"]:
+            # Get global CPU limit or default to 1
+            cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
+            method_params["n_jobs"] = cpu_limit
 
         ord_res = cfg["func"](table=table, **method_params)
 
@@ -763,7 +770,7 @@ class _AnalysisManager(_ProcessingMixin):
             main_task = prog.add_task("Ordination analysis...", total=total_tasks)
             
             # Use thread pool with limited workers
-            max_workers = self.cfg.get("ordination", {}).get("max_workers", 2)
+            max_workers = self.cfg.get("ordination", {}).get("max_workers", 1)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 for table_type, levels in self.tables.items():
@@ -868,6 +875,9 @@ class AmpliconData:
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
 
+        # Apply CPU limiting for parallel libraries
+        self._apply_cpu_limits()
+        
         data = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = data.meta, data.table
 
@@ -904,3 +914,16 @@ class AmpliconData:
 
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
+    
+    def _apply_cpu_limits(self):
+        """Set environment variables to limit CPU usage in parallel libraries"""
+        cpu_limit = self.cfg.get("cpu", {}).get("limit", 1)
+        
+        # Set for common parallel libraries
+        os.environ["OMP_NUM_THREADS"] = str(cpu_limit)
+        os.environ["OPENBLAS_NUM_THREADS"] = str(cpu_limit)
+        os.environ["MKL_NUM_THREADS"] = str(cpu_limit)
+        os.environ["BLIS_NUM_THREADS"] = str(cpu_limit)
+        os.environ["VECLIB_MAXIMUM_THREADS"] = str(cpu_limit)
+        os.environ["NUMBA_NUM_THREADS"] = str(cpu_limit)
+        os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_limit)
