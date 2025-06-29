@@ -38,6 +38,10 @@ from workflow_16s.stats.utils import (
     table_to_dataframe
 )
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger('workflow_16s')
+
 # ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_N_CLUSTERS = 10
@@ -47,10 +51,6 @@ DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 debug_mode = False
-
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-
-logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -516,7 +516,10 @@ def fisher_exact_bonferroni(
     results_df = pd.DataFrame(results)
     if results_df.empty:
         if verbose:
-            logger.warning("No significant features found after Fisher's Exact Tests with Bonferroni correction")
+            logger.warning(
+                "No significant features found after Fisher's Exact "
+                f"Tests with Bonferroni correction"
+            )
         return pd.DataFrame()
     
     # Apply Bonferroni correction
@@ -585,8 +588,8 @@ def calculate_distance_matrix(
     Calculate distance matrix from abundance table.
     
     Args:
-        table: Input abundance table
-        metric: Distance metric (default: braycurtis)
+        table:  Input abundance table.
+        metric: Distance metric (default: braycurtis).
         
     Returns:
         skbio DistanceMatrix object
@@ -607,10 +610,10 @@ def run_ordination(
     Perform dimensionality reduction.
     
     Args:
-        table: Input abundance table
-        method: 'pca', 'pcoa', 'tsne', or 'umap'
-        n_components: Number of dimensions to keep
-        random_state: Random seed
+        table:        Input abundance table.
+        method:       'pca', 'pcoa', 'tsne', or 'umap'.
+        n_components: Number of dimensions to keep.
+        random_state: Random seed.
         
     Returns:
         DataFrame with ordination coordinates
