@@ -19,6 +19,12 @@ from rich.progress import (
 )
 from rich.text import Text
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+warnings.filterwarnings("ignore") # Suppress warnings
+
+# ================================= GLOBAL VARIABLES ================================= #
+
 DEFAULT_PROGRESS_TEXT_N = 65
 
 # ==================================== FUNCTIONS ===================================== #
