@@ -830,113 +830,190 @@ def grid_search(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
-    params: Dict[str, List],
+    param_grid: Dict[str, List],
     output_dir: Union[str, Path],
+    n_splits: int = 5,
+    scoring: Dict[str, Callable] = None,
+    refit: str = 'mcc',
     verbose: int = 1
 ) -> Tuple[CatBoostClassifier, Dict, float]:
     """
-    Perform a grid search over hyperparameters and evaluate models using 
-    various metrics.
-
+    Enhanced grid search with cross-validation and comprehensive model evaluation.
+    
     Args:
-        X_train:     Training feature DataFrame.
-        y_train:     Training target Series.
-        X_test:      Testing feature DataFrame.
-        y_test:      Testing target Series.
-        params:      Dictionary of hyperparameter grids.
-        output_dir:  Directory to save results and plots.
-        verbose:     Controls verbosity (0 for silent, 1 for progress).
-
+        X_train:     Training feature DataFrame
+        y_train:     Training target Series
+        X_test:      Testing feature DataFrame
+        y_test:      Testing target Series
+        param_grid:  Dictionary of hyperparameter grids
+        output_dir:  Directory to save results
+        n_splits:    Number of cross-validation folds (default: 5)
+        scoring:     Dictionary of scoring metrics (name: function)
+        refit:       Metric to use for selecting best model
+        verbose:     Verbosity level (0-2)
+    
     Returns:
-        best_model:  Best trained CatBoostClassifier model.
-        best_params: Best hyperparameters.
-        best_mcc:    Best Matthews correlation coefficient.
+        best_model:  Best trained CatBoostClassifier
+        best_params: Best hyperparameters
+        best_score:  Best score of the reference metric
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
-
-    if not isinstance(params, dict):
-        raise ValueError("params must be a dictionary.")
-
     output_dir = Path(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-
-    # Initialize results
-    best_mcc = 0
+    
+    # Default scoring metrics
+    if scoring is None:
+        scoring = {
+            'accuracy': make_scorer(accuracy_score),
+            'f1': make_scorer(f1_score),
+            'mcc': make_scorer(matthews_corrcoef),
+            'roc_auc': make_scorer(roc_auc_score, needs_proba=True),
+            'pr_auc': make_scorer(average_precision_score, needs_proba=True)
+        }
+    
+    # Initialize results storage
+    results = []
+    best_score = -np.inf
     best_model = None
     best_params = None
-    results = []
-
-    if verbose > 0:
-        logger.info("Starting grid search...")
-
-    # Perform grid search
-    for idx, v in enumerate(
-        itertools.product(*params.values()), start=1
-    ):
-        current_params = dict(zip(params.keys(), v))
-
-        if verbose > 0:
-            logger.info(f"Training with parameters: {current_params}")
-
-        model, accuracy, f1, mcc, y_pred = train_and_evaluate(
-            X_train, y_train, X_test, y_test, current_params, 
-            output_dir, verbose=verbose
-        )
-
-        # Save results
-        results.append({
-            **current_params, 
-            'accuracy': accuracy, 
-            'f1_score': f1, 
-            'mcc': mcc
-        })
-
-        # Plot confusion matrix
-        conf_matrix_path = str(output_dir / f"conf_matrix_{idx}.png")
-        cm = confusion_matrix(y_test, y_pred)
-        cm_flipped = np.flip(cm)
-        plot_confusion_matrix(cm_flipped, conf_matrix_path)
-
-        # Plot ROC curve
-        y_scores = model.predict_proba(X_test)
-        roc_curve_path = str(output_dir / f"roc_curve_{idx}.png")
-        fpr, tpr, _ = roc_curve(y_test, y_scores[:, 1])
-        roc_auc = auc(fpr, tpr)
-        plot_roc_curve(fpr, tpr, roc_auc, roc_curve_path)
-
-        # Plot precision-recall curve
-        precision_recall_curve_path = str(output_dir / f"precision_recall_curve_{idx}.png")
-        precision, recall, _ = precision_recall_curve(y_test, y_scores[:, 1])
-        average_precision = average_precision_score(y_test, y_scores[:, 1])
-        plot_precision_recall_curve(precision, recall, average_precision, precision_recall_curve_path)
-
-        # Update best model
-        if mcc >= best_mcc:
-            best_mcc = mcc
-            best_model = model
+    cv_model = None
+    
+    # Create parameter combinations
+    param_combinations = list(itertools.product(*param_grid.values()))
+    total_combinations = len(param_combinations)
+    
+    if verbose:
+        logger.info(f"Starting grid search with {total_combinations} parameter combinations")
+        logger.info(f"Using {n_splits}-fold cross-validation")
+    
+    # Cross-validation setup
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=DEFAULT_RANDOM_STATE)
+    
+    for i, params in enumerate(param_combinations, 1):
+        current_params = dict(zip(param_grid.keys(), params))
+        fold_scores = {metric: [] for metric in scoring}
+        
+        if verbose:
+            logger.info(f"\n[{i}/{total_combinations}] Testing params: {current_params}")
+        
+        # Cross-validation
+        for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train), 1):
+            X_fold_train, X_fold_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+            y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
+            
+            # Initialize and train model
+            model = CatBoostClassifier(
+                **current_params,
+                train_dir=str(output_dir / 'catboost_info'),
+                verbose=False
+            )
+            
+            model.fit(
+                X_fold_train,
+                y_fold_train,
+                eval_set=(X_fold_val, y_fold_val),
+                early_stopping_rounds=100,
+                verbose=verbose > 1
+            )
+            
+            # Evaluate on validation fold
+            y_pred = model.predict(X_fold_val)
+            y_proba = model.predict_proba(X_fold_val)[:, 1]
+            
+            for metric_name, scorer in scoring.items():
+                if "auc" in metric_name or "pr_auc" in metric_name:
+                    score = scorer(y_fold_val, y_proba)
+                else:
+                    score = scorer(y_fold_val, y_pred)
+                fold_scores[metric_name].append(score)
+            
+            # Clean up memory
+            del model
+        
+        # Calculate mean CV scores
+        cv_means = {f"mean_{k}": np.mean(v) for k, v in fold_scores.items()}
+        cv_stds = {f"std_{k}": np.std(v) for k, v in fold_scores.items()}
+        current_result = {
+            **current_params,
+            **cv_means,
+            **cv_stds
+        }
+        results.append(current_result)
+        
+        # Check if best model
+        current_ref_score = cv_means[f"mean_{refit}"]
+        if current_ref_score > best_score:
+            best_score = current_ref_score
             best_params = current_params
-
-            # Save best predictions
-            best_predictions_df = X_test.loc[:, []].copy()
-            best_predictions_df['Prediction'] = y_pred
-            best_predictions_df['Confidence'] = y_scores[:, 1]
-            best_predictions_df['interaction'] = y_test
-            best_predictions_df.to_csv(output_dir / "best_predictions.csv", index=False)
-
-            if verbose > 0:
-                logger.info(f"New best model found with MCC: {mcc}")
-                logger.info(best_predictions_df)
-
-    # Save grid search results
+            if verbose:
+                logger.info(f"🔥 New best {refit} (CV): {current_ref_score:.4f}")
+            
+            # Train on full training set with best params
+            cv_model = CatBoostClassifier(
+                **best_params,
+                train_dir=str(output_dir / 'catboost_info'),
+                verbose=False
+            )
+            cv_model.fit(
+                X_train,
+                y_train,
+                eval_set=(X_test, y_test),
+                early_stopping_rounds=100,
+                verbose=verbose > 1
+            )
+    
+    # Final evaluation on test set
+    if cv_model:
+        y_pred = cv_model.predict(X_test)
+        y_proba = cv_model.predict_proba(X_test)[:, 1]
+        
+        test_scores = {}
+        for metric_name, scorer in scoring.items():
+            if "auc" in metric_name or "pr_auc" in metric_name:
+                test_scores[metric_name] = scorer(y_test, y_proba)
+            else:
+                test_scores[metric_name] = scorer(y_test, y_pred)
+        
+        # Save final model
+        best_model = cv_model
+        best_model.save_model(str(output_dir / "best_model.cbm"))
+        
+        # Generate evaluation plots
+        plot_confusion_matrix(
+            confusion_matrix(y_test, y_pred),
+            str(output_dir / "best_confusion_matrix.png")
+        )
+        plot_roc_curve(
+            *roc_curve(y_test, y_proba),
+            roc_auc_score(y_test, y_proba),
+            str(output_dir / "best_roc_curve.png")
+        )
+        plot_precision_recall_curve(
+            *precision_recall_curve(y_test, y_proba)[:2],
+            average_precision_score(y_test, y_proba),
+            str(output_dir / "best_precision_recall_curve.png")
+        )
+        
+        # Add test scores to results
+        for result in results:
+            if result.get('params') == best_params:
+                result.update({f"test_{k}": v for k, v in test_scores.items()})
+    
+    # Save results
     results_df = pd.DataFrame(results)
     results_df.to_csv(output_dir / "grid_search_results.csv", index=False)
-
-    if verbose > 0:
-        logger.info(results_df)
-        logger.info("Grid search completed.")
-
-    return best_model, best_params, best_mcc
+    
+    if verbose:
+        logger.info("\nGrid search completed")
+        logger.info(f"Best parameters: {best_params}")
+        logger.info(f"Best CV {refit}: {best_score:.4f}")
+        if test_scores:
+            logger.info("Test set performance:")
+            for metric, score in test_scores.items():
+                logger.info(f"{metric}: {score:.4f}")
+    
+    return best_model, best_params, best_score
 
 
 def save_feature_importances(
