@@ -1075,6 +1075,7 @@ def catboost_feature_selection(
     output_dir: Union[str, Path],
     contamination_status_col: str,
     method: str = 'rfe',
+    n_top_features: int = 100,  # New parameter
     filter_col: Union[str, None] = None,
     filter_val: Union[str, None] = None
 ) -> Any:
@@ -1208,5 +1209,24 @@ def catboost_feature_selection(
         plt.savefig(output_dir / f"shap_dependence_{feature}.png", bbox_inches='tight')
         logger.info(str(output_dir / f"shap_dependence_{feature}.png"))
         plt.close()
-        
-    return best_model
+
+    model = best_model
+    # Get feature importances
+    if hasattr(model, 'feature_importances_'):
+        importances = model.feature_importances_
+    else:
+        # For RFE, use ranking (1 = selected)
+        importances = [1 if s else 0 for s in selector.support_]
+    
+    # Create feature importance Series
+    feat_imp = pd.Series(importances, index=features.columns, name='importance')
+    feat_imp = feat_imp.sort_values(ascending=False)
+    
+    # Get top N features
+    top_features = feat_imp.head(n_top_features).index.tolist()
+    
+    return {
+        'model': model,
+        'feature_importances': feat_imp,
+        'top_features': top_features
+    }
