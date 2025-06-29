@@ -1027,9 +1027,12 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
                         
-                        # Update task description dynamically
-                        desc = f"[cyan]{table_type}/{level}: {cfg['name']}"
-                        progress.update(main_task, description=desc)
+                        # Create child task with fixed description
+                        child_task = progress.add_task(
+                            f"{table_type} | {level} | {cfg['name']}",
+                            parent=main_task,
+                            total=1
+                        )
                         
                         try:
                             # Run the test directly
@@ -1043,7 +1046,10 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             logger.error(f"Test failed: {e}")
                         finally:
-                            progress.advance(main_task)  # Update after each test
+                            # Complete and remove child task
+                            progress.update(child_task, completed=1)
+                            progress.remove_task(child_task)
+                            progress.advance(main_task)  # Update main task after each test
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
