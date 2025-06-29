@@ -306,6 +306,7 @@ def import_merged_meta_tsv(
             task = progress.add_task(
                 "Loading metadata files".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=len(meta_paths)
+            )
             for path in meta_paths:
                 try:
                     dfs.append(import_meta_tsv(path, column_renames))
