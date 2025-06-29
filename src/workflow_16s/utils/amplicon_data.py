@@ -950,6 +950,7 @@ class _AnalysisManager(_ProcessingMixin):
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
         self._run_ml_feature_selection(ml_tables)
+        self._compare_top_features()
         del ml_tables
 
         # Add FAPROTAX annotations only to top features
@@ -1155,7 +1156,6 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection on normalized tables."""
-        # Use configurable group column
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         tot = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
@@ -1176,6 +1176,7 @@ class _AnalysisManager(_ProcessingMixin):
                 methods = ml_cfg.get("methods", ["rfe"])
 
                 for level, table in levels.items():
+                    self.models[table_type].setdefault(level, {})
                     for method in methods:
                         child_task = progress.add_task(
                             f"{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
@@ -1186,26 +1187,70 @@ class _AnalysisManager(_ProcessingMixin):
                         X = table_to_dataframe(table)
                         X.index = X.index.str.lower()
                         y = self.meta.set_index("#sampleid")[[group_col]]
-                        # Fix index mismatch - lowercase y index to match X
                         y.index = y.index.astype(str).str.lower()
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
                         try:
-                            best_model = catboost_feature_selection(
+                            # MODIFIED: Capture model results including top features
+                            model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
                                 output_dir=mdir,
-                                # Use configurable group column
                                 contamination_status_col=group_col,
                                 method=method,
+                                n_top_features=100  # Collect top 100 features
                             )
+                            self.models[table_type][level][method] = model_result
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
+                            self.models[table_type][level][method] = None
                         progress.update(child_task, completed=1)
                         progress.remove_task(child_task)
                         progress.update(parent_task, advance=1)
-
+                        
+    # NEW METHOD: Compare model-selected features with statistical features
+    def _compare_top_features(self) -> None:
+        """Compares top features from ML models with statistical results."""
+        if not self.models:
+            return
+            
+        # Collect all statistically significant features
+        stat_features = {}
+        for table_type, tests in self.stats.items():
+            for test_name, levels in tests.items():
+                for level, df in levels.items():
+                    key = (table_type, level)
+                    sig_df = df[df["p_value"] < 0.05]
+                    if not sig_df.empty:
+                        if key not in stat_features:
+                            stat_features[key] = set()
+                        stat_features[key].update(sig_df["feature"].tolist())
+        
+        # Compare with model features
+        for table_type, levels in self.models.items():
+            for level, methods in levels.items():
+                key = (table_type, level)
+                stat_set = stat_features.get(key, set())
+                
+                for method, model_result in methods.items():
+                    if model_result is None:
+                        continue
+                        
+                    # Get top features from model
+                    model_set = set(model_result.get("top_features", []))
+                    
+                    # Calculate overlap
+                    overlap = model_set & stat_set
+                    jaccard = len(overlap) / len(model_set | stat_set) if (model_set or stat_set) else 0.0
+                    
+                    # Log comparison results
+                    logger.info(
+                        f"Feature comparison ({table_type}/{level}/{method}): "
+                        f"Model features: {len(model_set)}, "
+                        f"Statistical features: {len(stat_set)}, "
+                        f"Overlap: {len(overlap)} ({jaccard:.1%})"
+                    )
 
 class AmpliconData:
     """
