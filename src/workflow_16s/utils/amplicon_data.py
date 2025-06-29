@@ -75,6 +75,7 @@ RESET = "\033[0m"
 DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+DEFAULT_MODE = 'genus'
 
 # ===================================== CLASSES ====================================== #
 
@@ -942,8 +943,10 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ordination()
 
         # Keep only necessary tables for ML
+        #ml_table_types = {"normalized", "clr_transformed"}
+        ml_table_types = {"clr_transformed"}
         ml_tables = {
-            t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}
+            t: d for t, d in self.tables.items() if t in ml_table_types
         }
         self._run_ml_feature_selection(ml_tables)
         del ml_tables
@@ -1187,14 +1190,17 @@ class _AnalysisManager(_ProcessingMixin):
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
-                        catboost_feature_selection(
-                            metadata=y,
-                            features=X,
-                            output_dir=mdir,
-                            # Use configurable group column
-                            contamination_status_col=group_col,
-                            method=method,
-                        )
+                        try:
+                            catboost_feature_selection(
+                                metadata=y,
+                                features=X,
+                                output_dir=mdir,
+                                # Use configurable group column
+                                contamination_status_col=group_col,
+                                method=method,
+                            )
+                        except  Exception as e:
+            logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
                         progress.update(child_task, completed=1)
                         progress.remove_task(child_task)
                         progress.update(parent_task, advance=1)
@@ -1226,7 +1232,7 @@ class AmpliconData:
         self, 
         cfg: Dict, 
         project_dir: Any, 
-        mode: str = "genus", 
+        mode: str = DEFAULT_MODE, 
         verbose: bool = False
     ):
         """
