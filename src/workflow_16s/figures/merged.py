@@ -170,7 +170,7 @@ def _prepare_visualization_data(
         if col not in meta_filtered.columns:
             if verbose:
                 logger.warning(
-                    f"Column '{col}' missing from metadata. "J
+                    f"Column '{col}' missing from metadata. "
                     f"Creating placeholder column."
                 )
             meta_filtered[col] = placeholder
