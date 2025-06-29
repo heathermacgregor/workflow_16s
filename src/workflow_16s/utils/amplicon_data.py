@@ -3,30 +3,16 @@
 # Standard Library Imports
 import glob
 import logging
-import time
-import warnings
 import os
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
-import numpy as np
 import pandas as pd
 from biom.table import Table
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    TaskID,
-    ProgressColumn,
-    Task,
-)
-from rich.text import Text
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -42,12 +28,11 @@ from workflow_16s.utils.file_utils import (
     import_merged_meta_tsv,
     filter_and_reorder_biom_and_metadata as update_tables,
 )
-from workflow_16s.utils.misc_utils import print_structure
 from workflow_16s.stats.utils import (
     clr_transform_table,
     filter_table,
-    normalize_table,
     merge_table_with_metadata,
+    normalize_table,
     table_to_dataframe,
 )
 from workflow_16s.stats.tests import (
@@ -62,21 +47,17 @@ from workflow_16s.stats.beta_diversity import (
     tsne as calculate_tsne,
     umap as calculate_umap,
 )
-from workflow_16s.figures.merged.merged import (
+from workflow_16s.figures.merged import (
     mds as plot_mds,
     pca as plot_pca,
     pcoa as plot_pcoa,
     sample_map_categorical,
 )
 from workflow_16s.function.faprotax import (
-    get_faprotax_parsed,
     faprotax_functions_for_taxon,
+    get_faprotax_parsed,
 )
 from workflow_16s.models.feature_selection import (
-    filter_data,
-    grid_search,
-    perform_feature_selection,
-    save_feature_importances,
     catboost_feature_selection,
 )
 
