@@ -28,39 +28,41 @@ largecolorset = list(
 
 # Define the plot template
 pio.templates["heather"] = go.layout.Template(
-    layout={
-        'title': {
-            'font': {
-                'family': 'HelveticaNeue-CondensedBold, Helvetica, Sans-serif',
-                'size'  : 40,
-                'color' : '#000'
-            }
-        },
-        'font': {
-            'family': 'Helvetica Neue, Helvetica, Sans-serif',
-            'size'  : 26,
-            'color' : '#000'
-        },
-        'paper_bgcolor': 'rgba(0, 0, 0, 0)',
-        'plot_bgcolor' : '#fff',
-        'colorway'     : largecolorset,
-        'xaxis': {
-            'showgrid'  : False,
-            'showline'  : True,
-            'linewidth' : 7,
-            'linecolor' : 'black',
-            'automargin': True,
-            'mirror'    : True
-        },
-        'yaxis': {
-            'showgrid'  : False,
-            'showline'  : True,
-            'linewidth' : 7,
-            'linecolor' : 'black',
-            'automargin': True,
-            'mirror'    : True
-        }
+  layout={
+    'title': {
+      'font': {
+        'family': 'HelveticaNeue-CondensedBold, Helvetica, Sans-serif',
+        'size': 40,
+        'color': '#000' # Black
+      }
+    },
+    'font': {
+      'family': 'Helvetica Neue, Helvetica, Sans-serif',
+      'size': 26,
+      'color' : '#000'
+    },
+    'paper_bgcolor': 'rgba(0, 0, 0, 0)', # Transparent
+    'plot_bgcolor': '#fff', # White
+    'colorway': largecolorset,
+    'xaxis': {
+      'showgrid': False,
+      'zeroline': True
+      'showline': True,
+      'linewidth': 7,
+      'linecolor': 'black',
+      'automargin': True,
+      'mirror': True
+    },
+    'yaxis': {
+      'showgrid': False,
+      'zeroline': True
+      'showline': True,
+      'linewidth': 7,
+      'linecolor': 'black',
+      'automargin': True,
+      'mirror': True
     }
+  }
 )
 pio.templates.default = "heather" 
 
@@ -73,17 +75,34 @@ def plotly_show_and_save(
     save_as: List[str] = ['png', 'html'],
     verbose: bool = False
 ):
+    """
+    Save a Plotly figure to PNG and/or HTML formats and optionally display it.
+    
+    Args:
+        fig:         Plotly Figure object to be saved/displayed.
+        show:        Whether to display the figure (default: False).
+        output_path: Base output path for files. Actual files will have format-
+                     specific extensions appended (.png, .html). Directory will 
+                     be created if needed.
+        save_as:     List of formats to save (supported: 'png', 'html'). 
+                     Default: ['png','html']
+        verbose:     If True, logs success messages; errors are always logged.
+    
+    Notes:
+        - PNG saving requires kaleido: install with `pip install -U kaleido`
+        - File extensions are automatically handled (e.g., 'plot' becomes 'plot.png')
+        - Directory creation errors will propagate (not caught in exception handling)
+    """
     if output_path:
         output_path = Path(output_path)
         output_dir = output_path.parent.resolve()
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        # Handle PNG saving with APPENDED extension
         if 'png' in save_as:
-            png_file = output_path.with_name(output_path.name + ".png")  # Append .png
+            png_file = output_path.with_suffix('.png')  # Replace with .png
             try:
                 fig.write_image(
-                    str(png_file),  # Use new path
+                    str(png_file),
                     format='png', 
                     scale=3,
                     engine='kaleido'
@@ -95,9 +114,8 @@ def plotly_show_and_save(
                 if verbose:
                     logger.info("Install kaleido: pip install -U kaleido")
         
-        # Handle HTML saving with APPENDED extension
         if 'html' in save_as:
-            html_file = output_path.with_name(output_path.name + ".html")  # Append .html
+            html_file = output_path.with_suffix('.html')  # Replace with .html
             try:
                 fig.write_html(str(html_file))
                 if verbose:
@@ -130,16 +148,38 @@ def marker_color_map(
     continuous_color_set: bool = False
 ) -> None:
     """
-    Color map markers based on a column.
+    Generate color mappings for markers based on a DataFrame column.
+    
+    Creates either continuous (numeric) or categorical color mappings for 
+    data visualization. For continuous data, uses a viridis colormap and 
+    normalizes values. For categorical data, assigns unique colors from a 
+    large color set.
     
     Args:
-        df: 
-        col:
-        continuous_color_set:
-
+        df:                   DataFrame containing the data to color-map.
+        col:                  Column name in `df` to base color mapping on.
+        continuous_color_set: If True, treats column as continuous/numeric data. 
+                              If False (default), treats as categorical data.
+    
     Returns:
-        color_map_dict:
-        color_map_col:
+        tuple: 
+            - For continuous: (ScalarMappable, list) 
+                - ScalarMappable: Matplotlib mappable object for colorbar 
+                  creation
+                - list: RGBA color strings for each data point
+            - For categorical: (dict, pd.Series)
+                - dict: Color mapping dictionary {category: rgba_color}
+                - Series: RGBA color strings for each data point (aligned 
+                  with df index)
+    
+    Raises:
+        ValueError: If `continuous_color_set=True` but column contains 
+        non-numeric data
+    
+    Notes:
+        - Handles NaN values by assigning transparent black (rgba(0,0,0,0))
+        - Continuous mode adds a 'marker_color' column to the input DataFrame
+        - Categorical mode does not modify the input DataFrame
     """
     nan_color = (0, 0, 0, 0)
     if continuous_color_set:
@@ -199,56 +239,39 @@ def create_color_mapping(
 
 
 def plot_legend(
-    color_dict: Dict[str, str], 
-    color_col: str, 
+    color_dict: dict[str, str], 
     show: bool = False,
-    output_path: Union[str, Path] = None
+    output_path: str | Path = None
 ) -> None:
     """
-    Creates a legend image from a dictionary where the keys are 
-    labels and the values are hex colors.
+    Creates a legend image from a dictionary where keys are labels and 
+    values are hex colors.
     
     Args:
-        color_dict:  A dictionary where the keys are strings 
-                     (labels) and values are hex colors.
-        output_file: The path to save the generated legend image.
+        color_dict:  Dictionary with labels as keys and hex colors as 
+                     values.
+        show:        If True, displays the legend using plt.show().
+        output_path: Path to save the generated legend image (optional).
     """
-    n = len(color_dict) # Number of items in the legend
+    n = len(color_dict)  # Number of items in the legend
     
-    # Create a figure
+    # Create figure
     fig, ax = plt.subplots(figsize=(3, n * 0.5))
-    ax.axis('off') # Remove axes
+    ax.axis('off')  # Remove axes
     
-    # Iterate over the dictionary and add each label and color to the plot
+    # Add legend items
     for i, (label, color) in enumerate(color_dict.items()):
-        ax.add_patch(
-          plt.Rectangle((0, i), 1, 1, color=color)
-        )
-        ax.text(
-          1.2, i + 0.5, 
-          label, 
-          va='center', 
-          fontsize=16, 
-          color='#000'
-        )
+        ax.add_patch(plt.Rectangle((0, i), 1, 1, color=color))
+        ax.text(1.2, i + 0.5, label, va='center', fontsize=16, color='#000')
     
-    # Set the limits of the plot to fit all items
+    # Set plot limits
     ax.set_xlim(0, 3)
     ax.set_ylim(0, n)
-
     
-    # Save the figure
-    try:
-        if output_path:
-            plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
-        if show:
-            plt.show()
-    except:
-        if output_path:
-            plotly_show_and_save(
-                fig,
-                show=show,
-                output_path=output_path   
-            )
-    plt.close()
-    return fig
+    # Save or show
+    if output_path:
+        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
+    if show:
+        plt.show()
+    
+    plt.close(fig)  # Close the figure to free memory
