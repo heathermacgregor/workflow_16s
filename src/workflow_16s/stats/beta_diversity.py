@@ -3,7 +3,7 @@
 # Standard Library Imports
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 # Third-Party Imports
 import numpy as np
@@ -11,18 +11,17 @@ import pandas as pd
 from biom import Table
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
-from skbio.stats.composition import clr as CLR
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore") # Suppress warnings
 
 # ================================= GLOBAL VARIABLES ================================= #
 
@@ -36,9 +35,7 @@ DEFAULT_CPU_LIMIT = 1  # Default CPU limit for parallel operations
 
 # ==================================== FUNCTIONS ===================================== #
 
-def table_to_dataframe(
-    table: Union[Dict[Any, Any], Table]
-) -> pd.DataFrame:
+def table_to_dataframe(table: Union[Dict[Any, Any], Table]) -> pd.DataFrame:
     """
     Convert a BIOM Table or dictionary to a pandas DataFrame.
     
@@ -50,13 +47,21 @@ def table_to_dataframe(
     Returns:
         df:    Pandas DataFrame of shape (n_samples, n_features) with samples
                as rows and features as columns.
+    
+    Raises:
+        ValueError: If input type is not supported.
     """
     if isinstance(table, Table):
         # Convert BIOM Table to DataFrame (features x samples), then transpose
         df = table.to_dataframe(dense=True).T
+    elif isinstance(table, dict):
+        # Construct DataFrame from dict with samples as rows
+        df = pd.DataFrame.from_dict(table, orient='index')
+    elif isinstance(table, pd.DataFrame):
+        # Return as-is if already a DataFrame
+        df = table
     else:
-        # Construct DataFrame directly from dict-like mapping
-        df = pd.DataFrame(table)
+        raise ValueError("Unsupported input type for table conversion")
     return df
 
 
@@ -74,15 +79,23 @@ def distance_matrix(
     
     Returns:
         dm:     2D numpy array representing the pairwise distance matrix.
+    
+    Raises:
+        ValueError: If fewer than 2 samples are provided.
     """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
+    df = table_to_dataframe(table)
+    
+    # Validate sample size
+    if df.shape[0] < 2:
+        raise ValueError("At least 2 samples required for distance calculation")
+    
     # Compute condensed distance vector and convert to square form
-    dm = squareform(pdist(table.values, metric=metric))
+    dm = squareform(pdist(df.values, metric=metric))
     return dm
 
+
 def pcoa(
-    table: Table, 
+    table: Union[Dict, Table, pd.DataFrame], 
     metric: str = DEFAULT_METRIC, 
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
 ) -> PCoA:
@@ -90,49 +103,51 @@ def pcoa(
     Perform Principal Coordinate Analysis (PCoA) on a feature table.
     
     Args:
-        table:        Input BIOM Table.
+        table:        Input feature table as a dict-like, BIOM Table, or DataFrame.
         metric:       Distance metric for computing pairwise distances.
         n_dimensions: Number of principal coordinates to compute.
     
     Returns:
         pcoa_result: PCoA result object containing:
-            - samples:              DataFrame of PCoA coordinates
+            - samples: DataFrame of PCoA coordinates
             - proportion_explained: Explained variance ratios
+    
+    Raises:
+        ValueError: If fewer than 2 samples are provided.
     """
     # Convert to dataframe with samples as rows
     df = table_to_dataframe(table)
+    
+    # Validate sample size
+    if df.shape[0] < 2:
+        raise ValueError("At least 2 samples required for PCoA")
+    
     sample_ids = df.index.tolist()
     
-    # Compute pairwise distances
-    condensed_dists = pdist(df, metric=metric)
-    
-    # Convert to square form
-    square_dists = squareform(condensed_dists)
+    # Compute pairwise distances using optimized method
+    dist_matrix = pairwise_distances(df.values, metric=metric)
     
     # Create DistanceMatrix with sample IDs
-    dist_matrix = DistanceMatrix(square_dists, ids=sample_ids)
+    dist_matrix = DistanceMatrix(dist_matrix, ids=sample_ids)
     
-    # Perform PCoA
-    try:
-        # Perform PCoA
-        pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
-        
-        # Ensure consistent PC naming
-        pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
-        
-        return pcoa_result
-    except:
-        # Perform PCoA
-        pcoa_result = PCoA(dist_matrix, number_of_dimensions=3)
-        
-        # Ensure consistent PC naming
-        pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(3)]
-        
-        return pcoa_result
+    # Set safe dimension limit
+    max_dims = min(df.shape[0] - 1, df.shape[1] - 1)
+    if n_dimensions is None:
+        n_dimensions = max_dims
+    else:
+        n_dimensions = min(n_dimensions, max_dims)
+    
+    # Perform PCoA with safe dimension setting
+    pcoa_result = PCoA(dist_matrix, number_of_dimensions=n_dimensions)
+    
+    # Ensure consistent PC naming
+    pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
+    
+    return pcoa_result
 
 
 def pca(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_PCA
 ) -> Dict[str, Any]:
     """
@@ -145,17 +160,28 @@ def pca(
     
     Returns:
         Dictionary containing:
-            - 'components':    DataFrame of component scores (samples x components)
+            - 'components': DataFrame of component scores (samples x components)
             - 'exp_var_ratio': Explained variance ratios per component
             - 'exp_var_cumul': Cumulative explained variance ratios
-            - 'loadings':      PCA loadings (features x components)
+            - 'loadings': PCA loadings (features x components)
+    
+    Raises:
+        ValueError: If fewer than 2 samples are provided or n_components is invalid.
     """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
-    print(table.shape)
+    df = table_to_dataframe(table)
+    
+    # Validate input
+    if df.shape[0] < 2:
+        raise ValueError("At least 2 samples required for PCA")
+    if n_components < 1:
+        raise ValueError("n_components must be >= 1")
+    
+    # Set safe component limit
+    n_components = min(n_components, df.shape[0] - 1, df.shape[1] - 1)
+    
     # Standardize features
-    scaled = StandardScaler().fit_transform(table.values)
-    scaled_df = pd.DataFrame(scaled, index=table.index, columns=table.columns)
+    scaled = StandardScaler().fit_transform(df.values)
+    scaled_df = pd.DataFrame(scaled, index=df.index, columns=df.columns)
 
     # Fit PCA
     pca_model = PCA(n_components=n_components)
@@ -164,7 +190,7 @@ def pca(
     # Prepare results
     components_df = pd.DataFrame(
         scores,
-        index=table.index,
+        index=df.index,
         columns=[f"PC{i+1}" for i in range(n_components)]
     )
     exp_var_ratio = pca_model.explained_variance_ratio_
@@ -180,7 +206,7 @@ def pca(
 
 
 def tsne(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_TSNE,
     random_state: int = DEFAULT_RANDOM_STATE,
     n_jobs: int = DEFAULT_CPU_LIMIT
@@ -196,29 +222,39 @@ def tsne(
         n_jobs:       Number of CPU cores to use.
     
     Returns:
-        tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
+        tsne_df:      DataFrame of shape (n_samples, n_components) with t-SNE 
                       coordinates.
+    
+    Raises:
+        ValueError: If fewer than 2 samples are provided or n_components is invalid.
     """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
+    df = table_to_dataframe(table)
+    
+    # Validate input
+    if df.shape[0] < 2:
+        raise ValueError("At least 2 samples required for t-SNE")
+    if n_components < 1:
+        raise ValueError("n_components must be >= 1")
+    
+    # Set safe component limit
+    n_components = min(n_components, df.shape[0] - 1)
 
     tsne_arr = TSNE(
         n_components=n_components, 
         random_state=random_state,
         n_jobs=n_jobs
-    ).fit_transform(
-        table.values
-    )
+    ).fit_transform(df.values)
+    
     tsne_df = pd.DataFrame(
         tsne_arr,
-        index=table.index,
-        columns=[f"TSNE{i+1}" for i in range(n_components)]
+        index=df.index,
+        columns=[f"tSNE{i+1}" for i in range(n_components)]
     )
     return tsne_df
 
 
 def umap(
-    table: Union[Dict[Any, Any], Table, pd.DataFrame],
+    table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_UMAP,
     random_state: int = DEFAULT_RANDOM_STATE,
     n_jobs: int = DEFAULT_CPU_LIMIT
@@ -235,21 +271,32 @@ def umap(
     
     Returns:
         umap_df:      DataFrame of shape (n_samples, n_components) with UMAP 
-                       coordinates.
+                      coordinates.
+    
+    Raises:
+        ValueError: If fewer than 2 samples are provided or n_components is invalid.
     """
-    if not isinstance(table, pd.DataFrame):
-        table = table_to_dataframe(table)
+    df = table_to_dataframe(table)
+    
+    # Validate input
+    if df.shape[0] < 2:
+        raise ValueError("At least 2 samples required for UMAP")
+    if n_components < 1:
+        raise ValueError("n_components must be >= 1")
+    
+    # Set safe component limit
+    n_components = min(n_components, df.shape[0] - 1)
 
     umap_arr = UMAP(
         n_components=n_components,
         init='random',
         random_state=random_state,
         n_jobs=n_jobs
-    ).fit_transform(table.values)
+    ).fit_transform(df.values)
+    
     umap_df = pd.DataFrame(
         umap_arr,
-        index=table.index,
+        index=df.index,
         columns=[f"UMAP{i+1}" for i in range(n_components)]
     )
     return umap_df
-    
