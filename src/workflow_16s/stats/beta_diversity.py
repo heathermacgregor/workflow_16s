@@ -40,15 +40,16 @@ def table_to_dataframe(
     table: Union[Dict[Any, Any], Table]
 ) -> pd.DataFrame:
     """
-    Convert a BIOM Table or a mapping to a pandas DataFrame.
-
+    Convert a BIOM Table or dictionary to a pandas DataFrame.
+    
     Args:
         table: Input feature table, either a BIOM Table or a dict-like
                object where keys are sample identifiers and values are feature
                counts or abundances.
-
+    
     Returns:
-        df:    A pandas DataFrame of shape (n_samples, n_features).
+        df:    Pandas DataFrame of shape (n_samples, n_features) with samples
+               as rows and features as columns.
     """
     if isinstance(table, Table):
         # Convert BIOM Table to DataFrame (features x samples), then transpose
@@ -64,15 +65,15 @@ def distance_matrix(
     metric: str = DEFAULT_METRIC
 ) -> np.ndarray:
     """
-    Compute a pairwise distance matrix from a feature table.
-
+    Compute pairwise distance matrix from a feature table.
+    
     Args:
         table:  Input feature table as a dict-like, BIOM Table, or DataFrame
                 (samples x features or features x samples).
         metric: Distance metric name accepted by scipy.spatial.distance.pdist.
-
+    
     Returns:
-        dm:     A 2D numpy array representing the pairwise distance matrix.
+        dm:     2D numpy array representing the pairwise distance matrix.
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -86,7 +87,17 @@ def pcoa(
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
 ) -> PCoA:
     """
-    Compute PCoA with proper sample ID handling
+    Perform Principal Coordinate Analysis (PCoA) on a feature table.
+    
+    Args:
+        table:        Input BIOM Table.
+        metric:       Distance metric for computing pairwise distances.
+        n_dimensions: Number of principal coordinates to compute.
+    
+    Returns:
+        pcoa_result: PCoA result object containing:
+            - samples:              DataFrame of PCoA coordinates
+            - proportion_explained: Explained variance ratios
     """
     # Convert to dataframe with samples as rows
     df = table_to_dataframe(table)
@@ -126,18 +137,18 @@ def pca(
 ) -> Dict[str, Any]:
     """
     Perform Principal Component Analysis (PCA) on a feature table.
-
+    
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
                       (samples x features or features x samples).
         n_components: Number of principal components to compute.
-
+    
     Returns:
-        A dictionary with the following keys:
-            - 'components': DataFrame of component scores (samples x components).
-            - 'exp_var_ratio': Array of explained variance ratios per component.
-            - 'exp_var_cumul': Cumulative explained variance ratios.
-            - 'loadings': Array of PCA loadings (features x components).
+        Dictionary containing:
+            - 'components':    DataFrame of component scores (samples x components)
+            - 'exp_var_ratio': Explained variance ratios per component
+            - 'exp_var_cumul': Cumulative explained variance ratios
+            - 'loadings':      PCA loadings (features x components)
     """
     if not isinstance(table, pd.DataFrame):
         table = table_to_dataframe(table)
@@ -176,14 +187,14 @@ def tsne(
 ) -> pd.DataFrame:
     """
     Compute t-distributed Stochastic Neighbor Embedding (t-SNE) reduction.
-
+    
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
                       (samples x features or features x samples).
         n_components: Dimension of the embedded space.
         random_state: Random seed for reproducibility.
-        n_jobs:       Number of CPU cores to use (default: 1)
-
+        n_jobs:       Number of CPU cores to use.
+    
     Returns:
         tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
                       coordinates.
@@ -214,16 +225,16 @@ def umap(
 ) -> pd.DataFrame:
     """
     Compute Uniform Manifold Approximation and Projection (UMAP) reduction.
-
+    
     Args:
         table:        Input feature table as a dict-like, BIOM Table, or DataFrame
                       (samples x features or features x samples).
         n_components: Dimension of the embedded space.
         random_state: Random seed for reproducibility.
-        n_jobs:       Number of CPU cores to use (default: 1)
-
+        n_jobs:       Number of CPU cores to use.
+    
     Returns:
-        umap_df:       DataFrame of shape (n_samples, n_components) with UMAP 
+        umap_df:      DataFrame of shape (n_samples, n_components) with UMAP 
                        coordinates.
     """
     if not isinstance(table, pd.DataFrame):
@@ -241,3 +252,4 @@ def umap(
         columns=[f"UMAP{i+1}" for i in range(n_components)]
     )
     return umap_df
+    
