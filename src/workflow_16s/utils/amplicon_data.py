@@ -6,11 +6,11 @@ import time
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 
 # Third‑Party Imports
-import numpy as np 
+import numpy as np
 import pandas as pd
 from biom.table import Table
 from rich.progress import (
@@ -22,7 +22,7 @@ from rich.progress import (
     TimeRemainingColumn,
     TaskID,
     ProgressColumn,
-    Task
+    Task,
 )
 from rich.text import Text
 
@@ -95,6 +95,7 @@ DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ===================================== CLASSES ====================================== #
 
+
 class _ProcessingMixin:
     def _run_processing_step(
         self,
@@ -106,22 +107,18 @@ class _ProcessingMixin:
         log_template: Optional[str] = None,
         log_action: Optional[str] = None,
     ) -> Dict[str, Table]:
-        
+
         processed: Dict[str, Table] = {}
-        
+
         if getattr(self, "verbose", False):
             logger.info(f"{process_name}")
             for level in levels:
                 start_time = time.perf_counter()  # More precise timing
-                processed[level] = process_func(
-                    get_source(level), level, *func_args
-                )
+                processed[level] = process_func(get_source(level), level, *func_args)
                 duration = time.perf_counter() - start_time
                 # Only log if we have a template or action
                 if log_template or log_action:
-                    self._log_level_action(
-                        level, log_template, log_action, duration
-                    )
+                    self._log_level_action(level, log_template, log_action, duration)
         else:
             logger.debug(f"{process_name}")
             with get_progress_bar() as progress:
@@ -134,23 +131,19 @@ class _ProcessingMixin:
                     child_task = progress.add_task(
                         f"Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
                         parent=parent_task,
-                        total=1
+                        total=1,
                     )
-                    processed[level] = process_func(
-                        get_source(level), level, *func_args
-                    )
+                    processed[level] = process_func(get_source(level), level, *func_args)
                     duration = time.perf_counter() - start_time
-                    
+
                     # Only log if we have a template or action
                     if log_template or log_action:
-                        self._log_level_action(
-                            level, log_template, log_action, duration
-                        )
-                    
+                        self._log_level_action(level, log_template, log_action, duration)
+
                     progress.update(child_task, completed=1)
                     progress.remove_task(child_task)
                     progress.update(parent_task, advance=1)
-                    
+
         return processed
 
     def _log_level_action(
@@ -165,14 +158,14 @@ class _ProcessingMixin:
             message = template.format(level=level)
         elif action:
             message = f"{level} {action}"
-        
+
         # Only append duration if we have a message to log
         if message and duration is not None:
             message += f" in {duration:.2f}s"
-        
+
         if message:
             logger.debug(message)
-            
+
 
 class StatisticalAnalyzer:
     TEST_CONFIG = {
@@ -217,66 +210,26 @@ class StatisticalAnalyzer:
         group_column: str,
         group_values: List[Any],
         enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
     ) -> Dict[str, Any]:
         results: Dict[str, Any] = {}
         # Pre-align samples once instead of in each test
         table, metadata = update_tables(table, metadata)
-        
-        if not (progress and task_id):
-            for test_name in enabled_tests:
-                if test_name not in self.TEST_CONFIG:
-                    continue
-                cfg = self.TEST_CONFIG[test_name]
-                if self.verbose:
-                    logger.info(f"Running {cfg['name']}...")
-                results[cfg["key"]] = cfg["func"](
-                    table=table,
-                    metadata=metadata,
-                    group_column=group_column,
-                    group_column_values=group_values,
-                )
-            return results
 
-        parent_task = progress.add_task(
-            "Running statistical tests...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-            total=len(enabled_tests), 
-            parent=task_id
-        )
-        
         for test_name in enabled_tests:
             if test_name not in self.TEST_CONFIG:
                 continue
             cfg = self.TEST_CONFIG[test_name]
-            
-            child_task = progress.add_task(
-                f"{cfg['name']}",
-                parent=parent_task,
-                total=1
+            if self.verbose:
+                logger.info(f"Running {cfg['name']}...")
+            results[cfg["key"]] = cfg["func"](
+                table=table,
+                metadata=metadata,
+                group_column=group_column,
+                group_column_values=group_values,
             )
-            
-            try:
-                if self.verbose:
-                    logger.info(f"Running {cfg['name']}...")
-                results[cfg["key"]] = cfg["func"](
-                    table=table,
-                    metadata=metadata,
-                    group_column=group_column,
-                    group_column_values=group_values,
-                )
-            finally:
-                progress.update(child_task, completed=1)
-                progress.remove_task(child_task)
-                progress.update(parent_task, advance=1)
-        progress.remove_task(parent_task)        
         return results
 
-    def get_effect_size(
-        self, 
-        test_name: str, 
-        row: pd.Series
-    ) -> Optional[float]:
+    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
         if test_name not in self.TEST_CONFIG:
             return None
         cfg = self.TEST_CONFIG[test_name]
@@ -284,44 +237,29 @@ class StatisticalAnalyzer:
             if col and col in row:
                 return row[col]
         return None
-        
+
 
 class Ordination:
     TEST_CONFIG = {
-        "pca": {
-            "key": "pca", 
-            "func": calculate_pca, 
-            "plot_func": plot_pca, 
-            "name": "PCA"
-        },
-        "pcoa": {
-            "key": "pcoa", 
-            "func": calculate_pcoa, 
-            "plot_func": plot_pcoa, 
-            "name": "PCoA"
-        },
+        "pca": {"key": "pca", "func": calculate_pca, "plot_func": plot_pca, "name": "PCA"},
+        "pcoa": {"key": "pcoa", "func": calculate_pcoa, "plot_func": plot_pcoa, "name": "PCoA"},
         "tsne": {
-            "key": "tsne", 
-            "func": calculate_tsne, 
-            "plot_func": plot_mds, 
-            "name": "t‑SNE", 
-            "plot_kwargs": {"mode": "TSNE"}
+            "key": "tsne",
+            "func": calculate_tsne,
+            "plot_func": plot_mds,
+            "name": "t‑SNE",
+            "plot_kwargs": {"mode": "TSNE"},
         },
         "umap": {
-            "key": "umap", 
-            "func": calculate_umap, 
-            "plot_func": plot_mds, 
-            "name": "UMAP", 
-            "plot_kwargs": {"mode": "UMAP"}
+            "key": "umap",
+            "func": calculate_umap,
+            "plot_func": plot_mds,
+            "name": "UMAP",
+            "plot_kwargs": {"mode": "UMAP"},
         },
     }
 
-    def __init__(
-        self, 
-        cfg: Dict, 
-        output_dir: Union[str, Path], 
-        verbose: bool = False
-    ):
+    def __init__(self, cfg: Dict, output_dir: Union[str, Path], verbose: bool = False):
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
@@ -336,8 +274,6 @@ class Ordination:
         symbol_col: str,
         transformation: str,
         enabled_tests: List[str],
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
         **kwargs,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         trans_cfg = self.cfg.get("ordination", {}).get(transformation, {})
@@ -345,169 +281,112 @@ class Ordination:
         if not tests_to_run:
             return {}, {}
 
-        try:
-            table, metadata = update_tables(table, metadata)
-            
-            if not (progress and task_id):
-                return self._run_without_progress(
-                    table, metadata, color_col, symbol_col, 
-                    transformation, tests_to_run, trans_cfg, kwargs
-                )
+        table, metadata = update_tables(table, metadata)
+        return self._run_without_progress(
+            table,
+            metadata,
+            color_col,
+            symbol_col,
+            transformation,
+            tests_to_run,
+            trans_cfg,
+            kwargs,
+        )
 
-            parent_task = progress.add_task(
-                f"Running {transformation} ordination...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(tests_to_run),
-                parent=task_id
-            )
-            
-            results, figures = {}, {}
-            for tname in tests_to_run:
-                cfg = self.TEST_CONFIG[tname]
-                child_task = progress.add_task(
-                    f"[cyan]{cfg['name']}",
-                    parent=parent_task,
-                    total=1
-                )
-                
-                try:
-                    res, fig = self._run_ordination_method(
-                        cfg, table, metadata, color_col,
-                        symbol_col, transformation, trans_cfg, kwargs
-                    )
-                    results[cfg["key"]] = res
-                    figures[cfg["key"]] = fig
-                except Exception as e:
-                    logger.error(
-                        f"Failed {tname} for {transformation}: {e}"
-                    )
-                    figures[cfg["key"]] = None
-                finally:
-                    progress.update(child_task, completed=1)
-                    progress.remove_task(child_task)
-                    progress.update(parent_task, advance=1)
-            return results, figures
-        finally:
-            pass  # Cleanup if needed
-            
     def _run_without_progress(
-        self, 
-        table, 
-        metadata, 
-        color_col, 
-        symbol_col, 
-        transformation, 
-        tests_to_run, 
-        trans_cfg, 
-        kwargs
+        self,
+        table,
+        metadata,
+        color_col,
+        symbol_col,
+        transformation,
+        tests_to_run,
+        trans_cfg,
+        kwargs,
     ):
         results, figures = {}, {}
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
                 res, fig = self._run_ordination_method(
-                    cfg, table, metadata, color_col, 
-                    symbol_col, transformation, trans_cfg, kwargs
+                    cfg, table, metadata, color_col, symbol_col, transformation, trans_cfg, kwargs
                 )
                 results[cfg["key"]] = res
                 figures[cfg["key"]] = fig
             except Exception as e:
-                logger.error(
-                    f"Failed {tname} for {transformation}: {e}"
-                )
+                logger.error(f"Failed {tname} for {transformation}: {e}")
                 figures[cfg["key"]] = None
         return results, figures
-        
+
     def _run_ordination_method(
-        self, 
-        cfg, 
-        table, 
-        metadata, 
-        color_col, 
-        symbol_col, 
-        transformation, 
-        trans_cfg, 
-        kwargs
+        self, cfg, table, metadata, color_col, symbol_col, transformation, trans_cfg, kwargs
     ):
         method_params = {}
         if cfg["key"] == "pcoa":
-            method_params["metric"] = trans_cfg.get(
-                "pcoa_metric", 
-                "braycurtis"
-            )
-        
+            method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+
         ord_res = cfg["func"](table=table, **method_params)
-        
+
         pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
-        if cfg["key"] == 'pca':
-            pkwargs.update({
-                'components': ord_res['components'],
-                'proportion_explained': ord_res['exp_var_ratio']
-            })
-        elif cfg["key"] == 'pcoa':
-            pkwargs.update({
-                'components': ord_res.samples,
-                'proportion_explained': ord_res.proportion_explained
-            })
+        if cfg["key"] == "pca":
+            pkwargs.update(
+                {
+                    "components": ord_res["components"],
+                    "proportion_explained": ord_res["exp_var_ratio"],
+                }
+            )
+        elif cfg["key"] == "pcoa":
+            pkwargs.update(
+                {
+                    "components": ord_res.samples,
+                    "proportion_explained": ord_res.proportion_explained,
+                }
+            )
         else:  # t-SNE or UMAP
-            pkwargs['df'] = ord_res
-            
+            pkwargs["df"] = ord_res
+
         fig, _ = cfg["plot_func"](
             metadata=metadata,
             color_col=color_col,
             symbol_col=symbol_col,
             transformation=transformation,
             output_dir=self.figure_output_dir,
-            **pkwargs
+            **pkwargs,
         )
         return ord_res, fig
-                                
+
 
 class Plotter:
-    def __init__(
-        self, 
-        cfg: Dict, 
-        output_dir: Path, 
-        verbose: bool = False
-    ):
+    def __init__(self, cfg: Dict, output_dir: Path, verbose: bool = False):
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
         self.color_columns = cfg["figures"].get(
-            "map_columns", 
+            "map_columns",
             [
-                "dataset_name", 
+                "dataset_name",
                 "nuclear_contamination_status",
-                "env_feature", 
-                "env_material", 
-                "country"
-            ]
+                "env_feature",
+                "env_material",
+                "country",
+            ],
         )
 
-    def generate_sample_map(
-        self, 
-        metadata: pd.DataFrame, 
-        **kwargs
-    ) -> Dict[str, Any]:
-        valid_columns = [col 
-                         for col in self.color_columns if col in metadata]
+    def generate_sample_map(self, metadata: pd.DataFrame, **kwargs) -> Dict[str, Any]:
+        valid_columns = [col for col in self.color_columns if col in metadata]
         missing = set(self.color_columns) - set(valid_columns)
         if missing and self.verbose:
-            logger.warning(
-                f"Missing columns in metadata: {', '.join(missing)}"
-            )
-        
+            logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
+
         with get_progress_bar() as progress:
             parent_task = progress.add_task(
-                "Generating sample maps...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=len(valid_columns)
+                "Generating sample maps...".ljust(DEFAULT_PROGRESS_TEXT_N), total=len(valid_columns)
             )
-            
+
             figs = {}
             for col in valid_columns:
                 child_task = progress.add_task(
-                    f"[cyan]Mapping {col}...",
-                    parent=parent_task,
-                    total=1
+                    f"[cyan]Mapping {col}...", parent=parent_task, total=1
                 )
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
@@ -523,11 +402,7 @@ class Plotter:
 
 
 class TopFeaturesAnalyzer:
-    def __init__(
-        self, 
-        cfg: Dict, 
-        verbose: bool = False
-    ):
+    def __init__(self, cfg: Dict, verbose: bool = False):
         self.cfg = cfg
         self.verbose = verbose
 
@@ -538,7 +413,7 @@ class TopFeaturesAnalyzer:
     ) -> Tuple[List[Dict], List[Dict]]:
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         all_features = []
-        
+
         # Collect all significant features efficiently
         for table_type, tests in stats_results.items():
             for test_name, test_results in tests.items():
@@ -546,50 +421,41 @@ class TopFeaturesAnalyzer:
                     sig_df = df[df["p_value"] < 0.05].copy()
                     if sig_df.empty:
                         continue
-                    
+
                     # Vectorized effect size calculation
                     sig_df["effect"] = sig_df.apply(
-                        lambda row: san.get_effect_size(
-                            test_name, row
-                        ), axis=1
+                        lambda row: san.get_effect_size(test_name, row), axis=1
                     )
                     sig_df = sig_df.dropna(subset=["effect"])
-                    
+
                     # Collect features in a list
                     for _, row in sig_df.iterrows():
-                        all_features.append({
-                            "feature": row["feature"],
-                            "level": level,
-                            "table_type": table_type,
-                            "test": test_name,
-                            "effect": row["effect"],
-                            "p_value": row["p_value"],
-                            "effect_dir": "positive" if row["effect"] > 0 else "negative"
-                        })
-        
+                        all_features.append(
+                            {
+                                "feature": row["feature"],
+                                "level": level,
+                                "table_type": table_type,
+                                "test": test_name,
+                                "effect": row["effect"],
+                                "p_value": row["p_value"],
+                                "effect_dir": "positive" if row["effect"] > 0 else "negative",
+                            }
+                        )
+
         # Efficient sorting and filtering
         cont_feats = [f for f in all_features if f["effect"] > 0]
         pris_feats = [f for f in all_features if f["effect"] < 0]
-        
+
         cont_feats.sort(key=lambda d: (-d["effect"], d["p_value"]))
         pris_feats.sort(key=lambda d: (d["effect"], d["p_value"]))  # More negative is stronger
-        
+
         return cont_feats[:100], pris_feats[:100]
 
 
 class _DataLoader(_ProcessingMixin):
-    MODE_CONFIG = {
-        "asv": ("table", "asv"), 
-        "genus": ("table_6", "l6")
-    }
+    MODE_CONFIG = {"asv": ("table", "asv"), "genus": ("table_6", "l6")}
 
-    def __init__(
-        self, 
-        cfg: Dict, 
-        project_dir: Any, 
-        mode: str, 
-        verbose: bool = False
-    ):
+    def __init__(self, cfg: Dict, project_dir: Any, mode: str, verbose: bool = False):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self._validate_mode()
         self._load_metadata()
@@ -609,9 +475,7 @@ class _DataLoader(_ProcessingMixin):
         for bi in self._get_biom_paths():
             ds_dir = bi.parent if bi.is_file() else bi
             tail = ds_dir.parts[-6:-1]
-            mp = Path(
-               self.project_dir.metadata_per_dataset
-            ).joinpath(*tail, "sample-metadata.tsv")
+            mp = Path(self.project_dir.metadata_per_dataset).joinpath(*tail, "sample-metadata.tsv")
             if mp.exists():
                 paths.append(mp)
         if self.verbose:
@@ -624,23 +488,22 @@ class _DataLoader(_ProcessingMixin):
 
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = "/".join([
-            "*",
-            "*",
-            "*",
-            "*",
-            "FWD_*_REV_*",
-            table_dir,
-            "feature-table.biom",
-        ])
+        pattern = "/".join(
+            [
+                "*",
+                "*",
+                "*",
+                "*",
+                "FWD_*_REV_*",
+                table_dir,
+                "feature-table.biom",
+            ]
+        )
         globbed = glob.glob(
-           str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
-           recursive=True
+            str(Path(self.project_dir.qiime_data_per_dataset) / pattern), recursive=True
         )
         if self.verbose:
-            logger.info(
-               f"Found {RED}{len(globbed)}{RESET} feature tables"
-            )
+            logger.info(f"Found {RED}{len(globbed)}{RESET} feature tables")
         return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
@@ -651,9 +514,7 @@ class _DataLoader(_ProcessingMixin):
 
     def _filter_and_align(self) -> None:
         orig_n = self.table.shape[1]
-        self.table, self.meta = update_tables(
-            self.table, self.meta, "#sampleid"
-        )
+        self.table, self.meta = update_tables(self.table, self.meta, "#sampleid")
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
             f"Loaded metadata: "
@@ -665,7 +526,7 @@ class _DataLoader(_ProcessingMixin):
             f"{RED}{self.table.shape[1]} ({orig_n}){RESET} samples × "
             f"{RED}{self.table.shape[0]}{RESET} {ftype}"
         )
-        
+
 
 class _TableProcessor(_ProcessingMixin):
     def __init__(
@@ -691,16 +552,16 @@ class _TableProcessor(_ProcessingMixin):
     def _apply_preprocessing(self) -> None:
         feat_cfg = self.cfg["features"]
         table = self.tables["raw"][self.mode]
-        
+
         # Pipeline processing to avoid intermediate copies
         if feat_cfg["filter"]:
             table = filter_table(table)
             self.tables.setdefault("filtered", {})[self.mode] = table
-        
+
         if feat_cfg["normalize"]:
             table = normalize_table(table, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = table
-        
+
         if feat_cfg["clr_transform"]:
             table = clr_transform_table(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
@@ -710,7 +571,9 @@ class _TableProcessor(_ProcessingMixin):
         for table_type in list(self.tables.keys()):
             base_table = self.tables[table_type][self.mode]
             self.tables[table_type] = self._run_processing_step(
-                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...".ljust(DEFAULT_PROGRESS_TEXT_N),
+                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...".ljust(
+                    DEFAULT_PROGRESS_TEXT_N
+                ),
                 collapse_taxa,
                 levels,
                 (),
@@ -734,7 +597,7 @@ class _TableProcessor(_ProcessingMixin):
     def _save_tables(self) -> None:
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
-        
+
         # Prepare all export tasks
         export_tasks = []
         for table_type, levels in self.tables.items():
@@ -744,17 +607,17 @@ class _TableProcessor(_ProcessingMixin):
                 out = tdir / level / "feature-table.biom"
                 out.parent.mkdir(parents=True, exist_ok=True)
                 export_tasks.append((table, out, table_type, level))
-        
+
         # Parallel export
         with ThreadPoolExecutor() as executor:
             futures = []
             for table, out, table_type, level in export_tasks:
                 futures.append(executor.submit(export_h5py, table, out))
-            
+
             # Wait for completion
             for future in futures:
                 future.result()
-                
+
 
 class _AnalysisManager(_ProcessingMixin):
     def __init__(
@@ -777,186 +640,182 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
-        
+
         # Process in stages and clear intermediates
         self._run_statistical_tests()
         stats_copy = deepcopy(self.stats)
-        
+
         self._identify_top_features(stats_copy)
         del stats_copy  # Free memory
-        
+
         self._run_ordination()
-        
+
         # Keep only necessary tables for ML
-        ml_tables = {
-            t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}
-        }
+        ml_tables = {t: d for t, d in self.tables.items() if t in {"normalized", "clr_transformed"}}
         self._run_ml_feature_selection(ml_tables)
         del ml_tables
-        
+
         # Add FAPROTAX annotations only to top features
         if self.faprotax_enabled and self.top_contaminated_features:
             self._annotate_top_features()
-        
+
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         if taxon not in self._faprotax_cache:
             self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
                 taxon, self.fdb, include_references=False
             )
         return self._faprotax_cache[taxon]
-    
+
     def _annotate_top_features(self) -> None:
         """Batch process annotations to minimize DB lookups"""
         all_taxa = {
-            f['feature'] 
-            for f in self.top_contaminated_features + self.top_pristine_features
+            f["feature"] for f in self.top_contaminated_features + self.top_pristine_features
         }
-        
+
         # Batch lookup
         with ThreadPoolExecutor() as executor:
             results = list(executor.map(self._get_cached_faprotax, all_taxa))
-        
+
         taxon_map = dict(zip(all_taxa, results))
-        
+
         for feat in self.top_contaminated_features:
-            feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
-        
+            feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
+
         for feat in self.top_pristine_features:
-            feat['faprotax_functions'] = taxon_map.get(feat['feature'], [])
+            feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
 
     def _run_statistical_tests(self) -> None:
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         grp_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
-            
-        # Calculate total tests - FIXED syntax error
-        tot = sum(
-                len(levels) * len(
-                    [t for t, flag in self.cfg["stats"].get(table_type, {}).items() if flag]
-                )
-                for table_type, levels in self.tables.items()
-            )
-            
+
+        # Calculate total tests
+        total_tests = 0
+        for table_type, levels in self.tables.items():
+            tests_config = self.cfg["stats"].get(table_type, {})
+            enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
+            total_tests += len(levels) * len(enabled_for_table_type)
+
         with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                    "Statistical testing...",
-                    total=tot
-                )
-                
+            main_task = prog.add_task("Statistical testing...", total=total_tests)
+
             for table_type, levels in self.tables.items():
-                self.stats[table_type] = {}
                 tests_config = self.cfg["stats"].get(table_type, {})
-                enabled_for_table_type = [test 
-                                         for test, flag in tests_config.items() if flag]
-                    
+                enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
+                self.stats[table_type] = {}
+
                 for level, table in levels.items():
-                    if self.verbose:
-                        logger.info(f"Processing {table_type} table at {level} level")
+                    # Align table/metadata once per level
+                    table_aligned, meta_aligned = update_tables(table, self.meta)
+                    
+                    for test_name in enabled_for_table_type:
+                        if test_name not in san.TEST_CONFIG:
+                            continue
+                        cfg = san.TEST_CONFIG[test_name]
                         
-                    table, m = update_tables(table, self.meta)
+                        # Update task description dynamically
+                        desc = f"[cyan]{table_type}/{level}: {cfg['name']}"
+                        prog.update(main_task, description=desc)
                         
-                    level_task = prog.add_task(
-                            f"{table_type.ljust(15)} + {level.ljust(10)}",
-                            parent=parent_task,
-                            total=len(enabled_for_table_type))
-                        
-                    res = san.run_tests(
-                            table, m, grp_col, grp_vals, 
-                            enabled_for_table_type, prog, level_task
-                        )
-                        
-                    for key, df in res.items():
-                        self.stats.setdefault(
-                                table_type, {}
-                            ).setdefault(
-                                key, {}
-                            )[level] = df
-                        
-                    prog.update(
-                            level_task, 
-                            completed=len(enabled_for_table_type)
-                        )
-                    prog.remove_task(level_task)
-                    prog.update(
-                            parent_task, 
-                            advance=len(enabled_for_table_type)
-                        )
+                        try:
+                            # Run the test directly
+                            result = cfg["func"](
+                                table=table_aligned,
+                                metadata=meta_aligned,
+                                group_column=grp_col,
+                                group_column_values=grp_vals,
+                            )
+                            self.stats[table_type].setdefault(cfg['key'], {})[level] = result
+                        except Exception as e:
+                            logger.error(f"Test failed: {e}")
+                        finally:
+                            prog.advance(main_task)  # Update after each test
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
             stats_results, DEFAULT_GROUP_COLUMN
         )
-        
+
         if self.verbose:
             logger.info(
-                f"Found {len(self.top_contaminated_features)} "
-                f"top contaminated features"
+                f"Found {len(self.top_contaminated_features)} " f"top contaminated features"
             )
-            logger.info(
-                f"Found {len(self.top_pristine_features)} "
-                f"top pristine features"
-            )
+            logger.info(f"Found {len(self.top_pristine_features)} " f"top pristine features")
 
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
-        tot = sum(
-            len(levels) * len(
-                [m 
-                 for m in KNOWN_METHODS if self.cfg.get(
-                     "ordination", {}
-                 ).get(
-                     table_type, {}
-                 ).get(
-                     m, False
-                 )
-                ]
-            )
-            for table_type, levels in self.tables.items()
-        )
-        if not tot:
-            return
+        # Calculate total tasks
+        total_tasks = 0
+        for table_type, levels in self.tables.items():
+            ord_config = self.cfg.get("ordination", {}).get(table_type, {})
+            enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+            total_tasks += len(levels) * len(enabled_methods)
         
+        if not total_tasks:
+            return
+
+        # Initialize structures
+        self.ordination = {tt: {} for tt in self.tables}
+        self.figures = {tt: {} for tt in self.tables}
+
         with get_progress_bar() as prog:
-            parent_task = prog.add_task(
-                "Ordination analysis...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=tot
-            )
+            main_task = prog.add_task("Ordination analysis...", total=total_tasks)
             
-            for table_type, levels in self.tables.items():
-                self.ordination[table_type] = {}
-                self.figures[table_type] = {}
-                ord_config = self.cfg.get("ordination", {}).get(table_type, {})
-                enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+            # Use thread pool with limited workers
+            max_workers = self.cfg.get("ordination", {}).get("max_workers", 2)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = []
+                for table_type, levels in self.tables.items():
+                    ord_config = self.cfg.get("ordination", {}).get(table_type, {})
+                    enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+                    
+                    for level, table in levels.items():
+                        # Create output directory
+                        ordir = self.figure_output_dir / level / table_type
+                        ordir.mkdir(parents=True, exist_ok=True)
+                        
+                        for method in enabled_methods:
+                            # Submit task to thread pool
+                            future = executor.submit(
+                                self._run_single_ordination,
+                                table=table,
+                                meta=self.meta,
+                                table_type=table_type,
+                                level=level,
+                                method=method,
+                                ordir=ordir
+                            )
+                            futures.append(future)
                 
-                for level, table in levels.items():
-                    ordir = self.figure_output_dir / level / table_type
-                    ordn = Ordination(self.cfg, ordir, False)
-                    
-                    level_task = prog.add_task(
-                        f"[cyan]{table_type}/{level}",
-                        parent=parent_task,
-                        total=len(enabled_methods))
-                    
-                    res, figs = ordn.run_tests(
-                        table=table,
-                        metadata=self.meta,
-                        color_col="dataset_name",
-                        symbol_col="nuclear_contamination_status",
-                        transformation=table_type,
-                        enabled_tests=enabled_methods,
-                        progress=prog,
-                        task_id=level_task,
-                    )
-                    self.ordination[table_type][level] = res
-                    self.figures[table_type][level] = figs
-                    
-                    prog.update(level_task, completed=len(enabled_methods))
-                    prog.remove_task(level_task)
-                    prog.update(parent_task, advance=len(enabled_methods))
-                
+                # Process results as they complete
+                for future in as_completed(futures):
+                    table_type, level, method, res, fig = future.result()
+                    self.ordination[table_type].setdefault(level, {})[method] = res
+                    self.figures[table_type].setdefault(level, {})[method] = fig
+                    prog.advance(main_task)
+
+    def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
+        """Run a single ordination method in isolation"""
+        try:
+            ordn = Ordination(self.cfg, ordir, verbose=False)
+            # Run just this one method
+            res, figs = ordn.run_tests(
+                table=table,
+                metadata=meta,
+                color_col="dataset_name",
+                symbol_col="nuclear_contamination_status",
+                transformation=table_type,
+                enabled_tests=[method],
+            )
+            method_key = ordn.TEST_CONFIG[method]['key']
+            return table_type, level, method, res.get(method_key), figs.get(method_key)
+        except Exception as e:
+            logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
+            return table_type, level, method, None, None
+
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
-        # Use configurable group column - FIXED hardcoded value
+        # Use configurable group column
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         tot = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
@@ -964,30 +823,29 @@ class _AnalysisManager(_ProcessingMixin):
         )
         if not tot:
             return
-            
+
         with get_progress_bar() as prog:
             parent_task = prog.add_task(
-                "Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=tot
+                "Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N), total=tot
             )
-            
+
             for table_type, levels in ml_tables.items():
                 self.models[table_type] = {}
                 ml_cfg = self.cfg.get("ml", {})
                 methods = ml_cfg.get("methods", ["rfe"])
-                
+
                 for level, table in levels.items():
                     for method in methods:
                         child_task = prog.add_task(
                             f"{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
                             parent=parent_task,
-                            total=1
+                            total=1,
                         )
-                        
+
                         X = table_to_dataframe(table)
                         X.index = X.index.str.lower()
                         y = self.meta.set_index("#sampleid")[[group_col]]
-                        # FIXED index mismatch - lowercase y index to match X
+                        # Fix index mismatch - lowercase y index to match X
                         y.index = y.index.astype(str).str.lower()
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
@@ -1003,57 +861,39 @@ class _AnalysisManager(_ProcessingMixin):
                         prog.update(child_task, completed=1)
                         prog.remove_task(child_task)
                         prog.update(parent_task, advance=1)
-                        
 
-class AmpliconData:  
-    def __init__(
-        self, 
-        cfg: Dict, 
-        project_dir: Any, 
-        mode: str = "genus", 
-        verbose: bool = False
-    ):
+
+class AmpliconData:
+    def __init__(self, cfg: Dict, project_dir: Any, mode: str = "genus", verbose: bool = False):
         self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
-        
+
         data = _DataLoader(cfg, project_dir, mode, verbose)
         self.meta, self.table = data.meta, data.table
-       
+
         # Process
         self.figure_output_dir = Path(self.project_dir.figures)
         tp = _TableProcessor(
-            cfg, 
-            self.table, 
-            mode, 
-            self.meta, 
-            self.figure_output_dir, 
-            project_dir, 
-            verbose
+            cfg, self.table, mode, self.meta, self.figure_output_dir, project_dir, verbose
         )
         self.tables = tp.tables
-       
+
         # Figures
         self.figures: Dict[str, Any] = {}
-        
+
         if cfg["figures"].get("map", False):
-            self.plotter = Plotter(
-                cfg, 
-                self.figure_output_dir, 
-                verbose
-            )
-            self.figures["map"] = self.plotter.generate_sample_map(
-                self.meta
-            )
-           
+            self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
+            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
+
         # Analysis
         am = _AnalysisManager(
-            cfg, 
-            self.tables, 
-            self.meta, 
-            self.figure_output_dir, 
-            verbose, 
-            cfg.get("faprotax", False), 
-            self.fdb
+            cfg,
+            self.tables,
+            self.meta,
+            self.figure_output_dir,
+            verbose,
+            cfg.get("faprotax", False),
+            self.fdb,
         )
         self.stats = am.stats
         self.ordination = am.ordination
@@ -1061,6 +901,6 @@ class AmpliconData:
         self.top_contaminated_features = am.top_contaminated_features
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
-        
+
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
