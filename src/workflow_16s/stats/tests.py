@@ -2,18 +2,13 @@
 
 # Standard Library Imports
 import logging
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import numpy as np
 import pandas as pd
 from biom import Table
-from scipy.spatial.distance import (
-    braycurtis, 
-    pdist, 
-    squareform
-)
+from scipy.spatial.distance import pdist, squareform
 from scipy.stats import (
     fisher_exact, 
     f_oneway, 
@@ -26,17 +21,12 @@ from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
-from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.stats.utils import (
-    merge_table_with_metadata, 
-    table_to_dataframe
-)
+from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
