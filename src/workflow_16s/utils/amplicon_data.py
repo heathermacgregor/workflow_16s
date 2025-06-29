@@ -1009,7 +1009,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             main_task = progress.add_task(
-                "Statistical testing...", 
+                "Statistical testing...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=total_tests
             )
 
@@ -1029,7 +1029,7 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         # Create child task with fixed description
                         child_task = progress.add_task(
-                            f"{table_type} | {level} | {cfg['name']}",
+                            f"{table_type} | {level} | {cfg['name']}".ljust(DEFAULT_PROGRESS_TEXT_N),
                             parent=main_task,
                             total=1
                         )
@@ -1087,7 +1087,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             main_task = progress.add_task(
-                "Ordination analysis...", 
+                "Ordination analysis...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=total_tasks
             )
             
