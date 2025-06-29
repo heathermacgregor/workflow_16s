@@ -37,6 +37,8 @@ cutadapt:
   end_q_cutoff: 15
   min_seq_length: 150
   n_cores: 16
+
+
   
 qiime2:
   per_dataset:
@@ -87,8 +89,14 @@ stats:
     ttest: True            # Recommended: CLR addresses compositionality
     mwu_bonferroni: True   # Good alternative for non-normal distributions
     kruskal_bonferroni: True
+    
+# Example config.yaml additions
+cpu:
+  limit: 2  # Global CPU limit for all operations
 
 ordination:
+  max_workers: 1  # Max concurrent ordination tasks
+  cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False
     pcoa: True
