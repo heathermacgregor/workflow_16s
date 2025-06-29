@@ -1000,7 +1000,7 @@ def catboost_feature_selection(
     method: str = 'rfe',
     filter_col: Union[str, None] = None,
     filter_val: Union[str, None] = None
-) -> None:
+) -> Any:
     """
     Perform feature selection using CatBoost and save results.
 
@@ -1131,4 +1131,5 @@ def catboost_feature_selection(
         plt.savefig(output_dir / f"shap_dependence_{feature}.png", bbox_inches='tight')
         logger.info(str(output_dir / f"shap_dependence_{feature}.png"))
         plt.close()
-      
+        
+    return best_model
