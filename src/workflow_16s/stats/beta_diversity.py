@@ -32,6 +32,7 @@ DEFAULT_N_PCOA = None
 DEFAULT_N_TSNE = 3
 DEFAULT_N_UMAP = 3
 DEFAULT_RANDOM_STATE = 0
+DEFAULT_CPU_LIMIT = 1  # Default CPU limit for parallel operations
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -170,7 +171,8 @@ def pca(
 def tsne(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
     n_components: int = DEFAULT_N_TSNE,
-    random_state: int = DEFAULT_RANDOM_STATE
+    random_state: int = DEFAULT_RANDOM_STATE,
+    n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
     """
     Compute t-distributed Stochastic Neighbor Embedding (t-SNE) reduction.
@@ -180,6 +182,7 @@ def tsne(
                       (samples x features or features x samples).
         n_components: Dimension of the embedded space.
         random_state: Random seed for reproducibility.
+        n_jobs:       Number of CPU cores to use (default: 1)
 
     Returns:
         tsne_df:      DataFrame of shape (n_samples, n_components) with TSNE 
@@ -190,7 +193,8 @@ def tsne(
 
     tsne_arr = TSNE(
         n_components=n_components, 
-        random_state=random_state
+        random_state=random_state,
+        n_jobs=n_jobs
     ).fit_transform(
         table.values
     )
@@ -205,7 +209,8 @@ def tsne(
 def umap(
     table: Union[Dict[Any, Any], Table, pd.DataFrame],
     n_components: int = DEFAULT_N_UMAP,
-    random_state: int = DEFAULT_RANDOM_STATE
+    random_state: int = DEFAULT_RANDOM_STATE,
+    n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
     """
     Compute Uniform Manifold Approximation and Projection (UMAP) reduction.
@@ -215,6 +220,7 @@ def umap(
                       (samples x features or features x samples).
         n_components: Dimension of the embedded space.
         random_state: Random seed for reproducibility.
+        n_jobs:       Number of CPU cores to use (default: 1)
 
     Returns:
         umap_df:       DataFrame of shape (n_samples, n_components) with UMAP 
@@ -226,7 +232,8 @@ def umap(
     umap_arr = UMAP(
         n_components=n_components,
         init='random',
-        random_state=random_state
+        random_state=random_state,
+        n_jobs=n_jobs
     ).fit_transform(table.values)
     umap_df = pd.DataFrame(
         umap_arr,
