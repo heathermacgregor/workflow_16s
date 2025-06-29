@@ -1349,4 +1349,3 @@ class AmpliconData:
         os.environ["VECLIB_MAXIMUM_THREADS"] = str(cpu_limit)
         os.environ["NUMBA_NUM_THREADS"] = str(cpu_limit)
         os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_limit)
-        
