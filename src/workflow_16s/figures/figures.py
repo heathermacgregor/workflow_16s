@@ -2,25 +2,25 @@
 
 # Standard Library Imports
 import logging
+import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Dict, List, Union
 
 # Third Party Imports
+import colorcet as cc
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from matplotlib.colors import LogNorm
-import colorcet as cc
-import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-import kaleido
 
-# ================================= GLOBAL VARIABLES ================================= #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
+warnings.filterwarnings("ignore") # Suppress warnings
+
+# ================================= GLOBAL VARIABLES ================================= #
 
 largecolorset = list(
   cc.glasbey + cc.glasbey_light + cc.glasbey_warm + cc.glasbey_cool + cc.glasbey_dark
