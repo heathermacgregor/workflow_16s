@@ -2,15 +2,13 @@
 
 # Standard Library Imports
 import warnings
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 # Third-Party Imports
 import numpy as np
 import pandas as pd
 from biom import Table
 from scipy.spatial.distance import pdist, squareform
-from scipy.stats import kruskal, mannwhitneyu, spearmanr, ttest_ind
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.decomposition import PCA
