@@ -45,7 +45,7 @@ pio.templates["heather"] = go.layout.Template(
     'colorway': largecolorset,
     'xaxis': {
       'showgrid': False,
-      'zeroline': True
+      'zeroline': True,
       'showline': True,
       'linewidth': 7,
       'linecolor': 'black',
@@ -54,7 +54,7 @@ pio.templates["heather"] = go.layout.Template(
     },
     'yaxis': {
       'showgrid': False,
-      'zeroline': True
+      'zeroline': True,
       'showline': True,
       'linewidth': 7,
       'linecolor': 'black',
