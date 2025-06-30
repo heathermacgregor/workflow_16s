@@ -113,7 +113,31 @@ def _prepare_visualization_data(
                 "Metadata missing '#sampleid' column - using existing index"
             )
         meta_copy.index = meta_copy.index.astype(str).str.strip().str.lower()
-        
+    
+    # ------------------ DUPLICATE HANDLING ------------------ #
+    # Identify and remove duplicate indices
+    comp_duplicates = comp_copy.index.duplicated(keep='first')
+    meta_duplicates = meta_copy.index.duplicated(keep='first')
+    
+    if verbose:
+        if comp_duplicates.any():
+            dup_samples = comp_copy.index[comp_duplicates].unique()
+            logger.warning(
+                f"Found {len(dup_samples)} duplicate samples in components: "
+                f"{list(dup_samples)[:5]}{'...' if len(dup_samples) > 5 else ''}"
+            )
+        if meta_duplicates.any():
+            dup_samples = meta_copy.index[meta_duplicates].unique()
+            logger.warning(
+                f"Found {len(dup_samples)} duplicate samples in metadata: "
+                f"{list(dup_samples)[:5]}{'...' if len(dup_samples) > 5 else ''}"
+            )
+    
+    # Remove duplicates keeping first occurrence
+    comp_copy = comp_copy[~comp_duplicates]
+    meta_copy = meta_copy[~meta_duplicates]
+    # -------------------------------------------------------- #
+    
     if verbose:
         # Log sample IDs for debugging
         logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
@@ -123,7 +147,7 @@ def _prepare_visualization_data(
     common_idx = comp_copy.index.intersection(meta_copy.index)
     if verbose:
         logger.info(
-            f"Found {len(common_idx)} common samples between components and metadata"
+            f"Found {len(common_idx)} common samples after duplicate removal"
         )
     
     # Handle no common samples case with detailed diagnostics
@@ -134,18 +158,17 @@ def _prepare_visualization_data(
         comp_only = comp_samples - meta_samples
         meta_only = meta_samples - comp_samples
 
-        if verbose:
-            logger.critical(
-                "CRITICAL ERROR: No common samples between components and metadata!"
-            )
-            logger.critical(
-                f"Components-only samples ({len(comp_only)}): "
-                f"{list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}"
-            )
-            logger.critical(
-                f"Metadata-only samples ({len(meta_only)}): "
-                f"{list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}"
-            )
+        logger.critical(
+            "CRITICAL ERROR: No common samples between components and metadata!"
+        )
+        logger.critical(
+            f"Components-only samples ({len(comp_only)}): "
+            f"{list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}"
+        )
+        logger.critical(
+            f"Metadata-only samples ({len(meta_only)}): "
+            f"{list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}"
+        )
         
         # Look for partial matches
         partial_matches = []
@@ -156,8 +179,7 @@ def _prepare_visualization_data(
                     break
         
         if partial_matches:
-            if verbose:
-                logger.critical(f"Possible partial matches: {partial_matches[:5]}")
+            logger.critical(f"Possible partial matches: {partial_matches[:5]}")
         
         raise ValueError("No common samples between components and metadata")
     
@@ -185,10 +207,19 @@ def _prepare_visualization_data(
     for col in [color_col, symbol_col]:
         if col in merged.columns:
             merged[col] = merged[col].fillna(placeholder)
+    
     if verbose:
         logger.debug(f"Merged data shape: {merged.shape}")
+        # Verify no duplicate indices in final output
+        if merged.index.duplicated().any():
+            dupes = merged.index[merged.index.duplicated()].tolist()
+            logger.error(
+                f"DUPLICATE INDEX IN FINAL OUTPUT: {dupes[:5]}{'...' if len(dupes)>5 else ''}"
+            )
+        else:
+            logger.debug("No duplicate indices in final merged data")
+    
     return merged
-
 
 def _create_colordict(
     data: Union[pd.Series, pd.DataFrame], 
