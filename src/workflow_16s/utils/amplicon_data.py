@@ -721,9 +721,16 @@ class _DataLoader(_ProcessingMixin):
     def _get_biom_paths(self) -> List[Path]:
         """Retrieves paths to BIOM feature tables."""
         table_dir, _ = self.MODE_CONFIG[self.mode]
-        pattern = "/".join([
-            "*", "*", "*", "*", "FWD_*_REV_*", table_dir, "feature-table.biom",
-        ])
+        if self.cfg["target_subfragment_mode"] != 'any' or self.mode != 'genus':
+            pattern = "/".join([
+                "*", "*", "*", self.cfg["target_subfragment_mode"], 
+                "FWD_*_REV_*", table_dir, "feature-table.biom",
+            ])
+        else:
+            pattern = "/".join([
+                "*", "*", "*", "*", 
+                "FWD_*_REV_*", table_dir, "feature-table.biom",
+            ])
         globbed = glob.glob(str(Path(
             self.project_dir.qiime_data_per_dataset
         ) / pattern), recursive=True)
