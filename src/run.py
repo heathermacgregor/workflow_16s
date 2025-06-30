@@ -106,11 +106,6 @@ def get_existing_subsets(cfg, logger) -> List[str]:
     # Process each dataset to get expected subsets
     for dataset in datasets:
         try:
-            # Get dataset info
-            info_path = file_utils.fetch_first_match(dataset, datasets_info_dir)
-            if not info_path:
-                logger.warning(f"⚠️ Dataset info not found for {dataset}, skipping")
-                continue
             # Partition datasets by processing requirements 
             dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
             # Generate potential subsets
@@ -128,7 +123,7 @@ def get_existing_subsets(cfg, logger) -> List[str]:
                     + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
                     + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
                 )
-                
+                print(subset_id)
                 # Check all required files exist
                 all_files_exist = True
                 subset_dirs = project_dir.subset_dirs(subset=subset)
