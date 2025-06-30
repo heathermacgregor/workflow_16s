@@ -7,6 +7,7 @@ from typing import Any, Optional
 # Third-Party Imports
 from rich.progress import (
     BarColumn,
+    Column,
     MofNCompleteColumn,
     Progress,
     ProgressColumn,
