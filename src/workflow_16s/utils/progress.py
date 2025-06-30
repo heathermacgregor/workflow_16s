@@ -9,15 +9,12 @@ from typing import Any, Optional
 from rich.progress import (
     BarColumn,
     Column,
-    MofNCompleteColumn,
     Progress,
     ProgressColumn,
     SpinnerColumn,
     Task,
     TaskID,
     TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
     track, 
 )
 from rich.text import Text
@@ -38,38 +35,6 @@ DEFAULT_M_OF_N_COMPLETE_STYLE = "honeydew2"
 DEFAULT_TIME_ELAPSED_STYLE = "light_sky_blue1"
 DEFAULT_TIME_REMAINING_STYLE = "thistle1"
 
-# ==================================== FUNCTIONS ===================================== #
-
-def create_progress() -> Progress:
-    return Progress(
-        # Green spinner (turns bold green when finished)
-        SpinnerColumn(style="green"),
-        
-        # White task description text
-        TextColumn(
-            "[progress.description]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
-            style="white"
-        ),
-        
-        # Bar: yellow filling, green when complete, black background
-        BarColumn(
-            bar_width=40,
-            complete_style="yellow",
-            finished_style="green",
-            style="black"  # Background color
-        ),
-        
-        # Cyan "M/N" counter
-        MofNCompleteColumn(),#style="cyan"),
-        
-        # Magenta elapsed time
-        TimeElapsedColumn(),#style="magenta"),
-        
-        # Red remaining time estimate
-        TimeRemainingColumn(),#style="red"),
-        expand=False
-    )
-
 # ============================== CUSTOM PROGRESS COLUMN ============================== #
 
 class MofNCompleteColumn(ProgressColumn):
@@ -82,6 +47,7 @@ class MofNCompleteColumn(ProgressColumn):
             style=DEFAULT_M_OF_N_COMPLETE_STYLE,
             justify="right"
         )
+        
 
 class TimeElapsedColumn(ProgressColumn):
     """Renders time elapsed."""
@@ -93,6 +59,7 @@ class TimeElapsedColumn(ProgressColumn):
             return Text("-:--:--", style=DEFAULT_TIME_ELAPSED_STYLE)
         delta = timedelta(seconds=max(0, int(elapsed)))
         return Text(str(delta), style=DEFAULT_TIME_ELAPSED_STYLE)
+        
 
 class TimeRemainingColumn(ProgressColumn):
     """Renders estimated time remaining."""
@@ -161,16 +128,19 @@ def get_progress_bar(transient: bool = False) -> Progress:
         ),
         TextColumn(
             "[progress.percentage]{task.percentage:>3.0f}%".rjust(5), 
-            style=DEFAULT_PROGRESS_PERCENTAGE_STYLE
+            style=DEFAULT_PROGRESS_PERCENTAGE_STYLE,
+            justify="right"
         ),
         TextColumn(
             "E".rjust(2), 
-            style=DEFAULT_TIME_ELAPSED_STYLE
+            style=DEFAULT_TIME_ELAPSED_STYLE,
+            justify="right"
         ),
         TimeElapsedColumn(),
         TextColumn(
             "R".rjust(2), 
-            style=DEFAULT_TIME_REMAINING_STYLE
+            style=DEFAULT_TIME_REMAINING_STYLE,
+            justify="right"
         ),
         TimeRemainingColumn(),
         transient=transient,
