@@ -6,12 +6,33 @@ readonly ENV_NAME="workflow_16s"
 readonly SCRIPT_DIR=$(dirname "$(realpath "$0")")
 readonly PYTHON_SCRIPT="${SCRIPT_DIR}/src/run.py"
 
+# Timestamp toggle (default: off)
+ENABLE_TIMESTAMPS=false
+
 # Logging Utilities
 log() {
     local message=$1
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "${timestamp} - ${message}"
+    if $ENABLE_TIMESTAMPS; then
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "${timestamp} - ${message}"
+    else
+        echo "${message}"
+    fi
 }
+
+# Parse command-line options
+while getopts ":T" opt; do
+    case $opt in
+        T)
+            ENABLE_TIMESTAMPS=false
+            ;;
+        \?)
+            log "❌ Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))  # Remove processed options
 
 # Dependency Checks
 check_conda() {
@@ -86,4 +107,4 @@ main() {
 }
 
 # Execute main function
-main
+main "$@"
