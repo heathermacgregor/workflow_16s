@@ -89,8 +89,8 @@ def get_existing_subsets(cfg, logger) -> List[str]:
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
-    datasets = cfg["datasets"]
-    datasets_info_dir = Path(cfg["datasets_info_dir"])
+    datasets = file_utils.load_datasets_list(cfg["dataset_list"])
+    datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
     existing_subsets = []
 
     # Required files for each subset (conditionally include table_6)
@@ -111,8 +111,8 @@ def get_existing_subsets(cfg, logger) -> List[str]:
             if not info_path:
                 logger.warning(f"⚠️ Dataset info not found for {dataset}, skipping")
                 continue
-            dataset_info = file_utils.read_dataset_info(info_path)
-
+            # Partition datasets by processing requirements 
+            dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
             # Generate potential subsets
             subsets = SubsetDataset(cfg)
             subsets.process(dataset, dataset_info)
@@ -159,7 +159,9 @@ def upstream(cfg, logger) -> None:
         qiime_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
         classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
         project_dir = dir_utils.SubDirs(cfg["project_dir"])
-
+        datasets = file_utils.load_datasets_list(cfg["dataset_list"])
+        datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
+        
         for dataset in datasets:
             try:
                 # Partition datasets by processing requirements 
