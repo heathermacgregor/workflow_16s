@@ -38,7 +38,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s import ena
 from workflow_16s.config import get_config
-from workflow_16s.figures.html_report import HTMLReport
+from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
@@ -521,61 +521,26 @@ def upstream(cfg, logger) -> None:
 def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
 
-    figures = {}
-    if cfg.get("ml", {}).get("enable", False):
-        required = ["table_type", "level", "method", "num_features"]
-        if not all(k in cfg["ml"] for k in required):
-            logger.error("Missing required ML configuration - disabling ML")
-            cfg["ml"]["enable"] = False    
+    #figures = {}
+    #if cfg.get("ml", {}).get("enable", False):
+    #    required = ["table_type", "level", "method", "num_features"]
+    #    if not all(k in cfg["ml"] for k in required):
+    #        logger.error("Missing required ML configuration - disabling ML")
+    #        cfg["ml"]["enable"] = False    
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
         mode='genus' if cfg["target_subfragment_mode"] == "any" else 'asv',
         verbose=False
     )
-    print(data.figures.keys())
-    #print(data.meta['nuclear_contamination_status'].value_counts())
-    #print(data.stats)
-    #plot_pca(data=data, figures=figures, logger=logger, project_dir=project_dir, color_maps=color_maps)
+    report_path = Path(project_dir.final) / "analysis_report.html"
+    generate_html_report(
+        amplicon_data=data,
+        output_path=report_path,
+        max_features=50
+    )
+    logger.info(f"HTML report generated at: {report_path}")
     
-
-    '''
-    for level in ["phylum"]:
-        figures["pcoa"][level] = {}
-        for metric in ["braycurtis"]:
-            figures["pcoa"][level][metric] = {}
-            logger.info("Calculating PCoA...")
-
-            meta, table, _ = df_utils.match_indices_or_transpose(data.meta, data.tables[level])
-            
-            pcoa_results = beta_diversity.pcoa(
-                table=table,
-                metric=metric,
-                n_dimensions=3
-            )
-            
-            logger.info("Plotting PCoA...")
-            
-            pcoa_plot = pcoa(
-                components = pcoa_results.samples, 
-                proportion_explained = pcoa_results.proportion_explained, 
-                metadata=meta,
-                metric=metric,
-                color_col='dataset_name', 
-                color_map=color_maps['dataset_name'],
-                symbol_col='nuclear_contamination_status',
-                show=False,
-                output_dir=Path(project_dir.figures) / 'merged' / 'l2', 
-                transformation=None,
-                x=1, 
-                y=2
-            )
-            figures["pcoa"][level][metric][color_col] = pcoa_plot
-    
-    '''
-    #print(figures)
-    #writer = HTMLReport(figures)
-    #writer.write_report()
 
 def main(config_path: Path = DEFAULT_CONFIG) -> None:
     """Orchestrate entire analysis workflow."""    
