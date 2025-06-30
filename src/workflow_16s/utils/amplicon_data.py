@@ -836,33 +836,99 @@ class _TableProcessor(_ProcessingMixin):
             table = clr_transform_table(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
-    def _collapse_taxa(self) -> None:
+        def _collapse_taxa(self) -> None:
         """Collapses feature tables to different taxonomic levels."""
         levels = ["phylum", "class", "order", "family", "genus"]
-        for table_type in list(self.tables.keys()):
-            base_table = self.tables[table_type][self.mode]
-            self.tables[table_type] = self._run_processing_step(
-                f"Collapsing taxonomy for {table_type.replace('_', ' ')} tables...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                collapse_taxa,
-                levels,
-                (),
-                lambda level, _table=base_table: _table,
-                log_template=f"Collapsed {table_type} to {{level}}",
+        
+        # NEW: Create main progress bar for collapsing taxonomy
+        with get_progress_bar() as progress:
+            main_task = progress.add_task(
+                "Collapsing taxonomy".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=len(self.tables)
             )
+            
+            for table_type in list(self.tables.keys()):
+                # Create child task for each table type
+                child_task = progress.add_task(
+                    f"[cyan]Table: {table_type}",
+                    parent=main_task,
+                    total=len(levels)
+                )
+                
+                base_table = self.tables[table_type][self.mode]
+                processed = {}
+                
+                for level in levels:
+                    # Update task description to show current level
+                    progress.update(
+                        child_task,
+                        description=f"[cyan]{table_type} → {level}",
+                        refresh=True
+                    )
+                    
+                    start_time = time.perf_counter()
+                    processed[level] = collapse_taxa(base_table, level)
+                    duration = time.perf_counter() - start_time
+                    
+                    # Log if needed
+                    if self.verbose:
+                        logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
+                    
+                    # Advance the child progress bar
+                    progress.update(child_task, advance=1)
+                
+                # Store processed tables and clean up
+                self.tables[table_type] = processed
+                progress.remove_task(child_task)
+                progress.update(main_task, advance=1)
 
     def _create_presence_absence(self) -> None:
         """Creates presence/absence versions of feature tables."""
         if not self.cfg["features"]["presence_absence"]:
             return
+            
         levels = ["phylum", "class", "order", "family", "genus"]
-        raw_table = self.tables["raw"][self.mode]
-        self.tables["presence_absence"] = self._run_processing_step(
-            "Converting to presence/absence...".ljust(DEFAULT_PROGRESS_TEXT_N),
-            presence_absence,
-            levels,
-            (),
-            lambda level: raw_table,
-        )
+        
+        # NEW: Create main progress bar for presence/absence conversion
+        with get_progress_bar() as progress:
+            main_task = progress.add_task(
+                "Creating presence/absence tables".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=1  # Only one table type for PA
+            )
+            
+            # Create child task
+            child_task = progress.add_task(
+                "[cyan]Processing presence/absence",
+                parent=main_task,
+                total=len(levels)
+            )
+            
+            raw_table = self.tables["raw"][self.mode]
+            processed = {}
+            
+            for level in levels:
+                # Update task description to show current level
+                progress.update(
+                    child_task,
+                    description=f"[cyan]PA → {level}",
+                    refresh=True
+                )
+                
+                start_time = time.perf_counter()
+                processed[level] = presence_absence(raw_table, level)
+                duration = time.perf_counter() - start_time
+                
+                # Log if needed
+                if self.verbose:
+                    logger.debug(f"Created PA for {level} in {duration:.2f}s")
+                
+                # Advance the child progress bar
+                progress.update(child_task, advance=1)
+            
+            # Store processed tables and clean up
+            self.tables["presence_absence"] = processed
+            progress.remove_task(child_task)
+            progress.update(main_task, advance=1)
 
     def _save_tables(self) -> None:
         """Saves processed tables to disk in BIOM format."""
@@ -1024,7 +1090,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             main_task = progress.add_task(
-                "Statistical testing...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                f"Running statistics for '{grp_col}'...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=total_tests
             )
 
@@ -1043,8 +1109,11 @@ class _AnalysisManager(_ProcessingMixin):
                         cfg = san.TEST_CONFIG[test_name]
                         
                         # Create child task with fixed description
+                        child_task_description = " | ".join([
+                            table_type.replace('_', ' ').capitalize(), level.capitalize(), cfg['name']
+                        ])
                         child_task = progress.add_task(
-                            f"{table_type} | {level} | {cfg['name']}".ljust(DEFAULT_PROGRESS_TEXT_N),
+                            child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N),
                             parent=main_task,
                             total=1
                         )
