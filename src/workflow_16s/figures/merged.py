@@ -187,6 +187,18 @@ def _prepare_visualization_data(
     meta_filtered = meta_copy.loc[common_idx].copy()
     comp_filtered = comp_copy.loc[common_idx].copy()
     
+    # ======== CRITICAL FIX: PREVENT DUPLICATE COLUMNS ======== #
+    # Remove existing color/symbol columns from components to prevent duplicates
+    for col in [color_col, symbol_col]:
+        if col in comp_filtered.columns:
+            if verbose:
+                logger.warning(
+                    f"Removing existing '{col}' column from components "
+                    f"to prevent duplication"
+                )
+            comp_filtered = comp_filtered.drop(columns=col)
+    # ========================================================= #
+    
     # Handle missing metadata columns
     for col in [color_col, symbol_col]:
         if col not in meta_filtered.columns:
@@ -210,6 +222,8 @@ def _prepare_visualization_data(
     
     if verbose:
         logger.debug(f"Merged data shape: {merged.shape}")
+        logger.debug(f"Final columns: {merged.columns.tolist()}")
+        
         # Verify no duplicate indices in final output
         if merged.index.duplicated().any():
             dupes = merged.index[merged.index.duplicated()].tolist()
@@ -218,8 +232,18 @@ def _prepare_visualization_data(
             )
         else:
             logger.debug("No duplicate indices in final merged data")
+            
+        # Verify no duplicate columns
+        duplicate_cols = [col for col in merged.columns if col in [color_col, symbol_col]]
+        if len(duplicate_cols) > 1:
+            logger.error(
+                f"DUPLICATE COLUMNS DETECTED: {duplicate_cols}"
+            )
+        else:
+            logger.debug(f"Single column for each: {color_col}, {symbol_col}")
     
     return merged
+    
 
 def _create_colordict(
     data: Union[pd.Series, pd.DataFrame], 
