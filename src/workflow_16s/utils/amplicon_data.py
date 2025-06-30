@@ -720,7 +720,7 @@ class _DataLoader(_ProcessingMixin):
     def _get_metadata_paths_glob(self) -> List[Path]:
         """Retrieves paths to metadata files."""
         paths: List[Path] = []
-        for bi in self._get_biom_paths():
+        for bi in self._get_biom_paths_glob():
             ds_dir = bi.parent if bi.is_file() else bi
             tail = ds_dir.parts[-6:-1]
             mp = Path(self.project_dir.metadata_per_dataset).joinpath(*tail, "sample-metadata.tsv")
