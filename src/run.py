@@ -91,8 +91,8 @@ def get_existing_subsets(cfg) -> List[str]:
     existing_subsets = []
 
     # Base directories to check
-    metadata_dir = project_dir / "metadata"
-    qiime_dir = project_dir / "qiime"
+    metadata_dir = project_dir.metadata_per_dataset
+    qiime_dir = project_dir.qiime_data_per_dataset
     
     # Required files for each subset
     required_files = [
