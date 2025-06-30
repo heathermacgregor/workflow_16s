@@ -695,7 +695,7 @@ class _DataLoader(_ProcessingMixin):
             mode:        Analysis mode ('asv' or 'genus').
             verbose:     If True, enables verbose logging.
         """
-        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets verbose
+        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
         self._validate_mode()
         self._load_metadata()
         self._load_biom_table()
