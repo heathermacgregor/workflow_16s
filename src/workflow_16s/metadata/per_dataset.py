@@ -484,7 +484,7 @@ class SubsetDataset:
                         subfragment.
         """
         estimates = {}
-        target_genes = self.config["validate_sequences"]["run_targets"]
+        target_genes = self.config["validate_16s"]["run_targets"]
 
         for gene in target_genes:
             runs = ena_runs.get(gene, [])
@@ -497,7 +497,7 @@ class SubsetDataset:
                 metadata=meta,
                 runs=runs,
                 run_label=gene,
-                n_runs=self.config["validate_sequences"]["n_runs"],
+                n_runs=self.config["validate_16s"]["n_runs"],
                 output_dir=self.dirs.metadata_per_dataset / dataset,
                 fastq_dir=self.dirs.seq_data_per_dataset
                 / dataset
@@ -711,8 +711,8 @@ class SubsetDataset:
 
             # Primer processing mode
             if self.config["pcr_primers_mode"] == "manual":
-                if self.config["validate_16s"]:
-                    target_genes = self.config["validate_sequences"]["run_targets"]
+                if self.config["run_validate_16s"]:
+                    target_genes = self.config["validate_16s"]["run_targets"]
 
                     for gene in target_genes:
                         runs = ena_runs.get(gene, [])
@@ -726,7 +726,7 @@ class SubsetDataset:
                             metadata=meta,
                             runs=runs,
                             run_label=gene,
-                            n_runs=self.config["validate_sequences"]["n_runs"],
+                            n_runs=self.config["validate_16s"]["n_runs"],
                             output_dir=self.dirs.metadata_per_dataset 
                             / dataset,
                             fastq_dir=self.dirs.seq_data_per_dataset
