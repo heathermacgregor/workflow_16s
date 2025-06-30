@@ -146,7 +146,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
             speed=0.75
         ),
         TextColumn(
-            task.description.ljust(DEFAULT_PROGRESS_TEXT_N), 
+            f"[{DEFAULT_DESCRIPTION_STYLE}]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
             style=DEFAULT_DESCRIPTION_STYLE,
             justify="left"
         ),
