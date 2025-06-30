@@ -41,7 +41,9 @@ from workflow_16s.config import get_config
 from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
-from workflow_16s.qiime.workflows.execute_workflow import execute_per_dataset_qiime_workflow as execute_qiime
+from workflow_16s.qiime.workflows.execute_workflow import (
+    execute_per_dataset_qiime_workflow as execute_qiime
+)
 from workflow_16s.sequences.sequence_processing import process_sequences
 from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
 from workflow_16s.utils.amplicon_data import AmpliconData
@@ -52,9 +54,7 @@ import workflow_16s.custom_tmp_config
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
-# Set Pandas options
+warnings.filterwarnings("ignore") # Suppress warnings
 pd.set_option('display.max_colwidth', None)
 pd.set_option('future.no_silent_downcasting', True)
 
