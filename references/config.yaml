@@ -143,6 +143,12 @@ faprotax: True
 # Figures
 figures:
   map: True
+  color_columns: 
+    - "dataset_name"
+    - "nuclear_contamination_status"
+    - "env_feature"
+    - "env_material"
+    - "country"
 
 # Machine Learning
 run_ml: True
