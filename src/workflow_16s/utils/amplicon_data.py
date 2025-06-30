@@ -725,6 +725,13 @@ class _DataLoader(_ProcessingMixin):
         """Loads and merges metadata from multiple files."""
         paths = self._get_metadata_paths()
         self.meta = import_merged_meta_tsv(paths, None, self.verbose)
+        if self.meta.columns.duplicated().any():
+            duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
+            logger.debug(
+                f"Found duplicate columns in metadata: {duplicated_columns}. "
+                "Keeping first occurrence and removing duplicates."
+            )
+            self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
 
     def _get_biom_paths(self) -> List[Path]:
         """Retrieves paths to BIOM feature tables."""
