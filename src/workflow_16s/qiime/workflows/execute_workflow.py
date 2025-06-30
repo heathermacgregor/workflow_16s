@@ -39,12 +39,11 @@ def get_conda_env_path(env_name_substring: str) -> str:
       
 
 def execute_per_dataset_qiime_workflow(
+    cfg: Dict[str, Any],
+    subset: Dict[str, Union[str, Path, bool, dict]],
     qiime_dir: Union[str, Path],
     metadata_path: Union[str, Path],
     manifest_path: Union[str, Path],
-    subset: Dict[str, Union[str, Path, bool, dict]],
-    cfg: Dict[str, Any],
-    logger: logging.Logger,
     default_script_path: Union[str, Path] = DEFAULT_PER_DATASET,
 ) -> Dict[str, Path]:
     qiime_env_path = get_conda_env_path("qiime2-amplicon-2024.10")
