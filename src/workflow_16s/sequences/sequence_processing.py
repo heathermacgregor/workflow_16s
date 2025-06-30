@@ -29,8 +29,8 @@ DEFAULT_MAX_WORKERS_SEQKIT = 8
 
 def process_sequences(
     cfg: Dict[str, Any],
-    subset_dirs: Dict[str, Path],
     subset: Dict[str, Any],
+    subset_dirs: Dict[str, Path],
     info: Any,
 ) -> Tuple[List[Path], pd.DataFrame]:
     run_fastqc = cfg.get("run_fastqc", False)
