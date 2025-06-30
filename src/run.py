@@ -89,8 +89,8 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
-    datasets = cfg["datasets"]
-    datasets_info_dir = Path(cfg["datasets_info_dir"])
+    datasets = file_utils.load_datasets(cfg["datasets_list"])
+    datasets_info = file_utils.load_datasets_info(cfg["datasets_info"])
     existing_subsets = {}
 
     # Define required files and their keys
@@ -107,11 +107,7 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     for dataset in datasets:
         try:
             # Get dataset info
-            info_path = file_utils.fetch_first_match(dataset, datasets_info_dir)
-            if not info_path:
-                logger.warning(f"⚠️ Dataset info not found for {dataset}, skipping")
-                continue
-            dataset_info = file_utils.read_dataset_info(info_path)
+            dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
 
             # Generate potential subsets
             subsets = SubsetDataset(cfg)
