@@ -683,7 +683,7 @@ class _DataLoader(_ProcessingMixin):
         cfg: Dict, 
         project_dir: Any, 
         mode: str, 
-        existing_subsets: Dict[str, Dict[str, Path]],
+        existing_subsets: Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
         """
@@ -732,7 +732,10 @@ class _DataLoader(_ProcessingMixin):
 
     def _load_metadata(self) -> None:
         """Loads and merges metadata from multiple files."""
-        paths = self._get_metadata_paths()
+        if self.existing_subsets != None:
+            paths = self._get_metadata_paths()
+        else:
+            paths = self._get_metadata_paths_glob()
         self.meta = import_merged_metadata_tsv(paths, None, self.verbose)
         if self.meta.columns.duplicated().any():
             duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
@@ -772,7 +775,10 @@ class _DataLoader(_ProcessingMixin):
 
     def _load_biom_table(self) -> None:
         """Loads and merges BIOM feature tables."""
-        biom_paths = self._get_biom_paths()
+        if self.existing_subsets != None:
+            biom_paths = self._get_biom_paths()
+        else:
+            biom_paths = self._get_biom_paths_glob()
         if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
         self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
@@ -1393,7 +1399,7 @@ class AmpliconData:
         cfg: Dict, 
         project_dir: Any, 
         mode: str = DEFAULT_MODE, 
-        existing_subsets: Dict[str, Dict[str, Path]],
+        existing_subsets: Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
         """
@@ -1405,7 +1411,7 @@ class AmpliconData:
             mode:        Analysis mode ('asv' or 'genus').
             verbose:     If True, enables verbose logging.
         """
-        self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
+        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
         self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
 
         # Apply CPU limiting for parallel libraries
