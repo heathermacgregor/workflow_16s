@@ -95,10 +95,11 @@ def get_existing_subsets(cfg, logger) -> List[str]:
 
     # Required files for each subset (conditionally include table_6)
     required_files = [
-        "metadata/sample-metadata.tsv",
-        "qiime/table/feature-table.biom",
-        "qiime/rep-seqs/dna-sequences.fasta",
-        f"qiime/{classifier}/taxonomy/taxonomy.tsv",
+        "sample-metadata.tsv",
+        "table/feature-table.biom",
+        "table_6/feature-table.biom",
+        "rep-seqs/dna-sequences.fasta",
+        f"{classifier}/taxonomy/taxonomy.tsv",
     ]
     if cfg["target_subfragment_mode"] == "any":
         required_files.append("qiime/table_6/feature-table.biom")
