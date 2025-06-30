@@ -667,6 +667,7 @@ class _DataLoader(_ProcessingMixin):
         cfg:         Configuration dictionary.
         project_dir: Project directory structure.
         mode:        Analysis mode ('asv' or 'genus').
+        existing_subsets: Existing QIIME output paths.
         verbose:     Flag for verbose output.
         meta:        Loaded metadata DataFrame.
         table:       Loaded BIOM feature table.
@@ -682,6 +683,7 @@ class _DataLoader(_ProcessingMixin):
         cfg: Dict, 
         project_dir: Any, 
         mode: str, 
+        existing_subsets: Dict[str, Dict[str, Path]],
         verbose: bool = False
     ):
         """
@@ -693,7 +695,7 @@ class _DataLoader(_ProcessingMixin):
             mode:        Analysis mode ('asv' or 'genus').
             verbose:     If True, enables verbose logging.
         """
-        self.cfg, self.project_dir, self.mode, self.verbose = cfg, project_dir, mode, verbose
+        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets verbose
         self._validate_mode()
         self._load_metadata()
         self._load_biom_table()
@@ -709,6 +711,13 @@ class _DataLoader(_ProcessingMixin):
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def _get_metadata_paths(self) -> List[Path]:
+        """Retrieves paths to BIOM feature tables."""
+        metadata_paths = [paths["metadata"] for subset_id, paths in self.existing_subsets.items()]
+        if self.verbose:
+            logger.info(f"Found {RED}{len(metadata_paths)}{RESET} metadata files")
+        return metadata_paths
+
+    def _get_metadata_paths_glob(self) -> List[Path]:
         """Retrieves paths to metadata files."""
         paths: List[Path] = []
         for bi in self._get_biom_paths():
@@ -736,6 +745,14 @@ class _DataLoader(_ProcessingMixin):
     def _get_biom_paths(self) -> List[Path]:
         """Retrieves paths to BIOM feature tables."""
         table_dir, _ = self.MODE_CONFIG[self.mode]
+        biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
+        if self.verbose:
+            logger.info(f"Found {RED}{len(biom_paths)}{RESET} feature tables")
+        return biom_paths
+
+    def _get_biom_paths_glob(self) -> List[Path]:
+        """Retrieves paths to BIOM feature tables."""
+        table_dir, _ = self.MODE_CONFIG[self.mode]
         if self.cfg["target_subfragment_mode"] != 'any' or self.mode != 'genus':
             pattern = "/".join([
                 "*", "*", "*", self.cfg["target_subfragment_mode"], 
@@ -746,9 +763,9 @@ class _DataLoader(_ProcessingMixin):
                 "*", "*", "*", "*", 
                 "FWD_*_REV_*", table_dir, "feature-table.biom",
             ])
-        globbed = glob.glob(str(Path(
-            self.project_dir.qiime_data_per_dataset
-        ) / pattern), recursive=True)
+            globbed = glob.glob(str(Path(
+                self.project_dir.qiime_data_per_dataset
+            ) / pattern), recursive=True)
         if self.verbose:
             logger.info(f"Found {RED}{len(globbed)}{RESET} feature tables")
         return [Path(p) for p in globbed]
@@ -1376,6 +1393,7 @@ class AmpliconData:
         cfg: Dict, 
         project_dir: Any, 
         mode: str = DEFAULT_MODE, 
+        existing_subsets: Dict[str, Dict[str, Path]],
         verbose: bool = False
     ):
         """
@@ -1393,7 +1411,7 @@ class AmpliconData:
         # Apply CPU limiting for parallel libraries
         self._apply_cpu_limits()
         
-        data = _DataLoader(cfg, project_dir, mode, verbose)
+        data = _DataLoader(cfg, project_dir, mode, existing_subsets, verbose)
         self.meta, self.table = data.meta, data.table
 
         # Process
