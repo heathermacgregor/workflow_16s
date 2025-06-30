@@ -77,7 +77,7 @@ ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # =================================== MAIN WORKFLOW ================================== #
 
-def get_existing_subsets(cfg, logger) -> List[str]:
+def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     """Identify existing subsets with required QIIME outputs without running upstream processing.
     
     Args:
@@ -85,30 +85,34 @@ def get_existing_subsets(cfg, logger) -> List[str]:
         logger: Logger instance for logging messages
         
     Returns:
-        List of subset IDs that have all required output files
+        Dictionary mapping subset IDs to dictionaries of file paths
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
-    datasets = file_utils.load_datasets_list(cfg["dataset_list"])
-    datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
-    existing_subsets = []
+    datasets = cfg["datasets"]
+    datasets_info_dir = Path(cfg["datasets_info_dir"])
+    existing_subsets = {}
 
-    # Required files for each subset (conditionally include table_6)
-    required_files = [
-        "sample-metadata.tsv",
-        "table/feature-table.biom",
-        "table_6/feature-table.biom",
-        "rep-seqs/dna-sequences.fasta",
-        f"{classifier}/taxonomy/taxonomy.tsv",
-    ]
+    # Define required files and their keys
+    required_files = {
+        "metadata": "sample-metadata.tsv",
+        "table": "table/feature-table.biom",
+        "rep_seqs": "rep-seqs/dna-sequences.fasta",
+        "taxonomy": f"{classifier}/taxonomy/taxonomy.tsv",
+    }
     if cfg["target_subfragment_mode"] == "any":
-        required_files.append("qiime/table_6/feature-table.biom")
+        required_files["table_6"] = "table_6/feature-table.biom"
 
     # Process each dataset to get expected subsets
     for dataset in datasets:
         try:
-            # Partition datasets by processing requirements 
-            dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
+            # Get dataset info
+            info_path = file_utils.fetch_first_match(dataset, datasets_info_dir)
+            if not info_path:
+                logger.warning(f"⚠️ Dataset info not found for {dataset}, skipping")
+                continue
+            dataset_info = file_utils.read_dataset_info(info_path)
+
             # Generate potential subsets
             subsets = SubsetDataset(cfg)
             subsets.process(dataset, dataset_info)
@@ -124,27 +128,34 @@ def get_existing_subsets(cfg, logger) -> List[str]:
                     + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
                     + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
                 )
-                # Check all required files exist
-                all_files_exist = True
-                subset_dirs = project_dir.subset_dirs(subset=subset)
                 
-                for rel_path in required_files:
-                    if rel_path.startswith("metadata/"):
-                        file_path = subset_dirs["metadata"] / rel_path.split("/", 1)[1]
-                    else:  # qiime paths
-                        file_path = subset_dirs["qiime"] / rel_path.split("/", 1)[1]
+                # Get directory paths for this subset
+                subset_dirs = project_dir.subset_dirs(subset=subset)
+                subset_files = {}
+                all_files_exist = True
+                
+                # Check each required file
+                for file_key, rel_path in required_files.items():
+                    if file_key == "metadata":
+                        file_path = subset_dirs["metadata"] / rel_path
+                    else:
+                        file_path = subset_dirs["qiime"] / rel_path
                     
                     if not file_path.exists():
                         all_files_exist = False
                         break
+                    subset_files[file_key] = file_path
                 
                 if all_files_exist:
-                    existing_subsets.append(subset_id)
+                    existing_subsets[subset_id] = subset_files
+                    logger.debug(f"Found existing outputs for subset: {subset_id}")
         
         except Exception as e:
             logger.error(f"❌ Error processing dataset {dataset} for existing subsets: {str(e)}")
     
+    logger.info(f"Found {len(existing_subsets)} completed subsets with all required outputs")
     return existing_subsets
+    
     
 def upstream(cfg, logger) -> None:
     """Orchestrate entire analysis workflow."""
