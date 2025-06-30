@@ -16,6 +16,7 @@ from workflow_16s.sequences.utils import BasicStats, CutAdapt, FastQC, SeqKit
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
+logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore") # Suppress warnings
 
 # ================================= DEFAULT VALUES =================================== #
@@ -31,7 +32,6 @@ def process_sequences(
     subset_dirs: Dict[str, Path],
     subset: Dict[str, Any],
     info: Any,
-    logger: logging.Logger,
 ) -> Tuple[List[Path], pd.DataFrame]:
     run_fastqc = cfg.get("run_fastqc", False)
     run_seqkit = cfg.get("run_seqkit", False)
