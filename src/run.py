@@ -77,159 +77,196 @@ ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # =================================== MAIN WORKFLOW ================================== #
 
-def upstream(cfg, logger) -> None:
-    """Orchestrate entire analysis workflow."""    
-    try:
-        # Check if hard_rerun is enabled
-        qiime_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-        # Get the taxonomy classifier
-        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+def get_existing_subsets(cfg: Dict) -> Dict[str, Dict[str, Path]]:
+    """Identify and return existing subset output files without running upstream processing.
+    
+    Scans the project directory for completed analysis outputs for each potential subset.
+    Returns a dictionary of existing files for subsets where all required outputs are present.
+    
+    Args:
+        cfg: Configuration dictionary from the pipeline
+        
+    Returns:
+        Dictionary mapping subset IDs to their existing output file paths
+    """
+    project_dir = Path(cfg["project_dir"])
+    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
+    existing_subsets = {}
+    
+    # Iterate through all potential subset directories
+    for subset_dir in (project_dir / "subsets").iterdir():
+        if not subset_dir.is_dir():
+            continue
+            
+        # Define all required output paths for this subset
+        paths = {
+            "metadata": subset_dir / "metadata" / "sample-metadata.tsv",
+            "manifest": subset_dir / "qiime" / "manifest.tsv",
+            "table": subset_dir / "qiime" / "table" / "feature-table.biom",
+            "rep_seqs": subset_dir / "qiime" / "rep-seqs" / "dna-sequences.fasta",
+            "taxonomy": subset_dir / "qiime" / classifier / "taxonomy" / "taxonomy.tsv",
+            "table_6": subset_dir / "qiime" / "table_6" / "feature-table.biom",
+        }
+        
+        # Check if all required files exist
+        if all(path.exists() for path in paths.values()):
+            existing_subsets[subset_dir.name] = paths
+            
+    return existing_subsets
+    
 
-        # Set up the project directory structure
+def upstream(cfg, logger) -> None:
+    """Orchestrate entire analysis workflow."""
+    success_subsets, fail_subsets = [], []
+    qiime_outputs = {}
+    try:
+        qiime_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
+        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
         project_dir = dir_utils.SubDirs(cfg["project_dir"])
 
-        # Load datasets and associated information
-        datasets = file_utils.load_datasets_list(cfg["dataset_list"])
-        datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
-        
-        try:
-            success_subsets, fail_subsets = [], []
-            qiime_outputs = {}
+        # Get existing subsets without processing
+        existing_subsets = get_existing_subsets(cfg)
 
-            for dataset in datasets:
-                try:
-                    # Partition datasets by processing requirements 
-                    dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
-                    
-                    subsets = SubsetDataset(cfg)
-                    subsets.process(dataset, dataset_info)
-                    
-                    for subset in subsets.success:
-                        try:
-                            sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
-                            # Subset identifier:
-                            # dataset.instrument_platform.library_layout.target_subfragment.FWD_SEQ_REV_SEQ
-                            subset_id = (
-                                subset["dataset"] + '.' 
-                                + subset["instrument_platform"].lower() + '.' 
-                                + subset["library_layout"].lower() + '.' 
-                                + subset["target_subfragment"].lower() + '.' 
-                                + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
-                                + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
-                            )
-                            
-                            subset_dirs = project_dir.subset_dirs(subset=subset)
+        if not qiime_hard_rerun and existing_subsets:
+            logger.info(f"📁 Found {len(existing_subsets)} pre-existing subset outputs")
+            # Process existing subsets without re-running analysis
+            for subset_id, paths in existing_subsets.items():
+                logger.info(f"⏭️  Skipping processing for {subset_id} - outputs exist")
+                # Add to success list and use existing paths
+                success_subsets.append(subset_id)
+                qiime_outputs[subset_id] = paths
 
-                            # Write the sample metadata TSV file
-                            metadata = subset["metadata"]
-                            metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
-                            file_utils.write_metadata_tsv(metadata, metadata_path)
+        for dataset in datasets:
+            try:
+                # Partition datasets by processing requirements 
+                dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
 
-                            # If hard_rerun is not enabled, skip QIIME if the necessary outputs already exist
-                            if not qiime_hard_rerun:
-                                required_paths = {
-                                    "metadata": metadata_path,
-                                    "manifest": manifest_path,
-                                    "table": subset_dirs["qiime"] / "table" / "feature-table.biom",
-                                    "rep_seqs": subset_dirs["qiime"] / "rep-seqs" / "dna-sequences.fasta",
-                                    "taxonomy": subset_dirs["qiime"] / classifier / "taxonomy" / "taxonomy.tsv",
-                                    "table_6": subset_dirs["qiime"] / "table_6" / "feature-table.biom",
-                                }
-                                if all(p.exists() for p in required_paths.values()):
-                                    qiime_outputs[subset_id] = required_paths
-                                    success_subsets.append(subset_id)
-                                    logger.info(
-                                        f"⏭️  Skipping processing for "
-                                        f"{subset_id.replace('.', '/')} "
-                                        f"- existing outputs found"
-                                    )
-                                    continue
-                                    
-                            seq_paths, seq_stats = process_sequences(
-                                cfg=cfg,
-                                subset=subset,
-                                subset_dirs=subset_dirs,
-                                info=dataset_info,
-                            )
+                subsets = SubsetDataset(cfg)
+                subsets.process(dataset, dataset_info)
 
-                            # Write the manifest TSV file
-                            manifest_path = subset_dirs["qiime"] / "manifest.tsv"
-                            file_utils.write_manifest_tsv(seq_paths, manifest_path)
+                for subset in subsets.success:
+                    try:
+                        sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
+                        # Subset identifier:
+                        # dataset.instrument_platform.library_layout.target_subfragment.FWD_SEQ_REV_SEQ
+                        subset_id = (
+                            subset["dataset"] + '.' 
+                            + subset["instrument_platform"].lower() + '.' 
+                            + subset["library_layout"].lower() + '.' 
+                            + subset["target_subfragment"].lower() + '.' 
+                            + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
+                            + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
+                        )
 
-                            qiime_dir = subset_dirs["qiime"]
-                            qiime_outputs = execute_qiime(
-                                cfg, subset, qiime_dir, metadata_path, manifest_path
-                            )
+                        subset_dirs = project_dir.subset_dirs(subset=subset)
 
-                            qiime_outputs[subset["dataset"]] = qiime_outputs
-                            success_subsets.append(subset["dataset"])
+                        # Write the sample metadata TSV file
+                        metadata = subset["metadata"]
+                        metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
+                        file_utils.write_metadata_tsv(metadata, metadata_path)
 
-                            # Check if clean_fastq is enabled
-                            clean_fastq = cfg.get("clean_fastq", True)
-                            dataset_type = dataset_info.get('dataset_type', '').upper()
-                            if clean_fastq and dataset_type == 'ENA':
-                                dir_types = ["raw_seqs", "trimmed_seqs"]
-                                for dir_type in dir_types:
-                                    dir_path = subset_dirs[dir_type]
-                                    if not dir_path.exists():
-                                        continue
-                                    for fastq_file in dir_path.glob("*.fastq.gz"):
-                                        file_utils.safe_delete(fastq_file)
+                        # If hard_rerun is not enabled, skip QIIME if the necessary outputs already exist
+                        if not qiime_hard_rerun:
+                            required_paths = {
+                                "metadata": metadata_path,
+                                "manifest": manifest_path,
+                                "table": subset_dirs["qiime"] / "table" / "feature-table.biom",
+                                "rep_seqs": subset_dirs["qiime"] / "rep-seqs" / "dna-sequences.fasta",
+                                "taxonomy": subset_dirs["qiime"] / classifier / "taxonomy" / "taxonomy.tsv",
+                                "table_6": subset_dirs["qiime"] / "table_6" / "feature-table.biom",
+                            }
+                            if all(p.exists() for p in required_paths.values()):
+                                qiime_outputs[subset_id] = required_paths
+                                success_subsets.append(subset_id)
                                 logger.info(
-                                    f"Cleaned up intermediate files for subset: "
-                                    f"{subset['dataset']}"
-                                    )
+                                    f"⏭️  Skipping processing for "
+                                    f"{subset_id.replace('.', '/')} "
+                                    f"- existing outputs found"
+                                )
+                                continue
 
-                        except Exception as subset_error:
-                            logger.error(f"❌ Failed processing subset {subset['dataset']}: {str(subset_error)}")
-                            fail_subsets.append((subset["dataset"], str(subset_error)))
+                        seq_paths, seq_stats = process_sequences(
+                            cfg=cfg,
+                            subset=subset,
+                            subset_dirs=subset_dirs,
+                            info=dataset_info,
+                        )
 
-                except Exception as dataset_error:
-                    logger.error(f"❌ Failed processing dataset {dataset}: {str(dataset_error)}")
-                    fail_subsets.append((dataset, str(dataset_error)))
+                        # Write the manifest TSV file
+                        manifest_path = subset_dirs["qiime"] / "manifest.tsv"
+                        file_utils.write_manifest_tsv(seq_paths, manifest_path)
 
-            n_success_subsets = len(success_subsets)
-            n_total_subsets = len(success_subsets) + len(fail_subsets)
-            logger.info(
-                f"📢 Processing complete! Succeeded for {n_success_subsets} of {n_total_subsets} subsets"
-            )
-            if fail_subsets:
-                fail_subsets_report = '\n'.join(["ℹ️ Failure details:"] + [f"    • {dataset}: {error}" 
-                                                                          for dataset, error in fail_subsets])
-                logger.info(fail_subsets_report)
+                        qiime_dir = subset_dirs["qiime"]
+                        qiime_outputs = execute_qiime(
+                            cfg, subset, qiime_dir, metadata_path, manifest_path
+                        )
 
-            metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
-                            for i in qiime_outputs.values()]
-            metadata_df = pd.concat(metadata_dfs)
-            # Calculate the percentage of non-null values for each column
-            completeness = metadata_df.sort_index(axis=1).notna().mean() * 100
-            logger.info(f"\n{completeness}")
+                        qiime_outputs[subset["dataset"]] = qiime_outputs
+                        success_subsets.append(subset["dataset"])
 
-            table_type = 'table_6' if cfg['target_subfragment_mode'] == 'any' else 'table'
-            table_dfs = [file_utils.import_table_biom(i[table_type]) 
-                         for i in qiime_outputs.values()]
-            table_df = pd.concat(table_dfs)
-            logger.info(f"Feature table shape: {table_df.shape}")
+                        # Check if clean_fastq is enabled
+                        clean_fastq = cfg.get("clean_fastq", True)
+                        dataset_type = dataset_info.get('dataset_type', '').upper()
+                        if clean_fastq and dataset_type == 'ENA':
+                            dir_types = ["raw_seqs", "trimmed_seqs"]
+                            for dir_type in dir_types:
+                                dir_path = subset_dirs[dir_type]
+                                if not dir_path.exists():
+                                    continue
+                                for fastq_file in dir_path.glob("*.fastq.gz"):
+                                    file_utils.safe_delete(fastq_file)
+                            logger.info(
+                                f"Cleaned up intermediate files for subset: "
+                                f"{subset['dataset']}"
+                            )
 
-        except Exception as global_error:
-            logger.critical(
-                f"❌ Fatal pipeline error: {str(global_error)}", 
-                exc_info=True
-            )
-            raise
-            
-    except Exception as e:
-        print(f"Critical initialization error: {str(e)}")
+                    except Exception as subset_error:
+                        logger.error(f"❌ Failed processing subset {subset['dataset']}: {str(subset_error)}")
+                        fail_subsets.append((subset["dataset"], str(subset_error)))
 
+            except Exception as dataset_error:
+                logger.error(f"❌ Failed processing dataset {dataset}: {str(dataset_error)}")
+                fail_subsets.append((dataset, str(dataset_error)))
+
+        n_success_subsets = len(success_subsets)
+        n_total_subsets = len(success_subsets) + len(fail_subsets)
+        logger.info(
+            f"📢 Processing complete! Succeeded for {n_success_subsets} of {n_total_subsets} subsets"
+        )
+        if fail_subsets:
+            fail_subsets_report = '\n'.join(["ℹ️ Failure details:"] + [f"    • {dataset}: {error}" 
+                                                                      for dataset, error in fail_subsets])
+            logger.info(fail_subsets_report)
+
+        metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
+                        for i in qiime_outputs.values()]
+        metadata_df = pd.concat(metadata_dfs)
+        # Calculate the percentage of non-null values for each column
+        completeness = metadata_df.sort_index(axis=1).notna().mean() * 100
+        logger.info(f"\n{completeness}")
+
+        table_type = 'table_6' if cfg['target_subfragment_mode'] == 'any' else 'table'
+        table_dfs = [file_utils.import_table_biom(i[table_type]) 
+                     for i in qiime_outputs.values()]
+        table_df = pd.concat(table_dfs)
+        logger.info(f"Feature table shape: {table_df.shape}")
+
+    except Exception as global_error:
+        logger.critical(
+            f"❌ Fatal pipeline error: {str(global_error)}", 
+            exc_info=True
+        )
+        raise
 
 def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
-  
+    existing_subsets = get_existing_subsets(cfg)
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
         mode='genus' if cfg["target_subfragment_mode"] == 'any' else 'asv',
-        verbose=False
+        existing_subsets=existing_subsets,
+        verbose=False        
     )
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
@@ -245,6 +282,8 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     cfg = get_config(config_path)
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     logger = setup_logging(project_dir.logs)
+
+    
         
     upstream_enabled = cfg["upstream"]
     downstream_enabled = cfg["downstream"]
