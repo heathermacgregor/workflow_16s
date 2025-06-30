@@ -124,7 +124,6 @@ def get_existing_subsets(cfg, logger) -> List[str]:
                     + f"FWD_{sanitize(subset['pcr_primer_fwd_seq'])}_" 
                     + f"REV_{sanitize(subset['pcr_primer_rev_seq'])}"
                 )
-                print(subset_id)
                 # Check all required files exist
                 all_files_exist = True
                 subset_dirs = project_dir.subset_dirs(subset=subset)
