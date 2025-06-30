@@ -191,19 +191,25 @@ def _prepare_visualization_data(
 
 
 def _create_colordict(
-    data: pd.Series, 
+    data: Union[pd.Series, pd.DataFrame], 
     color_set: List[str] = largecolorset
 ) -> Dict[str, str]:
     """
     Create consistent color mapping for categories.
     
     Args:
-        data:      Series containing categorical values.
+        data:      Series or single-column DataFrame containing categorical values.
         color_set: List of colors to use for mapping.
         
     Returns:
         Dictionary mapping categories to colors.
     """
+    # Handle DataFrame input (extract first column)
+    if isinstance(data, pd.DataFrame):
+        if data.shape[1] != 1:
+            raise ValueError("Color data must be a single column")
+        data = data.iloc[:, 0]
+    
     categories = sorted(data.astype(str).unique())
     return {c: color_set[i % len(color_set)] for i, c in enumerate(categories)}
 
@@ -444,6 +450,8 @@ def create_ordination_plot(
     """
     # Validate inputs
     _validate_metadata(metadata, [color_col, symbol_col, '#sampleid'])
+    if not isinstance(color_col, str):
+        raise TypeError(f"color_col must be a string, got {type(color_col)}")
     
     # Prepare data
     data = _prepare_visualization_data(
