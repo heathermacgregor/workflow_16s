@@ -2,7 +2,7 @@
 
 # Standard Library Imports
 import warnings
-from typing import Any
+from typing import Any, Optional
 
 # Third-Party Imports
 from rich.progress import (
@@ -32,6 +32,7 @@ DEFAULT_DESCRIPTION_STYLE = "white"
 DEFAULT_BAR_COLUMN_COMPLETE_STYLE = "honeydew2"
 DEFAULT_FINISHED_STYLE = "dark_cyan" 
 DEFAULT_PROGRESS_PERCENTAGE_STYLE = "honeydew2"
+DEFAULT_M_OF_N_COMPLETE_STYLE = "honeydew2"
 DEFAULT_TIME_ELAPSED_STYLE = "light_sky_blue1"
 DEFAULT_TIME_REMAINING_STYLE = "thistle1"
 
@@ -76,7 +77,7 @@ class MofNCompleteColumn(ProgressColumn):
         """Render the progress count as 'completed/total'"""
         return Text(
             f"{task.completed}/{task.total}".rjust(10),
-            style="cyan",
+            style=DEFAULT_M_OF_N_COMPLETE_STYLE,
             justify="right"
         )
 
