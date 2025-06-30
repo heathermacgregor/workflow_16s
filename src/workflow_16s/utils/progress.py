@@ -146,7 +146,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
             speed=0.75
         ),
         TextColumn(
-            f"[{DEFAULT_DESCRIPTION_STYLE}]{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
+            "{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
             style=DEFAULT_DESCRIPTION_STYLE,
             justify="left"
         ),
@@ -169,7 +169,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
         TimeElapsedColumn(),
         TextColumn(
             "R".rjust(2), 
-            style="cyan"
+            style=DEFAULT_TIME_REMAINING_STYLE
         ),
         TimeRemainingColumn(),
         transient=transient,
