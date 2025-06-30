@@ -89,7 +89,7 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
-    datasets = file_utils.load_datasets(cfg["datasets_list"])
+    datasets = file_utils.load_datasets_list(cfg["datasets_list"])
     datasets_info = file_utils.load_datasets_info(cfg["datasets_info"])
     existing_subsets = {}
 
