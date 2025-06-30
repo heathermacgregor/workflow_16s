@@ -355,7 +355,7 @@ class Ordination:
         self.figures: Dict[str, Any] = {}
         # Get color columns from config or use default
         self.color_columns = cfg["figures"].get(
-            "ordination_color_columns",
+            "color_columns",
             cfg["figures"].get(
                 "map_columns",
                 ["dataset_name", "nuclear_contamination_status",
@@ -440,51 +440,59 @@ class Ordination:
                 - Ordination result object
                 - Dictionary of figures keyed by color column
         """
-        method_params = {}
-        if cfg["key"] == "pcoa":
-            method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
-        
-        # Add CPU limiting parameters
-        if cfg["key"] in ["tsne", "umap"]:
-            cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
-            method_params["n_jobs"] = cpu_limit
+        try:
+            method_params = {}
+            if cfg["key"] == "pcoa":
+                method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+            
+            # Add CPU limiting parameters
+            if cfg["key"] in ["tsne", "umap"]:
+                cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
+                method_params["n_jobs"] = cpu_limit
+    
+            ord_res = cfg["func"](table=table, **method_params)
+        except Exception as e:
+            logger.error(f"Failed {cfg['key']} for {transformation}: {e}")
+            return None, {}
 
-        ord_res = cfg["func"](table=table, **method_params)
+        try:
+            # Generate plots for each color column
+            figures = {}
+            pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+            
+            for color_col in self.color_columns:
+                if color_col not in metadata.columns:
+                    logger.warning(f"Color column '{color_col}' not found in metadata")
+                    continue
+    
+                # Set up plot parameters based on method
+                if cfg["key"] == "pca":
+                    pkwargs.update({
+                        "components": ord_res["components"],
+                        "proportion_explained": ord_res["exp_var_ratio"],
+                    })
+                elif cfg["key"] == "pcoa":
+                    pkwargs.update({
+                        "components": ord_res.samples,
+                        "proportion_explained": ord_res.proportion_explained,
+                    })
+                else:  # t-SNE or UMAP
+                    pkwargs["df"] = ord_res
+    
+                fig, _ = cfg["plot_func"](
+                    metadata=metadata,
+                    color_col=color_col,
+                    symbol_col=symbol_col,
+                    transformation=transformation,
+                    output_dir=self.figure_output_dir,
+                    **pkwargs,
+                )
+                figures[color_col] = fig
+            return ord_res, figures
 
-        # Generate plots for each color column
-        figures = {}
-        pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
-        
-        for color_col in self.color_columns:
-            if color_col not in metadata.columns:
-                logger.warning(f"Color column '{color_col}' not found in metadata")
-                continue
-
-            # Set up plot parameters based on method
-            if cfg["key"] == "pca":
-                pkwargs.update({
-                    "components": ord_res["components"],
-                    "proportion_explained": ord_res["exp_var_ratio"],
-                })
-            elif cfg["key"] == "pcoa":
-                pkwargs.update({
-                    "components": ord_res.samples,
-                    "proportion_explained": ord_res.proportion_explained,
-                })
-            else:  # t-SNE or UMAP
-                pkwargs["df"] = ord_res
-
-            fig, _ = cfg["plot_func"](
-                metadata=metadata,
-                color_col=color_col,
-                symbol_col=symbol_col,
-                transformation=transformation,
-                output_dir=self.figure_output_dir,
-                **pkwargs,
-            )
-            figures[color_col] = fig
-
-        return ord_res, figures
+        except Exception as e:
+            logger.error(f"Failed {cfg['key']} plot for {transformation}: {e}")
+            return ord_res, {}
 
 
 class Plotter:
