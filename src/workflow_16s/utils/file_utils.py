@@ -35,7 +35,13 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 
-# ==================================== FUNCTIONS ===================================== #    
+# ==================================== FUNCTIONS ===================================== #   
+
+def safe_delete(file_path):
+    try:
+        file_path.unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning(f"Error deleting {file_path}: {e}")
 
 # ------------------------------- Dataset Loading ------------------------------------ #
 
