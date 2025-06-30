@@ -123,8 +123,7 @@ def get_progress_bar(transient: bool = False) -> Progress:
             bar_width=40,
             style="black", # Background color
             complete_style=DEFAULT_BAR_COLUMN_COMPLETE_STYLE,
-            finished_style=DEFAULT_FINISHED_STYLE,
-            #pulse_style="yellow"
+            finished_style=DEFAULT_FINISHED_STYLE
         ),
         TextColumn(
             "{task.percentage:>3.0f}%".rjust(5), 
