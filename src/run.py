@@ -77,44 +77,57 @@ ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 
 # =================================== MAIN WORKFLOW ================================== #
 
-def get_existing_subsets(cfg: Dict) -> Dict[str, Dict[str, Path]]:
-    """Identify and return existing subset output files without running upstream processing.
-    
-    Scans the project directory for completed analysis outputs for each potential subset.
-    Returns a dictionary of existing files for subsets where all required outputs are present.
+def get_existing_subsets(cfg) -> List[str]:
+    """Identify existing subsets with required QIIME outputs without running upstream processing.
     
     Args:
-        cfg: Configuration dictionary from the pipeline
-        
+        cfg: Configuration dictionary from the workflow
+    
     Returns:
-        Dictionary mapping subset IDs to their existing output file paths
+        List of subset IDs that have all required output files
     """
     project_dir = Path(cfg["project_dir"])
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
-    existing_subsets = {}
+    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
+    existing_subsets = []
+
+    # Base directories to check
+    metadata_dir = project_dir / "metadata"
+    qiime_dir = project_dir / "qiime"
     
-    # Iterate through all potential subset directories
-    for subset_dir in (project_dir / "subsets").iterdir():
+    # Required files for each subset
+    required_files = [
+        "metadata/sample-metadata.tsv",
+        "qiime/table/feature-table.biom",
+        "qiime/rep-seqs/dna-sequences.fasta",
+        f"qiime/{classifier}/taxonomy/taxonomy.tsv",
+        "qiime/table_6/feature-table.biom"
+    ]
+
+    # Iterate through potential subsets
+    for subset_dir in metadata_dir.iterdir():
         if not subset_dir.is_dir():
             continue
             
-        # Define all required output paths for this subset
-        paths = {
-            "metadata": subset_dir / "metadata" / "sample-metadata.tsv",
-            "manifest": subset_dir / "qiime" / "manifest.tsv",
-            "table": subset_dir / "qiime" / "table" / "feature-table.biom",
-            "rep_seqs": subset_dir / "qiime" / "rep-seqs" / "dna-sequences.fasta",
-            "taxonomy": subset_dir / "qiime" / classifier / "taxonomy" / "taxonomy.tsv",
-            "table_6": subset_dir / "qiime" / "table_6" / "feature-table.biom",
-        }
+        subset_id = subset_dir.name
+        all_files_exist = True
         
-        # Check if all required files exist
-        if all(path.exists() for path in paths.values()):
-            existing_subsets[subset_dir.name] = paths
+        # Check all required files
+        for rel_path in required_files:
+            # Handle metadata separately as it's in a different base dir
+            if rel_path.startswith("metadata/"):
+                file_path = metadata_dir / subset_id / rel_path.split("/", 1)[1]
+            else:
+                file_path = qiime_dir / subset_id / rel_path.split("/", 1)[1]
             
+            if not file_path.exists():
+                all_files_exist = False
+                break
+        
+        if all_files_exist:
+            existing_subsets.append(subset_id)
+    
     return existing_subsets
     
-
 def upstream(cfg, logger) -> None:
     """Orchestrate entire analysis workflow."""
     success_subsets, fail_subsets = [], []
@@ -123,18 +136,6 @@ def upstream(cfg, logger) -> None:
         qiime_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
         classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
         project_dir = dir_utils.SubDirs(cfg["project_dir"])
-
-        # Get existing subsets without processing
-        existing_subsets = get_existing_subsets(cfg)
-
-        if not qiime_hard_rerun and existing_subsets:
-            logger.info(f"📁 Found {len(existing_subsets)} pre-existing subset outputs")
-            # Process existing subsets without re-running analysis
-            for subset_id, paths in existing_subsets.items():
-                logger.info(f"⏭️  Skipping processing for {subset_id} - outputs exist")
-                # Add to success list and use existing paths
-                success_subsets.append(subset_id)
-                qiime_outputs[subset_id] = paths
 
         for dataset in datasets:
             try:
@@ -260,7 +261,9 @@ def upstream(cfg, logger) -> None:
 
 def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
+    # Here
     existing_subsets = get_existing_subsets(cfg)
+    logger.info(f"Found {len(existing_subsets)} completed subsets")
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
