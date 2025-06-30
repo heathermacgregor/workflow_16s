@@ -247,7 +247,7 @@ def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
 
 # ------------------------------ Metadata Handling ----------------------------------- #
 
-def import_meta_tsv(
+def import_metadata_tsv(
     tsv_path: Union[str, Path],
     column_renames: Optional[List[Tuple[str, str]]] = None
 ) -> pd.DataFrame:
@@ -314,7 +314,7 @@ def import_meta_tsv(
     return df
 
 
-def import_merged_meta_tsv(
+def import_merged_metadata_tsv(
     meta_paths: List[Union[str, Path]],
     column_renames: Optional[List[Tuple[str, str]]] = None,
     verbose: bool = False
@@ -339,7 +339,7 @@ def import_merged_meta_tsv(
         # Verbose mode with individual file logging
         for path in meta_paths:
             try:
-                df = import_meta_tsv(path, column_renames)
+                df = import_metadata_tsv(path, column_renames)
                 dfs.append(df)
                 logger.info(f"Loaded {Path(path).name} with {len(df)} samples")
             except Exception as e:
@@ -353,7 +353,7 @@ def import_merged_meta_tsv(
             )
             for path in meta_paths:
                 try:
-                    dfs.append(import_meta_tsv(path, column_renames))
+                    dfs.append(import_metadata_tsv(path, column_renames))
                 except Exception as e:
                     logger.error(f"Metadata load failed for {path}: {e!r}")
                 finally:
