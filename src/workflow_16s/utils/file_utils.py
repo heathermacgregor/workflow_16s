@@ -87,7 +87,10 @@ def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
     return df.loc[:, ~df.columns.str.startswith('Unnamed')]
 
 
-def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
+def fetch_first_match(
+    dataset: str,
+    dataset_info: pd.DataFrame
+) -> pd.Series:
     """
     Find the best matching metadata record for a dataset.
     
@@ -96,8 +99,8 @@ def fetch_first_match(dataset_info: pd.DataFrame, dataset: str) -> pd.Series:
     matching and different identifier fields.
     
     Args:
-        dataset_info: DataFrame containing dataset metadata.
         dataset:      Dataset identifier to search for.
+        dataset_info: DataFrame containing dataset metadata.
     
     Returns:
         First matching row as a pandas Series.
@@ -187,6 +190,41 @@ def processed_dataset_files(
         'taxonomy_tsv': base_dir / classifier / 'taxonomy' / 'taxonomy.tsv',  
     }
 
+
+def find_required_qiime_output_files(test):
+    """Check for required output files in QIIME directories"""
+    targets = [
+        ("feature-table.biom", "table"),
+        ("feature-table.biom", "table_6"),
+        ("dna-sequences.fasta", "rep-seqs"),
+        ("taxonomy.tsv", "taxonomy"),
+        ("sample-metadata.tsv", None)
+    ]
+    qiime_base = test.get('qiime')
+    metadata_base = test.get('metadata')
+    found = {}
+    
+    for fname, subdir in targets:
+        if subdir:
+            base = qiime_base
+            pattern = f"{subdir}/{fname}"
+        else:
+            base = metadata_base
+            pattern = fname
+            
+        if not base:
+            continue
+            
+        for p in Path(base).rglob(pattern):
+            if p.is_file():
+                key = f"{subdir}/{fname}" if subdir else fname
+                found[key] = p.resolve()
+                break
+                
+    required_keys = [f"{subdir}/{fname}" if subdir else fname 
+                    for fname, subdir in targets]
+    return found if all(k in found for k in required_keys) else None
+    
 
 def missing_output_files(file_list: List[Union[str, Path]]) -> List[Path]:
     """
@@ -323,7 +361,11 @@ def import_merged_meta_tsv(
     return pd.concat(dfs, ignore_index=True)
 
 
-def write_metadata_tsv(df: pd.DataFrame, tsv_path: str) -> None:
+def write_metadata_tsv(
+    df: pd.DataFrame, 
+    tsv_path: Union[str, Path],
+    verbose: bool = True
+) -> None:
     """
     Write metadata DataFrame to standardized TSV format.
     
@@ -340,6 +382,8 @@ def write_metadata_tsv(df: pd.DataFrame, tsv_path: str) -> None:
         df['#SampleID'] = df['run_accession']
     df.set_index('#SampleID', inplace=True)
     df.to_csv(tsv_path, sep='\t', index=True)
+    if verbose:
+        logger.info(f"Wrote metadata TSV to '{tsv_path}'")
 
 
 def manual_meta(
@@ -481,15 +525,19 @@ def import_faprotax_tsv(tsv_path: Union[str, Path]) -> pd.DataFrame:
 
 # -------------------------------- Manifest Handling --------------------------------- #
 
-def write_manifest_tsv(results: Dict[str, List[str]], tsv_path: str) -> None:
+def write_manifest_tsv(
+    seq_paths: Dict[str, List[str]], 
+    tsv_path: str,
+    verbose: bool = True
+) -> None:
     """
     Generate QIIME2 manifest file from sequencing file paths.
     
     Args:
-        results:  Dictionary mapping sample IDs to file paths:
-                  - Single path: Single-end data
-                  - Two paths: Paired-end data
-        tsv_path: Output file path.
+        seq_paths: Dictionary mapping sample IDs to file paths:
+                   - Single path: Single-end data
+                   - Two paths: Paired-end data
+        tsv_path:  Output file path.
     """
     rows = []
     for sample_id, paths in results.items():
@@ -502,6 +550,8 @@ def write_manifest_tsv(results: Dict[str, List[str]], tsv_path: str) -> None:
                 'reverse-absolute-filepath': paths[1]
             })
     pd.DataFrame(rows).to_csv(tsv_path, sep='\t', index=False)
+    if verbose:
+        logger.info(f"Wrote manifest TSV to '{tsv_path}'")
 
 
 # ----------------------------- BIOM-Metadata Alignment ----------------------------- #
