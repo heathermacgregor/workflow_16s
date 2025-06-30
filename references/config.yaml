@@ -1,35 +1,45 @@
 # Default configuration file
 
+# Hardware
+cpu:
+  limit: 2  # Global CPU limit for all operations
+
 # Important directory and file paths
-manual_metadata_dir: "../../../manual_metadata"
-project_dir: "../../test"
 dataset_list: "./datasets.txt"
 dataset_info: "./datasets.tsv"
 
-# Part I: Upstream
-upstream: False
-
-ena_email: "macgregor@berkeley.edu"
-
-# Specify if PCR primers used are manually provided or predicted
-pcr_primers_mode: "manual"
-
-# Specify the target 16S subfragment
-target_subfragment_mode: "any"
+project_dir: "../../test"
+manual_metadata_dir: "../../../manual_metadata"
 
 blast_db_dir: "./blast/silva_16s/SILVA_16S_db"
-validate_16s: False
-validate_sequences:
+
+# ENA API
+ena_email: "macgregor@berkeley.edu"
+
+# Toggle what parts to run
+upstream: False
+downstream: True
+
+# Part I: Upstream
+# ================
+
+# Toggle if PCR primers used are manually provided or predicted
+pcr_primers_mode: "manual"
+
+# Target 16S subfragment
+target_subfragment_mode: "any"
+
+# Toggle sequence quality/validation tools
+run_validate_16s: False
+run_fastqc: False
+run_seqkit: False
+
+validate_16s:
   n_runs: 10
   run_targets:
     - '16S'
     - 'unknown'
 
-run_fastqc: False
-
-run_seqkit: False
-
-run_cutadapt: False
 cutadapt:
   start_trim: 0
   end_trim: 0
@@ -38,8 +48,10 @@ cutadapt:
   min_seq_length: 150
   n_cores: 16
 
+# Toggle CutAdapt outside of QIIME
+run_cutadapt: False
 
-  
+# QIIME settings
 qiime2:
   per_dataset:
     script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
@@ -58,48 +70,45 @@ qiime2:
     
 clean_fastq: True
 
-# Part II. Merging datasets and downstream analyses
-downstream: True
-
+# Part II. Downstream
+# ===================
 features:
   filter: True
   normalize: True
   clr_transform: True
   presence_absence: True
 
+# Statistical Analyses
 stats:
   raw:
-    ttest: False          # Avoid: compositionality violates assumptions
-    mwu_bonferroni: True   # Non-parametric alternative
+    ttest: False              # ❌ compositionality violates assumptions
+    mwu_bonferroni: True      # ✅ non-parametric alternative
     kruskal_bonferroni: True
   presence_absence:
-    fisher: True           # Ideal for binary data
-    ttest: False           # Avoid: designed for continuous data
-    mwu_bonferroni: False  # Avoid: not designed for binary data
+    fisher: True              # ✅ ideal for binary data
+    ttest: False              # ❌ designed for continuous data
+    mwu_bonferroni: False     # ❌ not designed for binary data
     kruskal_bonferroni: False
   filtered:
-    ttest: False           # Same issues as raw counts
+    ttest: False              # ❌ compositionality violates assumptions
     mwu_bonferroni: True
     kruskal_bonferroni: True
   normalized:
-    ttest: True            # Can be used after proper normalization
-    mwu_bonferroni: True   # Still valuable for robustness
+    ttest: True               # ✅ can be used after proper normalization
+    mwu_bonferroni: True      # ✅ still valuable for robustness
     kruskal_bonferroni: True
   clr_transformed:
-    ttest: True            # Recommended: CLR addresses compositionality
-    mwu_bonferroni: True   # Good alternative for non-normal distributions
+    ttest: True               # ✅ CLR addresses compositionality
+    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
     kruskal_bonferroni: True
     
-# Example config.yaml additions
-cpu:
-  limit: 2  # Global CPU limit for all operations
-
+# Beta Diversity + Ordination
 ordination:
   max_workers: 1  # Max concurrent ordination tasks
   cpu_limit: 1    # CPU cores per ordination method
   raw:
-    pca: False
-    pcoa: True
+    pca: False 
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
@@ -107,20 +116,20 @@ ordination:
     pca: False
     pcoa: True
     pcoa_metric: "jaccard"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   filtered:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: True
-    umap: True
+    umap: False #True
   normalized:
-    pca: True
+    pca: False #True
     pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   clr_transformed:
     pca: True
     pcoa: True
@@ -128,27 +137,27 @@ ordination:
     tsne: True
     umap: True
 
+# Functional Prediction
 faprotax: True
 
+# Figures
 figures:
   map: True
 
+# Machine Learning
 run_ml: True
 ml:
+  table_types:
+    - 'clr_transformed'
+  levels:
+    - 'genus'
   methods:
     - 'rfe'
-    - 'select_k_best'
-    - 'chi_squared'
-    - 'lasso'
-    - 'shap'
-    
-ml_dep:
-  enable: true
-  table_type: "clr_transformed"   # raw | normalized | clr_transformed | presence_absence
-  level: "genus"                  # phylum | … | genus
-  method: "rfe"                   # rfe | select_k_best | chi_squared | lasso | shap
+    #- 'select_k_best'
+    #- 'chi_squared'
+    #- 'lasso'
+    #- 'shap'
   num_features: 500
-  step_size: 100                  # only used by RFE
-  permutation_importance: true
-  catboost_threads: 4
-
+  step_size: 100
+  permutation_importance: True
+  n_threads: 4
