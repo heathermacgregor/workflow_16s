@@ -26,7 +26,7 @@ from workflow_16s.utils.biom import (
 from workflow_16s.utils.progress import get_progress_bar
 from workflow_16s.utils.file_utils import (
     import_merged_table_biom,
-    import_merged_meta_tsv,
+    import_merged_metadata_tsv,
     filter_and_reorder_biom_and_metadata as update_tables,
 )
 from workflow_16s.stats.utils import (
@@ -724,7 +724,7 @@ class _DataLoader(_ProcessingMixin):
     def _load_metadata(self) -> None:
         """Loads and merges metadata from multiple files."""
         paths = self._get_metadata_paths()
-        self.meta = import_merged_meta_tsv(paths, None, self.verbose)
+        self.meta = import_merged_metadata_tsv(paths, None, self.verbose)
         if self.meta.columns.duplicated().any():
             duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
             logger.debug(
