@@ -101,6 +101,30 @@ stats:
     ttest: True               # ✅ CLR addresses compositionality
     mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
     kruskal_bonferroni: True
+
+# Alpha Diversity
+alpha_diversity:
+  enabled: true
+  metrics:  # Optional, defaults to DEFAULT_ALPHA_METRICS
+    - shannon
+    - observed_features
+    - simpson
+    - pielou_evenness
+  parametric: false  # For statistical tests
+  tables:
+    raw:  # Table type
+      enabled: true
+      levels:  # Optional, defaults to all levels
+        - genus
+        - family
+    normalized:
+      enabled: true
+      levels: 
+        - genus
+    clr_transformed:
+      enabled: false
+    presence_absence:
+      enabled: false
     
 # Beta Diversity + Ordination
 ordination:
