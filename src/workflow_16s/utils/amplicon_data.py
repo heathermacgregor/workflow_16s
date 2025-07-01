@@ -37,6 +37,8 @@ from workflow_16s.stats.utils import (
     table_to_dataframe,
 )
 from workflow_16s.stats.tests import (
+    alpha_diversity,
+    analyze_alpha_diversity,
     fisher_exact_bonferroni,
     kruskal_bonferroni,
     mwu_bonferroni,
@@ -1044,8 +1046,11 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
+        self.alpha_diversity_results: Dict[str, Dict[str, pd.DataFrame]] = {}
+        self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
 
         # Process in stages and clear intermediates
+        self._run_alpha_diversity_analysis()  
         self._run_statistical_tests()
         stats_copy = deepcopy(self.stats)
 
@@ -1104,7 +1109,89 @@ class _AnalysisManager(_ProcessingMixin):
 
         for feat in self.top_pristine_features:
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
-
+    def _run_alpha_diversity_analysis(self) -> None:
+        """Run alpha diversity analysis based on configuration settings."""
+        # Check if alpha diversity analysis is enabled
+        alpha_cfg = self.cfg.get("alpha_diversity", {})
+        if not alpha_cfg.get("enabled", False):
+            logger.info("Alpha diversity analysis is disabled in configuration.")
+            return
+    
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
+        parametric = alpha_cfg.get("parametric", False)
+        
+        # Calculate total tasks based on configuration
+        total_tasks = 0
+        enabled_table_types = alpha_cfg.get("tables", {})
+        for table_type, levels in self.tables.items():
+            # Check if this table type is enabled
+            if not enabled_table_types.get(table_type, False):
+                continue
+            # Check if specific levels are specified, or use all
+            enabled_levels = enabled_table_types[table_type].get("levels", list(levels.keys()))
+            total_tasks += len(enabled_levels)
+        
+        if not total_tasks:
+            return
+            
+        with get_progress_bar() as progress:
+            task = progress.add_task(
+                "Calculating alpha diversity...".ljust(DEFAULT_PROGRESS_TEXT_N),
+                total=total_tasks
+            )
+            
+            for table_type, levels in self.tables.items():
+                # Skip table types not enabled in config
+                if not enabled_table_types.get(table_type, False):
+                    continue
+                    
+                table_cfg = enabled_table_types[table_type]
+                self.alpha_diversity_results[table_type] = {}
+                self.alpha_diversity_stats[table_type] = {}
+                
+                # Get enabled levels for this table type
+                enabled_levels = table_cfg.get("levels", list(levels.keys()))
+                
+                for level in enabled_levels:
+                    if level not in levels:
+                        logger.warning(f"Level '{level}' not found for table type '{table_type}'")
+                        continue
+                        
+                    progress.update(
+                        task,
+                        description=f"[white]{table_type} {level}".ljust(DEFAULT_PROGRESS_TEXT_N),
+                        refresh=True
+                    )
+                    
+                    try:
+                        # Convert to DataFrame and compute alpha diversity
+                        df = table_to_dataframe(levels[level])
+                        alpha_df = alpha_diversity(df, metrics=metrics)
+                        self.alpha_diversity_results[table_type][level] = alpha_df
+                        
+                        # Analyze relationship with contamination status
+                        stats_df = analyze_alpha_diversity(
+                            alpha_diversity_df=alpha_df,
+                            metadata=self.meta,
+                            group_col=group_col,
+                            parametric=parametric
+                        )
+                        self.alpha_diversity_stats[table_type][level] = stats_df
+                        
+                        # Log significant results
+                        sig = stats_df[stats_df['p_value'] < 0.05]
+                        if not sig.empty:
+                            logger.info(
+                                f"Significant alpha diversity differences for "
+                                f"{table_type}/{level}:\n{sig.to_string()}"
+                            )
+                            
+                    except Exception as e:
+                        logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
+                    
+                    progress.advance(task)
+                
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -1446,9 +1533,17 @@ class AmpliconData:
         self.top_contaminated_features = am.top_contaminated_features
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
+        
+        # NEW: Capture alpha diversity results
+        self.alpha_diversity_results = am.alpha_diversity_results
+        self.alpha_diversity_stats = am.alpha_diversity_stats
 
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
+            logger.info(
+                f"Alpha diversity calculated for {len(self.alpha_diversity_results)} "
+                f"table types and {sum(len(levels) for levels in self.alpha_diversity_results.values())} levels"
+            )
     
     def _apply_cpu_limits(self):
         """
