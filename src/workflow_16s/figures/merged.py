@@ -1075,7 +1075,7 @@ def plot_correlation_matrix(
 def create_alpha_diversity_boxplot(
     alpha_df: pd.DataFrame,
     metadata: pd.DataFrame,
-    group_col: str,
+    group_column: str,
     metric: str,
     output_dir: Optional[Path] = None,
     show: bool = False,
@@ -1107,12 +1107,12 @@ def create_alpha_diversity_boxplot(
     # Create plot
     fig = px.box(
         merged, 
-        x=group_col, 
+        x=group_column, 
         y=metric,
-        color=group_col,
+        color=group_column,
         points="all",
-        title=f"{metric.replace('_', ' ').title()} by {group_col}",
-        labels={metric: metric.replace('_', ' ').title(), group_col: group_col.replace('_', ' ').title()}
+        title=f"{metric.replace('_', ' ').title()} by {group_column}",
+        labels={metric: metric.replace('_', ' ').title(), group_column: group_column.replace('_', ' ').title()}
     )
     
     # Update layout
@@ -1126,8 +1126,9 @@ def create_alpha_diversity_boxplot(
     
     # Save output
     if output_dir:
+        output_dir = output_dir / 'alpha_diversity'
         output_dir.mkdir(parents=True, exist_ok=True)
-        file_stem = f"alpha_diversity.{metric}.boxplot"
+        file_stem = f"boxplot.{metric}.{group_column}"
         plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
         
     return fig
@@ -1201,8 +1202,9 @@ def create_alpha_diversity_stats_plot(
     
     # Save output
     if output_dir:
+        output_dir = Path(output_dir) / 'alpha_diversity'
         output_dir.mkdir(parents=True, exist_ok=True)
-        file_stem = "alpha_diversity.statistics"
+        file_stem = "statistics"
         plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
         
     return fig
