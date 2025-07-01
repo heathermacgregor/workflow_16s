@@ -1050,7 +1050,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
 
         # Process in stages and clear intermediates
-        self._run_alpha_diversity_analysis()  
+        self._run_alpha_diversity_analysis()  # NEW: Run alpha diversity analysis
         self._run_statistical_tests()
         stats_copy = deepcopy(self.stats)
 
@@ -1109,6 +1109,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         for feat in self.top_pristine_features:
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
+
     def _run_alpha_diversity_analysis(self) -> None:
         """Run alpha diversity analysis based on configuration settings."""
         # Check if alpha diversity analysis is enabled
@@ -1116,10 +1117,11 @@ class _AnalysisManager(_ProcessingMixin):
         if not alpha_cfg.get("enabled", False):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
-    
+
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
+        generate_plots = alpha_cfg.get("generate_plots", True)
         
         # Calculate total tasks based on configuration
         total_tasks = 0
@@ -1150,6 +1152,10 @@ class _AnalysisManager(_ProcessingMixin):
                 self.alpha_diversity_results[table_type] = {}
                 self.alpha_diversity_stats[table_type] = {}
                 
+                # Initialize figures structure
+                if table_type not in self.figures:
+                    self.figures[table_type] = {}
+                
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
                 
@@ -1179,14 +1185,46 @@ class _AnalysisManager(_ProcessingMixin):
                         )
                         self.alpha_diversity_stats[table_type][level] = stats_df
                         
-                        # Log significant results
-                        sig = stats_df[stats_df['p_value'] < 0.05]
-                        if not sig.empty:
-                            logger.info(
-                                f"Significant alpha diversity differences for "
-                                f"{table_type}/{level}:\n{sig.to_string()}"
-                            )
+                        # Generate plots if enabled
+                        if generate_plots:
+                            # Create directory for plots
+                            plot_dir = self.figure_output_dir / "alpha_diversity" / table_type / level
+                            plot_dir.mkdir(parents=True, exist_ok=True)
                             
+                            # Initialize figures storage for this level
+                            if level not in self.figures[table_type]:
+                                self.figures[table_type][level] = {}
+                            
+                            # Create boxplots for each metric
+                            for metric in metrics:
+                                fig = create_alpha_diversity_boxplot(
+                                    alpha_df=alpha_df,
+                                    metadata=self.meta,
+                                    group_col=group_col,
+                                    metric=metric,
+                                    output_dir=plot_dir,
+                                    show=False,
+                                    verbose=self.verbose
+                                )
+                                self.figures[table_type][level][f"alpha_{metric}_boxplot"] = fig
+                            
+                            # Create statistics summary plot
+                            stats_fig = create_alpha_diversity_stats_plot(
+                                stats_df=stats_df,
+                                output_dir=plot_dir,
+                                show=False,
+                                verbose=self.verbose
+                            )
+                            self.figures[table_type][level]["alpha_statistics"] = stats_fig
+                            
+                            # Log significant results
+                            sig = stats_df[stats_df['p_value'] < 0.05]
+                            if not sig.empty:
+                                logger.info(
+                                    f"Significant alpha diversity differences for "
+                                    f"{table_type}/{level}:\n{sig.to_string()}"
+                                )
+                                
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                     
@@ -1534,7 +1572,6 @@ class AmpliconData:
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
         
-        # NEW: Capture alpha diversity results
         self.alpha_diversity_results = am.alpha_diversity_results
         self.alpha_diversity_stats = am.alpha_diversity_stats
 
