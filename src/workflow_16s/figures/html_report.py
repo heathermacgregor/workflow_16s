@@ -4,7 +4,7 @@
 import base64
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 # Third‑Party Imports
 import pandas as pd
