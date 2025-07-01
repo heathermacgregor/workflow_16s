@@ -55,6 +55,8 @@ from workflow_16s.figures.merged import (
     pca as plot_pca,
     pcoa as plot_pcoa,
     sample_map_categorical,
+    create_alpha_diversity_boxplot,
+    create_alpha_diversity_stats_plot
 )
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon,
