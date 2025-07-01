@@ -892,7 +892,7 @@ class _TableProcessor(_ProcessingMixin):
                     # Update task description to show current level
                     progress.update(
                         child_task,
-                        description=f"[cyan]{table_type} → {level}",
+                        description=f"{table_type} → {level}",
                         refresh=True
                     )
                         
