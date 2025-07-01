@@ -105,26 +105,22 @@ stats:
 # Alpha Diversity
 alpha_diversity:
   enabled: true
-  metrics:  # Optional, defaults to DEFAULT_ALPHA_METRICS
+  metrics:  # Metrics to calculate
     - shannon
     - observed_features
     - simpson
-    - pielou_evenness
-  parametric: false  # For statistical tests
+  parametric: false  # Statistical test type
+  generate_plots: true  # Enable/disable plot generation
   tables:
     raw:  # Table type
       enabled: true
-      levels:  # Optional, defaults to all levels
+      levels:  # Taxonomic levels
         - genus
         - family
     normalized:
       enabled: true
       levels: 
         - genus
-    clr_transformed:
-      enabled: false
-    presence_absence:
-      enabled: false
     
 # Beta Diversity + Ordination
 ordination:
