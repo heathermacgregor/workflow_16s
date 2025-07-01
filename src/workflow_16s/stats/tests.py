@@ -184,9 +184,9 @@ def analyze_alpha_diversity(
     merged = merge_table_with_metadata(alpha_diversity_df, metadata, group_column)
     
     # Check group validity
-    groups = merged[group_col].dropna().unique()
+    groups = merged[group_column].dropna().unique()
     if len(groups) < 2:
-        raise ValueError(f"Grouping column '{group_col}' must contain at least 2 groups")
+        raise ValueError(f"Grouping column '{group_column}' must contain at least 2 groups")
     
     results = []
     
@@ -194,7 +194,7 @@ def analyze_alpha_diversity(
         # Prepare data: list of values per group
         group_data = []
         for group in groups:
-            group_vals = merged.loc[merged[group_col] == group, metric].dropna()
+            group_vals = merged.loc[merged[group_column] == group, metric].dropna()
             if len(group_vals) == 0:
                 logger.warning(f"No data for {metric} in group '{group}'")
                 continue
