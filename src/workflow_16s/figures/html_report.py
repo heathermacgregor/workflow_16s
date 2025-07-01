@@ -208,7 +208,12 @@ def _figure_to_html(fig: Figure, caption: str) -> str:
         
     # Save figure to in-memory bytes buffer
     buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
+    if hasattr(fig, 'savefig'):
+        fig.savefig(buf, format="png", bbox_inches="tight")
+    elif hasattr(fig, 'figure'):  # Handle seaborn grid objects
+        fig.figure.savefig(buf, format="png", bbox_inches="tight")
+    else:
+        raise TypeError(f"Unsupported figure type: {type(fig)}")
     buf.seek(0)
     
     # Convert to base64
