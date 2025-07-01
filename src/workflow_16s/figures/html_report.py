@@ -1,9 +1,12 @@
 # ===================================== IMPORTS ====================================== #
 
+# Standard Library Imports
 import base64
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Union
+
+# Third‑Party Imports
 import pandas as pd
 from matplotlib.figure import Figure
 
