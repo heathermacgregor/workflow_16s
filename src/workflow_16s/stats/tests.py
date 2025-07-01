@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from biom import Table
-from scipy.spatial.distance import pdist, squareform=
+from scipy.spatial.distance import pdist, squareform
 from scipy.stats import (
     fisher_exact, 
     f_oneway, 
