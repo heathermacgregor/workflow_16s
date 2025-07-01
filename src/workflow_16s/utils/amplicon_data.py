@@ -135,7 +135,7 @@ class _ProcessingMixin:
                 for level in levels:
                     start_time = time.perf_counter()  # More precise timing
                     child_task = progress.add_task(
-                        f"Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
+                        f"[white]Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
                         parent=parent_task,
                         total=1,
                     )
@@ -563,7 +563,7 @@ class Plotter:
             figs = {}
             for col in valid_columns:
                 child_task = progress.add_task(
-                    f"[cyan]Mapping {col}...", 
+                    f"[white]Mapping {col}...", 
                     parent=parent_task, total=1
                 )
                 fig, _ = sample_map_categorical(
@@ -880,7 +880,7 @@ class _TableProcessor(_ProcessingMixin):
             for table_type in list(self.tables.keys()):
                 # Create child task for each table type
                 child_task = progress.add_task(
-                    f"[cyan]Table: {table_type}",
+                    f"[white]Table: {table_type}",
                     parent=main_task,
                     total=len(levels)
                 )
@@ -892,7 +892,7 @@ class _TableProcessor(_ProcessingMixin):
                     # Update task description to show current level
                     progress.update(
                         child_task,
-                        description=f"{table_type} → {level}",
+                        description=f"[white]{table_type} → {level}",
                         refresh=True
                     )
                         
@@ -928,7 +928,7 @@ class _TableProcessor(_ProcessingMixin):
                 
             # Create child task
             child_task = progress.add_task(
-                "[cyan]Processing presence/absence",
+                "[white]Processing presence/absence",
                 parent=main_task,
                 total=len(levels)
             )
@@ -1143,7 +1143,7 @@ class _AnalysisManager(_ProcessingMixin):
                             table_type.replace('_', ' ').capitalize(), level.capitalize(), cfg['name']
                         ])
                         child_task = progress.add_task(
-                            child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N),
+                            f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                             parent=main_task,
                             total=1
                         )
@@ -1299,7 +1299,7 @@ class _AnalysisManager(_ProcessingMixin):
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
                         child_task = progress.add_task(
-                            f"{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
+                            f"[white]{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
                             parent=parent_task,
                             total=1,
                         )
