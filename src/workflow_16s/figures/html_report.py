@@ -3,7 +3,7 @@
 import base64
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 import pandas as pd
 from matplotlib.figure import Figure
 
@@ -201,27 +201,44 @@ def _prepare_figures(figures: Dict) -> str:
     
     return "\n".join(html_parts)
 
-def _figure_to_html(fig: Figure, caption: str) -> str:
-    """Convert matplotlib figure to HTML image tag with caption"""
+def _figure_to_html(fig: Any, caption: str) -> str:
+    """Convert various figure types to HTML image tags with captions"""
     if fig is None:
         return ""
+    
+    try:
+        buf = BytesIO()
         
-    # Save figure to in-memory bytes buffer
-    buf = BytesIO()
-    if hasattr(fig, 'savefig'):
-        fig.savefig(buf, format="png", bbox_inches="tight")
-    elif hasattr(fig, 'figure'):  # Handle seaborn grid objects
-        fig.figure.savefig(buf, format="png", bbox_inches="tight")
-    else:
-        raise TypeError(f"Unsupported figure type: {type(fig)}")
-    buf.seek(0)
+        # Handle Matplotlib figures
+        if hasattr(fig, 'savefig'):
+            fig.savefig(buf, format="png", bbox_inches="tight")
+        
+        # Handle Seaborn grid objects
+        elif hasattr(fig, 'figure'):  
+            fig.figure.savefig(buf, format="png", bbox_inches="tight")
+        
+        # Handle Plotly figures
+        elif hasattr(fig, 'to_image') and callable(fig.to_image):
+            buf.write(fig.to_image(format="png"))
+        
+        # Unsupported figure types
+        else:
+            raise TypeError(f"Unsupported figure type: {type(fig)}")
+        
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        
+        return f"""
+        <div class="figure-container">
+            <img src="data:image/png;base64,{img_base64}" alt="{caption}">
+            <p>{caption}</p>
+        </div>
+        """
     
-    # Convert to base64
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    
-    return f"""
-    <div class="figure-container">
-        <img src="data:image/png;base64,{img_base64}" alt="{caption}">
-        <p>{caption}</p>
-    </div>
-    """
+    except Exception as e:
+        return f"""
+        <div class="figure-container">
+            <p>Error rendering figure: {str(e)}</p>
+            <p>{caption}</p>
+        </div>
+        """
