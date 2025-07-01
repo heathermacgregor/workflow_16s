@@ -1423,8 +1423,9 @@ class _AnalysisManager(_ProcessingMixin):
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
             return table_type, level, method, None, None
 
+    # In the _run_ml_feature_selection method of _AnalysisManager class
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
-        """Runs machine learning feature selection on normalized tables."""
+        """Runs machine learning feature selection with comprehensive parameter grid"""
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         tot = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
@@ -1432,30 +1433,33 @@ class _AnalysisManager(_ProcessingMixin):
         )
         if not tot:
             return
-
+    
         with get_progress_bar() as progress:
             parent_task = progress.add_task(
                 "Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N), 
                 total=tot
             )
-
+    
             for table_type, levels in ml_tables.items():
                 self.models[table_type] = {}
                 ml_cfg = self.cfg.get("ml", {})
                 methods = ml_cfg.get("methods", ["rfe"])
-
+                n_top_features = ml_cfg.get("n_top_features", 100)  # Get from config
+    
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
                         child_task_description = " | ".join([
-                            table_type.replace('_', ' ').title(), level.capitalize(), method.upper()
+                            table_type.replace('_', ' ').title(), 
+                            level.capitalize(), 
+                            method.upper()
                         ])
                         child_task = progress.add_task(
                             f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                             parent=parent_task,
                             total=1
                         )
-
+    
                         X = table_to_dataframe(table)
                         X.index = X.index.str.lower()
                         y = self.meta.set_index("#sampleid")[[group_col]]
@@ -1463,15 +1467,16 @@ class _AnalysisManager(_ProcessingMixin):
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
+                        
                         try:
-                            # MODIFIED: Capture model results including top features
+                            # NEW: Comprehensive ML feature selection
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
                                 output_dir=mdir,
                                 contamination_status_col=group_col,
                                 method=method,
-                                n_top_features=100  # Collect top 100 features
+                                n_top_features=n_top_features
                             )
                             self.models[table_type][level][method] = model_result
                         except Exception as e:
