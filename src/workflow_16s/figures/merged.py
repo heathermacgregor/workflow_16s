@@ -241,7 +241,7 @@ def _prepare_visualization_data(
             )
         else:
             logger.debug(f"Single column for each: {color_col}, {symbol_col}")
-        merged = merged.loc[:, ~filtered.columns.duplicated()]
+        merged = merged.loc[:, ~merged.columns.duplicated()]
     return merged
     
 
