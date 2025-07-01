@@ -288,8 +288,8 @@ def upstream(cfg, logger) -> None:
 
 def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    existing_subsets = get_existing_subsets(cfg, logger)
-    logger.info(f"Found {len(existing_subsets)} completed subsets")
+    existing_subsets = None#get_existing_subsets(cfg, logger)
+    #logger.info(f"Found {len(existing_subsets)} completed subsets")
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
