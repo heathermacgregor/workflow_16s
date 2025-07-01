@@ -262,10 +262,8 @@ def _create_colordict(
     # Handle DataFrame input (extract first column)
     if isinstance(data, pd.DataFrame):
         if data.shape[1] != 1:
-            #print(data)
             #raise ValueError("Color data must be a single column")
             data = data.iloc[:, 0]
-            print(data)
     
     categories = sorted(data.astype(str).unique())
     return {c: color_set[i % len(color_set)] for i, c in enumerate(categories)}
@@ -552,9 +550,7 @@ def create_ordination_plot(
         y_title = f"{y_col} ({proportion_explained[y_dim-1]*100:.1f}%)"
     else:
         x_title, y_title = x_col, y_col
-    print(data.shape)
     data = data.loc[:, ~data.columns.duplicated()]
-    print(data.shape)
     hover_data = ['sample_id', color_col, symbol_col]
     # Create plot
     fig = _create_base_scatter_plot(
