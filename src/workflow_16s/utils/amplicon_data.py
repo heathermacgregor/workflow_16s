@@ -733,8 +733,7 @@ class _DataLoader(_ProcessingMixin):
     def _load_metadata(self) -> None:
         """Loads and merges metadata from multiple files."""
         if self.existing_subsets != None:
-            #paths = self._get_metadata_paths()
-            paths = self._get_metadata_paths_glob()
+            paths = self._get_metadata_paths()
         else:
             paths = self._get_metadata_paths_glob()
         self.meta = import_merged_metadata_tsv(paths, None, self.verbose)
@@ -777,8 +776,7 @@ class _DataLoader(_ProcessingMixin):
     def _load_biom_table(self) -> None:
         """Loads and merges BIOM feature tables."""
         if self.existing_subsets != None:
-            #biom_paths = self._get_biom_paths()
-            biom_paths = self._get_biom_paths_glob()
+            biom_paths = self._get_biom_paths()
         else:
             biom_paths = self._get_biom_paths_glob()
         if not biom_paths:
