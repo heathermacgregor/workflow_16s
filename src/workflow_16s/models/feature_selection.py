@@ -835,8 +835,9 @@ def grid_search(
     n_splits: int = 5,
     scoring: Dict[str, Callable] = None,
     refit: str = 'mcc',
-    verbose: int = 1
-) -> Tuple[CatBoostClassifier, Dict, float]:
+    verbose: int = 1,
+    fixed_params: Dict = None  # NEW: Added fixed parameters
+) -> Tuple[CatBoostClassifier, Dict, float, Dict]:
     """
     Enhanced grid search with cross-validation and comprehensive model evaluation.
     
@@ -851,11 +852,13 @@ def grid_search(
         scoring:     Dictionary of scoring metrics (name: function)
         refit:       Metric to use for selecting best model
         verbose:     Verbosity level (0-2)
+        fixed_params: Fixed parameters for all models (NEW)
     
     Returns:
         best_model:  Best trained CatBoostClassifier
         best_params: Best hyperparameters
         best_score:  Best score of the reference metric
+        test_scores: Test set performance metrics (NEW)
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
@@ -891,7 +894,11 @@ def grid_search(
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=DEFAULT_RANDOM_STATE)
     
     for i, params in enumerate(param_combinations, 1):
+        # Combine grid parameters with fixed parameters
         current_params = dict(zip(param_grid.keys(), params))
+        if fixed_params:
+            current_params.update(fixed_params)
+        
         fold_scores = {metric: [] for metric in scoring}
         
         if verbose:
@@ -964,11 +971,11 @@ def grid_search(
             )
     
     # Final evaluation on test set
+    test_scores = {}
     if cv_model:
         y_pred = cv_model.predict(X_test)
         y_proba = cv_model.predict_proba(X_test)[:, 1]
         
-        test_scores = {}
         for metric_name, scorer in scoring.items():
             if "auc" in metric_name or "pr_auc" in metric_name:
                 test_scores[metric_name] = scorer(y_test, y_proba)
@@ -1013,60 +1020,7 @@ def grid_search(
             for metric, score in test_scores.items():
                 logger.info(f"{metric}: {score:.4f}")
     
-    return best_model, best_params, best_score
-
-
-def save_feature_importances(
-    model,
-    X_train_selected: pd.DataFrame,
-    output_dir: Union[str, Path],
-    verbose: int = 1,
-    file_format: str = 'csv'
-) -> None:
-    """
-    Save feature importances from a trained model to a file.
-
-    Args:
-        model:            Trained model with a `get_feature_importance` method.
-        X_train_selected: DataFrame containing the selected features used for training.
-        output_dir:       Directory to save the feature importances file.
-        verbose:          Controls verbosity (0 for silent, 1 for progress).
-        file_format:      File format for saving feature importances ('csv' or 'excel').
-    """
-    # Input validation
-    if not hasattr(model, 'get_feature_importance'):
-        raise ValueError("The model must have a `get_feature_importance` method.")
-
-    if not isinstance(X_train_selected, pd.DataFrame):
-        raise ValueError("X_train_selected must be a pandas DataFrame.")
-
-    output_dir = Path(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Get feature importances
-    feature_importances = model.get_feature_importance()
-    
-
-    if len(feature_importances) != X_train_selected.shape[1]:
-        raise ValueError(
-            "The number of feature importances does not match the number "
-            "of selected features."
-        )
-
-    # Create DataFrame
-    selected_features = X_train_selected.columns
-    importance_df = pd.DataFrame({
-        'Feature': selected_features,
-        'Importance': feature_importances
-    })
-    importance_df = importance_df.sort_values(by='Importance', ascending=False)
-
-    # Save to file
-    output_path = output_dir / f"feature_importances.{file_format}"
-    _save_dataframe(importance_df, output_path, file_format)
-
-    if verbose > 0:
-        logger.info(f"Feature importances saved to {output_path}")
+    return best_model, best_params, best_score, test_scores  # Added test_scores return
 
 
 def catboost_feature_selection(
@@ -1075,13 +1029,13 @@ def catboost_feature_selection(
     output_dir: Union[str, Path],
     contamination_status_col: str,
     method: str = 'rfe',
-    n_top_features: int = 100,  # New parameter
+    n_top_features: int = 100,
     filter_col: Union[str, None] = None,
     filter_val: Union[str, None] = None
-) -> Any:
+) -> Dict:
     """
     Perform feature selection using CatBoost and save results.
-
+    
     Args:
         metadata:                 DataFrame containing metadata.
         features:                 DataFrame containing features.
@@ -1090,6 +1044,7 @@ def catboost_feature_selection(
                                   status.
         method:                   Feature selection method to use ('rfe', 
                                   'select_k_best', 'chi_squared', 'lasso', 'shap').
+        n_top_features:           Number of top features to return.
         filter_col:               Column to filter metadata by (optional).
         filter_val:               Value to filter metadata by (optional).
     """
@@ -1111,7 +1066,6 @@ def catboost_feature_selection(
 
     num_features = 500
     if X_train.shape[1] < 500:
-        print(X_train.shape)
         num_features = X_train.shape[1]
         
     # Perform feature selection
@@ -1125,25 +1079,32 @@ def catboost_feature_selection(
     )
     logger.info(X_train_selected.var().describe())  # Check feature variance after correction
 
-
-    # Define CatBoost parameters
-    params = {
-        'iterations': [1000],
-        'learning_rate': [0.1],
-        'depth': [4],
-        'loss_function': ['Logloss'],
-        'thread_count': [4]
+    # NEW: Comprehensive parameter grid with fixed parameters
+    param_grid = {
+        'iterations': [500, 1000, 1500],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'depth': [4, 6, 8],
+        'l2_leaf_reg': [1, 3, 5, 7],
+        'border_count': [32, 64, 128]
+    }
+    
+    fixed_params = {
+        'loss_function': 'Logloss',
+        'thread_count': 4,
+        'random_state': DEFAULT_RANDOM_STATE
     }
 
-    # Save selected features
-    X_train_selected.to_csv(output_dir / "X_train_selected.csv", index=False)
-
     # Run grid search with selected features
-    best_model, best_params, best_mcc = grid_search(
-        X_train_selected, y_train, X_test_selected, y_test, params, output_dir
+    best_model, best_params, best_score, test_scores = grid_search(
+        X_train_selected, 
+        y_train, 
+        X_test_selected, 
+        y_test, 
+        param_grid, 
+        output_dir,
+        fixed_params=fixed_params  # NEW: Pass fixed parameters
     )
-    logger.info(f"Best Model Parameters: {best_params}, MCC: {best_mcc}")
-
+    
     # Save feature importances
     save_feature_importances(
         best_model, 
@@ -1151,82 +1112,55 @@ def catboost_feature_selection(
         output_dir
     )
 
-    # Save model
-    best_model_path = output_dir / "best_model.cbm"
-    best_model.save_model(best_model_path)
-    logger.info(f"Best model saved to {best_model_path}")
-
-    # SHAP summary plots
-    _check_shap_installed()
-    explainer = shap.TreeExplainer(best_model)
-    shap_values = explainer.shap_values(X_train)
-    shap.summary_plot(
-        shap_values, X_train, plot_type="bar", 
-        class_names=best_model.classes_
-    )
-    shap.summary_plot(
-        shap_values, X_train.values, feature_names=X_train.columns
-    )
-
-    # Save SHAP summary plot (bar plot)
-    plt.figure()
-    shap.summary_plot(
-        shap_values, X_train, plot_type="bar", 
-        class_names=best_model.classes_, show=False
-    )
-    plt.savefig(output_dir / "shap_summary_bar.png", bbox_inches='tight')
-    logger.info(str(output_dir / "shap_summary_bar.png"))
-    plt.close()
-    
-    # Save SHAP summary plot (beeswarm plot)
-    plt.figure()
-    shap.summary_plot(
-        shap_values, X_train.values, 
-        feature_names=X_train.columns, show=False
-    )
-    plt.savefig(output_dir / "shap_summary_beeswarm.png", bbox_inches='tight')
-    logger.info(str(output_dir / "shap_summary_beeswarm.png"))
-    plt.close()
-
-    # Get the mean absolute SHAP values for each feature
-    shap_values_mean_abs = np.abs(shap_values).mean(axis=0)
-    
-    # Sort features by importance and select the top N
-    top_n = 10
-    top_features_indices = np.argsort(shap_values_mean_abs)[-top_n:]
-    shap_values_filtered = shap_values[:, top_features_indices]
-    top_features_indices = [i for i in top_features_indices 
-                            if i < shap_values.shape[1]]
-
-    for feature in top_features_indices:
-        logger.info("shap_values shape:", shap_values.shape)
-        logger.info("X shape:", X_train.shape)
-        logger.info("Feature index:", feature)
-
-        shap.dependence_plot(
-            feature, shap_values, X_train, feature_names=X_train.columns
-        )
-        plt.savefig(output_dir / f"shap_dependence_{feature}.png", bbox_inches='tight')
-        logger.info(str(output_dir / f"shap_dependence_{feature}.png"))
-        plt.close()
-
-    model = best_model
     # Get feature importances
-    if hasattr(model, 'feature_importances_'):
-        importances = model.feature_importances_
+    if hasattr(best_model, 'feature_importances_'):
+        importances = best_model.feature_importances_
     else:
-        # For RFE, use ranking (1 = selected)
-        importances = [1 if s else 0 for s in selector.support_]
+        importances = np.zeros(len(final_selected_features))
     
     # Create feature importance Series
-    feat_imp = pd.Series(importances, index=features.columns, name='importance')
+    feat_imp = pd.Series(importances, index=final_selected_features, name='importance')
     feat_imp = feat_imp.sort_values(ascending=False)
     
     # Get top N features
     top_features = feat_imp.head(n_top_features).index.tolist()
     
+    # SHAP summary plots
+    try:
+        _check_shap_installed()
+        explainer = shap.TreeExplainer(best_model)
+        shap_values = explainer.shap_values(X_train)
+        
+        # Save SHAP summary plot (bar plot)
+        plt.figure()
+        shap.summary_plot(
+            shap_values, X_train, plot_type="bar", 
+            class_names=best_model.classes_, show=False
+        )
+        bar_path = output_dir / "shap_summary_bar.png"
+        plt.savefig(bar_path, bbox_inches='tight')
+        plt.close()
+        
+        # Save SHAP summary plot (beeswarm plot)
+        plt.figure()
+        shap.summary_plot(
+            shap_values, X_train.values, 
+            feature_names=X_train.columns, show=False
+        )
+        beeswarm_path = output_dir / "shap_summary_beeswarm.png"
+        plt.savefig(beeswarm_path, bbox_inches='tight')
+        plt.close()
+    except Exception as e:
+        logger.error(f"SHAP plot generation failed: {e}")
+        bar_path = beeswarm_path = None
+
+    # Return comprehensive results
     return {
-        'model': model,
-        'feature_importances': feat_imp,
-        'top_features': top_features
+        'model': best_model,
+        'feature_importances': feat_imp.to_dict(),
+        'top_features': top_features,
+        'best_params': best_params,
+        'test_scores': test_scores,
+        'shap_summary_bar_path': str(bar_path) if bar_path else None,
+        'shap_summary_beeswarm_path': str(beeswarm_path) if beeswarm_path else None
     }
