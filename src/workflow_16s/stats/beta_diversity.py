@@ -2,7 +2,7 @@
 
 # Standard Library
 import os
-import logger
+import logging
 import warnings
 from typing import Any, Dict, Optional, Union
 
