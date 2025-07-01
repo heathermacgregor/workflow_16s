@@ -552,7 +552,9 @@ def create_ordination_plot(
         y_title = f"{y_col} ({proportion_explained[y_dim-1]*100:.1f}%)"
     else:
         x_title, y_title = x_col, y_col
-
+    print(data.shape)
+    data = data.loc[:, ~data.columns.duplicated()]
+    print(data.shape)
     hover_data = ['sample_id', color_col, symbol_col]
     # Create plot
     fig = _create_base_scatter_plot(
