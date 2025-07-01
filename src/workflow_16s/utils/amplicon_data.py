@@ -899,7 +899,7 @@ class _TableProcessor(_ProcessingMixin):
                 
             for table_type in list(self.tables.keys()):
                 # Create child task for each table type
-                child_task_description = f"Table: {table_type.replace('_', ' ').capitalize()}"
+                child_task_description = f"Table: {table_type.replace('_', ' ').title()}"
                 child_task = progress.add_task(
                     f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                     parent=main_task,
@@ -913,7 +913,7 @@ class _TableProcessor(_ProcessingMixin):
                     # Update task description to show current level
                     progress.update(
                         child_task,
-                        description=f"[white]{table_type.replace('_', ' ').capitalize()} → {level.capitalize()}",
+                        description=f"[white]{table_type.replace('_', ' ').title()} → {level.capitalize()}",
                         refresh=True
                     )
                         
@@ -1184,7 +1184,7 @@ class _AnalysisManager(_ProcessingMixin):
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
                     task_description = " | ".join([
-                        table_type.replace('_', ' ').capitalize(), level.capitalize()
+                        table_type.replace('_', ' ').title(), level.capitalize()
                     ]) 
                     progress.update(
                         task,
@@ -1222,7 +1222,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
-                                    group_col=group_col,
+                                    group_column=group_column,
                                     metric=metric,
                                     output_dir=plot_dir,
                                     show=False,
@@ -1287,7 +1287,7 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         # Create child task with fixed description
                         child_task_description = " | ".join([
-                            table_type.replace('_', ' ').capitalize(), level.capitalize(), cfg['name']
+                            table_type.replace('_', ' ').title(), level.capitalize(), cfg['name']
                         ])
                         child_task = progress.add_task(
                             f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
@@ -1446,7 +1446,7 @@ class _AnalysisManager(_ProcessingMixin):
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
                         child_task_description = " | ".join([
-                            table_type.replace('_', ' ').capitalize(), level.capitalize(), method.upper()
+                            table_type.replace('_', ' ').title(), level.capitalize(), method.upper()
                         ])
                         child_task = progress.add_task(
                             f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
