@@ -1071,3 +1071,138 @@ def plot_correlation_matrix(
         show=show
     )
     
+
+def create_alpha_diversity_boxplot(
+    alpha_df: pd.DataFrame,
+    metadata: pd.DataFrame,
+    group_col: str,
+    metric: str,
+    output_dir: Optional[Path] = None,
+    show: bool = False,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Create boxplot for an alpha diversity metric grouped by contamination status.
+    
+    Args:
+        alpha_df:   DataFrame from alpha_diversity()
+        metadata:   Sample metadata DataFrame
+        group_col:  Column containing group labels
+        metric:     Alpha diversity metric to plot
+        output_dir: Directory to save plot
+        show:       Display figure interactively
+        verbose:    Enable debug logging
+        
+    Returns:
+        Plotly figure object
+    """
+    # Merge alpha diversity with metadata
+    merged = alpha_df[[metric]].merge(
+        metadata[[group_col]], 
+        left_index=True, 
+        right_index=True,
+        how='inner'
+    )
+    
+    # Create plot
+    fig = px.box(
+        merged, 
+        x=group_col, 
+        y=metric,
+        color=group_col,
+        points="all",
+        title=f"{metric.replace('_', ' ').title()} by {group_col}",
+        labels={metric: metric.replace('_', ' ').title(), group_col: group_col.replace('_', ' ').title()}
+    )
+    
+    # Update layout
+    fig.update_layout(
+        template='heather',
+        height=800,
+        width=1000,
+        font_size=16,
+        showlegend=False
+    )
+    
+    # Save output
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_stem = f"alpha_diversity.{metric}.boxplot"
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
+        
+    return fig
+
+
+def create_alpha_diversity_stats_plot(
+    stats_df: pd.DataFrame,
+    output_dir: Optional[Path] = None,
+    show: bool = False,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Create visualization for alpha diversity statistical results.
+    
+    Args:
+        stats_df:   DataFrame from analyze_alpha_diversity()
+        output_dir: Directory to save plot
+        show:       Display figure interactively
+        verbose:    Enable debug logging
+        
+    Returns:
+        Plotly figure object
+    """
+    # Transform p-values for visualization
+    stats_df['-log10(p)'] = -np.log10(stats_df['p_value'])
+    stats_df['significant'] = stats_df['p_value'] < 0.05
+    
+    # Create plot
+    fig = px.bar(
+        stats_df,
+        x='metric',
+        y='-log10(p)',
+        color='significant',
+        color_discrete_map={True: '#EF553B', False: '#636EFA'},
+        text='p_value',
+        title="Alpha Diversity Statistical Results",
+        labels={
+            'metric': 'Diversity Metric',
+            '-log10(p)': '-log10(p-value)',
+            'p_value': 'p-value',
+            'test': 'Statistical Test'
+        },
+        hover_data=['test', 'statistic', 'p_value', 'groups']
+    )
+    
+    # Add significance threshold line
+    fig.add_hline(
+        y=-np.log10(0.05), 
+        line_dash="dash", 
+        line_color="red",
+        annotation_text="p=0.05 threshold", 
+        annotation_position="top right"
+    )
+    
+    # Update layout
+    fig.update_layout(
+        template='heather',
+        height=800,
+        width=1200,
+        font_size=16,
+        xaxis_title="Diversity Metric",
+        yaxis_title="-log10(p-value)",
+        legend_title="Significant (p<0.05)"
+    )
+    
+    # Improve text formatting
+    fig.update_traces(
+        texttemplate='%{text:.2e}',
+        textposition='outside'
+    )
+    
+    # Save output
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_stem = "alpha_diversity.statistics"
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
+        
+    return fig
