@@ -79,6 +79,19 @@ DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 DEFAULT_MODE = 'genus'
+DEFAULT_ALPHA_METRICS = [
+    'shannon', 
+    'observed_features', 
+    'simpson',
+    'pielou_evenness',
+    'chao1',
+    'ace',
+    'gini_index',
+    'goods_coverage'
+]
+
+
+PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 # ===================================== CLASSES ====================================== #
 
