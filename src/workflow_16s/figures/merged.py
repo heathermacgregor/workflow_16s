@@ -1098,7 +1098,7 @@ def create_alpha_diversity_boxplot(
     """
     # Merge alpha diversity with metadata
     merged = alpha_df[[metric]].merge(
-        metadata[[group_col]], 
+        metadata[[group_column]], 
         left_index=True, 
         right_index=True,
         how='inner'
