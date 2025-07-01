@@ -149,11 +149,13 @@ class _ProcessingMixin:
                 )
                 for level in levels:
                     start_time = time.perf_counter()  # More precise timing
+                    child_task_description = f"Processing {level} level"
                     child_task = progress.add_task(
-                        f"[white]Processing {level} level".ljust(DEFAULT_PROGRESS_TEXT_N),
+                        f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                         parent=parent_task,
-                        total=1,
+                        total=1
                     )
+                    
                     processed[level] = process_func(get_source(level), level, *func_args)
                     duration = time.perf_counter() - start_time
 
@@ -577,10 +579,13 @@ class Plotter:
 
             figs = {}
             for col in valid_columns:
+                child_task_description = f"Mapping {col}..."
                 child_task = progress.add_task(
-                    f"[white]Mapping {col}...", 
-                    parent=parent_task, total=1
+                    f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
+                    parent=parent_task,
+                    total=1
                 )
+                
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
                     output_dir=self.output_dir,
@@ -894,8 +899,9 @@ class _TableProcessor(_ProcessingMixin):
                 
             for table_type in list(self.tables.keys()):
                 # Create child task for each table type
+                child_task_description = f"Table: {table_type.replace('_', ' ').capitalize()}"
                 child_task = progress.add_task(
-                    f"[white]Table: {table_type}",
+                    f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                     parent=main_task,
                     total=len(levels)
                 )
@@ -907,7 +913,7 @@ class _TableProcessor(_ProcessingMixin):
                     # Update task description to show current level
                     progress.update(
                         child_task,
-                        description=f"[white]{table_type} → {level}",
+                        description=f"[white]{table_type.replace('_', ' ').capitalize()} → {level.capitalize()}",
                         refresh=True
                     )
                         
@@ -942,8 +948,9 @@ class _TableProcessor(_ProcessingMixin):
             )
                 
             # Create child task
+            child_task_description = "Processing presence/absence"
             child_task = progress.add_task(
-                "[white]Processing presence/absence",
+                f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                 parent=main_task,
                 total=len(levels)
             )
@@ -955,7 +962,7 @@ class _TableProcessor(_ProcessingMixin):
                 # Update task description to show current level
                 progress.update(
                     child_task,
-                    description=f"[cyan]PA → {level}",
+                    description=f"Presence Absence → {level.capitalize()}",
                     refresh=True
                 )
                     
@@ -1131,7 +1138,7 @@ class _AnalysisManager(_ProcessingMixin):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
 
-        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        group_column = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
         generate_plots = alpha_cfg.get("generate_plots", True)
@@ -1176,10 +1183,12 @@ class _AnalysisManager(_ProcessingMixin):
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
-                        
+                    task_description = " | ".join([
+                        table_type.replace('_', ' ').capitalize(), level.capitalize()
+                    ]) 
                     progress.update(
                         task,
-                        description=f"[white]{table_type} {level}".ljust(DEFAULT_PROGRESS_TEXT_N),
+                        description=f"[white]{task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                         refresh=True
                     )
                     
@@ -1193,7 +1202,7 @@ class _AnalysisManager(_ProcessingMixin):
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
                             metadata=self.meta,
-                            group_col=group_col,
+                            group_column=group_column,
                             parametric=parametric
                         )
                         self.alpha_diversity_stats[table_type][level] = stats_df
@@ -1436,10 +1445,13 @@ class _AnalysisManager(_ProcessingMixin):
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
+                        child_task_description = " | ".join([
+                            table_type.replace('_', ' ').capitalize(), level.capitalize(), method.upper()
+                        ])
                         child_task = progress.add_task(
-                            f"[white]{table_type.ljust(15)} + {level.ljust(10)} + {method.ljust(20)}",
+                            f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                             parent=parent_task,
-                            total=1,
+                            total=1
                         )
 
                         X = table_to_dataframe(table)
