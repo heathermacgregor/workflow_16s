@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from biom import Table
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import pdist, squareform=
 from scipy.stats import (
     fisher_exact, 
     f_oneway, 
@@ -17,6 +17,7 @@ from scipy.stats import (
     spearmanr, 
     ttest_ind
 )
+from skbio.diversity import alpha
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
@@ -40,9 +41,214 @@ DEFAULT_RANDOM_STATE = 0
 DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
+DEFAULT_ALPHA_METRICS = [
+    'shannon', 
+    'observed_features', 
+    'simpson',
+    'pielou_evenness',
+    'chao1',
+    'ace',
+    'gini_index',
+    'goods_coverage'
+]
+
+
+PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
+
 debug_mode = False
 
 # ==================================== FUNCTIONS ===================================== #
+
+def alpha_diversity(
+    table: Union[Dict, Any, pd.DataFrame],
+    metrics: List[str] = DEFAULT_ALPHA_METRICS,
+    tree: Optional[Any] = None,
+    pseudo_count: float = 1e-12
+) -> pd.DataFrame:
+    """
+    Calculate alpha diversity metrics for each sample.
+    
+    Args:
+        table:        Input abundance table (samples x features)
+        metrics:      List of alpha diversity metrics to compute
+        tree:         Phylogenetic tree (required for phylogenetic metrics)
+        pseudo_count: Small value to avoid log(0) (default: 1e-12)
+        
+    Returns:
+        DataFrame with alpha diversity values (samples x metrics)
+    """
+    df = table_to_dataframe(table)
+    results = pd.DataFrame(index=df.index)
+    
+    # Precompute common statistics vectorially
+    totals = df.sum(axis=1)
+    non_zeros = (df > 0).sum(axis=1)
+    proportions = df.div(totals, axis=0).fillna(0)
+    
+    def calculate_metric(metric: str, values: np.ndarray, total: float, 
+                         non_zero: int, proportions: np.ndarray) -> float:
+        """Helper function to compute a single metric for a sample"""
+        try:
+            # Phylogenetic metrics
+            if metric in ['faith_pd', 'pd_whole_tree']:
+                return alpha.faith_pd(values, ids=df.columns, tree=tree)
+            
+            # Richness metrics
+            elif metric == 'observed_features':
+                return non_zero
+            elif metric == 'chao1':
+                return alpha.chao1(values + pseudo_count)
+            
+            # Diversity indices
+            elif metric == 'shannon':
+                return alpha.shannon(proportions, base=np.e)
+            elif metric == 'simpson':
+                return alpha.simpson(proportions)
+            
+            # Evenness metrics
+            elif metric == 'pielou_evenness':
+                shannon_val = alpha.shannon(proportions, base=np.e)
+                return shannon_val / np.log(non_zero) if non_zero > 0 else 0.0
+            elif metric == 'heip_evenness':
+                simpson_val = alpha.simpson(proportions)
+                return (1 - simpson_val) / (1 - 1/non_zero) if non_zero > 1 else 0.0
+            
+            # Dominance metrics
+            elif metric == 'berger_parker_dominance':
+                return np.max(values) / total if total > 0 else 0.0
+            elif metric == 'mcintosh_dominance':
+                return total / np.sqrt(np.sum(values**2)) if total > 0 else 0.0
+            
+            # Rarefaction metrics
+            elif metric == 'ace':
+                return alpha.ace(values)
+            elif metric == 'goods_coverage':
+                singletons = np.sum(values == 1)
+                return 1 - singletons/total if total > 0 else 0.0
+            
+            # Gini index
+            elif metric == 'gini_index':
+                sorted_vals = np.sort(values)
+                n = len(values)
+                cum_sum = np.cumsum(sorted_vals)
+                return 1 - (2 * np.sum(cum_sum)) / (n * total) if total > 0 else 0.0
+            
+            # Fallback to skbio's alpha function
+            else:
+                return alpha(metric, values)
+                
+        except Exception as e:
+            logger.warning(f"Error calculating {metric}: {str(e)}")
+            return np.nan
+
+    # Compute each metric for all samples
+    for metric in metrics:
+        if metric in PHYLO_METRICS and tree is None:
+            logger.warning(f"Skipping {metric} - phylogenetic tree not provided")
+            continue
+            
+        metric_values = []
+        for i, sample in enumerate(df.index):
+            vals = df.loc[sample].values
+            total = totals.iloc[i]
+            non_zero = non_zeros.iloc[i]
+            props = proportions.iloc[i].values
+            
+            metric_values.append(
+                calculate_metric(metric, vals, total, non_zero, props)
+            )
+            
+        results[metric] = metric_values
+
+    return results
+    
+
+def analyze_alpha_diversity(
+    alpha_diversity_df: pd.DataFrame,
+    metadata: pd.DataFrame,
+    group_column: str = 'nuclear_contamination_status',
+    parametric: bool = False
+) -> pd.DataFrame:
+    """
+    Analyze relationship between alpha diversity metrics and a grouping variable.
+    
+    Args:
+        alpha_diversity_df: DataFrame from alpha_diversity() (samples x metrics)
+        metadata:           Metadata DataFrame (must include group_col)
+        group_col:          Metadata column containing group labels
+        parametric:         Use parametric tests (False for non-parametric)
+        
+    Returns:
+        DataFrame with statistical results (metric, test, p-value, etc.)
+    """
+    merged = merge_table_with_metadata(alpha_diversity_df, metadata, group_column)
+    
+    # Check group validity
+    groups = merged[group_col].dropna().unique()
+    if len(groups) < 2:
+        raise ValueError(f"Grouping column '{group_col}' must contain at least 2 groups")
+    
+    results = []
+    
+    for metric in alpha_diversity_df.columns:
+        # Prepare data: list of values per group
+        group_data = []
+        for group in groups:
+            group_vals = merged.loc[merged[group_col] == group, metric].dropna()
+            if len(group_vals) == 0:
+                logger.warning(f"No data for {metric} in group '{group}'")
+                continue
+            group_data.append(group_vals)
+        
+        # Skip metric if <2 groups have data
+        if len(group_data) < 2:
+            logger.warning(f"Insufficient groups for {metric} - skipping")
+            continue
+        
+        # Statistical testing
+        test_name = ""
+        test_result = None
+        
+        try:
+            if parametric:
+                # Parametric tests
+                if len(group_data) == 2:
+                    # T-test for two groups
+                    t_stat, p_val = ttest_ind(*group_data, equal_var=False)
+                    test_name = "Welch's t-test"
+                    test_result = (t_stat, p_val)
+                else:
+                    # One-way ANOVA for >2 groups
+                    f_stat, p_val = f_oneway(*group_data)
+                    test_name = "ANOVA"
+                    test_result = (f_stat, p_val)
+            else:
+                # Non-parametric tests
+                if len(group_data) == 2:
+                    # Mann-Whitney U test for two groups
+                    u_stat, p_val = mannwhitneyu(*group_data)
+                    test_name = "Mann-Whitney U"
+                    test_result = (u_stat, p_val)
+                else:
+                    # Kruskal-Wallis for >2 groups
+                    h_stat, p_val = kruskal(*group_data)
+                    test_name = "Kruskal-Wallis"
+                    test_result = (h_stat, p_val)
+            
+            # Store results
+            results.append({
+                'metric': metric,
+                'test': test_name,
+                'statistic': test_result[0],
+                'p_value': test_result[1],
+                'groups': len(group_data)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {metric}: {str(e)}")
+    
+    return pd.DataFrame(results)
+    
 
 def k_means(
     table: Union[Dict, Table, pd.DataFrame], 
