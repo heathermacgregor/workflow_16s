@@ -262,9 +262,10 @@ def _create_colordict(
     # Handle DataFrame input (extract first column)
     if isinstance(data, pd.DataFrame):
         if data.shape[1] != 1:
+            #print(data)
+            #raise ValueError("Color data must be a single column")
+            data = data.iloc[:, 0]
             print(data)
-            raise ValueError("Color data must be a single column")
-        data = data.iloc[:, 0]
     
     categories = sorted(data.astype(str).unique())
     return {c: color_set[i % len(color_set)] for i, c in enumerate(categories)}
