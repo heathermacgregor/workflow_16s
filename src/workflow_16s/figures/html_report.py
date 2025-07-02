@@ -48,7 +48,7 @@ def generate_html_report(
 <head>
 <meta charset=\"utf-8\">
 <title>16S Sample‑Map Debug</title>
-<script src=\"https://cdn.plot.ly/plotly-latest.min.js\"></script>
+<script src=\"https://cdn.plot.ly/plotly-3.0.1.min.js\"></script>
 <style>
   body {{ font-family: Arial, sans-serif; margin: 40px; }}
   h1 {{ color: #2c3e50; }}
