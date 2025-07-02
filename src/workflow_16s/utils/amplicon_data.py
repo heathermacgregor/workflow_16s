@@ -1428,7 +1428,7 @@ class _AnalysisManager(_ProcessingMixin):
         """Runs machine learning feature selection with comprehensive parameter grid"""
         # Check if alpha diversity analysis is enabled
         ml_cfg = self.cfg.get("ml", {})
-        if not alpha_cfg.get("enabled", False):
+        if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection is disabled in configuration.")
             return
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
