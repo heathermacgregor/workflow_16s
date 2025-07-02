@@ -406,7 +406,7 @@ def _prepare_figures(figures: Dict) -> str:
                 options.append(f"<option value='{plot_id}' {selected}>{col}</option>")
                 plot_divs.append(
                     f"<div id='{plot_id}' class='plot-container{' active' if i==0 else ''}'>"
-                    f"{_figure_to_html(fig, f'Colored by: {col}', include_caption=False)}"
+                    f"{_figure_to_html(fig, f'Colored by: {col}')}"
                     "</div>"
                 )
 
