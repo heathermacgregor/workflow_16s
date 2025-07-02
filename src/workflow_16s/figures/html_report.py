@@ -113,9 +113,31 @@ def generate_html_report(
                 padding-bottom: 5px;
             }}
             .ml-feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+            /* NEW: Plotly container styling */
+            .plotly-container {{
+                width: 100%;
+                height: 100%;
+            }}
+            .plotly-graph-div {{
+                width: 100% !important;
+                height: 100% !important;
+            }}
         </style>
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script>
+            // NEW: Initialize Plotly figures on page load
+            document.addEventListener('DOMContentLoaded', function() {{
+                renderAllPlotlyFigures();
+            }});
+            
+            function renderAllPlotlyFigures() {{
+                var plotlyContainers = document.querySelectorAll('.plotly-container');
+                plotlyContainers.forEach(function(container) {{
+                    var figure = JSON.parse(container.dataset.figure);
+                    Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
+                }});
+            }}
+            
             function showPlot(selectElement, containerId) {{
                 var container = document.getElementById(containerId);
                 var plots = container.getElementsByClassName('plot-container');
@@ -125,6 +147,15 @@ def generate_html_report(
                 var selectedPlot = document.getElementById(selectElement.value);
                 if (selectedPlot) {{
                     selectedPlot.classList.add('active');
+                    
+                    // NEW: Render Plotly figures when made visible
+                    var plotlyContainers = selectedPlot.querySelectorAll('.plotly-container');
+                    plotlyContainers.forEach(function(container) {{
+                        if (!container.hasChildNodes()) {{
+                            var figure = JSON.parse(container.dataset.figure);
+                            Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
+                        }}
+                    }});
                 }}
             }}
         </script>
@@ -407,14 +438,14 @@ def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str
         return f"<div class='figure-container'><p>Missing figure: {caption}</p></div>"
     
     try:
-        # Handle Plotly figures
-        if hasattr(fig, 'to_html') and callable(fig.to_html):
-            plot_html = fig.to_html(full_html=False, include_plotlyjs=False)
+        # Handle Plotly figures - NEW METHOD
+        if hasattr(fig, 'to_json') and callable(fig.to_json):
+            plot_json = fig.to_json()
             caption_html = f"<p>{caption}</p>" if include_caption else ""
             return f"""
             <div class="figure-container">
                 <div class="plot-wrapper">
-                    {plot_html}
+                    <div class="plotly-container" data-figure='{plot_json}'></div>
                 </div>
                 {caption_html}
             </div>
