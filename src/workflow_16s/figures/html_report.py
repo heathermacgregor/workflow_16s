@@ -1,32 +1,29 @@
-# ===================================== IMPORTS ======================================
 from pathlib import Path
 from typing import Union
 import pandas as pd
-import plotly.graph_objects as go   # only to satisfy type checkers
-
-# ===================================== DEBUG‑ONLY REPORT ============================
 
 def generate_html_report(amplicon_data: "AmpliconData",
-                         output_path: Union[str, Path]) -> None:
+                         output_path: Union[str, Path],
+                         width: int = 900,
+                         height: int = 600) -> None:
     """
-    Write an HTML page that shows ONLY the first Plotly map figure, embedded
-    exactly as Plotly generates it (no JSON processing).
+    Write an HTML page displaying only the first sample‑map Plotly figure,
+    resized to `width` × `height` pixels.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # -- find the first sample‑map figure ------------------------------------------
     fig_html = "<p><strong>No sample‑map figure found.</strong></p>"
     if isinstance(amplicon_data.figures, dict) and "map" in amplicon_data.figures:
         for _col, f in amplicon_data.figures["map"].items():
             if f is not None and hasattr(f, "to_html"):
-                # Plotly generates a <div> with the data + PlotlyJS loader.
+                # ── resize ──────────────────────────────────────────────────────────
+                f.update_layout(width=width, height=height)
                 fig_html = f.to_html(full_html=False, include_plotlyjs="cdn")
                 break
 
-    # -- write the minimal wrapper --------------------------------------------------
     html_doc = f"""<!DOCTYPE html>
 <html>
 <head>
