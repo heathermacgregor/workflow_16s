@@ -1426,6 +1426,11 @@ class _AnalysisManager(_ProcessingMixin):
     # In the _run_ml_feature_selection method of _AnalysisManager class
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
+        # Check if alpha diversity analysis is enabled
+        ml_cfg = self.cfg.get("ml", {})
+        if not alpha_cfg.get("enabled", False):
+            logger.info("ML feature selection is disabled in configuration.")
+            return
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         tot = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
