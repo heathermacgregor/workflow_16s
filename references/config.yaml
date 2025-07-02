@@ -82,29 +82,29 @@ features:
 stats:
   raw:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True      # ✅ non-parametric alternative
-    kruskal_bonferroni: True
+    mwu_bonferroni: False #True      # ✅ non-parametric alternative
+    kruskal_bonferroni: False #True
   presence_absence:
-    fisher: True              # ✅ ideal for binary data
+    fisher: False #True              # ✅ ideal for binary data
     ttest: False              # ❌ designed for continuous data
     mwu_bonferroni: False     # ❌ not designed for binary data
     kruskal_bonferroni: False
   filtered:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True
-    kruskal_bonferroni: True
+    mwu_bonferroni: False #True
+    kruskal_bonferroni: False #True
   normalized:
-    ttest: True               # ✅ can be used after proper normalization
-    mwu_bonferroni: True      # ✅ still valuable for robustness
-    kruskal_bonferroni: True
+    ttest: False #True               # ✅ can be used after proper normalization
+    mwu_bonferroni: False #True      # ✅ still valuable for robustness
+    kruskal_bonferroni: False #True
   clr_transformed:
-    ttest: True               # ✅ CLR addresses compositionality
-    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
+    ttest: False #True               # ✅ CLR addresses compositionality
+    mwu_bonferroni: False #True      # ✅ good alternative for non-normal distributions
     kruskal_bonferroni: True
 
 # Alpha Diversity
 alpha_diversity:
-  enabled: true
+  enabled: False #true
   metrics:  # Metrics to calculate
     - shannon
     - observed_features
@@ -134,7 +134,7 @@ ordination:
     umap: False
   presence_absence:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "jaccard"
     tsne: False #True
     umap: False #True
@@ -142,20 +142,20 @@ ordination:
     pca: False
     pcoa: False #True
     pcoa_metric: "braycurtis"
-    tsne: True
+    tsne: False #True
     umap: False #True
   normalized:
     pca: False #True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
     umap: False #True
   clr_transformed:
     pca: True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "euclidean"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
 
 # Functional Prediction
 faprotax: True
@@ -171,7 +171,7 @@ figures:
     - "country"
 
 # Machine Learning
-run_ml: True
+run_ml: False #True
 ml:
   table_types:
     - 'clr_transformed'
