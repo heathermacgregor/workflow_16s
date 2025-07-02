@@ -103,6 +103,9 @@ def plotly_show_and_save(
         output_path = Path(output_path).expanduser().resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Convenience for optional INFO logging
+        log_ok = (lambda msg: logger.info(msg)) if verbose else (lambda *_: None)
+
         static_exts = {"png", "jpg", "jpeg", "pdf", "svg", "eps"}
         for ext in static_exts.intersection(save_as):
             target = output_path.with_suffix(f".{ext}")
@@ -126,8 +129,7 @@ def plotly_show_and_save(
             target = output_path.with_suffix('.html')  # Replace with .html
             try:
                 fig.write_html(str(target), **write_kwargs)
-                if verbose:
-                    logger.info(f"Saved figure to '{target}'.")
+                log_ok(f"Saved figure to '{target}'.")
             except Exception as e:
                 logger.error(f"Failed to save figure: {str(e)}")
               
