@@ -199,6 +199,31 @@ def generate_html_report(
     with open(output_path, 'w') as f:
         f.write(html_content)
 
+def _format_ml_section(ml_metrics, ml_features, shap_plot):
+    """Format the machine learning results section"""
+    if ml_metrics is None or ml_metrics.empty:
+        return "<p>No ML results available</p>"
+    
+    ml_html = f"""
+    <div class="ml-section">
+        <h3>Model Performance</h3>
+        {ml_metrics.to_html(index=False)}
+        
+        <h3>Top Features</h3>
+        {ml_features.to_html(index=False, classes='ml-feature-table')}
+    """
+    
+    if shap_plot:
+        ml_html += f"""
+        <h3>Feature Importance (Best Model)</h3>
+        <div class="figure-container">
+            <img src="data:image/png;base64,{shap_plot}" alt="SHAP Summary">
+        </div>
+        """
+    
+    ml_html += "</div>"
+    return ml_html
+
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
