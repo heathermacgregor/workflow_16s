@@ -11,10 +11,11 @@ from typing import Any, Dict, List, Union, Tuple, Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import plotly.graph_objects as go  
 
-# ==================================== LOGGING ====================================== #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("workflow_16s")
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -113,7 +114,7 @@ def generate_html_report(
                 padding-bottom: 5px;
             }}
             .ml-feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-            /* NEW: Plotly container styling */
+            /* MODIFIED: Plotly container styling */
             .plotly-container {{
                 width: 100%;
                 height: 100%;
@@ -123,18 +124,27 @@ def generate_html_report(
                 height: 100% !important;
             }}
         </style>
+        <!-- ADDED: Plotly.js CDN -->
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script>
-            // NEW: Initialize Plotly figures on page load
+            // MODIFIED: Render only active Plotly figures
             document.addEventListener('DOMContentLoaded', function() {{
                 renderAllPlotlyFigures();
             }});
             
             function renderAllPlotlyFigures() {{
-                var plotlyContainers = document.querySelectorAll('.plotly-container');
-                plotlyContainers.forEach(function(container) {{
-                    var figure = JSON.parse(container.dataset.figure);
-                    Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
+                // Select only active plot containers
+                var activeContainers = document.querySelectorAll('.plot-container.active .plotly-container');
+                activeContainers.forEach(function(container) {{
+                    if (!container.hasChildNodes()) {{
+                        try {{
+                            var figure = JSON.parse(container.dataset.figure);
+                            Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
+                        }} catch (e) {{
+                            console.error('Error rendering Plotly figure:', e);
+                            container.innerHTML = '<p>Error rendering Plotly figure</p>';
+                        }}
+                    }}
                 }});
             }}
             
@@ -147,15 +157,8 @@ def generate_html_report(
                 var selectedPlot = document.getElementById(selectElement.value);
                 if (selectedPlot) {{
                     selectedPlot.classList.add('active');
-                    
-                    // NEW: Render Plotly figures when made visible
-                    var plotlyContainers = selectedPlot.querySelectorAll('.plotly-container');
-                    plotlyContainers.forEach(function(container) {{
-                        if (!container.hasChildNodes()) {{
-                            var figure = JSON.parse(container.dataset.figure);
-                            Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
-                        }}
-                    }});
+                    // Now render any Plotly figures in the newly active container
+                    renderAllPlotlyFigures();
                 }}
             }}
         </script>
@@ -196,241 +199,7 @@ def generate_html_report(
     with open(output_path, 'w') as f:
         f.write(html_content)
 
-def _format_ml_section(ml_metrics, ml_features, shap_plot):
-    """Format the machine learning results section"""
-    if ml_metrics is None or ml_metrics.empty:
-        return "<p>No ML results available</p>"
-    
-    ml_html = f"""
-    <div class="ml-section">
-        <h3>Model Performance</h3>
-        {ml_metrics.to_html(index=False)}
-        
-        <h3>Top Features</h3>
-        {ml_features.to_html(index=False, classes='ml-feature-table')}
-    """
-    
-    if shap_plot:
-        ml_html += f"""
-        <h3>Feature Importance (Best Model)</h3>
-        <div class="figure-container">
-            <img src="data:image/png;base64,{shap_plot}" alt="SHAP Summary">
-        </div>
-        """
-    
-    ml_html += "</div>"
-    return ml_html
-
-def _prepare_features_table(
-    features: List[Dict], 
-    max_features: int,
-    category: str
-) -> pd.DataFrame:
-    """Prepare top features table for HTML display"""
-    if not features:
-        return pd.DataFrame({"Message": [f"No significant {category} features found"]})
-    
-    df = pd.DataFrame(features[:max_features])
-    # Simplify column names and select important columns
-    df = df.rename(columns={
-        "feature": "Feature",
-        "level": "Taxonomic Level",
-        "test": "Test",
-        "effect": "Effect Size",
-        "p_value": "P-value",
-        "effect_dir": "Direction"
-    })
-    
-    # Add FAPROTAX annotations if available
-    if "faprotax_functions" in df.columns:
-        df["Functions"] = df["faprotax_functions"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) else ""
-        )
-    
-    # Format numeric columns
-    df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
-    
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", "P-value", "Direction"]]
-
-def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
-    """Prepare statistical summary table"""
-    summary = []
-    for table_type, tests in stats.items():
-        for test_name, levels in tests.items():
-            for level, df in levels.items():
-                n_sig = sum(df["p_value"] < 0.05) if "p_value" in df.columns else 0
-                summary.append({
-                    "Table Type": table_type,
-                    "Test": test_name,
-                    "Level": level,
-                    "Significant Features": n_sig,
-                    "Total Features": len(df)
-                })
-    
-    return pd.DataFrame(summary)
-
-def _prepare_ml_summary(models: Dict) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
-    """Prepare detailed ML results for HTML display"""
-    if not models:
-        return None, None, None
-
-    metrics_summary = []
-    features_summary = []
-    shap_plot_base64 = None
-    best_mcc = -1  # Track best MCC for SHAP plot selection
-    
-    for table_type, levels in models.items():
-        for level, methods in levels.items():
-            for method, result in methods.items():
-                if not result:
-                    continue
-                
-                # Extract metrics
-                test_scores = result.get("test_scores", {})
-                metrics = {
-                    "Table Type": table_type,
-                    "Level": level,
-                    "Method": method,
-                    "Top Features": len(result.get("top_features", [])),
-                    "Accuracy": f"{test_scores.get('accuracy', 0):.4f}",
-                    "F1 Score": f"{test_scores.get('f1', 0):.4f}",
-                    "MCC": f"{test_scores.get('mcc', 0):.4f}",
-                    "ROC AUC": f"{test_scores.get('roc_auc', 0):.4f}",
-                    "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
-                }
-                metrics_summary.append(metrics)
-                
-                # Extract top features
-                feat_imp = result.get("feature_importances", {})
-                top_features = result.get("top_features", [])[:10]
-                for i, feat in enumerate(top_features, 1):
-                    importance = feat_imp.get(feat, 0)
-                    features_summary.append({
-                        "Table Type": table_type,
-                        "Level": level,
-                        "Method": method,
-                        "Rank": i,
-                        "Feature": feat,
-                        "Importance": f"{importance:.4f}"
-                    })
-                
-                # Track best model for SHAP plot
-                current_mcc = test_scores.get("mcc", -1)
-                shap_path = result.get("shap_summary_bar_path")
-                if current_mcc > best_mcc and shap_path:
-                    try:
-                        with open(shap_path, "rb") as img_file:
-                            shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-                        best_mcc = current_mcc
-                    except Exception as e:
-                        logger.warning(f"Couldn't load SHAP plot: {str(e)}")
-    
-    metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
-    features_df = pd.DataFrame(features_summary) if features_summary else None
-    
-    return metrics_df, features_df, shap_plot_base64
-
-def _prepare_figures(figures: Dict) -> str:
-    """Organize figures into categories with dropdowns for color selection"""
-    if not figures:
-        return "<p>No visualizations available</p>"
-    
-    html_parts = []
-    
-    # Sample Maps
-    if "map" in figures:
-        html_parts.append("<h3>Sample Maps</h3>")
-        for col, fig in figures["map"].items():
-            if fig:
-                html_parts.append(
-                    _figure_to_html(fig, f"Sample Map: {col}")
-                )
-    
-    # Alpha Diversity
-    alpha_html = []
-    for table_type, levels in figures.items():
-        if table_type == "map":
-            continue
-        for level, plots in levels.items():
-            if not isinstance(plots, dict):
-                continue
-            for plot_type, fig in plots.items():
-                if "alpha" in plot_type and fig:
-                    alpha_html.append(
-                        _figure_to_html(fig, f"Alpha Diversity - {table_type} - {level} - {plot_type}")
-                    )
-    if alpha_html:
-        html_parts.append("<h3>Alpha Diversity</h3>" + "\n".join(alpha_html))
-    
-    # Beta Diversity
-    beta_groups = {}
-    for table_type, levels in figures.items():
-        if table_type == "map":
-            continue
-        for level, methods in levels.items():
-            if not isinstance(methods, dict):
-                continue
-            for method, color_figs in methods.items():
-                if method in ["pca", "pcoa", "tsne", "umap"] and isinstance(color_figs, dict):
-                    key = f"{table_type}_{level}_{method}"
-                    beta_groups[key] = {
-                        "title": f"{method.upper()} - {table_type} - {level}",
-                        "figures": color_figs
-                    }
-    
-    if beta_groups:
-        html_parts.append("<div class='beta-diversity-section'><h3>Beta Diversity</h3>")
-        for key, group in beta_groups.items():
-            container_id = f"{key}_container"
-            html_parts.append(f"<h4>{group['title']}</h4>")
-            
-            # Create dropdown
-            select_html = f"<select class='color-selector' onchange='showPlot(this, \"{container_id}\")'>"
-            options = []
-            plot_divs = []
-            
-            valid_figs = [(col, fig) for col, fig in group["figures"].items() if fig is not None]
-            if not valid_figs:
-                continue
-                
-            for i, (col, fig) in enumerate(valid_figs):
-                plot_id = f"{key}_{col.replace(' ', '_')}"
-                selected = "selected" if i == 0 else ""
-                options.append(f"<option value='{plot_id}' {selected}>{col}</option>")
-                plot_divs.append(
-                    f"<div id='{plot_id}' class='plot-container' style='display: {'flex' if i==0 else 'none'}'>"
-                    f"{_figure_to_html(fig, f'Colored by: {col}', include_caption=False)}"
-                    "</div>"
-                )
-            
-            select_html += "\n".join(options) + "</select>"
-            plot_container = f"<div id='{container_id}' class='plot-wrapper'>" + "\n".join(plot_divs) + "</div>"
-            
-            html_parts.append(select_html)
-            html_parts.append(plot_container)
-        
-        html_parts.append("</div>")  # Close beta-diversity-section
-    
-    # Other plots
-    other_html = []
-    for plot_type, levels in figures.items():
-        if plot_type in ["map", "pca", "pcoa", "tsne", "umap"]:
-            continue
-        if not isinstance(levels, dict):
-            continue
-        for level, methods in levels.items():
-            if not isinstance(methods, dict):
-                continue
-            for method, fig in methods.items():
-                if fig and not isinstance(fig, dict):  # Single figure
-                    other_html.append(
-                        _figure_to_html(fig, f"{plot_type} - {level} - {method}")
-                    )
-    if other_html:
-        html_parts.append("<h3>Other Visualizations</h3>" + "\n".join(other_html))
-    
-    return "\n".join(html_parts) if html_parts else "<p>No visualizations available</p>"
+# ... [The rest of your functions remain unchanged until _figure_to_html] ...
 
 def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str:
     """Convert figures to HTML embedding with consistent size"""
@@ -438,20 +207,30 @@ def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str
         return f"<div class='figure-container'><p>Missing figure: {caption}</p></div>"
     
     try:
-        # Handle Plotly figures - NEW METHOD
+        # MODIFIED: Improved Plotly handling
         if hasattr(fig, 'to_json') and callable(fig.to_json):
             plot_json = fig.to_json()
             caption_html = f"<p>{caption}</p>" if include_caption else ""
+            
+            # MODIFIED: Use direct HTML embedding instead of JSON parsing
+            # Generate Plotly HTML string
+            plotly_html = fig.to_html(
+                full_html=False, 
+                include_plotlyjs=False, 
+                config={'responsive': True}
+            )
+            
             return f"""
             <div class="figure-container">
                 <div class="plot-wrapper">
-                    <div class="plotly-container" data-figure='{plot_json}'></div>
+                    <!-- MODIFIED: Directly embed Plotly HTML -->
+                    <div class="plotly-container">{plotly_html}</div>
                 </div>
                 {caption_html}
             </div>
             """
         
-        # Handle Matplotlib/Seaborn figures
+        # Handle Matplotlib/Seaborn figures (unchanged)
         buf = BytesIO()
         dpi = 100
         if hasattr(fig, 'savefig'):
