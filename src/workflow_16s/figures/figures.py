@@ -73,7 +73,10 @@ def plotly_show_and_save(
     show: bool = False,
     output_path: Union[str, Path] = None,
     save_as: List[str] = ['png', 'html'],
-    verbose: bool = False
+    scale: int = 3,
+    engine: str = 'kaleido',
+    verbose: bool = False,
+    **write_kwargs
 ):
     """
     Save a Plotly figure to PNG and/or HTML formats and optionally display it.
@@ -84,9 +87,12 @@ def plotly_show_and_save(
         output_path: Base output path for files. Actual files will have format-
                      specific extensions appended (.png, .html). Directory will 
                      be created if needed.
-        save_as:     List of formats to save (supported: 'png', 'html'). 
+        save_as:     List of formats to save ('png', 'html'). 
                      Default: ['png','html']
+        scale:       DPI‑like scale factor for raster outputs.
+        engine:      Backend used for static image export ('kaleido', 'orca').
         verbose:     If True, logs success messages; errors are always logged.
+        **write_kwargs: Extra args forwarded to `fig.write_image` / `fig.write_html`.
     
     Notes:
         - PNG saving requires kaleido: install with `pip install -U kaleido`
@@ -94,34 +100,36 @@ def plotly_show_and_save(
         - Directory creation errors will propagate (not caught in exception handling)
     """
     if output_path:
-        output_path = Path(output_path)
-        output_dir = output_path.parent.resolve()
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path).expanduser().resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if 'png' in save_as:
-            png_file = output_path.with_suffix('.png')  # Replace with .png
+        static_exts = {"png", "jpg", "jpeg", "pdf", "svg", "eps"}
+        for ext in static_exts.intersection(save_as):
+            target = output_path.with_suffix(f".{ext}")
             try:
                 fig.write_image(
-                    str(png_file),
-                    format='png', 
-                    scale=3,
-                    engine='kaleido'
+                    str(target),
+                    format=ext,
+                    scale=scale,
+                    engine=engine,
+                    **write_kwargs,
                 )
-                if verbose:
-                    logger.info(f"Saved figure to '{png_file}'.")
+                log_ok(f"Saved figure to '{target}'.")
             except Exception as e:
-                logger.error(f"Failed to save PNG: {str(e)}")
-                if verbose:
-                    logger.info("Install kaleido: pip install -U kaleido")
+                logger.error(
+                    f"Failed to save figure: {str(e)}. "
+                    "Make sure the export engine is installed "
+                    "(e.g. `pip install -U kaleido`)."
+                )
         
         if 'html' in save_as:
-            html_file = output_path.with_suffix('.html')  # Replace with .html
+            target = output_path.with_suffix('.html')  # Replace with .html
             try:
-                fig.write_html(str(html_file))
+                fig.write_html(str(target), **write_kwargs)
                 if verbose:
-                    logger.info(f"Saved figure to '{html_file}'.")
+                    logger.info(f"Saved figure to '{target}'.")
             except Exception as e:
-                logger.error(f"Failed to save HTML: {str(e)}")
+                logger.error(f"Failed to save figure: {str(e)}")
               
 
 class PlotlyFigure:
