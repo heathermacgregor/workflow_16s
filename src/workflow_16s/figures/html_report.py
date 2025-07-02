@@ -238,55 +238,57 @@ def _figure_to_html(
 
 def _prepare_figures(figures: Dict) -> str:
     """
-    Build a dropdown + single container to switch between
-    the first two sample‑map Plotly figures.
-    Assumes your <head> already has:
+    Embed the first two sample‐map figures as full Plotly HTML fragments,
+    then toggle their visibility via a dropdown. Assumes your <head> has:
       <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     """
-    # 1. grab up to two maps
     maps = [(col, fig) for col, fig in figures.get("map", {}).items() if fig][:2]
     if not maps:
         return "<p>No sample maps available.</p>"
 
-    # 2. resize + hide legend + serialize each to JSON
-    blobs = []
+    # 1) Generate two HTML fragments (no <html>/<head>, no PlotlyJS include)
+    fragments = []
     for col, fig in maps:
         fig.update_layout(width=900, height=600, showlegend=False)
-        blobs.append((col, fig.to_json()))
+        fragments.append( fig.to_html(full_html=False, include_plotlyjs=False) )
 
-    # 3. build <option>s and <script type="application/json"> blocks
-    opts = []
-    scripts = []
-    for i, (col, blob) in enumerate(blobs):
-        tag = f"fig{i}"
-        selected = " selected" if i == 0 else ""
-        opts.append(f"<option value='{tag}'{selected}>{col}</option>")
-        scripts.append(
-            f"<script id='{tag}' type='application/json'>\n{blob}\n</script>"
-        )
-
+    # 2) Build dropdown options
+    options = []
+    for i, (col, _) in enumerate(maps):
+        sel = " selected" if i == 0 else ""
+        options.append(f"<option value='map{i}'{sel}>{col}</option>")
     dropdown = (
-        "<select class='color-selector' onchange='renderMap()'>\n"
-        + "\n".join(opts)
+        "<select class='color-selector' onchange='showMap(this.value)'>\n"
+        + "\n".join(options)
         + "\n</select>"
     )
 
-    # 4. single div where we’ll draw
-    container = "<div id='map_container' style='width:900px;height:600px;'></div>"
+    # 3) Wrap each fragment in a toggleable <div>
+    divs = []
+    for i, html_frag in enumerate(fragments):
+        cls = "plot-container active" if i == 0 else "plot-container"
+        divs.append(f"<div id='map{i}' class='{cls}'>{html_frag}</div>")
+    wrapper = "<div id='map_wrapper'>" + "\n".join(divs) + "</div>"
 
-    # 5. inline script to actually render
-    runner = """
+    # 4) JS to show/hide
+    script = """
 <script>
-function renderMap() {
-  const sel = document.querySelector('.color-selector');
-  const raw = document.getElementById(sel.value);
-  if (!raw) return;
-  const fig = JSON.parse(raw.textContent);
-  Plotly.newPlot('map_container', fig.data, fig.layout, {responsive:true});
+function showMap(id) {
+  document.querySelectorAll('.plot-container').forEach(d => d.classList.remove('active'));
+  const tgt = document.getElementById(id);
+  if (tgt) tgt.classList.add('active');
 }
-document.addEventListener('DOMContentLoaded', renderMap);
 </script>
 """
 
-    # 6. glue it all together
-    return "\n".join([dropdown, container] + scripts + [runner])
+    # 5) some CSS (if not already in your <style>)
+    style = """
+<style>
+.plot-container { display: none; }
+.plot-container.active { display: block; }
+.color-selector { margin-bottom: 10px; padding: 5px; }
+</style>
+"""
+
+    return "\n".join([style, dropdown, wrapper, script])
+
