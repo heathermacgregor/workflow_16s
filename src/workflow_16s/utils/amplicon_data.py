@@ -577,18 +577,19 @@ class Plotter:
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
-        with get_progress_bar() as progress:
-            parent_task = progress.add_task(
-                "Generating sample maps...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with get_progress_bar() as prog:
+            l0_desc = "Generating sample maps..."
+            l0_task = prog.add_task(
+                f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=len(valid_columns)
             )
 
             figs = {}
             for col in valid_columns:
-                child_task_description = f"Mapping {col}..."
+                l1_desc = f"Mapping {col}..."
                 child_task = progress.add_task(
-                    f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
-                    parent=parent_task,
+                    f"[white]{l1_desc:<{DEFAULT_N}}",
+                    parent=l0_task,
                     total=1
                 )
                 
@@ -599,9 +600,9 @@ class Plotter:
                     **kwargs,
                 )
                 figs[col] = fig
-                progress.update(child_task, completed=1)
-                progress.remove_task(child_task)
-                progress.update(parent_task, advance=1)
+                progress.update(l1_task, completed=1)
+                progress.remove_task(l1_task)
+                progress.update(l0_task, advance=1)
         return figs
 
 
@@ -1303,13 +1304,13 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
 
-                        l2_desc = " | ".join([
+                        new_l1_desc = " | ".join([
                             level.capitalize(), cfg['name']
                         ])
-                        l2_task = prog.add_task(
-                            f"[white]{l2_desc:<{DEFAULT_N}}",
-                            parent=l1_task,
-                            total=len(enabled_for_table_type)
+                        prog.update(
+                            l1_task,
+                            description=f"[white]{new_l1_desc:<{DEFAULT_N}}",
+                            refresh=True
                         )
                         
                         
@@ -1325,12 +1326,10 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             logger.error(f"Test failed: {e}")
                         finally:
-                            prog.update(l2_task, advance=1)
-                prog.remove_task(l2_task)
-                prog.update(l1_task, advance=1)
+                            prog.update(l1_task, advance=1)
                 
-            prog.remove_task(l1_task)
-            prog.update(l0_task, advance=1)
+                prog.remove_task(l1_task)
+                prog.update(l0_task, advance=1)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
