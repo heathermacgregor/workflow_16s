@@ -148,15 +148,15 @@ class _ProcessingMixin:
                     self._log_level_action(level, log_template, log_action, duration)
         else:
             logger.debug(f"{process_name}")
-            with get_progress_bar() as progress:
-                parent_task = progress.add_task(
+            with get_progress_bar() as prog:
+                parent_task = prog.add_task(
                     process_name,
                     total=len(levels),
                 )
                 for level in levels:
                     start_time = time.perf_counter()  # More precise timing
                     child_task_description = f"Processing {level} level"
-                    child_task = progress.add_task(
+                    child_task = prog.add_task(
                         f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
                         parent=parent_task,
                         total=1
@@ -169,9 +169,9 @@ class _ProcessingMixin:
                     if log_template or log_action:
                         self._log_level_action(level, log_template, log_action, duration)
 
-                    progress.update(child_task, completed=1)
-                    progress.remove_task(child_task)
-                    progress.update(parent_task, advance=1)
+                    prog.update(child_task, completed=1)
+                    prog.remove_task(child_task)
+                    prog.update(parent_task, advance=1)
 
         return processed
 
@@ -578,7 +578,7 @@ class Plotter:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
         with get_progress_bar() as prog:
-            l0_desc = "Generating sample maps..."
+            l0_desc = "Plotting sample maps..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=len(valid_columns)
@@ -587,7 +587,7 @@ class Plotter:
             figs = {}
             for col in valid_columns:
                 l1_desc = f"Mapping {col}..."
-                child_task = progress.add_task(
+                child_task = prog.add_task(
                     f"[white]{l1_desc:<{DEFAULT_N}}",
                     parent=l0_task,
                     total=1
@@ -600,9 +600,9 @@ class Plotter:
                     **kwargs,
                 )
                 figs[col] = fig
-                progress.update(l1_task, completed=1)
-                progress.remove_task(l1_task)
-                progress.update(l0_task, advance=1)
+                prog.update(l1_task, completed=1)
+                prog.remove_task(l1_task)
+                prog.update(l0_task, advance=1)
         return figs
 
 
@@ -1459,7 +1459,7 @@ class _AnalysisManager(_ProcessingMixin):
     
         with get_progress_bar() as prog:
             l0_desc = "Running ML feature selection..."
-            l0_task = progress.add_task(
+            l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=n
             )
@@ -1478,7 +1478,7 @@ class _AnalysisManager(_ProcessingMixin):
                             level.capitalize(), 
                             method.upper()
                         ])
-                        l1_task = progress.add_task(
+                        l1_task = prog.add_task(
                             f"[white]{l1_desc:<{DEFAULT_N}}",
                             parent=l0_task,
                             total=1
