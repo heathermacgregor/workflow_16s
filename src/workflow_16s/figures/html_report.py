@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 logger = logging.getLogger("workflow_16s")
 
 # ==================================== FUNCTIONS ===================================== #
+timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
 
 def generate_html_report(
     amplicon_data: 'AmpliconData',
