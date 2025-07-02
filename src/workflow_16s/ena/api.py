@@ -27,6 +27,7 @@ from contextlib import contextmanager
 import logging
 
 import workflow_16s.custom_tmp_config
+from workflow_16s.utils.progress import get_progress_bar
 
 logger = logging.getLogger('workflow_16s')
 
@@ -43,6 +44,9 @@ from rich.progress import (
     TaskProgressColumn,
     SpinnerColumn
 )
+
+DEFAULT_PROGRESS_TEXT_N = 65
+DEFAULT_N = DEFAULT_PROGRESS_TEXT_N
 
 # ================================ FUNCTIONS ================================ #
 
@@ -68,6 +72,7 @@ class MetadataFetcher:
     ):
         self.base_url = base_url
         self.session = self._create_session(retries, backoff_factor)
+        """
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -78,6 +83,8 @@ class MetadataFetcher:
             TextColumn("[white]•"),
             TimeRemainingColumn(),
         )
+        """
+        self.progress = get_progress_bar()
         self._auto_start = auto_start_progress
         if self._auto_start:
             self.progress.start()
@@ -190,13 +197,16 @@ class MetadataFetcher:
     ) -> pd.DataFrame:
         """Get combined study and sample metadata."""
         with self.track():
+            parent_desc = f"Processing {ena_study_accession}",
             parent_task = self.progress.add_task(
-                f"[bold]Processing {ena_study_accession}", total=3
+                 f"[white]{parent_desc:<{DEFAULT_N}}", , 
+                total=3
             )
 
             try:
+                study_desc = "Fetching study metadata..."
                 study_task = self.progress.add_task(
-                    "[white]Fetching study metadata...".ljust(50),
+                     f"[white]{study_desc:<{DEFAULT_N}}", ,
                     parent=parent_task,
                     total=1,
                 )
@@ -205,8 +215,9 @@ class MetadataFetcher:
                 self.progress.advance(parent_task)
 
                 samples = study_df["sample_accession"].dropna().unique().tolist()
+                sample_desc = "Fetching sample metadata..."
                 sample_task = self.progress.add_task(
-                    "[white]Fetching sample metadata...".ljust(50),
+                    f"[white]{sample_desc:<{DEFAULT_N}}",
                     parent=parent_task,
                     total=len(samples),
                 )
@@ -214,9 +225,9 @@ class MetadataFetcher:
                     sample_task, samples, max_workers
                 )
                 self.progress.advance(parent_task)
-
+                merge_desc = "Merging study and sample metadata..."
                 merge_task = self.progress.add_task(
-                    "[white]Merging study and sample metadata...".ljust(50),
+                    f"[white]{merge_desc:<{DEFAULT_N}}", 
                     parent=parent_task,
                     total=1,
                 )
@@ -269,6 +280,7 @@ class SequenceFetcher:
         self.retries = retries
         self.initial_delay = initial_delay
         self.max_workers = max_workers
+        """
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -279,6 +291,8 @@ class SequenceFetcher:
             TextColumn("[white]•"),
             TimeRemainingColumn(),
         )
+        """
+        self.progress = get_progress_bar()
 
     def get_run_fastq(self, run_accession: str, urls: List[str]) -> Dict[str, List[str]]:
         """Download FASTQ files for a single run accession."""
@@ -330,8 +344,10 @@ class SequenceFetcher:
         """
         results = {}
         with self.progress:
+            main_desc = "Downloading sequencing data..."
             main_task = self.progress.add_task(
-                "[white]Downloading sequencing data...".ljust(50), total=len(metadata)
+                f"[white]{main_desc:<{DEFAULT_N}}", 
+                total=len(metadata)
             )
 
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
