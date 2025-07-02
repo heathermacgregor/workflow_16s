@@ -42,7 +42,7 @@ def generate_html_report(
 
     # Match JS to the Python package version
     plotly_js_tag = (
-        f"<script src='https://cdn.plot.ly/plotly-3.1.0.min.js'></script>"
+        f"<script src='https://cdn.plot.ly/plotly-3.0.1.min.js'></script>"
     )
 
     html = f"""<!DOCTYPE html>
