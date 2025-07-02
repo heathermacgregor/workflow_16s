@@ -26,16 +26,8 @@ def generate_html_report(
     max_features: int = 20,
 ) -> None:
     """
-    Generate the full 16S analysis HTML report.
-
-    Args
-    ----
-    amplicon_data : AmpliconData
-        Object holding results, figures, models, etc.
-    output_path   : str | Path
-        Where to write the HTML file.
-    max_features  : int, default 20
-        Maximum rows to include in the top‑features tables.
+    Generate a debug version of the 16S analysis HTML report
+    that shows *only* the first sample‑map figure.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,7 +46,7 @@ def generate_html_report(
     # 3. ML summary
     ml_metrics, ml_features, shap_plot = _prepare_ml_summary(amplicon_data.models)
 
-    # 4. Figures (with Plotly‑native embedding)
+    # 4. Figures – only the first sample map
     figures_html = _prepare_figures(amplicon_data.figures)
 
     # 5. Compose document
@@ -62,7 +54,7 @@ def generate_html_report(
 <html>
 <head>
   <meta charset="utf-8">
-  <title>16S Analysis Report</title>
+  <title>16S Analysis Report (DEBUG)</title>
   <style>
     body {{ font-family: Arial, sans-serif; margin: 40px; }}
     h1, h2, h3, h4 {{ color: #2c3e50; }}
@@ -70,17 +62,12 @@ def generate_html_report(
     th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
     th {{ background-color: #f2f2f2; }}
     .section {{ margin-bottom: 40px; }}
-    .figure-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 20px; }}
     .figure-container {{ border: 1px solid #ddd; padding: 10px; }}
     .plot-wrapper {{ width: 100%; height: 400px; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
-    .plot-container {{ display: none; width: 100%; height: 100%; }}
-    .plot-container.active {{ display: flex; justify-content: center; align-items: center; }}
-    .color-selector {{ margin: 10px 0; padding: 5px; width: 100%; }}
-    .ml-feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
   </style>
 </head>
 <body>
-  <h1>16S Amplicon Analysis Report</h1>
+  <h1>16S Amplicon Analysis Report – DEBUG</h1>
   <p>Generated on {timestamp}</p>
 
   <div class='section'>
@@ -102,10 +89,8 @@ def generate_html_report(
   </div>
 
   <div class='section'>
-    <h2>Visualisations</h2>
-    <div class='figure-grid'>
-      {figures_html}
-    </div>
+    <h2>Visualisation (First Sample Map Only)</h2>
+    {figures_html}
   </div>
 </body>
 </html>
@@ -253,8 +238,7 @@ def _prepare_ml_summary(
     features_df = pd.DataFrame(feature_rows) if feature_rows else None
     return metrics_df, features_df, shap_plot_b64
 
-
-# --------------------------- FIGURE HANDLING (UPDATED) ------------------------------
+# --------------------------- FIGURE HANDLING (DEBUG) --------------------------------
 
 def _figure_to_html(
     fig: Any,
@@ -307,111 +291,21 @@ def _figure_to_html(
 </div>
 """
 
-
 def _prepare_figures(figures: Dict) -> str:
-    """Build HTML for every figure category."""
-    if not figures:
-        return "<p>No visualisations available</p>"
+    """
+    Return HTML for *only* the first sample‑map figure.
+    All other plot types are ignored.
+    """
+    if not figures or "map" not in figures:
+        return "<p>No sample map found.</p>"
 
-    html_parts: List[str] = []
-
-    # ───────────────────────────── SAMPLE MAPS ────────────────────────────────────
-    if "map" in figures:
-        html_parts.append("<h3>Sample Maps</h3>")
-        for col, fig in figures["map"].items():
-            if fig:
-                html_parts.append(
-                    _figure_to_html(
-                        fig,
-                        f"Sample Map: {col}",
-                        width=900,
-                        height=600,
-                        hide_legend=True,
-                    )
-                )
-
-    # ───────────────────────────── ALPHA DIV ─────────────────────────────────────
-    alpha_html: List[str] = []
-    for table_type, levels in figures.items():
-        if table_type == "map":
-            continue
-        for level, plots in levels.items():
-            if not isinstance(plots, dict):
-                continue
-            for plot_type, fig in plots.items():
-                if "alpha" in plot_type and fig:
-                    alpha_html.append(
-                        _figure_to_html(
-                            fig,
-                            f"Alpha Diversity – {table_type} – {level} – {plot_type}",
-                        )
-                    )
-    if alpha_html:
-        html_parts.append("<h3>Alpha Diversity</h3>" + "\n".join(alpha_html))
-
-    # ───────────────────────────── BETA DIV (+ dropdown) ─────────────────────────
-    beta_groups: Dict[str, Dict[str, Any]] = {}
-    for table_type, levels in figures.items():
-        if table_type == "map":
-            continue
-        for level, methods in levels.items():
-            if not isinstance(methods, dict):
-                continue
-            for method, color_figs in methods.items():
-                if method in {"pca", "pcoa", "tsne", "umap"} and isinstance(color_figs, dict):
-                    key = f"{table_type}_{level}_{method}"
-                    beta_groups[key] = {
-                        "title": f"{method.upper()} – {table_type} – {level}",
-                        "figures": color_figs,
-                    }
-
-    if beta_groups:
-        html_parts.append("<div class='beta-diversity-section'><h3>Beta Diversity</h3>")
-        for key, group in beta_groups.items():
-            container_id = f"{key}_container"
-            html_parts.append(f"<h4>{group['title']}</h4>")
-
-            select_html = f"<select class='color-selector' onchange='showPlot(this, \"{container_id}\")'>"
-            options, plot_divs = [], []
-
-            valid_figs = [(col, fig) for col, fig in group["figures"].items() if fig]
-            if not valid_figs:
-                continue
-
-            for i, (col, fig) in enumerate(valid_figs):
-                plot_id = f"{key}_{col.replace(' ', '_')}"
-                opt_sel = "selected" if i == 0 else ""
-                options.append(f"<option value='{plot_id}' {opt_sel}>{col}</option>")
-                plot_divs.append(
-                    f"<div id='{plot_id}' class='plot-container{' active' if i==0 else ''}'>"
-                    f"{_figure_to_html(fig, f'Colored by: {col}')}"
-                    "</div>"
-                )
-
-            select_html += "\n".join(options) + "</select>"
-            plot_wrapper = f"<div id='{container_id}' class='plot-wrapper'>" + "\n".join(plot_divs) + "</div>"
-
-            html_parts.append(select_html)
-            html_parts.append(plot_wrapper)
-
-        html_parts.append("</div>")  # end beta section
-
-    # ───────────────────────────── OTHER PLOTS ───────────────────────────────────
-    other_html: List[str] = []
-    for plot_type, levels in figures.items():
-        if plot_type in {"map", "pca", "pcoa", "tsne", "umap"}:
-            continue
-        if not isinstance(levels, dict):
-            continue
-        for level, methods in levels.items():
-            if not isinstance(methods, dict):
-                continue
-            for method, fig in methods.items():
-                if fig and not isinstance(fig, dict):
-                    other_html.append(
-                        _figure_to_html(fig, f"{plot_type} – {level} – {method}")
-                    )
-    if other_html:
-        html_parts.append("<h3>Other Visualisations</h3>" + "\n".join(other_html))
-
-    return "\n".join(html_parts) if html_parts else "<p>No visualisations available</p>"
+    for col, fig in figures["map"].items():
+        if fig:
+            return _figure_to_html(
+                fig,
+                f"Sample Map: {col}",
+                width=900,
+                height=600,
+                hide_legend=True,
+            )
+    return "<p>No sample map found.</p>"
