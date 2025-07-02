@@ -1,229 +1,93 @@
-# ===================================== IMPORTS ======================================
+# ---------------------------------- DEBUG SAMPLE MAP REPORT ----------------------------------
+"""
+Generate an HTML report that embeds **only the first two sample‑map Plotly figures** found in
+``amplicon_data.figures["map"]``. Each figure is exported as its own Plotly HTML fragment and
+shown/hidden with a dropdown. No raw JSON blobs (which require the Plotly binary plugin) are used.
+This keeps things simple and reliable.
 
-# -------- Standard Library --------
+Usage
+-----
+>>> generate_html_report(amplicon_data, "report_debug.html")
+"""
+from __future__ import annotations
+
+# -------- Standard library --------
 import base64
-import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
+import logging
 
-# -------- Third‑Party -------------
+# -------- Third‑party ------------
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-import plotly.graph_objects as go
+import plotly.graph_objects as go  # noqa: F401 – imported for type checking only
 
-# ========================== INITIALIZATION & CONFIGURATION ==========================
+logger = logging.getLogger(__name__)
 
-logger = logging.getLogger("workflow_16s")
-timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-
-# ==================================== MAIN API =====================================
+# =================================================================================================
+# Top‑level API
+# =================================================================================================
 
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
     max_features: int = 20,
 ) -> None:
-    """
-    Generate a debug 16S analysis report that shows only the first TWO
-    sample‑map figures with a color‑column dropdown.
-    """
+    """Write an HTML page for debugging the first two sample maps."""
+    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Top‑feature tables
-    contam_df  = _prepare_features_table(
-        amplicon_data.top_contaminated_features, max_features, "Contaminated"
-    )
-    pristine_df = _prepare_features_table(
-        amplicon_data.top_pristine_features, max_features, "Pristine"
-    )
-
-    # 2. Stats summary
-    stats_summary = _prepare_stats_summary(amplicon_data.stats)
-
-    # 3. ML summary
-    ml_metrics, ml_features, shap_plot = _prepare_ml_summary(amplicon_data.models)
-
-    # 4. Figures – only the first two sample maps + dropdown
+    # ------------------------------------------------------------------ layout sections (minimal)
     figures_html = _prepare_figures(amplicon_data.figures)
 
-    # 5. Compose document
     html = f"""<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>16S Analysis Report – DEBUG</title>
+<meta charset=\"utf-8\">
+<title>16S Sample‑Map Debug</title>
+<script src=\"https://cdn.plot.ly/plotly-latest.min.js\"></script>
 <style>
   body {{ font-family: Arial, sans-serif; margin: 40px; }}
-  h1, h2, h3, h4 {{ color: #2c3e50; }}
-  table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-  th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-  th {{ background-color: #f2f2f2; }}
+  h1 {{ color: #2c3e50; }}
   .section {{ margin-bottom: 40px; }}
-  .figure-container {{ border: 1px solid #ddd; padding: 10px; }}
-  .plot-wrapper {{ width: 100%; height: 600px; position: relative; }}
-  .plot-container {{ display: none; width: 100%; height: 100%; }}
+  .plot-container {{ display: none; }}
   .plot-container.active {{ display: block; }}
-  .color-selector {{ padding: 5px; margin-bottom: 10px; }}
+  .color-selector {{ margin-bottom: 10px; padding: 5px; }}
 </style>
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script>
-function showSampleMap(sel) {{
-  const plots = document.querySelectorAll('#sample_map_wrapper .plot-container');
-  plots.forEach(p => p.classList.remove('active'));
-  const tgt = document.getElementById(sel.value);
+function showMap(id) {{
+  document.querySelectorAll('.plot-container').forEach(div => div.classList.remove('active'));
+  const tgt = document.getElementById(id);
   if (tgt) tgt.classList.add('active');
 }}
 </script>
 </head>
 <body>
-<h1>16S Amplicon Analysis Report – DEBUG</h1>
-<p>Generated on {timestamp}</p>
+  <h1>16S Amplicon Analysis – Sample‑Map Debug</h1>
+  <p>Generated: {ts}</p>
 
-<div class='section'>
-  <h2>Top Features</h2>
-  <h3>Contaminated‑Associated Features</h3>
-  {contam_df.to_html(index=False, classes='feature-table')}
-  <h3>Pristine‑Associated Features</h3>
-  {pristine_df.to_html(index=False, classes='feature-table')}
-</div>
-
-<div class='section'>
-  <h2>Statistical Summary</h2>
-  {stats_summary.to_html(index=False)}
-</div>
-
-<div class='section'>
-  <h2>Machine‑Learning Results</h2>
-  {_format_ml_section(ml_metrics, ml_features, shap_plot)}
-</div>
-
-<div class='section'>
-  <h2>Sample Map (first two color columns)</h2>
-  {figures_html}
-</div>
-
+  <div class='section'>
+    <h2>Sample Map (first two colour columns)</h2>
+    {figures_html}
+  </div>
 </body>
-</html>
-"""
+</html>"""
     output_path.write_text(html, encoding="utf-8")
 
-# =============================== HELPER FUNCTIONS ===================================
+# =================================================================================================
+# Figure handling (debug only)
+# =================================================================================================
 
-def _format_ml_section(
-    ml_metrics: Optional[pd.DataFrame],
-    ml_features: Optional[pd.DataFrame],
-    shap_plot: Optional[str],
-) -> str:
-    if ml_metrics is None or ml_metrics.empty:
-        return "<p>No ML results available.</p>"
-
-    out = [ml_metrics.to_html(index=False)]
-    out.append("<h3>Top Features</h3>")
-    out.append(ml_features.to_html(index=False, classes='ml-feature-table')
-               if ml_features is not None else "<p>No feature table.</p>")
-
-    if shap_plot:
-        out.append(
-            f'<div class="figure-container"><img src="data:image/png;base64,{shap_plot}"'
-            ' alt="SHAP Summary"></div>'
-        )
-    return "\n".join(out)
-
-
-def _prepare_features_table(
-    features: List[Dict],
-    max_features: int,
-    category: str,
-) -> pd.DataFrame:
-    if not features:
-        return pd.DataFrame({"Message": [f"No significant {category} features found"]})
-
-    df = pd.DataFrame(features[:max_features]).rename(
-        columns={
-            "feature": "Feature",
-            "level": "Taxonomic Level",
-            "test": "Test",
-            "effect": "Effect Size",
-            "p_value": "P-value",
-            "effect_dir": "Direction",
-        }
-    )
-    df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
-    cols = ["Feature", "Taxonomic Level", "Test", "Effect Size", "P-value", "Direction"]
-    return df[cols]
-
-
-def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
-    rows = []
-    for ttype, tests in stats.items():
-        for test, lvls in tests.items():
-            for lvl, df in lvls.items():
-                n_sig = sum(df["p_value"] < 0.05) if "p_value" in df.columns else 0
-                rows.append(
-                    {"Table Type": ttype, "Test": test, "Level": lvl,
-                     "Significant Features": n_sig, "Total Features": len(df)}
-                )
-    return pd.DataFrame(rows)
-
-
-def _prepare_ml_summary(
-    models: Dict,
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
-    if not models:
-        return None, None, None
-
-    metrics, feats = [], []
-    shap_b64, best_mcc = None, -1
-    for ttype, lvls in models.items():
-        for lvl, methods in lvls.items():
-            for mtd, res in methods.items():
-                if not res:
-                    continue
-                sc = res.get("test_scores", {})
-                metrics.append(
-                    {"Table": ttype, "Level": lvl, "Method": mtd,
-                     "Accuracy": f"{sc.get('accuracy',0):.4f}",
-                     "F1": f"{sc.get('f1',0):.4f}",
-                     "MCC": f"{sc.get('mcc',0):.4f}"}
-                )
-
-                for rk, feat in enumerate(res.get("top_features", [])[:10], 1):
-                    feats.append(
-                        {"Table": ttype, "Level": lvl, "Method": mtd,
-                         "Rank": rk, "Feature": feat}
-                    )
-
-                mcc = sc.get("mcc", -1)
-                shap_path = res.get("shap_summary_bar_path")
-                if mcc > best_mcc and shap_path:
-                    try:
-                        with open(shap_path, "rb") as fh:
-                            shap_b64 = base64.b64encode(fh.read()).decode()
-                        best_mcc = mcc
-                    except Exception:
-                        pass
-
-    return (pd.DataFrame(metrics) if metrics else None,
-            pd.DataFrame(feats) if feats else None,
-            shap_b64)
-
-# --------------------------- FIGURE HANDLING (DEBUG) --------------------------------
-
-def _figure_to_html(
-    fig: Any,
-    *,
-    width: int = 900,
-    height: int = 600,
-) -> str:
-    """Embed a Plotly figure as raw HTML (no legend)."""
+def _figure_to_html(fig: Any, *, width: int = 900, height: int = 600) -> str:
+    """Return a Plotly or Matplotlib figure embedded as HTML/PNG."""
     if hasattr(fig, "to_html"):
         fig.update_layout(width=width, height=height, showlegend=False)
-        return fig.to_html(full_html=False, include_plotlyjs="cdn")
-    # Matplotlib fallback
+        return fig.to_html(full_html=False, include_plotlyjs=False)
+
+    # Fallback to PNG if not Plotly
     buf = BytesIO()
     if isinstance(fig, Figure):
         fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
@@ -234,61 +98,38 @@ def _figure_to_html(
     else:
         return f"<p>Unsupported figure type: {type(fig)}</p>"
     img_b64 = base64.b64encode(buf.getvalue()).decode()
-    return f'<img src="data:image/png;base64,{img_b64}" style="max-width:100%;">'
+    return f'<img src="data:image/png;base64,{img_b64}" style="max-width:100%">'
+
 
 def _prepare_figures(figures: Dict) -> str:
-    """
-    Embed the first two sample‐map figures as full Plotly HTML fragments,
-    then toggle their visibility via a dropdown. Assumes your <head> has:
-      <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    """
-    maps = [(col, fig) for col, fig in figures.get("map", {}).items() if fig][:2]
+    """Return dropdown + two Plotly map fragments wrapped for toggling."""
+    if not figures or "map" not in figures:
+        return "<p>No sample maps available.</p>"
+
+    # Pick first two maps that are not None
+    maps = [(col, fig) for col, fig in figures["map"].items() if fig][:2]
     if not maps:
         return "<p>No sample maps available.</p>"
 
-    # 1) Generate two HTML fragments (no <html>/<head>, no PlotlyJS include)
-    fragments = []
-    for col, fig in maps:
-        fig.update_layout(width=900, height=600, showlegend=False)
-        fragments.append( fig.to_html(full_html=False, include_plotlyjs=False) )
+    # Build dropdown
+    options_html: List[str] = []
+    divs_html: List[str] = []
 
-    # 2) Build dropdown options
-    options = []
-    for i, (col, _) in enumerate(maps):
+    for i, (col, fig) in enumerate(maps):
+        div_id = f"map{i}"
         sel = " selected" if i == 0 else ""
-        options.append(f"<option value='map{i}'{sel}>{col}</option>")
+        options_html.append(f"<option value='{div_id}'{sel}>{col}</option>")
+
+        div_class = "plot-container active" if i == 0 else "plot-container"
+        divs_html.append(
+            f"<div id='{div_id}' class='{div_class}'>\n{_figure_to_html(fig)}\n</div>"
+        )
+
     dropdown = (
         "<select class='color-selector' onchange='showMap(this.value)'>\n"
-        + "\n".join(options)
+        + "\n".join(options_html)
         + "\n</select>"
     )
+    wrapper = "<div id='map_wrapper'>" + "\n".join(divs_html) + "</div>"
 
-    # 3) Wrap each fragment in a toggleable <div>
-    divs = []
-    for i, html_frag in enumerate(fragments):
-        cls = "plot-container active" if i == 0 else "plot-container"
-        divs.append(f"<div id='map{i}' class='{cls}'>{html_frag}</div>")
-    wrapper = "<div id='map_wrapper'>" + "\n".join(divs) + "</div>"
-
-    # 4) JS to show/hide
-    script = """
-<script>
-function showMap(id) {
-  document.querySelectorAll('.plot-container').forEach(d => d.classList.remove('active'));
-  const tgt = document.getElementById(id);
-  if (tgt) tgt.classList.add('active');
-}
-</script>
-"""
-
-    # 5) some CSS (if not already in your <style>)
-    style = """
-<style>
-.plot-container { display: none; }
-.plot-container.active { display: block; }
-.color-selector { margin-bottom: 10px; padding: 5px; }
-</style>
-"""
-
-    return "\n".join([style, dropdown, wrapper, script])
-
+    return dropdown + "\n" + wrapper + "\n"
