@@ -236,64 +236,57 @@ def _figure_to_html(
     img_b64 = base64.b64encode(buf.getvalue()).decode()
     return f'<img src="data:image/png;base64,{img_b64}" style="max-width:100%;">'
 
-
 def _prepare_figures(figures: Dict) -> str:
     """
-    Return HTML + JS for a dropdown that switches between the first
-    two sample‑map Plotly figures.
+    Build a dropdown + single container to switch between
+    the first two sample‑map Plotly figures.
+    Assumes your <head> already has:
+      <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     """
-    # 1. Grab up to two (col_name, fig) pairs
+    # 1. grab up to two maps
     maps = [(col, fig) for col, fig in figures.get("map", {}).items() if fig][:2]
     if not maps:
         return "<p>No sample maps available.</p>"
 
-    # 2. Serialize each figure to JSON
-    json_blobs = []
-    for i, (_col, fig) in enumerate(maps):
-        # optional: resize & hide legend
+    # 2. resize + hide legend + serialize each to JSON
+    blobs = []
+    for col, fig in maps:
         fig.update_layout(width=900, height=600, showlegend=False)
-        json_blobs.append(fig.to_json())
+        blobs.append((col, fig.to_json()))
 
-    # 3. Build dropdown options
-    options = "\n".join(
-        f"<option value='fig{i}'>{maps[i][0]}</option>" for i in range(len(maps))
-    )
-
-    # 4. Emit a single container + two <script type="application/json"> blocks
+    # 3. build <option>s and <script type="application/json"> blocks
+    opts = []
     scripts = []
-    for i, blob in enumerate(json_blobs):
+    for i, (col, blob) in enumerate(blobs):
+        tag = f"fig{i}"
+        selected = " selected" if i == 0 else ""
+        opts.append(f"<option value='{tag}'{selected}>{col}</option>")
         scripts.append(
-            f"<script id='fig{i}' type='application/json'>\n{blob}\n</script>"
+            f"<script id='{tag}' type='application/json'>\n{blob}\n</script>"
         )
 
-    return f"""
-  <select class='color-selector' onchange='renderMap()'>
-    {options}
-  </select>
-  <div id='map_container'></div>
+    dropdown = (
+        "<select class='color-selector' onchange='renderMap()'>\n"
+        + "\n".join(opts)
+        + "\n</select>"
+    )
 
-  {''.join(scripts)}
+    # 4. single div where we’ll draw
+    container = "<div id='map_container' style='width:900px;height:600px;'></div>"
 
-  <script>
-  async function renderMap() {{
-    const sel = document.querySelector('.color-selector');
-    const raw = document.getElementById(sel.value);
-    if (!raw) return;
-    const fig = JSON.parse(raw.textContent);
-    Plotly.newPlot(
-      'map_container',
-      fig.data,
-      fig.layout,
-      {{responsive: true}}
-    );
-  }}
-
-  document.addEventListener('DOMContentLoaded', () => {{
-    // load Plotly library
-    const s = document.createElement('script');
-    s.src = 'https://cdn.plot.ly/plotly-latest.min.js';
-    s.onload = renderMap;
-    document.head.appendChild(s);
-  }});
-  </script>
+    # 5. inline script to actually render
+    runner = """
+<script>
+function renderMap() {
+  const sel = document.querySelector('.color-selector');
+  const raw = document.getElementById(sel.value);
+  if (!raw) return;
+  const fig = JSON.parse(raw.textContent);
+  Plotly.newPlot('map_container', fig.data, fig.layout, {responsive:true});
+}
+document.addEventListener('DOMContentLoaded', renderMap);
+</script>
 """
+
+    # 6. glue it all together
+    return "\n".join([dropdown, container] + scripts + [runner])
