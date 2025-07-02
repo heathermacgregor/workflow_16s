@@ -7,8 +7,9 @@ def generate_html_report(amplicon_data: "AmpliconData",
                          width: int = 900,
                          height: int = 600) -> None:
     """
-    Write an HTML page displaying only the first sample‑map Plotly figure,
-    resized to `width` × `height` pixels.
+    Minimal HTML page showing the first sample‑map Plotly figure:
+        • resized to `width` × `height`
+        • legend hidden
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -19,8 +20,8 @@ def generate_html_report(amplicon_data: "AmpliconData",
     if isinstance(amplicon_data.figures, dict) and "map" in amplicon_data.figures:
         for _col, f in amplicon_data.figures["map"].items():
             if f is not None and hasattr(f, "to_html"):
-                # ── resize ──────────────────────────────────────────────────────────
-                f.update_layout(width=width, height=height)
+                # ── resize & hide legend ───────────────────────────────────────────
+                f.update_layout(width=width, height=height, showlegend=False)
                 fig_html = f.to_html(full_html=False, include_plotlyjs="cdn")
                 break
 
