@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 # PUBLIC API
 # =============================================================================
 
+from plotly.offline import get_plotlyjs_version  # Ensure this import exists
+import json
+
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -39,14 +42,10 @@ def generate_html_report(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    figures_html = _prepare_figures(amplicon_data.figures)
+    figures_html, plot_data = _prepare_figures(amplicon_data.figures)
 
-    # Dynamically get correct Plotly.js version
-    try:
-        plotly_js_version = get_plotlyjs_version()
-    except Exception as e:
-        logger.error(f"Error getting Plotly.js version: {e}")
-        plotly_js_version = "3.0.1"  # Fallback version
+    # Get Plotly.js version dynamically
+    plotly_js_version = get_plotlyjs_version()  # Ensure this matches your environment
     plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_js_version}.min.js"></script>'
 
     html = f"""<!DOCTYPE html>
@@ -57,27 +56,119 @@ def generate_html_report(
   {plotly_js_tag}
   <style>
     body {{ font-family: Arial, sans-serif; margin: 40px; }}
-    .plot-container {{ display: none; }}
-    .plot-container.active {{ display: block; }}
-    .color-selector {{ margin-bottom: 10px; padding: 5px; }}
-  </style>
-  <script>
-    function showMap(id) {{
-      document.querySelectorAll('.plot-container').forEach(d => d.classList.remove('active'));
-      const tgt = document.getElementById(id);
-      if (tgt) tgt.classList.add('active');
+    .tab {{ display: none; }}
+    .tab.active {{ display: block; }}
+    .tab-button {{ 
+      padding: 10px 15px;
+      background: #eee;
+      border: 1px solid #ccc;
+      cursor: pointer;
     }}
-  </script>
+    .tab-button.active {{ 
+      background: #fff; 
+      border-bottom: none;
+    }}
+    .tab-container {{ 
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin-top: -1px;
+    }}
+    .tabs {{
+      display: flex;
+      margin-bottom: -1px;
+    }}
+  </style>
 </head>
 <body>
   <h1>16S Amplicon Analysis – Sample‑Map Debug</h1>
   <p>Generated: {ts}</p>
 
   <h2>Sample Map (first two colour columns)</h2>
-  {figures_html}
+  <div class="tabs">
+    {''.join([f'<div id="btn{i}" class="tab-button{" active" if i==0 else ""}" onclick="showTab({i})">{col}</div>' 
+              for i, col in enumerate(plot_data.keys())])}
+  </div>
+  
+  <div class="tab-container">
+    {figures_html}
+  </div>
+
+  <script>
+    const plotData = {json.dumps(plot_data)};
+    
+    function renderPlot(containerId, data) {{
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      
+      // Clean existing plot
+      while(container.firstChild) container.removeChild(container.firstChild);
+      
+      Plotly.newPlot(container, data.data, data.layout)
+        .catch(err => {{
+          container.innerHTML = `<div style="color:red">Plot error: ${{err}}</div>`;
+        }});
+    }}
+    
+    function showTab(index) {{
+      // Update buttons
+      document.querySelectorAll('.tab-button').forEach((btn, i) => {{
+        btn.classList.toggle('active', i === index);
+      }});
+      
+      // Update tabs
+      document.querySelectorAll('.tab').forEach((tab, i) => {{
+        tab.classList.toggle('active', i === index);
+        if (i === index) {{
+          const containerId = `plot${{i}}`;
+          if (!window.PLOTLY_INITIALIZED${{i}}) {{
+            renderPlot(containerId, plotData[Object.keys(plotData)[i]]);
+            window.PLOTLY_INITIALIZED${{i}} = true;
+          }}
+        }}
+      }});
+    }}
+    
+    // Initialize first tab
+    document.addEventListener('DOMContentLoaded', () => showTab(0));
+  </script>
 </body>
 </html>"""
     output_path.write_text(html, encoding="utf-8")
+
+def _prepare_figures(figures: Dict) -> tuple:
+    """Prepare HTML tabs and store plot data in JSON format."""
+    if not figures or "map" not in figures:
+        return "<div class='tab active'><p>No sample maps available.</p></div>", {}
+    
+    maps = [(c, f) for c, f in figures["map"].items() if f][:2]
+    if not maps:
+        return "<div class='tab active'><p>No sample maps available.</p></div>", {}
+    
+    tabs = []
+    plot_data = {}
+    
+    for i, (col, fig) in enumerate(maps):
+        active = "active" if i == 0 else ""
+        
+        if hasattr(fig, "to_plotly_json"):
+            plot_json = fig.to_plotly_json()
+            plot_data[col] = {
+                "data": plot_json["data"],
+                "layout": plot_json["layout"]
+            }
+            tabs.append(f"""
+            <div id="tab{i}" class="tab {active}">
+                <div id="plot{i}" style="width:900px;height:600px;"></div>
+            </div>""")
+        else:
+            # Fallback for matplotlib figures
+            tabs.append(f"""
+            <div id="tab{i}" class="tab {active}">
+                {_figure_to_html(fig)}
+            </div>""")
+    
+    return "\n".join(tabs), plot_data
+
 
 # =============================================================================
 # INTERNAL HELPERS
@@ -106,26 +197,3 @@ def _figure_to_html(fig: Any, *, w: int = 900, h: int = 600) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f'<img src="data:image/png;base64,{b64}" style="max-width:100%">'
 
-
-def _prepare_figures(figures: Dict) -> str:
-    """Create dropdown + two map divs."""
-    if not figures or "map" not in figures:
-        return "<p>No sample maps available.</p>"
-
-    maps = [(c, f) for c, f in figures["map"].items() if f][:2]
-    if not maps:
-        return "<p>No sample maps available.</p>"
-
-    opts, divs = [], []
-    for i, (col, fig) in enumerate(maps):
-        div_id = f"map{i}"
-        sel = " selected" if i == 0 else ""
-        cls = "plot-container active" if i == 0 else "plot-container"
-        opts.append(f"<option value='{div_id}'{sel}>{col}</option>")
-        divs.append(f"<div id='{div_id}' class='{cls}'>\n{_figure_to_html(fig)}\n</div>")
-
-    dropdown = (
-        "<select class='color-selector' onchange='showMap(this.value)'>\n"
-        + "\n".join(opts) + "\n</select>"
-    )
-    return dropdown + "\n" + "\n".join(divs)
