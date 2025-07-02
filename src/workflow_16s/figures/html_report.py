@@ -22,6 +22,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import plotly
+from plotly.offline import get_plotlyjs_version  # Add this import
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +35,19 @@ def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
 ) -> None:
-    """Write an HTML debug page with exactly two sample‑map plots."""
     ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     figures_html = _prepare_figures(amplicon_data.figures)
 
-    # Match JS to the Python package version
-    plotly_js_tag = (
-        f"<script src='https://cdn.plot.ly/plotly-3.0.1.min.js'></script>"
-    )
+    # Dynamically get correct Plotly.js version
+    try:
+        plotly_js_version = get_plotlyjs_version()
+    except Exception as e:
+        logger.error(f"Error getting Plotly.js version: {e}")
+        plotly_js_version = "3.0.1"  # Fallback version
+    plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_js_version}.min.js"></script>'
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -80,10 +84,15 @@ def generate_html_report(
 # =============================================================================
 
 def _figure_to_html(fig: Any, *, w: int = 900, h: int = 600) -> str:
-    """Convert a Plotly or Matplotlib figure to an embeddable HTML fragment."""
+    """Convert figure to HTML with safe layout updates."""
     if hasattr(fig, "to_html"):
-        fig.update_layout(width=w, height=h, showlegend=False)
+        try:
+            # Safely update layout
+            fig.update_layout(width=w, height=h, showlegend=False)
+        except Exception as e:
+            logger.error(f"Layout update failed: {e}")
         return fig.to_html(full_html=False, include_plotlyjs=False)
+    
 
     buf = BytesIO()
     if isinstance(fig, Figure):
