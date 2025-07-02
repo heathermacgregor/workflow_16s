@@ -301,7 +301,7 @@ def downstream(cfg, logger) -> None:
     generate_html_report(
         amplicon_data=data,
         output_path=report_path,
-        max_features=50
+        #max_features=50
     )
     logger.info(f"HTML report generated at: {report_path}")
     
