@@ -58,145 +58,91 @@ def generate_html_report(
     
     # 5. Generate HTML content
     html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>16S Analysis Report</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            h1, h2, h3, h4 {{ color: #2c3e50; }}
-            table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-            th {{ background-color: #f2f2f2; }}
-            .section {{ margin-bottom: 40px; }}
-            .figure-grid {{ 
-                display: grid; 
-                grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-                gap: 20px;
-            }}
-            .figure-container {{ 
-                border: 1px solid #ddd; 
-                padding: 10px; 
-                height: 500px;
-                overflow: hidden;
-            }}
-            .plot-wrapper {{
-                width: 100%;
-                height: 400px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                overflow: hidden;
-            }}
-            .plot-container {{
-                width: 100%;
-                height: 100%;
-                display: none;
-            }}
-            .plot-container.active {{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }}
-            .plot-container img {{
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-            }}
-            .color-selector {{
-                margin: 10px 0;
-                padding: 5px;
-                width: 100%;
-            }}
-            .beta-diversity-section h3 {{
-                margin-top: 30px;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 5px;
-            }}
-            .ml-feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-            /* MODIFIED: Plotly container styling */
-            .plotly-container {{
-                width: 100%;
-                height: 100%;
-            }}
-            .plotly-graph-div {{
-                width: 100% !important;
-                height: 100% !important;
-            }}
-        </style>
-        <!-- ADDED: Plotly.js CDN -->
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <script>
-            // Render Plotly figures from embedded JSON
-            document.addEventListener('DOMContentLoaded', renderAllPlotlyFigures);
-        
-            function renderAllPlotlyFigures() {{
-                // Grab every Plotly container with JSON payload
-                var containers = document.querySelectorAll('.plotly-container[data-figure]');
-                containers.forEach(function(container) {{
-                    // Only render once
-                    if (!container.hasChildNodes()) {{
-                        try {{
-                            var fig = JSON.parse(container.getAttribute('data-figure'));
-                            Plotly.newPlot(container, fig.data, fig.layout, {{ responsive: true }});
-                        }} catch (e) {{
-                            console.error('Error rendering Plotly figure:', e);
-                            container.innerHTML = '<p>Error rendering Plotly figure</p>';
-                        }}
-                    }}
-                }});
-            }}
-        
-            function showPlot(selectElem, containerId) {{
-                var wrapper = document.getElementById(containerId);
-                // Hide all plots in this group
-                var plots = wrapper.querySelectorAll('.plot-container');
-                plots.forEach(function(p) {{
-                    p.classList.remove('active');
-                }});
-        
-                // Show the selected one
-                var selected = document.getElementById(selectElem.value);
-                if (selected) {{
-                    selected.classList.add('active');
-                    // Trigger rendering in case it's not yet drawn
-                    renderAllPlotlyFigures();
-                }}
-            }}
-        </script>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>16S Analysis Report</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 40px; }}
+    h1, h2, h3, h4 {{ color: #2c3e50; }}
+    table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    th {{ background-color: #f2f2f2; }}
+    .section {{ margin-bottom: 40px; }}
+    .figure-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 20px; }}
+    .figure-container {{ border: 1px solid #ddd; padding: 10px; height: 500px; overflow: hidden; }}
+    .plot-wrapper {{ width: 100%; height: 400px; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
+    .plot-container {{ display: none; width: 100%; height: 100%; }}
+    .plot-container.active {{ display: flex; justify-content: center; align-items: center; }}
+    .color-selector {{ margin: 10px 0; padding: 5px; width: 100%; }}
+    .ml-feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+    .plotly-container {{ width: 100%; height: 100%; }}
+  </style>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script>
+    // Render Plotly figures from embedded JSON once the DOM is ready
+    document.addEventListener('DOMContentLoaded', renderAllPlotlyFigures);
 
-    </head>
-    <body>
-        <h1>16S Amplicon Analysis Report</h1>
-        <p>Generated on {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        
-        <div class="section">
-            <h2>Top Features</h2>
-            <h3>Contaminated-Associated Features</h3>
-            {contam_df.to_html(index=False, classes='feature-table')}
-            
-            <h3>Pristine-Associated Features</h3>
-            {pristine_df.to_html(index=False, classes='feature-table')}
-        </div>
-        
-        <div class="section">
-            <h2>Statistical Summary</h2>
-            {stats_summary.to_html(index=False)}
-        </div>
-        
-        <div class="section">
-            <h2>Machine Learning Results</h2>
-            {_format_ml_section(ml_metrics, ml_features, shap_plot)}
-        </div>
-        
-        <div class="section">
-            <h2>Visualizations</h2>
-            <div class="figure-grid">
-                {figures_html}
-            </div>
-        </div>
-    </body>
-    </html>
+    function renderAllPlotlyFigures() {{
+      // Grab every Plotly container with JSON payload
+      var containers = document.querySelectorAll('.plotly-container[data-figure]');
+      containers.forEach(function(container) {{
+        if (!container.hasChildNodes()) {{
+          try {{
+            var fig = JSON.parse(container.getAttribute('data-figure'));
+            Plotly.newPlot(container, fig.data, fig.layout, {{ responsive: true }});
+          }} catch (e) {{
+            console.error('Error rendering Plotly figure:', e);
+            container.innerHTML = '<p>Error rendering Plotly figure</p>';
+          }}
+        }}
+      }});
+    }}
+
+    function showPlot(selectElem, containerId) {{
+      var wrapper = document.getElementById(containerId);
+      var plots = wrapper.querySelectorAll('.plot-container');
+      plots.forEach(function(p) {{ p.classList.remove('active'); }});
+
+      var sel = document.getElementById(selectElem.value);
+      if (sel) {{
+        sel.classList.add('active');
+        renderAllPlotlyFigures();
+      }}
+    }}
+  </script>
+</head>
+<body>
+  <h1>16S Amplicon Analysis Report</h1>
+  <p>Generated on {timestamp}</p>
+
+  <div class='section'>
+    <h2>Top Features</h2>
+    <h3>Contaminated-Associated Features</h3>
+    {contam_df.to_html(index=False, classes='feature-table')}
+    <h3>Pristine-Associated Features</h3>
+    {pristine_df.to_html(index=False, classes='feature-table')}
+  </div>
+
+  <div class='section'>
+    <h2>Statistical Summary</h2>
+    {stats_summary.to_html(index=False)}
+  </div>
+
+  <div class='section'>
+    <h2>Machine Learning Results</h2>
+    {_format_ml_section(ml_metrics, ml_features, shap_plot)}
+  </div>
+
+  <div class='section'>
+    <h2>Visualizations</h2>
+    <div class='figure-grid'>
+      {figures_html}
+    </div>
+  </div>
+</body>
+</html>
     """
     
     with open(output_path, 'w') as f:
