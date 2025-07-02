@@ -2,14 +2,19 @@
 
 # Standard Library Imports
 import base64
+import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union, Tuple, Optional
 
 # Third‑Party Imports
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+
+# ==================================== LOGGING ====================================== #
+
+logger = logging.getLogger(__name__)
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -88,7 +93,14 @@ def generate_html_report(
                 display: none;
             }}
             .plot-container.active {{
-                display: block;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }}
+            .plot-container img {{
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
             }}
             .color-selector {{
                 margin: 10px 0;
@@ -155,7 +167,7 @@ def generate_html_report(
 
 def _format_ml_section(ml_metrics, ml_features, shap_plot):
     """Format the machine learning results section"""
-    if ml_metrics is None:
+    if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
     
     ml_html = f"""
@@ -216,7 +228,7 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     for table_type, tests in stats.items():
         for test_name, levels in tests.items():
             for level, df in levels.items():
-                n_sig = sum(df["p_value"] < 0.05)
+                n_sig = sum(df["p_value"] < 0.05) if "p_value" in df.columns else 0
                 summary.append({
                     "Table Type": table_type,
                     "Test": test_name,
@@ -227,7 +239,7 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
-def _prepare_ml_summary(models: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
+def _prepare_ml_summary(models: Dict) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
     """Prepare detailed ML results for HTML display"""
     if not models:
         return None, None, None
@@ -240,7 +252,7 @@ def _prepare_ml_summary(models: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
     for table_type, levels in models.items():
         for level, methods in levels.items():
             for method, result in methods.items():
-                if result is None:
+                if not result:
                     continue
                 
                 # Extract metrics
@@ -260,21 +272,24 @@ def _prepare_ml_summary(models: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
                 
                 # Extract top features
                 feat_imp = result.get("feature_importances", {})
-                for i, feat in enumerate(result.get("top_features", [])[:10], 1):
+                top_features = result.get("top_features", [])[:10]
+                for i, feat in enumerate(top_features, 1):
+                    importance = feat_imp.get(feat, 0)
                     features_summary.append({
                         "Table Type": table_type,
                         "Level": level,
                         "Method": method,
                         "Rank": i,
                         "Feature": feat,
-                        "Importance": f"{feat_imp.get(feat, 0):.4f}"
+                        "Importance": f"{importance:.4f}"
                     })
                 
                 # Track best model for SHAP plot
                 current_mcc = test_scores.get("mcc", -1)
-                if current_mcc > best_mcc and "shap_summary_bar_path" in result:
+                shap_path = result.get("shap_summary_bar_path")
+                if current_mcc > best_mcc and shap_path:
                     try:
-                        with open(result["shap_summary_bar_path"], "rb") as img_file:
+                        with open(shap_path, "rb") as img_file:
                             shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
                         best_mcc = current_mcc
                     except Exception as e:
@@ -287,15 +302,19 @@ def _prepare_ml_summary(models: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
 
 def _prepare_figures(figures: Dict) -> str:
     """Organize figures into categories with dropdowns for color selection"""
+    if not figures:
+        return "<p>No visualizations available</p>"
+    
     html_parts = []
     
     # Sample Maps
     if "map" in figures:
         html_parts.append("<h3>Sample Maps</h3>")
         for col, fig in figures["map"].items():
-            html_parts.append(
-                _figure_to_html(fig, f"Sample Map: {col}")
-            )
+            if fig:
+                html_parts.append(
+                    _figure_to_html(fig, f"Sample Map: {col}")
+                )
     
     # Alpha Diversity
     alpha_html = []
@@ -303,8 +322,10 @@ def _prepare_figures(figures: Dict) -> str:
         if table_type == "map":
             continue
         for level, plots in levels.items():
+            if not isinstance(plots, dict):
+                continue
             for plot_type, fig in plots.items():
-                if "alpha" in plot_type:
+                if "alpha" in plot_type and fig:
                     alpha_html.append(
                         _figure_to_html(fig, f"Alpha Diversity - {table_type} - {level} - {plot_type}")
                     )
@@ -317,6 +338,8 @@ def _prepare_figures(figures: Dict) -> str:
         if table_type == "map":
             continue
         for level, methods in levels.items():
+            if not isinstance(methods, dict):
+                continue
             for method, color_figs in methods.items():
                 if method in ["pca", "pcoa", "tsne", "umap"] and isinstance(color_figs, dict):
                     key = f"{table_type}_{level}_{method}"
@@ -336,11 +359,16 @@ def _prepare_figures(figures: Dict) -> str:
             options = []
             plot_divs = []
             
-            for i, (col, fig) in enumerate(group["figures"].items()):
+            valid_figs = [(col, fig) for col, fig in group["figures"].items() if fig is not None]
+            if not valid_figs:
+                continue
+                
+            for i, (col, fig) in enumerate(valid_figs):
                 plot_id = f"{key}_{col.replace(' ', '_')}"
-                options.append(f"<option value='{plot_id}' {'selected' if i==0 else ''}>{col}</option>")
+                selected = "selected" if i == 0 else ""
+                options.append(f"<option value='{plot_id}' {selected}>{col}</option>")
                 plot_divs.append(
-                    f"<div id='{plot_id}' class='plot-container' style='display: {'block' if i==0 else 'none'}'>"
+                    f"<div id='{plot_id}' class='plot-container' style='display: {'flex' if i==0 else 'none'}'>"
                     f"{_figure_to_html(fig, f'Colored by: {col}', include_caption=False)}"
                     "</div>"
                 )
@@ -358,21 +386,25 @@ def _prepare_figures(figures: Dict) -> str:
     for plot_type, levels in figures.items():
         if plot_type in ["map", "pca", "pcoa", "tsne", "umap"]:
             continue
+        if not isinstance(levels, dict):
+            continue
         for level, methods in levels.items():
+            if not isinstance(methods, dict):
+                continue
             for method, fig in methods.items():
-                if not isinstance(fig, dict):  # Single figure
+                if fig and not isinstance(fig, dict):  # Single figure
                     other_html.append(
                         _figure_to_html(fig, f"{plot_type} - {level} - {method}")
                     )
     if other_html:
         html_parts.append("<h3>Other Visualizations</h3>" + "\n".join(other_html))
     
-    return "\n".join(html_parts)
+    return "\n".join(html_parts) if html_parts else "<p>No visualizations available</p>"
 
 def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str:
     """Convert figures to HTML embedding with consistent size"""
     if fig is None:
-        return ""
+        return f"<div class='figure-container'><p>Missing figure: {caption}</p></div>"
     
     try:
         # Handle Plotly figures
@@ -390,10 +422,15 @@ def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str
         
         # Handle Matplotlib/Seaborn figures
         buf = BytesIO()
+        dpi = 100
         if hasattr(fig, 'savefig'):
-            fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=dpi)
+            plt.close(fig)  # Close figure to free memory
         elif hasattr(fig, 'figure'):  # Seaborn grid
-            fig.figure.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+            fig.figure.savefig(buf, format="png", bbox_inches="tight", dpi=dpi)
+            plt.close(fig.figure)
+        else:
+            return f"<div class='figure-container'><p>Unsupported figure type: {type(fig)}</p><p>{caption}</p></div>"
         
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
@@ -402,13 +439,14 @@ def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str
         return f"""
         <div class="figure-container">
             <div class="plot-wrapper">
-                <img src="data:image/png;base64,{img_base64}" alt="{caption}" style="max-height: 100%; max-width: 100%;">
+                <img src="data:image/png;base64,{img_base64}" alt="{caption}">
             </div>
             {caption_html}
         </div>
         """
     
     except Exception as e:
+        logger.error(f"Error rendering figure: {str(e)}")
         return f"""
         <div class="figure-container">
             <p>Error rendering figure: {str(e)}</p>
