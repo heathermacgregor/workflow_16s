@@ -147,18 +147,19 @@ class _ProcessingMixin:
                 if log_template or log_action:
                     self._log_level_action(level, log_template, log_action, duration)
         else:
-            logger.debug(f"{process_name}")
             with get_progress_bar() as prog:
+                l0_desc = f"{process_name}"
+                logger.debug(l0_desc)
                 parent_task = prog.add_task(
-                    process_name,
+                    f"[white]{l0_desc:<{DEFAULT_N}}",,
                     total=len(levels),
                 )
                 for level in levels:
                     start_time = time.perf_counter()  # More precise timing
-                    child_task_description = f"Processing {level} level"
+                    l1_desc = f"Processing {level} level"
                     child_task = prog.add_task(
-                        f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
-                        parent=parent_task,
+                        f"[white]{l1_desc:<{DEFAULT_N}}",
+                        parent=l0_task,
                         total=1
                     )
                     
@@ -169,9 +170,9 @@ class _ProcessingMixin:
                     if log_template or log_action:
                         self._log_level_action(level, log_template, log_action, duration)
 
-                    prog.update(child_task, completed=1)
-                    prog.remove_task(child_task)
-                    prog.update(parent_task, advance=1)
+                    prog.update(l1_task, completed=1)
+                    prog.remove_task(l1_task)
+                    prog.update(l0_task, advance=1)
 
         return processed
 
@@ -291,7 +292,7 @@ class StatisticalAnalyzer:
                 table=table,
                 metadata=metadata,
                 group_column=group_column,
-                group_column_values=group_values,
+                group_column_values=group_values
             )
         return results
 
