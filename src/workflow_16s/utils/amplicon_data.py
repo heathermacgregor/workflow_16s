@@ -587,7 +587,7 @@ class Plotter:
             figs = {}
             for col in valid_columns:
                 l1_desc = f"Mapping {col}..."
-                child_task = prog.add_task(
+                l1_task = prog.add_task(
                     f"[white]{l1_desc:<{DEFAULT_N}}",
                     parent=l0_task,
                     total=1
