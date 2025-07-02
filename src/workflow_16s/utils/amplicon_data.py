@@ -1305,7 +1305,8 @@ class _AnalysisManager(_ProcessingMixin):
                         cfg = san.TEST_CONFIG[test_name]
 
                         new_l1_desc = " | ".join([
-                            level.capitalize(), cfg['name']
+                            table_type.replace('_', ' ').title(),
+                            f" {level.capitalize()} → {cfg['name']}"
                         ])
                         prog.update(
                             l1_task,
@@ -1313,9 +1314,7 @@ class _AnalysisManager(_ProcessingMixin):
                             refresh=True
                         )
                         
-                        
                         try:
-                            # Run the test directly
                             result = cfg["func"](
                                 table=table_aligned,
                                 metadata=meta_aligned,
@@ -1456,27 +1455,25 @@ class _AnalysisManager(_ProcessingMixin):
         )
         if not n:
             return
-    
+
+        methods = ml_cfg.get("methods", ["rfe"])
+        n_top_features = ml_cfg.get("n_top_features", 100) 
+        
         with get_progress_bar() as prog:
             l0_desc = "Running ML feature selection..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=n
             )
-    
             for table_type, levels in ml_tables.items():
                 self.models[table_type] = {}
-                ml_cfg = self.cfg.get("ml", {})
-                methods = ml_cfg.get("methods", ["rfe"])
-                n_top_features = ml_cfg.get("n_top_features", 100)  # Get from config
-    
+                 
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
                         l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
-                            level.capitalize(), 
-                            method.upper()
+                            f" {level.capitalize()} → {method.upper()}"
                         ])
                         l1_task = prog.add_task(
                             f"[white]{l1_desc:<{DEFAULT_N}}",
