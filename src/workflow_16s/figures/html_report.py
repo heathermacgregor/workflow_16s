@@ -127,41 +127,44 @@ def generate_html_report(
         <!-- ADDED: Plotly.js CDN -->
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script>
-            // MODIFIED: Render only active Plotly figures
-            document.addEventListener('DOMContentLoaded', function() {{
-                renderAllPlotlyFigures();
-            }});
-            
-            function renderAllPlotlyFigures() {{
-                // Select only active plot containers
-                var activeContainers = document.querySelectorAll('.plot-container.active .plotly-container');
-                activeContainers.forEach(function(container) {{
-                    if (!container.hasChildNodes()) {{
-                        try {{
-                            var figure = JSON.parse(container.dataset.figure);
-                            Plotly.newPlot(container, figure.data, figure.layout, {{responsive: true}});
-                        }} catch (e) {{
+            // Render Plotly figures from embedded JSON
+            document.addEventListener('DOMContentLoaded', renderAllPlotlyFigures);
+        
+            function renderAllPlotlyFigures() {
+                // Grab every Plotly container with JSON payload
+                var containers = document.querySelectorAll('.plotly-container[data-figure]');
+                containers.forEach(function(container) {
+                    // Only render once
+                    if (!container.hasChildNodes()) {
+                        try {
+                            var fig = JSON.parse(container.getAttribute('data-figure'));
+                            Plotly.newPlot(container, fig.data, fig.layout, { responsive: true });
+                        } catch (e) {
                             console.error('Error rendering Plotly figure:', e);
                             container.innerHTML = '<p>Error rendering Plotly figure</p>';
-                        }}
-                    }}
-                }});
-            }}
-            
-            function showPlot(selectElement, containerId) {{
-                var container = document.getElementById(containerId);
-                var plots = container.getElementsByClassName('plot-container');
-                for (var i = 0; i < plots.length; i++) {{
-                    plots[i].classList.remove('active');
-                }}
-                var selectedPlot = document.getElementById(selectElement.value);
-                if (selectedPlot) {{
-                    selectedPlot.classList.add('active');
-                    // Now render any Plotly figures in the newly active container
+                        }
+                    }
+                });
+            }
+        
+            function showPlot(selectElem, containerId) {
+                var wrapper = document.getElementById(containerId);
+                // Hide all plots in this group
+                var plots = wrapper.querySelectorAll('.plot-container');
+                plots.forEach(function(p) {
+                    p.classList.remove('active');
+                });
+        
+                // Show the selected one
+                var selected = document.getElementById(selectElem.value);
+                if (selected) {
+                    selected.classList.add('active');
+                    // Trigger rendering in case it's not yet drawn
                     renderAllPlotlyFigures();
-                }}
-            }}
+                }
+            }
         </script>
+
     </head>
     <body>
         <h1>16S Amplicon Analysis Report</h1>
@@ -402,10 +405,11 @@ def _prepare_figures(figures: Dict) -> str:
                 selected = "selected" if i == 0 else ""
                 options.append(f"<option value='{plot_id}' {selected}>{col}</option>")
                 plot_divs.append(
-                    f"<div id='{plot_id}' class='plot-container' style='display: {'flex' if i==0 else 'none'}'>"
+                    f"<div id='{plot_id}' class='plot-container{' active' if i==0 else ''}'>"
                     f"{_figure_to_html(fig, f'Colored by: {col}', include_caption=False)}"
                     "</div>"
                 )
+
             
             select_html += "\n".join(options) + "</select>"
             plot_container = f"<div id='{container_id}' class='plot-wrapper'>" + "\n".join(plot_divs) + "</div>"
@@ -436,65 +440,32 @@ def _prepare_figures(figures: Dict) -> str:
     return "\n".join(html_parts) if html_parts else "<p>No visualizations available</p>"
 
 
-def _figure_to_html(fig: Any, caption: str, include_caption: bool = True) -> str:
-    """Convert figures to HTML embedding with consistent size"""
-    if fig is None:
-        return f"<div class='figure-container'><p>Missing figure: {caption}</p></div>"
-    
-    try:
-        # MODIFIED: Improved Plotly handling
-        if hasattr(fig, 'to_json') and callable(fig.to_json):
-            plot_json = fig.to_json()
-            caption_html = f"<p>{caption}</p>" if include_caption else ""
-            
-            # MODIFIED: Use direct HTML embedding instead of JSON parsing
-            # Generate Plotly HTML string
-            plotly_html = fig.to_html(
-                full_html=False, 
-                include_plotlyjs=False, 
-                config={'responsive': True}
-            )
-            
-            return f"""
-            <div class="figure-container">
-                <div class="plot-wrapper">
-                    <!-- MODIFIED: Directly embed Plotly HTML -->
-                    <div class="plotly-container">{plotly_html}</div>
-                </div>
-                {caption_html}
-            </div>
-            """
-        
-        # Handle Matplotlib/Seaborn figures (unchanged)
-        buf = BytesIO()
-        dpi = 100
-        if hasattr(fig, 'savefig'):
-            fig.savefig(buf, format="png", bbox_inches="tight", dpi=dpi)
-            plt.close(fig)  # Close figure to free memory
-        elif hasattr(fig, 'figure'):  # Seaborn grid
-            fig.figure.savefig(buf, format="png", bbox_inches="tight", dpi=dpi)
-            plt.close(fig.figure)
-        else:
-            return f"<div class='figure-container'><p>Unsupported figure type: {type(fig)}</p><p>{caption}</p></div>"
-        
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        caption_html = f"<p>{caption}</p>" if include_caption else ""
-        
+def _figure_to_html(fig: Any, caption: str) -> str:
+    # Plotly figures via JSON
+    if hasattr(fig, 'to_json'):
         return f"""
-        <div class="figure-container">
-            <div class="plot-wrapper">
-                <img src="data:image/png;base64,{img_base64}" alt="{caption}">
-            </div>
-            {caption_html}
-        </div>
-        """
-    
-    except Exception as e:
-        logger.error(f"Error rendering figure: {str(e)}")
-        return f"""
-        <div class="figure-container">
-            <p>Error rendering figure: {str(e)}</p>
-            <p>{caption}</p>
-        </div>
-        """
+<div class='figure-container'>
+  <div class='plotly-container' data-figure='{fig.to_json()}'></div>
+  <p>{caption}</p>
+</div>
+"""
+
+    # Matplotlib/Seaborn fallback
+    buf = BytesIO()
+    if hasattr(fig, 'savefig'):
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        plt.close(fig)
+    elif hasattr(fig, 'figure'):
+        fig.figure.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        plt.close(fig.figure)
+    else:
+        return f"<div class='figure-container'><p>Unsupported figure type: {type(fig)}</p><p>{caption}</p></div>"
+
+    img_str = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return f"""
+<div class='figure-container'>
+  <div class='plot-wrapper'><img src='data:image/png;base64,{img_str}' alt='{caption}'></div>
+  <p>{caption}</p>
+</div>
+"""
+
