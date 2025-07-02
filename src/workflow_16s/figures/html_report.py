@@ -31,9 +31,30 @@ logger = logging.getLogger(__name__)
 # PUBLIC API
 # =============================================================================
 
-from plotly.offline import get_plotlyjs_version  # Ensure this import exists
 import json
+import numpy as np
+from plotly.offline import get_plotlyjs_version
 
+# =============================================================================
+# NEW HELPER FUNCTION FOR NUMPY SERIALIZATION
+# =============================================================================
+def numpy_to_json(obj):
+    """Recursively convert NumPy objects to JSON-serializable types."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: numpy_to_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [numpy_to_json(item) for item in obj]
+    return obj
+
+# =============================================================================
+# UPDATED REPORT FUNCTION
+# =============================================================================
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -45,8 +66,12 @@ def generate_html_report(
     figures_html, plot_data = _prepare_figures(amplicon_data.figures)
 
     # Get Plotly.js version dynamically
-    plotly_js_version = get_plotlyjs_version()  # Ensure this matches your environment
+    plotly_js_version = get_plotlyjs_version()
     plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_js_version}.min.js"></script>'
+
+    # Convert plot_data to JSON-safe format
+    safe_plot_data = numpy_to_json(plot_data)
+    plot_data_json = json.dumps(safe_plot_data)
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -94,7 +119,7 @@ def generate_html_report(
   </div>
 
   <script>
-    const plotData = {json.dumps(plot_data)};
+    const plotData = {plot_data_json};
     
     function renderPlot(containerId, data) {{
       const container = document.getElementById(containerId);
@@ -135,8 +160,11 @@ def generate_html_report(
 </html>"""
     output_path.write_text(html, encoding="utf-8")
 
+# =============================================================================
+# UPDATED FIGURE PREPARATION
+# =============================================================================
 def _prepare_figures(figures: Dict) -> tuple:
-    """Prepare HTML tabs and store plot data in JSON format."""
+    """Prepare HTML tabs and store sanitized plot data."""
     if not figures or "map" not in figures:
         return "<div class='tab active'><p>No sample maps available.</p></div>", {}
     
@@ -152,6 +180,7 @@ def _prepare_figures(figures: Dict) -> tuple:
         
         if hasattr(fig, "to_plotly_json"):
             plot_json = fig.to_plotly_json()
+            # Store sanitized data
             plot_data[col] = {
                 "data": plot_json["data"],
                 "layout": plot_json["layout"]
