@@ -77,7 +77,11 @@ RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
+ROW_W = 6
+COL_W = 5
+LABEL_W = 30
 DEFAULT_PROGRESS_TEXT_N = 65
+DEFAULT_N = DEFAULT_PROGRESS_TEXT_N
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 DEFAULT_MODE = 'genus'
@@ -804,21 +808,25 @@ class _DataLoader(_ProcessingMixin):
         if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
         self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
-
+    
     def _filter_and_align(self) -> None:
         """Filters and aligns feature table with metadata."""
         orig_n = self.table.shape[1]
         self.table, self.meta = update_tables(self.table, self.meta, "#sampleid")
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
-            f"Loaded metadata: "
-            f"{RED}{self.meta.shape[0]}{RESET} samples × "
-            f"{RED}{self.meta.shape[1]}{RESET} cols"
+            f"{'Loaded metadata:':<{LABEL_W}}"             
+            f"{RED}{self.meta.shape[0]:>{ROW_W}}{RESET} "   
+            "samples × "
+            f"{RED}{self.meta.shape[1]:>{COL_W}}{RESET} "  
+            "cols"
         )
         logger.info(
-            f"Loaded feature table: "
-            f"{RED}{self.table.shape[1]} ({orig_n}){RESET} samples × "
-            f"{RED}{self.table.shape[0]}{RESET} {ftype}"
+            f"{'Loaded features:':<{LABEL_W}}"              
+            f"{RED}{self.table.shape[1]:>{ROW_W}}{RESET} "   
+            "samples × "
+            f"{RED}{self.table.shape[0]:>{COL_W}}{RESET} "  
+            f"{ftype}"
         )
 
 
@@ -888,22 +896,21 @@ class _TableProcessor(_ProcessingMixin):
             table = clr_transform_table(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
+
     def _collapse_taxa(self) -> None:
         """Collapses feature tables to different taxonomic levels."""
         levels = ["phylum", "class", "order", "family", "genus"]
-            
-            # NEW: Create main progress bar for collapsing taxonomy
-        with get_progress_bar() as progress:
-            main_task = progress.add_task(
-                "Collapsing taxonomy".ljust(DEFAULT_PROGRESS_TEXT_N),
+        with get_progress_bar() as prog:
+            main_desc = "Collapsing taxonomy..."
+            main_task = prog.add_task(
+                f"[white]{main_desc:<{DEFAULT_N}}",
                 total=len(self.tables)
             )
                 
             for table_type in list(self.tables.keys()):
-                # Create child task for each table type
-                child_task_description = f"Table: {table_type.replace('_', ' ').title()}"
-                child_task = progress.add_task(
-                    f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
+                child_desc = table_type.replace('_', ' ').title()
+                child_task = prog.add_task(
+                    f"[white]{child_desc:<{DEFAULT_N}}",
                     parent=main_task,
                     total=len(levels)
                 )
@@ -912,10 +919,10 @@ class _TableProcessor(_ProcessingMixin):
                 processed = {}
                     
                 for level in levels:
-                    # Update task description to show current level
-                    progress.update(
+                    new_desc = f"{table_type.replace('_', ' ').title()} → {level.capitalize()}"
+                    prog.update(
                         child_task,
-                        description=f"[white]{table_type.replace('_', ' ').title()} → {level.capitalize()}",
+                        description=f"[white]{new_desc:<{DEFAULT_N}}",
                         refresh=True
                     )
                         
@@ -923,17 +930,15 @@ class _TableProcessor(_ProcessingMixin):
                     processed[level] = collapse_taxa(base_table, level)
                     duration = time.perf_counter() - start_time
                         
-                    # Log if needed
                     if self.verbose:
                         logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
                         
-                    # Advance the child progress bar
-                    progress.update(child_task, advance=1)
+                    prog.update(child_task, advance=1)
                     
                 # Store processed tables and clean up
                 self.tables[table_type] = processed
-                progress.remove_task(child_task)
-                progress.update(main_task, advance=1)
+                prog.remove_task(child_task)
+                prog.update(main_task, advance=1)
     
     def _create_presence_absence(self) -> None:
         """Creates presence/absence versions of feature tables."""
@@ -941,18 +946,16 @@ class _TableProcessor(_ProcessingMixin):
             return
                
         levels = ["phylum", "class", "order", "family", "genus"]
-            
-        # NEW: Create main progress bar for presence/absence conversion
-        with get_progress_bar() as progress:
-            main_task = progress.add_task(
-                "Creating presence/absence tables".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=1  # Only one table type for PA
+        with get_progress_bar() as prog:
+            main_desc = "Converting to Presence/Absence..."
+            main_task = prog.add_task(
+                f"{main_desc:<{DEFAULT_N}}",
+                total=1  
             )
                 
-            # Create child task
-            child_task_description = "Processing presence/absence"
-            child_task = progress.add_task(
-                f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
+            child_desc = "Collapsing Presence Absence"
+            child_task = prog.add_task(
+                f"[white]{child_desc:<{DEFAULT_N}}",
                 parent=main_task,
                 total=len(levels)
             )
@@ -961,10 +964,10 @@ class _TableProcessor(_ProcessingMixin):
             processed = {}
                 
             for level in levels:
-                # Update task description to show current level
-                progress.update(
+                new_desc = f"Presence Absence → {level.capitalize()}"
+                prog.update(
                     child_task,
-                    description=f"Presence Absence → {level.capitalize()}",
+                    description=f"[white]{new_desc:<{DEFAULT_N}}",
                     refresh=True
                 )
                     
@@ -972,17 +975,15 @@ class _TableProcessor(_ProcessingMixin):
                 processed[level] = presence_absence(raw_table, level)
                 duration = time.perf_counter() - start_time
                   
-                # Log if needed
                 if self.verbose:
                     logger.debug(f"Created PA for {level} in {duration:.2f}s")
                   
-                # Advance the child progress bar
-                progress.update(child_task, advance=1)
+                prog.update(child_task, advance=1)
                 
             # Store processed tables and clean up
             self.tables["presence_absence"] = processed
-            progress.remove_task(child_task)
-            progress.update(main_task, advance=1)
+            prog.remove_task(child_task)
+            prog.update(main_task, advance=1)
 
     def _save_tables(self) -> None:
         """Saves processed tables to disk in BIOM format."""
@@ -1146,7 +1147,7 @@ class _AnalysisManager(_ProcessingMixin):
         generate_plots = alpha_cfg.get("generate_plots", True)
         
         # Calculate total tasks based on configuration
-        total_tasks = 0
+        n = 0
         enabled_table_types = alpha_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
             # Check if this table type is enabled
@@ -1154,22 +1155,28 @@ class _AnalysisManager(_ProcessingMixin):
                 continue
             # Check if specific levels are specified, or use all
             enabled_levels = enabled_table_types[table_type].get("levels", list(levels.keys()))
-            total_tasks += len(enabled_levels)
+            n += len(enabled_levels)
         
-        if not total_tasks:
+        if not n:
             return
             
-        with get_progress_bar() as progress:
-            task = progress.add_task(
-                "Calculating alpha diversity...".ljust(DEFAULT_PROGRESS_TEXT_N),
-                total=total_tasks
+        with get_progress_bar() as prog:
+            l0_desc = "Running alpha diversity analysis..."
+            l0_task = prog.add_task(
+                f"[white]{l0_desc:<{DEFAULT_N}}",
+                total=len(self.tables)
             )
             
             for table_type, levels in self.tables.items():
                 # Skip table types not enabled in config
                 if not enabled_table_types.get(table_type, False):
                     continue
-                    
+                l1_desc = table_type.replace('_', ' ').title()
+                l1_task = prog.add_task(
+                    f"[white]{l1_desc:<{DEFAULT_N}}",
+                    parent=l0_task,
+                    total=len(levels)
+                )    
                 table_cfg = enabled_table_types[table_type]
                 self.alpha_diversity_results[table_type] = {}
                 self.alpha_diversity_stats[table_type] = {}
@@ -1185,12 +1192,12 @@ class _AnalysisManager(_ProcessingMixin):
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
-                    task_description = " | ".join([
+                    new_desc = " | ".join([
                         table_type.replace('_', ' ').title(), level.capitalize()
                     ]) 
-                    progress.update(
-                        task,
-                        description=f"[white]{task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
+                    prog.update(
+                        l1_task,
+                        description=f"[white]{new_desc:<{DEFAULT_N}}",
                         refresh=True
                     )
                     
@@ -1251,8 +1258,9 @@ class _AnalysisManager(_ProcessingMixin):
                                 
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
-                    
-                    progress.advance(task)
+                        
+                    prog.remove_task(l1_task)
+                    prog.update(l0_task, advance=1)
                 
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
@@ -1261,22 +1269,30 @@ class _AnalysisManager(_ProcessingMixin):
         san = StatisticalAnalyzer(self.cfg, self.verbose)
 
         # Calculate total tests
-        total_tests = 0
+        n = 0
         for table_type, levels in self.tables.items():
             tests_config = self.cfg["stats"].get(table_type, {})
             enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
-            total_tests += len(levels) * len(enabled_for_table_type)
+            n += len(levels) * len(enabled_for_table_type)
 
-        with get_progress_bar() as progress:
-            main_task = progress.add_task(
-                f"Running statistics for '{grp_col}'...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=total_tests
+        with get_progress_bar() as prog:
+            l0_desc = f"Running statistical tests for '{grp_col}'..."
+            l0_task = prog.add_task(
+                f"[white]{l0_desc:<{DEFAULT_N}}",
+                total=len(self.tables)
             )
 
             for table_type, levels in self.tables.items():
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
                 self.stats[table_type] = {}
+
+                l1_desc = table_type.replace('_', ' ').title()
+                l1_task = prog.add_task(
+                    f"[white]{l1_desc:<{DEFAULT_N}}",
+                    parent=l0_task,
+                    total=len(levels)
+                )    
 
                 for level, table in levels.items():
                     # Align table/metadata once per level
@@ -1286,16 +1302,16 @@ class _AnalysisManager(_ProcessingMixin):
                         if test_name not in san.TEST_CONFIG:
                             continue
                         cfg = san.TEST_CONFIG[test_name]
-                        
-                        # Create child task with fixed description
-                        child_task_description = " | ".join([
-                            table_type.replace('_', ' ').title(), level.capitalize(), cfg['name']
+
+                        l2_desc = " | ".join([
+                            level.capitalize(), cfg['name']
                         ])
-                        child_task = progress.add_task(
-                            f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
-                            parent=main_task,
-                            total=1
+                        l2_task = prog.add_task(
+                            f"[white]{l2_desc:<{DEFAULT_N}}",
+                            parent=l1_task,
+                            total=len(enabled_for_table_type)
                         )
+                        
                         
                         try:
                             # Run the test directly
@@ -1309,10 +1325,12 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             logger.error(f"Test failed: {e}")
                         finally:
-                            # Complete and remove child task
-                            progress.update(child_task, completed=1)
-                            progress.remove_task(child_task)
-                            progress.advance(main_task)  # Update main task after each test
+                            prog.update(l2_task, advance=1)
+                prog.remove_task(l2_task)
+                prog.update(l1_task, advance=1)
+                
+            prog.remove_task(l1_task)
+            prog.update(l0_task, advance=1)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
@@ -1348,9 +1366,10 @@ class _AnalysisManager(_ProcessingMixin):
         self.ordination = {tt: {} for tt in self.tables}
         self.figures = {tt: {} for tt in self.tables}
 
-        with get_progress_bar() as progress:
-            main_task = progress.add_task(
-                "Ordination analysis...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with get_progress_bar() as prog:
+            l0_desc = "Running beta diversity analysis..."
+            l0_task = prog.add_task(
+                f"{l0_desc:<{DEFAULT_N}}", 
                 total=total_tasks
             )
             
@@ -1385,7 +1404,7 @@ class _AnalysisManager(_ProcessingMixin):
                     table_type, level, method, res, fig = future.result()
                     self.ordination[table_type].setdefault(level, {})[method] = res
                     self.figures[table_type].setdefault(level, {})[method] = fig
-                    progress.advance(main_task)
+                    prog.advance(l0_task)
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
@@ -1432,17 +1451,18 @@ class _AnalysisManager(_ProcessingMixin):
             logger.info("ML feature selection is disabled in configuration.")
             return
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        tot = sum(
+        n = sum(
             len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
             for table_type, levels in ml_tables.items()
         )
-        if not tot:
+        if not n:
             return
     
-        with get_progress_bar() as progress:
-            parent_task = progress.add_task(
-                "Running ML feature selection...".ljust(DEFAULT_PROGRESS_TEXT_N), 
-                total=tot
+        with get_progress_bar() as prog:
+            l0_desc = "Running ML feature selection..."
+            l0_task = progress.add_task(
+                f"[white]{l0_desc:<{DEFAULT_N}}", 
+                total=n
             )
     
             for table_type, levels in ml_tables.items():
@@ -1454,14 +1474,14 @@ class _AnalysisManager(_ProcessingMixin):
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
                     for method in methods:
-                        child_task_description = " | ".join([
+                        l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
                             level.capitalize(), 
                             method.upper()
                         ])
-                        child_task = progress.add_task(
-                            f"[white]{child_task_description.ljust(DEFAULT_PROGRESS_TEXT_N)}",
-                            parent=parent_task,
+                        l1_task = progress.add_task(
+                            f"[white]{l1_desc:<{DEFAULT_N}}",
+                            parent=l0_task,
                             total=1
                         )
     
@@ -1487,11 +1507,11 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
                             self.models[table_type][level][method] = None
-                        progress.update(child_task, completed=1)
-                        progress.remove_task(child_task)
-                        progress.update(parent_task, advance=1)
+                            
+                        prog.update(l1_task, completed=1)
+                        prog.remove_task(l1_task)
+                        prog.update(l0_task, advance=1)
                         
-    # NEW METHOD: Compare model-selected features with statistical features
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
         if not self.models:
