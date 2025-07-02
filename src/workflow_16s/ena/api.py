@@ -199,14 +199,14 @@ class MetadataFetcher:
         with self.track():
             parent_desc = f"Processing {ena_study_accession}",
             parent_task = self.progress.add_task(
-                 f"[white]{parent_desc:<{DEFAULT_N}}", , 
+                 f"[white]{parent_desc:<{DEFAULT_N}}", 
                 total=3
             )
 
             try:
                 study_desc = "Fetching study metadata..."
                 study_task = self.progress.add_task(
-                     f"[white]{study_desc:<{DEFAULT_N}}", ,
+                     f"[white]{study_desc:<{DEFAULT_N}}", 
                     parent=parent_task,
                     total=1,
                 )
