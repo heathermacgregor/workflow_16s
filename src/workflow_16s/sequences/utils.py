@@ -30,38 +30,22 @@ import seaborn as sns
 from Bio import SeqIO
 from Bio.Seq import Seq
 from matplotlib.colors import LogNorm
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    track,
-)
-from tqdm import tqdm
 
 # ================================== LOCAL IMPORTS =================================== #
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s.figures.fastqc.fastqc import FastQCPlots
+from workflow_16s.utils.progress import get_progress_bar 
 
 project_root = str(Path(__file__).resolve().parent.parent.parent) # Adjust .parent count
 sys.path.append(project_root)
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
 import workflow_16s.custom_tmp_config  
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
-
-# Initialize logger
 logger = logging.getLogger("workflow_16s")
+warnings.filterwarnings("ignore") # Suppress warnings
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -73,7 +57,8 @@ DEFAULT_N_CORES_SEQKIT = 4 #os.cpu_count() or 1
 DEFAULT_N_CORES_CUTADAPT = 16
 DEFAULT_MAX_WORKERS = 1
 
-DEFAULT_PROGRESS_TEXT_N = 50
+DEFAULT_PROGRESS_TEXT_N = 65
+DEFAULT_N = DEFAULT_PROGRESS_TEXT_N
 
 DEFAULT_START_TRIM = 0
 DEFAULT_END_TRIM = 0
@@ -170,9 +155,10 @@ class SeqKit:
         file_list = self._flatten_samples(samples)
         agg_stats, overall = self._init_aggregators(samples)
         
-        with Progress(*self._create_progress_columns()) as progress:
+        with get_progress_bar() as progress:
+            desc = "Running SeqKit..."
             task = progress.add_task(
-                "[white]Analyzing runs with SeqKit...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+                f"[white]{desc:<{DEFAULT_N}}",
                 total=len(file_list)
             )
             
@@ -341,19 +327,6 @@ class SeqKit:
                 overall["total_seqs"]
             )
         }
-
-    @staticmethod
-    def _create_progress_columns():
-        return [
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
-        ]
         
 # ===================================== CUTADAPT ===================================== #
 
@@ -525,16 +498,6 @@ class CutAdapt:
         self, fastq_paths: Dict[str, List[str]]
     ) -> Tuple[Dict[str, List[str]], pd.DataFrame]:
         """Executes the CutAdapt pipeline on provided FASTQ paths."""
-        progress_columns = [
-            SpinnerColumn(),
-            TextColumn("[white]{task.description}"),
-            BarColumn(bar_width=40, complete_style="red", finished_style="green"),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
-        ]
         samples = list(fastq_paths.keys())
         logger.info(
             f"CutAdapt Parameters:\n"
@@ -572,9 +535,10 @@ class CutAdapt:
                 'rerun': self.rerun,
             })
         results = []
-        with Progress(*progress_columns) as progress:
-            task = progress.add_task(
-                "[white]Trimming runs with CutAdapt...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with get_progress_bar() as prog:
+            desc = "Running CutAdapt..."
+            task = prog.add_task(
+                f"[white]{desc:<{DEFAULT_N}}", 
                 total=len(samples)
             )
             with ThreadPoolExecutor(max_workers=self.cores) as executor:
@@ -585,10 +549,10 @@ class CutAdapt:
                 for future in as_completed(futures):
                     sample, result = future.result()
                     results.append((sample, result))
-                    progress.update(task, advance=1)
+                    prog.update(task, advance=1)
 
             # Calculate total processing time
-            elapsed = progress.tasks[task].time_elapsed
+            elapsed = prog.tasks[task].time_elapsed
 
             proc_time = {
                 "execution_seconds": elapsed,
@@ -615,9 +579,10 @@ class BasicStats:
         file_list = self._flatten_samples(samples)
         sample_agg, overall_stats = self._initialize_structures(samples)
         
-        with Progress(*self._create_progress_columns()) as progress:
-            task = progress.add_task(
-                "[white]Analyzing runs...".ljust(DEFAULT_PROGRESS_TEXT_N), 
+        with get_progress_bar() as prog:
+            desc = "Analyzing runs..."
+            task = prog.add_task(
+                f"[white]{desc:<{DEFAULT_N}}", 
                 total=len(file_list)
             )
             
@@ -629,9 +594,9 @@ class BasicStats:
                     for sample, fpath in file_list
                 }
                 
-                self._process_results(futures, progress, task, sample_agg)
+                self._process_results(futures, prog, task, sample_agg)
         
-            elapsed = progress.tasks[task].elapsed
+            elapsed = prog.tasks[task].elapsed
         
         return self._finalize_stats(sample_agg, overall_stats, elapsed)
 
@@ -645,21 +610,6 @@ class BasicStats:
             (sample, fpath)
             for sample, paths in samples.items()
             for fpath in paths
-        ]
-
-    def _create_progress_columns(self):
-        """Configure rich progress bar display columns."""
-        return [
-            SpinnerColumn(),
-            TextColumn("[white][progress.description]{task.description}"),
-            BarColumn(
-                bar_width=40, complete_style="red", finished_style="green"
-            ),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
         ]
 
     def _initialize_structures(self, samples):
@@ -684,10 +634,10 @@ class BasicStats:
 
         return sample_agg, overall_stats
 
-    def _process_results(self, futures, progress, task, sample_agg):
+    def _process_results(self, futures, prog, task, sample_agg):
         """Process completed futures and update aggregations."""
         for future in as_completed(futures):
-            progress.advance(task)
+            prog.advance(task)
             sample, result = future.result()
             agg = sample_agg[sample]
             agg["total_sequences"] += result["total_sequences"]
@@ -878,21 +828,10 @@ class FastQC:
                 ): (sample, path.name)
                 for sample, path in tasks
             }
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[white][progress.description]{task.description}"),
-                BarColumn(
-                    bar_width=40, complete_style="red", finished_style="green"
-                ),
-                MofNCompleteColumn(),
-                TextColumn("[white]•"),
-                TimeElapsedColumn(),
-                TextColumn("[white]•"),
-                TimeRemainingColumn()
-            ) as progress:
-                task = progress.add_task(
-                    "[white]Analyzing runs with FastQC...".ljust(DEFAULT_PROGRESS_TEXT_N),
+            with get_progress_bar() as prog:
+                desc = "Running FastQC..."
+                task = prog.add_task(
+                    f"[white]{desc:<{DEFAULT_N}}",
                     total=len(futures)
                 )
                 
@@ -904,7 +843,7 @@ class FastQC:
                         logger.error(
                             f"Critical error processing {sample}/{fname}: {str(e)}"
                         )
-                    progress.update(task, advance=1)
+                    prog.update(task, advance=1)
 
     def _parse_sample_name(self, zip_path: Path) -> Tuple[str, str]:
         """Parse sample name and direction from filename."""
@@ -1096,4 +1035,3 @@ class FastQC:
     def get_figures(self) -> Dict[str, plt.Figure]:
         """Access generated matplotlib figures."""
         return self.figs or {}
-
