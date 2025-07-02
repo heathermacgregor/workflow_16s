@@ -130,39 +130,39 @@ def generate_html_report(
             // Render Plotly figures from embedded JSON
             document.addEventListener('DOMContentLoaded', renderAllPlotlyFigures);
         
-            function renderAllPlotlyFigures() {
+            function renderAllPlotlyFigures() {{
                 // Grab every Plotly container with JSON payload
                 var containers = document.querySelectorAll('.plotly-container[data-figure]');
-                containers.forEach(function(container) {
+                containers.forEach(function(container) {{
                     // Only render once
-                    if (!container.hasChildNodes()) {
-                        try {
+                    if (!container.hasChildNodes()) {{
+                        try {{
                             var fig = JSON.parse(container.getAttribute('data-figure'));
-                            Plotly.newPlot(container, fig.data, fig.layout, { responsive: true });
-                        } catch (e) {
+                            Plotly.newPlot(container, fig.data, fig.layout, {{ responsive: true }});
+                        }} catch (e) {{
                             console.error('Error rendering Plotly figure:', e);
                             container.innerHTML = '<p>Error rendering Plotly figure</p>';
-                        }
-                    }
-                });
-            }
+                        }}
+                    }}
+                }});
+            }}
         
-            function showPlot(selectElem, containerId) {
+            function showPlot(selectElem, containerId) {{
                 var wrapper = document.getElementById(containerId);
                 // Hide all plots in this group
                 var plots = wrapper.querySelectorAll('.plot-container');
-                plots.forEach(function(p) {
+                plots.forEach(function(p) {{
                     p.classList.remove('active');
-                });
+                }});
         
                 // Show the selected one
                 var selected = document.getElementById(selectElem.value);
-                if (selected) {
+                if (selected) {{
                     selected.classList.add('active');
                     // Trigger rendering in case it's not yet drawn
                     renderAllPlotlyFigures();
-                }
-            }
+                }}
+            }}
         </script>
 
     </head>
