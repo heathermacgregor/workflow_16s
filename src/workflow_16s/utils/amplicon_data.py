@@ -151,7 +151,7 @@ class _ProcessingMixin:
                 l0_desc = f"{process_name}"
                 logger.debug(l0_desc)
                 parent_task = prog.add_task(
-                    f"[white]{l0_desc:<{DEFAULT_N}}",,
+                    f"[white]{l0_desc:<{DEFAULT_N}}",
                     total=len(levels),
                 )
                 for level in levels:
