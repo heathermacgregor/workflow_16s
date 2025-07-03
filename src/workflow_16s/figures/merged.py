@@ -467,6 +467,16 @@ def create_geographical_map(
     colordict = _create_colordict(metadata[color_col])
 
     n_pts = metadata.shape[0]
+
+    fig = px.scatter_geo(
+        metadata,
+        lat=lat_col,
+        lon=lon_col,
+        color=color_col,
+        color_discrete_map=colordict,
+        hover_data={color_col: True, 'sample_count': ':.0f'}
+    )
+
     fig.add_annotation(
         text=f"n = {n_pts}",
         xref="paper", yref="paper",        # relative to full plot
@@ -475,15 +485,6 @@ def create_geographical_map(
         showarrow=False,
         font=dict(size=12, color="black"),
         bgcolor="rgba(255,255,255,0.4)",
-    )
-    
-    fig = px.scatter_geo(
-        metadata,
-        lat=lat_col,
-        lon=lon_col,
-        color=color_col,
-        color_discrete_map=colordict,
-        hover_data={color_col: True, 'sample_count': ':.0f'}
     )
     
     # Configure map
@@ -1119,7 +1120,9 @@ def create_alpha_diversity_boxplot(
     metric: str,
     output_dir: Optional[Path] = None,
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    add_points: bool = True, 
+    add_stat_annot: bool = True
 ) -> go.Figure:
     """
     Create boxplot for an alpha diversity metric grouped by contamination status.
@@ -1154,6 +1157,31 @@ def create_alpha_diversity_boxplot(
         title=f"{metric.replace('_', ' ').title()} by {group_column}",
         labels={metric: metric.replace('_', ' ').title(), group_column: group_column.replace('_', ' ').title()}
     )
+
+    # Add swarmplot for individual observations
+    if add_points:
+        ax = sns.swarmplot(
+            x=group_column, 
+            y=metric, 
+            data=merged,
+            color=".25",
+            size=3,
+            alpha=0.5
+        )
+    
+    # Add statistical annotations
+    if add_stat_annot:
+        add_stat_annotation(
+            ax,
+            data=merged,
+            x=group_column,
+            y=metric,
+            box_pairs=[(grp1, grp2) for grp1 in groups for grp2 in groups if grp1 < grp2],
+            test=test_type,  # 't-test' or 'Mann-Whitney'
+            text_format='star',
+            loc='inside',
+            verbose=0
+        )
     
     # Update layout
     fig.update_layout(
