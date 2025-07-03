@@ -1397,7 +1397,8 @@ class _AnalysisManager(_ProcessingMixin):
                 table_cfg = enabled_table_types[table_type]
                 self.alpha_diversity_results[table_type] = {}
                 self.alpha_diversity_stats[table_type] = {}
-                
+
+                self.figures["alpha_diversity"] = {}    
                 # Initialize figures structure
                 if table_type not in self.figures["alpha_diversity"]:
                     self.figures["alpha_diversity"][table_type] = {}
@@ -1446,7 +1447,6 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         # Generate plots if enabled
                         if generate_plots:
-                            self.figures["alpha_diversity"] = {}    
                             # Create directory for plots
                             plot_dir = self.figure_output_dir / "alpha_diversity" / table_type / level
                             plot_dir.mkdir(parents=True, exist_ok=True)
