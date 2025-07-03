@@ -1376,8 +1376,6 @@ class _AnalysisManager(_ProcessingMixin):
         
         if not n:
             return
-            
-        self.figures["alpha_diversity"] = {}    
         
         with get_progress_bar() as prog:
             l0_desc = "Running alpha diversity analysis..."
@@ -1448,6 +1446,7 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         # Generate plots if enabled
                         if generate_plots:
+                            self.figures["alpha_diversity"] = {}    
                             # Create directory for plots
                             plot_dir = self.figure_output_dir / "alpha_diversity" / table_type / level
                             plot_dir.mkdir(parents=True, exist_ok=True)
@@ -1495,8 +1494,8 @@ class _AnalysisManager(_ProcessingMixin):
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                         
-                    prog.remove_task(l1_task)
-                    prog.update(l0_task, advance=1)
+                prog.remove_task(l1_task)
+                prog.update(l0_task, advance=1)
                 
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
