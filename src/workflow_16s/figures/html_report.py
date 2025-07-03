@@ -547,7 +547,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
         
         // Show first table in this method
-        const firstTable = document.querySelector(`#${methodId} .table-pane`);
+        const firstTable = document.querySelector(`#${{methodId}} .table-pane`);
         if (firstTable) showTable(firstTable.id);
     }}
     
@@ -581,7 +581,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         document.querySelector(`[data-level="${{levelId}}"]`).classList.add('active');
         
         // Show first colour in this level
-        const firstColour = document.querySelector(`#${levelId} .tab-pane`);
+        const firstColour = document.querySelector(`#${{levelId}} .tab-pane`);
         if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
     }}
 
