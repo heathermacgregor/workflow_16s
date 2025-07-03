@@ -183,7 +183,7 @@ figures:
 # Machine Learning
 run_ml: True
 ml:
-  enabled: False
+  enabled: True
   table_types:
     - 'clr_transformed'
   levels:
