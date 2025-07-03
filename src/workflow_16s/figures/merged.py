@@ -294,6 +294,24 @@ def _save_figure_and_legend(
     plot_legend(colordict, color_col, output_dir / f"{file_stem}.legend.png")
 
 
+def _pts_in_trace(trace):
+    for key in ("x", "y", "z", "values"):
+        arr = trace.get(key)
+        if arr is None:
+            continue
+        # 2‑D arrays → total cells
+        if (isinstance(arr, (list, tuple))
+                and arr
+                and isinstance(arr[0], (list, tuple))):
+            return sum(len(row) for row in arr)
+        try:
+            return len(arr)
+        except TypeError:
+            pass
+    return 0
+
+
+
 def _create_base_scatter_plot(
     data: pd.DataFrame,
     x_col: str,
@@ -318,7 +336,7 @@ def _create_base_scatter_plot(
     Returns:
         Configured Plotly scatter plot
     """
-    return px.scatter(
+    fig = px.scatter(
         data,
         x=x_col,
         y=y_col,
@@ -329,6 +347,18 @@ def _create_base_scatter_plot(
         opacity=0.8,
         size_max=10
     )
+    n_pts = sum(_pts_in_trace(t) for t in fig.data)
+    print(n_pts)
+    fig.add_annotation(
+        text=f"n = {n_pts}",
+        xref="paper", yref="paper",        # relative to full plot
+        x=0.99, y=0.01,                    # bottom‑right corner
+        xanchor="right", yanchor="bottom",
+        showarrow=False,
+        font=dict(size=12, color="black"),
+        bgcolor="rgba(255,255,255,0.4)",
+    )
+    return fig
 
 
 def _apply_common_layout(
