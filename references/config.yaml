@@ -104,7 +104,7 @@ stats:
 
 # Alpha Diversity
 alpha_diversity:
-  enabled: False #true
+  enabled: True
   metrics:  # Metrics to calculate
     - shannon
     - observed_features
