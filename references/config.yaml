@@ -115,12 +115,16 @@ alpha_diversity:
     raw:  # Table type
       enabled: True
       levels:  # Taxonomic levels
-        - genus
-        - family
+        - 'genus'
+        - 'family'
     normalized:
       enabled: True
       levels: 
-        - genus
+        - 'genus'
+  correlation_analysis: true
+  max_categories: 20       # Max unique values for categorical variables
+  min_group_size: 5        # Min samples per group for valid comparison
+  top_columns: 10          # Number of top associations to show
     
 # Beta Diversity + Ordination
 ordination:
