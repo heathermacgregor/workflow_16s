@@ -96,6 +96,225 @@ DEFAULT_ALPHA_METRICS = [
 PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 # ===================================== CLASSES ====================================== #
+# Temp functions
+from scipy import stats
+import pandas as pd
+import numpy as np
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+def analyze_alpha_correlations(
+    alpha_df: pd.DataFrame,
+    metadata: pd.DataFrame,
+    max_categories: int = 20,
+    min_samples: int = 5
+) -> Dict[str, pd.DataFrame]:
+    """
+    Analyze relationships between alpha diversity metrics and metadata columns.
+    
+    Args:
+        alpha_df: DataFrame of alpha diversity metrics
+        metadata: Sample metadata DataFrame
+        max_categories: Maximum unique values for categorical variables
+        min_samples: Minimum samples per group for valid comparison
+        
+    Returns:
+        Dictionary of DataFrames with correlation results per metric
+    """
+    results = {}
+    
+    # Align indices
+    common_idx = alpha_df.index.intersection(metadata.index)
+    alpha_df = alpha_df.loc[common_idx]
+    meta = metadata.loc[common_idx]
+    
+    for metric in alpha_df.columns:
+        metric_results = []
+        y = alpha_df[metric]
+        
+        for col in meta.columns:
+            # Skip columns with too many missing values
+            if meta[col].isna().mean() > 0.5:
+                continue
+                
+            col_data = meta[col].dropna()
+            common_idx = y.index.intersection(col_data.index)
+            x = col_data.loc[common_idx]
+            y_vals = y.loc[common_idx]
+            
+            # Skip if insufficient data
+            if len(x) < 10:
+                continue
+                
+            # Handle numerical columns
+            if pd.api.types.is_numeric_dtype(x):
+                # Pearson correlation
+                r_pearson, p_pearson = stats.pearsonr(x, y_vals)
+                # Spearman correlation
+                r_spearman, p_spearman = stats.spearmanr(x, y_vals)
+                
+                metric_results.append({
+                    'metadata_column': col,
+                    'type': 'numerical',
+                    'pearson_r': r_pearson,
+                    'pearson_p': p_pearson,
+                    'spearman_rho': r_spearman,
+                    'spearman_p': p_spearman,
+                    'n_samples': len(x)
+                })
+                
+            # Handle categorical columns
+            elif pd.api.types.is_categorical_dtype(x) or x.nunique() <= max_categories:
+                # ANOVA for parametric
+                groups = x.unique()
+                group_data = [y_vals[x == g] for g in groups]
+                
+                # Skip small groups
+                if any(len(g) < min_samples for g in group_data):
+                    continue
+                    
+                # Kruskal-Wallis for non-parametric
+                h_stat, p_kruskal = stats.kruskal(*group_data)
+                
+                # Calculate eta squared (effect size)
+                ss_between = h_stat
+                ss_total = len(y_vals) - 1
+                eta_squared = ss_between / ss_total if ss_total > 0 else 0
+                
+                # Pairwise comparisons
+                pairwise = []
+                if len(groups) > 2 and p_kruskal < 0.05:
+                    tukey = pairwise_tukeyhsd(
+                        y_vals.values, 
+                        x.values
+                    )
+                    pairwise = [
+                        f"{groups[i]} vs {groups[j]}: {p:.4f}" 
+                        for i, j, p in zip(tukey._results[0], tukey._results[1], tukey._results[4])
+                    ]
+                
+                metric_results.append({
+                    'metadata_column': col,
+                    'type': 'categorical',
+                    'n_categories': len(groups),
+                    'kruskal_h': h_stat,
+                    'kruskal_p': p_kruskal,
+                    'eta_squared': eta_squared,
+                    'pairwise_comparisons': "; ".join(pairwise),
+                    'n_samples': len(x)
+                })
+        
+        # Create sorted DataFrame for this metric
+        df = pd.DataFrame(metric_results)
+        
+        # Add ranking columns
+        if not df.empty:
+            # Numerical columns - rank by absolute Spearman correlation
+            num_df = df[df['type'] == 'numerical'].copy()
+            num_df['strength_rank'] = num_df['spearman_rho'].abs().rank(ascending=False)
+            
+            # Categorical columns - rank by eta squared
+            cat_df = df[df['type'] == 'categorical'].copy()
+            cat_df['strength_rank'] = cat_df['eta_squared'].rank(ascending=False)
+            
+            # Combine and sort
+            df = pd.concat([num_df, cat_df]).sort_values('strength_rank')
+            df = df.reset_index(drop=True)
+        
+        results[metric] = df
+    
+    return results
+import plotly.graph_objects as go
+
+def plot_alpha_correlations(
+    corr_results: Dict[str, pd.DataFrame],
+    output_dir: Optional[Path] = None,
+    top_n: int = 10,
+    height: int = 800,
+    width: int = 1000
+) -> Dict[str, go.Figure]:
+    """
+    Visualize top correlations for each alpha diversity metric.
+    
+    Args:
+        corr_results: Output from analyze_alpha_correlations()
+        output_dir: Directory to save plots
+        top_n: Number of top correlations to display
+        height: Figure height
+        width: Figure width
+        
+    Returns:
+        Dictionary of Plotly figures per metric
+    """
+    figures = {}
+    
+    for metric, df in corr_results.items():
+        if df.empty:
+            continue
+            
+        # Prepare data for visualization
+        df = df.head(top_n).copy()
+        df['abs_strength'] = df.apply(
+            lambda x: abs(x['spearman_rho']) if x['type'] == 'numerical' else x['eta_squared'],
+            axis=1
+        )
+        df['direction'] = df.apply(
+            lambda x: "positive" if (x['type'] == 'numerical' and x['spearman_rho'] > 0) else "negative",
+            axis=1
+        )
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Add bars with conditional coloring
+        colors = {'numerical': 'rgba(54, 162, 235, 0.6)', 'categorical': 'rgba(255, 99, 132, 0.6)'}
+        for _, row in df.iterrows():
+            fig.add_trace(go.Bar(
+                x=[row['metadata_column']],
+                y=[row['abs_strength']],
+                name=row['type'],
+                marker_color=colors[row['type']],
+                textposition='auto',
+                hoverinfo='text',
+                hovertext=(
+                    f"<b>{row['metadata_column']}</b><br>"
+                    f"Type: {row['type']}<br>"
+                    + (f"ρ = {row['spearman_rho']:.3f}<br>p = {row['spearman_p']:.4f}" 
+                       if row['type'] == 'numerical' 
+                       else f"η² = {row['eta_squared']:.3f}<br>p = {row['kruskal_p']:.4f}")
+                )
+            ))
+        
+        # Update layout
+        fig.update_layout(
+            title=f"Top {top_n} Associations with {metric.replace('_', ' ').title()}",
+            yaxis_title="Association Strength (|ρ| or η²)",
+            barmode='group',
+            height=height,
+            width=width,
+            template="plotly_white",
+            hoverlabel=dict(bgcolor="white", font_size=12),
+            legend_title="Variable Type"
+        )
+        
+        # Add significance markers
+        fig.add_trace(go.Scatter(
+            x=df['metadata_column'],
+            y=df['abs_strength'] * 1.05,
+            text=df.apply(lambda x: "★" if (x['spearman_p'] < 0.05 or x['kruskal_p'] < 0.05) else "", axis=1),
+            mode="text",
+            showlegend=False,
+            textfont=dict(color="red", size=16)
+        ))
+        
+        figures[metric] = fig
+        
+        # Save output
+        if output_dir:
+            save_path = output_dir / f"alpha_correlations_{metric}.html"
+            fig.write_html(str(save_path), include_plotlyjs="cdn")
+            
+    return figures
+#####################################################################
 
 class _ProcessingMixin:
     """
@@ -1203,8 +1422,19 @@ class _AnalysisManager(_ProcessingMixin):
                         # Convert to DataFrame and compute alpha diversity
                         df = table_to_dataframe(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
+                        # Store alpha diversity results
                         self.alpha_diversity_results[table_type][level] = alpha_df
                         
+                        # Run correlation analysis if enabled
+                        if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                            corr_results = analyze_alpha_correlations(
+                                alpha_df,
+                                self.meta,
+                                max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
+                                min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
+                            )
+                            self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
+                                
                         # Analyze relationship with contamination status
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
@@ -1226,6 +1456,9 @@ class _AnalysisManager(_ProcessingMixin):
                             
                             # Create boxplots for each metric
                             for metric in metrics:
+                                # Get statistical results for this metric
+                                metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
+                                
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
@@ -1233,18 +1466,21 @@ class _AnalysisManager(_ProcessingMixin):
                                     metric=metric,
                                     output_dir=plot_dir,
                                     show=False,
-                                    verbose=self.verbose
+                                    verbose=self.verbose,
+                                    add_points=plot_cfg.get("add_points", True),
+                                    add_stat_annot=plot_cfg.get("add_stat_annot", True),
+                                    test_type="parametric" if parametric else "nonparametric"
                                 )
-                                self.figures["alpha_diversity"][table_type][level][f"alpha_{metric}_boxplot"] = fig
+                                self.figures["alpha_diversity"][table_type][level][metric] = fig
                             
                             # Create statistics summary plot
                             stats_fig = create_alpha_diversity_stats_plot(
                                 stats_df=stats_df,
                                 output_dir=plot_dir,
-                                show=False,
-                                verbose=self.verbose
+                                verbose=self.verbose,
+                                effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
                             )
-                            self.figures["alpha_diversity"][table_type][level]["alpha_statistics"] = stats_fig
+                            self.figures["alpha_diversity"][table_type][level]["summary"] = stats_fig
                             
                             # Log significant results
                             sig = stats_df[stats_df['p_value'] < 0.05]
