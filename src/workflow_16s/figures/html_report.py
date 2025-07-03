@@ -55,7 +55,7 @@ def _prepare_sections(
         }
 
         if sec == "ordination":
-            # Use new nested tab structure for ordination
+            # Use nested tab structure for ordination
             btns, tabs, pd = _ordination_to_nested_html(
                 figures[sec], id_counter, sec_data["id"]
             )
@@ -65,8 +65,30 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
+        elif sec == "alpha_diversity":
+            # Use nested structure for alpha diversity
+            btns, tabs, pd = _alpha_diversity_to_nested_html(
+                figures[sec], id_counter, sec_data["id"]
+            )
+            plot_data.update(pd)
+            sec_data["subsections"].append({
+                "title": "Alpha Diversity",
+                "tabs_html": tabs,
+                "buttons_html": btns
+            })
+        elif sec == "alpha_correlations":
+            # Use nested structure for alpha correlations
+            btns, tabs, pd = _alpha_correlations_to_nested_html(
+                figures[sec], id_counter, sec_data["id"]
+            )
+            plot_data.update(pd)
+            sec_data["subsections"].append({
+                "title": "Alpha Diversity Correlations",
+                "tabs_html": tabs,
+                "buttons_html": btns
+            })
         else:
-            # Existing non-ordination sections
+            # Flatten nested structures for other sections
             flat: Dict[str, Any] = {}
             _flatten(figures[sec], [], flat)
             if flat:
@@ -84,16 +106,6 @@ def _prepare_sections(
             sections.append(sec_data)
 
     return sections, plot_data
-
-
-def _collect_ord_figs(tree, meth):
-    out = {}
-    for table_type, levels in tree.items():
-        for level, methods in levels.items():
-            if meth in methods:
-                for colour, fig in methods[meth].items():
-                    out[f"{table_type} - {level} - {colour}"] = fig
-    return out
 
 
 def _flatten(tree, keys, out):
@@ -222,7 +234,7 @@ def _prepare_features_table(
     df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
     
     return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
-               "P-value", "Direction"]]
+               "P-value", "Direction", "Functions"]]
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     """Prepare statistical summary table."""
@@ -430,6 +442,208 @@ def _ordination_to_nested_html(
     # wrap top‑level (method) buttons row
     buttons_row = (
         f'<div class="tabs" data-label="method">{"".join(buttons_html)}</div>'
+    )
+    return buttons_row, "".join(panes_html), plot_data
+
+def _alpha_diversity_to_nested_html(
+    figures: Dict[str, Any],
+    id_counter,
+    prefix: str,
+) -> Tuple[str, str, Dict]:
+    """
+    Build the nested tab structure for alpha diversity section.
+    
+    ┌ table_type (raw/normalized/...) ┐
+        ┌ level (phylum/class/...) ┐
+            ┌ metric (shannon/observed_features/...) ┐
+    """
+    buttons_html, panes_html, plot_data = [], [], {}
+    
+    for table_type, levels in figures.items():
+        # ---------- table type button ----------
+        table_id = f"{prefix}-table-{next(id_counter)}"
+        is_first_table = not buttons_html
+        buttons_html.append(
+            f'<button class="table-button {"active" if is_first_table else ""}" '
+            f'data-table="{table_id}" '
+            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+        )
+        
+        # ---------- build table pane ----------
+        level_btns, level_panes = [], []
+        for l_idx, (level, metrics) in enumerate(levels.items()):
+            level_id = f"{table_id}-level-{next(id_counter)}"
+            
+            # level button
+            level_btns.append(
+                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
+                f'data-level="{level_id}" '
+                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+            )
+            
+            # ---------- build level pane ----------
+            metric_btns, metric_panes = [], []
+            for m_idx, (metric, fig) in enumerate(metrics.items()):
+                metric_id = f"{level_id}-metric-{next(id_counter)}"
+                
+                # metric button
+                metric_btns.append(
+                    f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
+                    f'data-metric="{metric_id}" '
+                    f'onclick="showMetric(\'{metric_id}\')">{metric}</button>'
+                )
+                
+                # metric pane
+                metric_panes.append(
+                    f'<div id="{metric_id}" class="metric-pane" '
+                    f'style="display:{"block" if m_idx == 0 else "none"};">'
+                    f'<div id="container-{metric_id}" class="plot-container"></div>'
+                    f'</div>'
+                )
+                
+                # Add plot data
+                plot_id = f"{prefix}-plot-{next(id_counter)}"
+                try:
+                    if hasattr(fig, "to_plotly_json"):
+                        pj = fig.to_plotly_json()
+                        plot_data[plot_id] = {
+                            "type": "plotly",
+                            "data": pj["data"],
+                            "layout": pj["layout"],
+                        }
+                    elif isinstance(fig, Figure):
+                        buf = BytesIO()
+                        fig.savefig(buf, format="png", bbox_inches="tight")
+                        buf.seek(0)
+                        plot_data[plot_id] = {
+                            "type": "image",
+                            "data": base64.b64encode(buf.read()).decode()
+                        }
+                except Exception as exc:
+                    logger.exception("Serializing figure failed")
+                    plot_data[plot_id] = {
+                        "type": "error", 
+                        "error": str(exc)
+                    }
+            
+            # level pane: metric buttons + metric panes
+            level_panes.append(
+                f'<div id="{level_id}" class="level-pane" '
+                f'style="display:{"block" if l_idx == 0 else "none"};">'
+                f'<div class="tabs" data-label="metric">{"".join(metric_btns)}</div>'
+                f'{"".join(metric_panes)}'
+                f'</div>'
+            )
+        
+        # table pane: level buttons + level panes
+        panes_html.append(
+            f'<div id="{table_id}" class="table-pane" '
+            f'style="display:{"block" if is_first_table else "none"};">'
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+            f'{"".join(level_panes)}'
+            f'</div>'
+        )
+    
+    # Wrap top-level buttons
+    buttons_row = (
+        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
+    )
+    return buttons_row, "".join(panes_html), plot_data
+
+def _alpha_correlations_to_nested_html(
+    figures: Dict[str, Any],
+    id_counter,
+    prefix: str,
+) -> Tuple[str, str, Dict]:
+    """
+    Build the nested tab structure for alpha diversity correlations.
+    
+    ┌ table_type (raw/normalized/...) ┐
+        ┌ level (phylum/class/...) ┐
+            ┌ metric (shannon/observed_features/...) ┐
+    """
+    buttons_html, panes_html, plot_data = [], [], {}
+    
+    for table_type, levels in figures.items():
+        # ---------- table type button ----------
+        table_id = f"{prefix}-table-{next(id_counter)}"
+        is_first_table = not buttons_html
+        buttons_html.append(
+            f'<button class="table-button {"active" if is_first_table else ""}" '
+            f'data-table="{table_id}" '
+            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+        )
+        
+        # ---------- build table pane ----------
+        level_btns, level_panes = [], []
+        for l_idx, (level, metrics) in enumerate(levels.items()):
+            level_id = f"{table_id}-level-{next(id_counter)}"
+            
+            # level button
+            level_btns.append(
+                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
+                f'data-level="{level_id}" '
+                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+            )
+            
+            # ---------- build level pane ----------
+            metric_btns, metric_panes = [], []
+            for m_idx, (metric, fig) in enumerate(metrics.items()):
+                metric_id = f"{level_id}-metric-{next(id_counter)}"
+                
+                # metric button
+                metric_btns.append(
+                    f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
+                    f'data-metric="{metric_id}" '
+                    f'onclick="showMetric(\'{metric_id}\')">{metric}</button>'
+                )
+                
+                # metric pane
+                metric_panes.append(
+                    f'<div id="{metric_id}" class="metric-pane" '
+                    f'style="display:{"block" if m_idx == 0 else "none"};">'
+                    f'<div id="container-{metric_id}" class="plot-container"></div>'
+                    f'</div>'
+                )
+                
+                # Add plot data
+                plot_id = f"{prefix}-plot-{next(id_counter)}"
+                try:
+                    if hasattr(fig, "to_plotly_json"):
+                        pj = fig.to_plotly_json()
+                        plot_data[plot_id] = {
+                            "type": "plotly",
+                            "data": pj["data"],
+                            "layout": pj["layout"],
+                        }
+                except Exception as exc:
+                    logger.exception("Serializing figure failed")
+                    plot_data[plot_id] = {
+                        "type": "error", 
+                        "error": str(exc)
+                    }
+            
+            # level pane: metric buttons + metric panes
+            level_panes.append(
+                f'<div id="{level_id}" class="level-pane" '
+                f'style="display:{"block" if l_idx == 0 else "none"};">'
+                f'<div class="tabs" data-label="metric">{"".join(metric_btns)}</div>'
+                f'{"".join(metric_panes)}'
+                f'</div>'
+            )
+        
+        # table pane: level buttons + level panes
+        panes_html.append(
+            f'<div id="{table_id}" class="table-pane" '
+            f'style="display:{"block" if is_first_table else "none"};">'
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+            f'{"".join(level_panes)}'
+            f'</div>'
+        )
+    
+    # Wrap top-level buttons
+    buttons_row = (
+        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     )
     return buttons_row, "".join(panes_html), plot_data
 
@@ -1039,6 +1253,35 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         // Show first colour plot
         const firstColour = newLevel.querySelector('.tab-pane');
         if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
+    }}
+    
+    function showMetric(metricId) {{
+        // Purge all plots in current metric
+        const levelPane = document.getElementById(metricId).closest('.level-pane');
+        const currentMetric = levelPane.querySelector('.metric-pane[style*="display: block"]');
+        if (currentMetric) {{
+            const plotId = currentMetric.querySelector('.plot-container').id.replace('container-', '');
+            if (rendered.has(plotId)) purgePlot(plotId);
+        }}
+
+        // Update UI
+        levelPane.querySelectorAll('.metric-pane').forEach(pane => {{
+            pane.style.display = 'none';
+        }});
+        levelPane.querySelectorAll('.metric-button').forEach(btn => {{
+            btn.classList.remove('active');
+        }});
+        
+        const newMetric = document.getElementById(metricId);
+        if (newMetric) newMetric.style.display = 'block';
+        document.querySelector(`[data-metric="${{metricId}}"]`).classList.add('active');
+        
+        // Render new plot
+        const plotId = newMetric.querySelector('.plot-container').id.replace('container-', '');
+        if (!rendered.has(plotId)) {{
+            renderPlot(`container-${{plotId}}`, plotId);
+            rendered.add(plotId);
+        }}
     }}
 
     /* ---- section toggles ---- */
