@@ -527,7 +527,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .tab-button,
     .method-button,
     .table-button,
-    .level-button {
+    .level-button {(
         padding: 4px 10px;          /* smaller */
         font-size: 0.8em;           /* smaller text */
         line-height: 1.2;
@@ -541,17 +541,17 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         flex: 0 0 auto;             /* keep size even in flex rows */
         margin-right: 5px;
         margin-bottom: 5px;
-    }
+    })
     
     /* Tab Buttons ACTIVE */
     .tab-button.active,
     .method-button.active,
     .table-button.active,
-    .level-button.active {
+    .level-button.active {(
         background: #fff;           /* white bg */
         color: #000;                /* black text */
         border-color: #000;         /* keep black outline */
-    }
+    })
   </style>
 </head>
 <body>
