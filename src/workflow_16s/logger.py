@@ -56,43 +56,35 @@ def setup_logging(
     )
     file_handler.setFormatter(file_fmt)
 
-    # 1.  Custom theme (change colours here once)
+    # 1. Use correct theme keys for RichHandler
     custom_theme = Theme({
-        "time":          "bold white",
-        "level.debug":   "dim cyan",
-        "level.info":    "bold white",
-        "level.warning": "bold yellow",
-        "level.error":   "bold red",
-        "level.critical":"reverse bold bright_white on red",
-        "logger":        "bold white",
-        "func":          "bold white",
-        "msg":           "white",
+        "logging.time": "bold white",
+        "logging.level.debug": "dim cyan",
+        "logging.level.info": "bold white",
+        "logging.level.warning": "bold yellow",
+        "logging.level.error": "bold red",
+        "logging.level.critical": "reverse bold bright_white on red",
+        "logging.name": "bold white",
+        "logging.function": "bold white",  # Rich uses "function" (not "func")
+        "logging.message": "white",
     })
     console = Console(theme=custom_theme)
 
-    # 2.  Rich handler
+    # 2. Configure RichHandler WITHOUT a custom formatter
     rich_handler = RichHandler(
         console=console,
         rich_tracebacks=True,
-        markup=True,
         level=console_level,
-        show_time=False,       
-        show_path=False,
+        show_time=True,          # Enable time (styled via theme)
+        show_path=False,          # Disable file paths
+        markup=False,             # Disable markup (use theme styles)
     )
-    rich_fmt = logging.Formatter(
-        "[time]{asctime}[/] "
-        "[level]{levelname:<8}[/] "
-        "[logger]{name}[/] "
-        "[func]{funcName}()[/] "
-        ": [msg]{message}[/]",
-        datefmt="%H:%M:%S",
-        style="{",
-    )
-    rich_handler.setFormatter(rich_fmt)
+    # Remove custom formatter for RichHandler
+    # (RichHandler uses its own internal formatting)
 
     logger.handlers.clear()
     logger.addHandler(file_handler)
-    logger.addHandler(rich_handler)
+    logger.addHandler(rich_handler)  # Uses built-in formatting
 
     logger.debug("Logging initialised → %s", log_file_path)
     return logger
