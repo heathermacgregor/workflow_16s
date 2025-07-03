@@ -127,6 +127,23 @@ def _figs_to_html(figs: Dict[str, Any], counter, prefix, *, square=False) -> Tup
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
+
+                # ── count points across all traces ──────────────────────
+                num_points = sum(
+                    len(trace.get("x", []))
+                    for trace in pj.get("data", [])
+                    if isinstance(trace.get("x", []), list)
+                )
+                pj["layout"].setdefault("annotations", []).append({
+                    "text": f"n = {num_points}",
+                    "xref": "paper", "yref": "paper",   # relative to full plot
+                    "x": 0.99, "y": 0.01,               # near (1,0) corner
+                    "xanchor": "right", "yanchor": "bottom",
+                    "showarrow": False,
+                    "font": {"size": 12, "color": "gray"},
+                    "align": "right",
+                    "bgcolor": "rgba(255,255,255,0.4)",
+                })
                 plot_data[plot_id] = {
                     "type": "plotly",
                     "data": pj["data"],
@@ -160,8 +177,10 @@ def _section_html(sec):
     sub_html = "\n".join(
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tabs">{sub["buttons_html"]}</div>\n'
-        f'  <div class="tab-content">{sub["tabs_html"]}</div>\n'
+        f'  <div class="tab-content">\n'           # ⟵  wrapper starts
+        f'    <div class="tabs">{sub["buttons_html"]}</div>\n'
+        f'    {sub["tabs_html"]}\n'
+        f'  </div>\n'                             # ⟵  wrapper ends
         f'</div>'
         for sub in sec["subsections"]
     )
@@ -494,9 +513,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     body              {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
     .section          {{ margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }}
     .subsection       {{ margin-left: 20px; margin-bottom: 20px; }}
-    .tabs             {{ display: flex; margin-bottom: -1px; flex-wrap: wrap; }}
     
-    .tab-content      {{ border: 1px solid #ccc; padding: 15px; border-radius: 0 4px 4px 4px; }}
+    .tabs             {{ display: flex; margin: 0 0 10px 0; flex-wrap: wrap; }}
+    .tab-content      {{ border: 1px solid #ccc; padding: 10px; border-radius: 4px; }}
     
     .method-pane {{ display: none; }}
     .method-pane:first-child {{ display: block; }}
