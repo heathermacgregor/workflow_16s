@@ -43,7 +43,9 @@ def generate_html_report(
     include_sections: List[str] | None = None,
 ) -> None:
     """Write an HTML file with interactive Plotly/Matplotlib figures."""
-    include_sections = include_sections or ["map", "ordination"]
+    include_sections = include_sections or [
+        k for k, v in amplicon_data.figures.items() if v
+    ]#["map", "ordination"]
     ts = pd.Timestamp.now().strftime("%Y‑%m‑%d %H:%M:%S")
 
     output_path = Path(output_path)
