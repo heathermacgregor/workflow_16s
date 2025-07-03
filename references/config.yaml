@@ -82,24 +82,24 @@ features:
 stats:
   raw:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: False #True      # ✅ non-parametric alternative
-    kruskal_bonferroni: False #True
+    mwu_bonferroni: True      # ✅ non-parametric alternative
+    kruskal_bonferroni: True
   presence_absence:
-    fisher: False #True              # ✅ ideal for binary data
+    fisher: True              # ✅ ideal for binary data
     ttest: False              # ❌ designed for continuous data
     mwu_bonferroni: False     # ❌ not designed for binary data
     kruskal_bonferroni: False
   filtered:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: False #True
-    kruskal_bonferroni: False #True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
   normalized:
-    ttest: False #True               # ✅ can be used after proper normalization
-    mwu_bonferroni: False #True      # ✅ still valuable for robustness
-    kruskal_bonferroni: False #True
+    ttest: True               # ✅ can be used after proper normalization
+    mwu_bonferroni: True      # ✅ still valuable for robustness
+    kruskal_bonferroni: True
   clr_transformed:
-    ttest: False #True               # ✅ CLR addresses compositionality
-    mwu_bonferroni: False #True      # ✅ good alternative for non-normal distributions
+    ttest: True               # ✅ CLR addresses compositionality
+    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
     kruskal_bonferroni: True
 
 # Alpha Diversity
@@ -109,16 +109,16 @@ alpha_diversity:
     - shannon
     - observed_features
     - simpson
-  parametric: false  # Statistical test type
-  generate_plots: true  # Enable/disable plot generation
+  parametric: False  # Statistical test type
+  generate_plots: True  # Enable/disable plot generation
   tables:
     raw:  # Table type
-      enabled: true
+      enabled: True
       levels:  # Taxonomic levels
         - genus
         - family
     normalized:
-      enabled: true
+      enabled: True
       levels: 
         - genus
     
@@ -128,34 +128,34 @@ ordination:
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
   presence_absence:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "jaccard"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   filtered:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   normalized:
-    pca: False #True
-    pcoa: False #True
+    pca: True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   clr_transformed:
     pca: True
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "euclidean"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
 
 # Functional Prediction
 faprotax: True
@@ -171,7 +171,7 @@ figures:
     - "country"
 
 # Machine Learning
-run_ml: False #True
+run_ml: True
 ml:
   enabled: False
   table_types:
@@ -180,11 +180,11 @@ ml:
     - 'genus'
   methods:
     - 'rfe'
-    #- 'select_k_best'
+    - 'select_k_best'
     #- 'chi_squared'
     #- 'lasso'
     #- 'shap'
   num_features: 500
   step_size: 100
   permutation_importance: True
-  n_threads: 4
+  n_threads: 8
