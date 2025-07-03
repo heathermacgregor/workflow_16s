@@ -1196,6 +1196,7 @@ def create_alpha_diversity_boxplot(
                     text=stars,
                     showarrow=False,
                     font=dict(size=14)
+                )
             )
             
         fig.update_layout(annotations=annotations)
