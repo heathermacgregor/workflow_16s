@@ -56,35 +56,34 @@ def setup_logging(
     )
     file_handler.setFormatter(file_fmt)
 
-    # 1. Use correct theme keys for RichHandler
+     # 1. Use EXACT theme keys required by Rich
     custom_theme = Theme({
         "logging.time": "bold white",
         "logging.level.debug": "dim cyan",
-        "logging.level.info": "bold white",
+        "logging.level.info": "bold white",  # Now white instead of blue
         "logging.level.warning": "bold yellow",
         "logging.level.error": "bold red",
         "logging.level.critical": "reverse bold bright_white on red",
         "logging.name": "bold white",
-        "logging.function": "bold white",  # Rich uses "function" (not "func")
+        "logging.function": "bold white",  # Note: must be "function" not "func"
         "logging.message": "white",
     })
     console = Console(theme=custom_theme)
 
-    # 2. Configure RichHandler WITHOUT a custom formatter
+    # 2. Configure RichHandler with correct parameters
     rich_handler = RichHandler(
         console=console,
         rich_tracebacks=True,
         level=console_level,
-        show_time=True,          # Enable time (styled via theme)
-        show_path=False,          # Disable file paths
-        markup=False,             # Disable markup (use theme styles)
+        show_time=True,           # Must be True to show timestamp
+        show_path=False,
+        markup=False,             # Disable markup interpretation
+        log_time_format="[%X]"    # Time format matching your theme
     )
-    # Remove custom formatter for RichHandler
-    # (RichHandler uses its own internal formatting)
 
     logger.handlers.clear()
     logger.addHandler(file_handler)
     logger.addHandler(rich_handler)  # Uses built-in formatting
 
-    logger.debug("Logging initialised → %s", log_file_path)
+    logger.info("Logging initialised → %s", log_file_path)
     return logger
