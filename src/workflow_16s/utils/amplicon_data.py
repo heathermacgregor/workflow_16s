@@ -1185,7 +1185,7 @@ class _AnalysisManager(_ProcessingMixin):
                 
                 # Initialize figures structure
                 if table_type not in self.figures:
-                    self.figures[table_type] = {}
+                    self.figures["alpha_diversity"][table_type] = {}
                 
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
@@ -1225,8 +1225,8 @@ class _AnalysisManager(_ProcessingMixin):
                             plot_dir.mkdir(parents=True, exist_ok=True)
                             
                             # Initialize figures storage for this level
-                            if level not in self.figures[table_type]:
-                                self.figures[table_type][level] = {}
+                            if level not in self.figures["alpha_diversity"][table_type]:
+                                self.figures["alpha_diversity"][table_type][level] = {}
                             
                             # Create boxplots for each metric
                             for metric in metrics:
@@ -1239,7 +1239,7 @@ class _AnalysisManager(_ProcessingMixin):
                                     show=False,
                                     verbose=self.verbose
                                 )
-                                self.figures[table_type][level][f"alpha_{metric}_boxplot"] = fig
+                                self.figures["alpha_diversity"][table_type][level][f"alpha_{metric}_boxplot"] = fig
                             
                             # Create statistics summary plot
                             stats_fig = create_alpha_diversity_stats_plot(
@@ -1248,7 +1248,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 show=False,
                                 verbose=self.verbose
                             )
-                            self.figures[table_type][level]["alpha_statistics"] = stats_fig
+                            self.figures["alpha_diversity"][table_type][level]["alpha_statistics"] = stats_fig
                             
                             # Log significant results
                             sig = stats_df[stats_df['p_value'] < 0.05]
@@ -1363,7 +1363,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         # Initialize structures
         self.ordination = {tt: {} for tt in self.tables}
-        self.figures = {tt: {} for tt in self.tables}
+        self.figures["ordination"] = {tt: {} for tt in self.tables}
 
         with get_progress_bar() as prog:
             l0_desc = "Running beta diversity analysis..."
@@ -1402,7 +1402,7 @@ class _AnalysisManager(_ProcessingMixin):
                 for future in as_completed(futures):
                     table_type, level, method, res, fig = future.result()
                     self.ordination[table_type].setdefault(level, {})[method] = res
-                    self.figures[table_type].setdefault(level, {})[method] = fig
+                    self.figures["ordination"][table_type].setdefault(level, {})[method] = fig
                     prog.advance(l0_task)
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
