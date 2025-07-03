@@ -58,14 +58,14 @@ def setup_logging(
 
     # 1.  Custom theme (change colours here once)
     custom_theme = Theme({
-        "time":          "bold cyan",
+        "time":          "bold white",
         "level.debug":   "dim cyan",
-        "level.info":    "bold magenta",
+        "level.info":    "bold white",
         "level.warning": "bold yellow",
         "level.error":   "bold red",
         "level.critical":"reverse bold bright_white on red",
-        "logger":        "bold green",
-        "func":          "bold yellow",
+        "logger":        "bold white",
+        "func":          "bold white",
         "msg":           "white",
     })
     console = Console(theme=custom_theme)
