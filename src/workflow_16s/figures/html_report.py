@@ -463,18 +463,38 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <script>
     /* ---- data ---- */
     const plotData = JSON.parse(document.getElementById('plot-data').textContent);
-
+    
     /* ---- state ---- */
     const rendered = new Set();
+    const MAX_WEBGL_CONTEXTS = 6;  // Conservative limit for most browsers
+    const activeWebGLPlots = new Set();
 
     /* ---- helpers ---- */
+    function purgePlot(plotId) {{
+        const plotDiv = document.getElementById(plotId);
+        if (plotDiv && Plotly) {{
+            Plotly.purge(plotDiv);
+        }}
+        const container = document.getElementById(`container-${{plotId}}`);
+        if (container) container.innerHTML = '';
+        rendered.delete(plotId);
+        activeWebGLPlots.delete(plotId);
+    }}
+
+    function enforceWebGLLimit() {{
+        while (activeWebGLPlots.size > MAX_WEBGL_CONTEXTS) {{
+            const oldest = activeWebGLPlots.values().next().value;
+            purgePlot(oldest);
+        }}
+    }}
+
     function renderPlot(containerId, plotId) {{
         const container = document.getElementById(containerId);
         if (!container) return console.error('Missing container', containerId);
 
         container.innerHTML = '';
         const div = document.createElement('div');
-        div.id        = plotId;
+        div.id = plotId;
         div.className = 'plot-container';
         container.appendChild(div);
 
@@ -484,27 +504,56 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return;
         }}
 
-        if (payload.type === 'plotly') {{
-            if (payload.layout) {{
-                payload.layout.showlegend = false;
-                payload.layout.width  = 900;
-                payload.layout.height = 600;
+        // Check if this is a 3D plot
+        const is3D = payload.data?.some(d => d.type.includes('3d'));
+
+        try {{
+            if (payload.type === 'plotly') {{
+                if (payload.layout) {{
+                    payload.layout.showlegend = false;
+                    payload.layout.width = 900;
+                    payload.layout.height = 600;
+                    
+                    // Optimize 3D plots
+                    if (is3D) {{
+                        payload.layout.scene = payload.layout.scene || {{}};
+                        payload.layout.scene.aspectmode = 'data';
+                        payload.layout.uirevision = 'constant';
+                    }}
+                }}
+                
+                const config = {{
+                    responsive: true,
+                    webglOptions: {{ preserveDrawingBuffer: false }}
+                }};
+                
+                Plotly.newPlot(plotId, payload.data, payload.layout, config)
+                    .then(() => {{
+                        if (is3D) {{
+                            activeWebGLPlots.add(plotId);
+                            enforceWebGLLimit();
+                        }}
+                    }})
+                    .catch(err => {{
+                        div.innerHTML = `<div class="error">Plotly error: ${err}</div>`;
+                        console.error(err);
+                    }});
             }}
-            Plotly.newPlot(
-                plotId, payload.data, payload.layout, {{responsive: true}}
-            ).catch(err => {{
-                div.innerHTML = `<div class="error">Plotly error: ${{err}}</div>`;
-                console.error(err);
-            }});
-        }} else if (payload.type === 'image') {{
-            const img = document.createElement('img');
-            img.src = 'data:image/png;base64,' + payload.data;
-            img.style.maxWidth = '100%';
-            div.appendChild(img);
-        }} else if (payload.type === 'error') {{
-            div.innerHTML = `<div class="error">${{payload.error}}</div>`;
-        }} else {{
-            div.innerHTML = '<div class="error">Unknown plot type</div>';
+            else if (payload.type === 'image') {{
+                const img = document.createElement('img');
+                img.src = 'data:image/png;base64,' + payload.data;
+                img.style.maxWidth = '100%';
+                div.appendChild(img);
+            }} 
+            else if (payload.type === 'error') {{
+                div.innerHTML = `<div class="error">${payload.error}</div>`;
+            }} 
+            else {{
+                div.innerHTML = '<div class="error">Unknown plot type</div>';
+            }}
+        }} catch (err) {{
+            div.innerHTML = `<div class="error">Rendering error: ${err}</div>`;
+            console.error(err);
         }}
     }}
 
@@ -514,91 +563,138 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         if (!pane) return;
 
         const subsection = pane.closest('.subsection');
-        subsection.querySelectorAll('.tab-pane')
-                   .forEach(p => p.style.display = 'none');
-        subsection.querySelectorAll('.tab-button')
-                   .forEach(b => b.classList.remove('active'));
+        if (!subsection) return;
+        
+        // Purge previous plot in this subsection
+        const prevPane = subsection.querySelector('.tab-pane[style*="display: block"]');
+        if (prevPane) {{
+            const prevPlotId = prevPane.dataset.plotId;
+            if (rendered.has(prevPlotId)) {{
+                purgePlot(prevPlotId);
+            }}
+        }}
 
+        // Update UI
+        subsection.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+        subsection.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        
         pane.style.display = 'block';
-        subsection.querySelector(`[data-tab="${{tabId}}"]`)
-                  .classList.add('active');
+        const button = subsection.querySelector(`[data-tab="${{tabId}}"]`);
+        if (button) button.classList.add('active');
 
+        // Render new plot
         if (!rendered.has(plotId)) {{
             renderPlot(`container-${{plotId}}`, plotId);
             rendered.add(plotId);
         }}
     }}
 
-    /* ---- section toggles ---- */
-    function toggleAllSections(show) {{
-        document.querySelectorAll('.section')
-                .forEach(s => (s.style.display = show ? 'block' : 'none'));
-    }}
-
+    /* ---- nested tab management ---- */
     function showMethod(methodId) {{
+        // Purge all plots in current method
+        const currentMethod = document.querySelector('.method-pane[style*="display: block"]');
+        if (currentMethod) {{
+            currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                const plotId = pane.dataset.plotId;
+                if (rendered.has(plotId)) purgePlot(plotId);
+            }});
+        }}
+
+        // Update UI
         document.querySelectorAll('.method-pane').forEach(pane => {{
             pane.style.display = 'none';
         }});
-        document.getElementById(methodId).style.display = 'block';
-        
         document.querySelectorAll('.method-button').forEach(btn => {{
             btn.classList.remove('active');
         }});
+        
+        const newMethod = document.getElementById(methodId);
+        if (newMethod) newMethod.style.display = 'block';
         document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
         
-        // Show first table in this method
-        const firstTable = document.querySelector(`#${{methodId}} .table-pane`);
+        // Show first table
+        const firstTable = newMethod.querySelector('.table-pane');
         if (firstTable) showTable(firstTable.id);
     }}
     
     function showTable(tableId) {{
+        // Purge all plots in current table
         const methodPane = document.getElementById(tableId).closest('.method-pane');
+        const currentTable = methodPane.querySelector('.table-pane[style*="display: block"]');
+        if (currentTable) {{
+            currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                const plotId = pane.dataset.plotId;
+                if (rendered.has(plotId)) purgePlot(plotId);
+            }});
+        }}
+
+        // Update UI
         methodPane.querySelectorAll('.table-pane').forEach(pane => {{
             pane.style.display = 'none';
         }});
-        document.getElementById(tableId).style.display = 'block';
-        
         methodPane.querySelectorAll('.table-button').forEach(btn => {{
             btn.classList.remove('active');
         }});
+        
+        const newTable = document.getElementById(tableId);
+        if (newTable) newTable.style.display = 'block';
         document.querySelector(`[data-table="${{tableId}}"]`).classList.add('active');
         
-        // Show first level in this table
-        const firstLevel = document.querySelector(`#${{tableId}} .level-pane`);
+        // Show first level
+        const firstLevel = newTable.querySelector('.level-pane');
         if (firstLevel) showLevel(firstLevel.id);
     }}
     
     function showLevel(levelId) {{
+        // Purge all plots in current level
         const tablePane = document.getElementById(levelId).closest('.table-pane');
+        const currentLevel = tablePane.querySelector('.level-pane[style*="display: block"]');
+        if (currentLevel) {{
+            currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                const plotId = pane.dataset.plotId;
+                if (rendered.has(plotId)) purgePlot(plotId);
+            }});
+        }}
+
+        // Update UI
         tablePane.querySelectorAll('.level-pane').forEach(pane => {{
             pane.style.display = 'none';
         }});
-        document.getElementById(levelId).style.display = 'block';
-        
         tablePane.querySelectorAll('.level-button').forEach(btn => {{
             btn.classList.remove('active');
         }});
+        
+        const newLevel = document.getElementById(levelId);
+        if (newLevel) newLevel.style.display = 'block';
         document.querySelector(`[data-level="${{levelId}}"]`).classList.add('active');
         
-        // Show first colour in this level
-        const firstColour = document.querySelector(`#${{levelId}} .tab-pane`);
+        // Show first colour plot
+        const firstColour = newLevel.querySelector('.tab-pane');
         if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
     }}
 
-    document.addEventListener('DOMContentLoaded', () => {{
-        // Initialize method tabs
-        document.querySelectorAll('.method-pane').forEach(pane => {{
-            const firstTable = pane.querySelector('.table-pane');
-            if (firstTable) showTable(firstTable.id);
+    /* ---- section toggles ---- */
+    function toggleAllSections(show) {{
+        document.querySelectorAll('.section').forEach(s => {{
+            s.style.display = show ? 'block' : 'none';
         }});
-        
-        // Initialize regular tabs
+    }}
+
+    /* ---- initialization ---- */
+    document.addEventListener('DOMContentLoaded', () => {{
+        // Initialize all first-level plots
         document.querySelectorAll('.subsection').forEach(sub => {{
             const first = sub.querySelector('.tab-pane');
             if (first) showTab(first.id, first.dataset.plotId);
         }});
+        
+        // Initialize nested tabs
+        document.querySelectorAll('.method-pane').forEach(pane => {{
+            const firstTable = pane.querySelector('.table-pane');
+            if (firstTable) showTable(firstTable.id);
+        }});
     }});
-  </script>
+</script>
 </body>
 </html>"""
 
