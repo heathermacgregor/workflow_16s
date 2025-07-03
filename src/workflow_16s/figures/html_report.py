@@ -41,11 +41,8 @@ def _prepare_sections(
     include_sections: List[str],
     id_counter,
 ) -> Tuple[List[Dict], Dict]:
-    """Flatten figures → list‑of‑sections, dict‑of‑plotPayload."""
     sections = []
     plot_data: Dict[str, Any] = {}
-
-    ordination_methods = ["pca", "pcoa", "tsne", "umap"]
 
     for sec in include_sections:
         if sec not in figures:
@@ -54,24 +51,29 @@ def _prepare_sections(
         sec_data = {"id": f"sec-{uuid.uuid4().hex}", "title": sec.title(), "subsections": []}
 
         if sec == "ordination":
-            for meth in ordination_methods:
-                figs = _collect_ord_figs(figures[sec], meth)
-                if not figs:
-                    continue
-                tabs, btns, pd = _figs_to_html(figs, id_counter, sec_data["id"])
-                plot_data.update(pd)
-                sec_data["subsections"].append({"title": meth.upper(),
-                                                "tabs_html": tabs,
-                                                "buttons_html": btns})
+            # Use new nested tab structure for ordination
+            btns, tabs, pd = _ordination_to_nested_html(
+                figures[sec], id_counter, sec_data["id"]
+            )
+            plot_data.update(pd)
+            sec_data["subsections"].append({
+                "title": "Ordination",
+                "tabs_html": tabs,
+                "buttons_html": btns
+            })
         else:
+            # Existing non-ordination sections
             flat: Dict[str, Any] = {}
             _flatten(figures[sec], [], flat)
             if flat:
                 tabs, btns, pd = _figs_to_html(flat, id_counter, sec_data["id"])
                 plot_data.update(pd)
-                sec_data["subsections"].append({"title": "All",
-                                                "tabs_html": tabs,
-                                                "buttons_html": btns})
+                sec_data["subsections"].append({
+                    "title": "All",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
+        
         if sec_data["subsections"]:
             sections.append(sec_data)
 
@@ -423,6 +425,20 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     th                {{ background-color: #f2f2f2; }}
     .feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
     .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}
+
+    /* Add these to your existing CSS */
+    .method-pane {{ display: none; }}
+    .method-pane:first-child {{ display: block; }}
+    .method-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
+    .table-tabs, .level-tabs {{ display: flex; flex-wrap: wrap; margin-bottom: 5px; }}
+    .table-pane {{ display: none; margin-left: 15px; }}
+    .table-pane:first-child {{ display: block; }}
+    .level-pane {{ display: none; margin-left: 15px; }}
+    .level-pane:first-child {{ display: block; }}
+    .table-button, .level-button {{ padding: 6px 10px; background: #f0f0f0; border: 1px solid #ddd; cursor: pointer; 
+                                    border-radius: 4px; margin-right: 5px; margin-bottom: 5px; font-size: 0.85em; }}
+    .table-button.active, .level-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
+    
   </style>
 </head>
 <body>
@@ -519,8 +535,64 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                 .forEach(s => (s.style.display = show ? 'block' : 'none'));
     }}
 
-    /* ---- first‑tab bootstrapping ---- */
+    function showMethod(methodId) {{
+        document.querySelectorAll('.method-pane').forEach(pane => {{
+            pane.style.display = 'none';
+        }});
+        document.getElementById(methodId).style.display = 'block';
+        
+        document.querySelectorAll('.method-button').forEach(btn => {{
+            btn.classList.remove('active');
+        }});
+        document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
+        
+        // Show first table in this method
+        const firstTable = document.querySelector(`#${methodId} .table-pane`);
+        if (firstTable) showTable(firstTable.id);
+    }}
+    
+    function showTable(tableId) {{
+        const methodPane = document.getElementById(tableId).closest('.method-pane');
+        methodPane.querySelectorAll('.table-pane').forEach(pane => {{
+            pane.style.display = 'none';
+        }});
+        document.getElementById(tableId).style.display = 'block';
+        
+        methodPane.querySelectorAll('.table-button').forEach(btn => {{
+            btn.classList.remove('active');
+        }});
+        document.querySelector(`[data-table="${{tableId}}"]`).classList.add('active');
+        
+        // Show first level in this table
+        const firstLevel = document.querySelector(`#${{tableId}} .level-pane`);
+        if (firstLevel) showLevel(firstLevel.id);
+    }}
+    
+    function showLevel(levelId) {{
+        const tablePane = document.getElementById(levelId).closest('.table-pane');
+        tablePane.querySelectorAll('.level-pane').forEach(pane => {{
+            pane.style.display = 'none';
+        }});
+        document.getElementById(levelId).style.display = 'block';
+        
+        tablePane.querySelectorAll('.level-button').forEach(btn => {{
+            btn.classList.remove('active');
+        }});
+        document.querySelector(`[data-level="${{levelId}}"]`).classList.add('active');
+        
+        // Show first colour in this level
+        const firstColour = document.querySelector(`#${levelId} .tab-pane`);
+        if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
+    }}
+
     document.addEventListener('DOMContentLoaded', () => {{
+        // Initialize method tabs
+        document.querySelectorAll('.method-pane').forEach(pane => {{
+            const firstTable = pane.querySelector('.table-pane');
+            if (firstTable) showTable(firstTable.id);
+        }});
+        
+        // Initialize regular tabs
         document.querySelectorAll('.subsection').forEach(sub => {{
             const first = sub.querySelector('.tab-pane');
             if (first) showTab(first.id, first.dataset.plotId);
@@ -529,3 +601,78 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </script>
 </body>
 </html>"""
+
+def _ordination_to_nested_html(
+    figures: Dict[str, Any], 
+    id_counter, 
+    prefix: str
+) -> Tuple[str, str, Dict]:
+    """Create nested tab structure for ordination plots."""
+    tabs, btns, plot_data = [], [], {}
+    ordination_methods = ["pca", "pcoa", "tsne", "umap"]
+    
+    for meth in ordination_methods:
+        meth_figs = {}
+        for table_type, levels in figures.items():
+            for level, methods in levels.items():
+                if meth in methods:
+                    meth_figs.setdefault(table_type, {})[level] = methods[meth]
+        
+        if not meth_figs:
+            continue
+            
+        # Generate unique IDs for method section
+        meth_id = f"{prefix}-meth-{next(id_counter)}"
+        tabs.append(f'<div id="{meth_id}" class="method-pane">')
+        btns.append(
+            f'<button class="method-button {"active" if meth=="pca" else ""}" '
+            f'data-method="{meth_id}" '
+            f'onclick="showMethod(\'{meth_id}\')">{meth.upper()}</button>'
+        )
+        
+        # Table type tabs
+        table_tabs, table_btns = [], []
+        for i, (table_type, levels) in enumerate(meth_figs.items()):
+            table_id = f"{meth_id}-table-{next(id_counter)}"
+            table_tabs.append(f'<div id="{table_id}" class="table-pane">')
+            table_btns.append(
+                f'<button class="table-button {"active" if i==0 else ""}" '
+                f'data-table="{table_id}" '
+                f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+            )
+            
+            # Level tabs
+            level_tabs, level_btns = [], []
+            for j, (level, colours) in enumerate(levels.items()):
+                level_id = f"{table_id}-level-{next(id_counter)}"
+                level_tabs.append(f'<div id="{level_id}" class="level-pane">')
+                level_btns.append(
+                    f'<button class="level-button {"active" if j==0 else ""}" '
+                    f'data-level="{level_id}" '
+                    f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+                )
+                
+                # Colour tabs (lowest level)
+                colour_tabs, colour_btns, pd = _figs_to_html(
+                    colours, id_counter, level_id
+                )
+                plot_data.update(pd)
+                level_tabs.append(
+                    f'<div class="colour-tabs">{colour_btns}</div>'
+                    f'<div class="colour-content">{colour_tabs}</div>'
+                    f'</div>'  # close level-pane
+                )
+            
+            table_tabs.append(
+                f'<div class="level-tabs">{ "".join(level_btns) }</div>'
+                f'<div class="level-content">{ "".join(level_tabs) }</div>'
+                f'</div>'  # close table-pane
+            )
+        
+        tabs.append(
+            f'<div class="table-tabs">{ "".join(table_btns) }</div>'
+            f'<div class="table-content">{ "".join(table_tabs) }</div>'
+            f'</div>'  # close method-pane
+        )
+    
+    return "".join(btns), "".join(tabs), plot_data
