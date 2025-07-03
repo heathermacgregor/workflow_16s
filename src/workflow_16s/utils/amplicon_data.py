@@ -86,14 +86,10 @@ DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 DEFAULT_MODE = 'genus'
 DEFAULT_ALPHA_METRICS = [
-    'shannon', 
-    'observed_features', 
-    'simpson',
-    'pielou_evenness',
-    'chao1',
-    'ace',
-    'gini_index',
-    'goods_coverage'
+    'shannon', 'observed_features', 'simpson',
+    'pielou_evenness', 'chao1', 'ace', 
+    'gini_index', 'goods_coverage', 'heip_evenness', 
+    'dominance'       
 ]
 
 
@@ -818,16 +814,16 @@ class _DataLoader(_ProcessingMixin):
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
             f"{'Loaded metadata:':<{LABEL_W}}"             
-            f"{RED}{self.meta.shape[0]:>{ROW_W}}{RESET} "   
+            f"{self.meta.shape[0]:>{ROW_W}} "   
             "samples × "
-            f"{RED}{self.meta.shape[1]:>{COL_W}}{RESET} "  
+            f"{self.meta.shape[1]:>{COL_W}} "  
             "cols"
         )
         logger.info(
             f"{'Loaded features:':<{LABEL_W}}"              
-            f"{RED}{self.table.shape[1]:>{ROW_W}}{RESET} "   
+            f"{self.table.shape[1]:>{ROW_W}} "   
             "samples × "
-            f"{RED}{self.table.shape[0]:>{COL_W}}{RESET} "  
+            f"{self.table.shape[0]:>{COL_W}} "  
             f"{ftype}"
         )
 
