@@ -104,21 +104,34 @@ def _flatten(tree, keys, out):
             out[" - ".join(new_keys)] = v
 
 
-def _trace_len(trace: Dict[str, Any]) -> int:
-    """Return a best‑guess count of data points in a Plotly trace."""
-    for key in ("x", "y", "z", "values"):          # common data fields
+def _pts_in_trace(trace: Dict[str, Any]) -> int:
+    """
+    Return a best‑guess number of data points in a Plotly JSON trace.
+    Works for scatter/line, scatter3d, bar, heatmap, surface, histogram,
+    box/violin, pie, etc.  If no suitable field is found, returns 0.
+    """
+    # Common 1‑D fields in order of preference
+    for key in ("x", "y", "z", "values"):
         arr = trace.get(key)
         if arr is None:
             continue
-        # 2‑D arrays (heatmap, surface) → total cells
+
+        # 2‑D array (heatmap.z, surface.z, contour.z, etc.)
         if isinstance(arr, (list, tuple)) and arr and isinstance(arr[0], (list, tuple)):
             return sum(len(row) for row in arr)
-        # NumPy array or any sequence with __len__
+
+        # Anything with __len__ (list, tuple, NumPy ndarray, pandas Series, etc.)
         try:
             return len(arr)
         except TypeError:
-            pass
-    return 0   # fallback if no len() possible
+            pass  # e.g. generators, None, scalars
+
+    # Special cases
+    if trace.get("type") == "pie" and "labels" in trace and "values" in trace:
+        return len(trace["values"])
+
+    # If nothing matches, 0 is safest
+    return 0
 
 
 def _figs_to_html(
@@ -153,7 +166,8 @@ def _figs_to_html(
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
-                num_points = sum(_trace_len(t) for t in pj.get("data", []))
+                num_points = sum(_pts_in_trace(t) for t in pj.get("data", []))
+
                 pj["layout"].setdefault("annotations", []).append({
                     "text": f"n = {num_points}",
                     "xref": "paper", "yref": "paper",   # relative to full plot
