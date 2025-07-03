@@ -103,7 +103,7 @@ def generate_html_report(
 <head>
     <meta charset='utf-8'>
     <title>16S Analysis Report</title>
-    {plotly_js_tag}
+    {{plotly_js_tag}}
     <style>
         body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
         h1, h2, h3, h4 {{ color: #2c3e50; }}
@@ -178,45 +178,45 @@ def generate_html_report(
 </head>
 <body>
     <h1>16S Amplicon Analysis Report</h1>
-    <p>Generated on {timestamp}</p>
+    <p>Generated on {{timestamp}}</p>
 
     <!-- ========================== TOP FEATURES ========================== -->
     <div class="section">
         <h2>Top Features</h2>
         <h3>Contaminated‑Associated Features</h3>
-        {contam_df.to_html(index=False, classes='feature-table')}
+        {{contam_df.to_html(index=False, classes='feature-table')}}
         <h3>Pristine‑Associated Features</h3>
-        {pristine_df.to_html(index=False, classes='feature-table')}
+        {{pristine_df.to_html(index=False, classes='feature-table')}}
     </div>
 
     <!-- ========================== STAT SUMMARY ========================== -->
     <div class="section">
         <h2>Statistical Summary</h2>
-        {stats_summary.to_html(index=False)}
+        {{stats_summary.to_html(index=False)}}
     </div>
 
     <!-- ========================== ML RESULTS ============================ -->
     <div class="section">
         <h2>Machine Learning Results</h2>
-        {_format_ml_section(ml_metrics, ml_features, shap_plot)}
+        {{_format_ml_section(ml_metrics, ml_features, shap_plot)}}
     </div>
 
     <!-- ========================== SAMPLE MAPS (new) ===================== -->
     <div class="section">
         <h2>Sample Maps</h2>
-        <div class="tabs">{map_buttons_html}</div>
-        <div class="tab-content">{map_tabs_html}</div>
+        <div class="tabs">{{map_buttons_html}}</div>
+        <div class="tab-content">{{map_tabs_html}}</div>
     </div>
 
     <!-- ========================== OTHER FIGURES (legacy) ================ -->
     <div class="section">
         <h2>Other Visualisations</h2>
-        <div class="figure-grid">{other_figures_html}</div>
+        <div class="figure-grid">{{other_figures_html}}</div>
     </div>
 
     <!-- ========================== JS FOR SAMPLE MAP TABS ================ -->
     <script>
-        const plotData = {map_plot_data_json};
+        const plotData = {{map_plot_data_json}};
         const initialised = new Set();
 
         function renderPlot(containerId, plotId) {{
@@ -253,11 +253,11 @@ def generate_html_report(
             if (pane) {{
                 pane.style.display = 'block';
                 if (!initialised.has(plotId)) {{
-                    renderPlot(`container-${plotId}`, plotId);
+                    renderPlot(`container-${{plotId}}`, plotId);
                     initialised.add(plotId);
                 }}
             }}
-            const btn = document.querySelector(`[data-tab="${tabId}"]`);
+            const btn = document.querySelector(`[data-tab="${{tabId}}"]`);
             if (btn) btn.classList.add('active');
         }}
 
