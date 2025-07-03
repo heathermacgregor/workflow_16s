@@ -87,8 +87,22 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
+        elif sec == "map":
+            # Sample map section
+            flat: Dict[str, Any] = {}
+            _flatten(figures[sec], [], flat)
+            if flat:
+                tabs, btns, pd = _figs_to_html(
+                    flat, id_counter, sec_data["id"]
+                )
+                plot_data.update(pd)
+                sec_data["subsections"].append({
+                    "title": "Sample Maps",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
         else:
-            # Flatten nested structures for other sections
+            # Existing non-ordination sections
             flat: Dict[str, Any] = {}
             _flatten(figures[sec], [], flat)
             if flat:
@@ -301,13 +315,13 @@ def _prepare_ml_summary(models: Dict) -> Tuple[Optional[pd.DataFrame], Optional[
                 # Track best model for SHAP plot
                 current_mcc = test_scores.get("mcc", -1)
                 shap_path = result.get("shap_summary_bar_path")
-                if current_mcc > best_mcc and shap_path:
+                if current_mcc > best_mcc and shap_path and Path(shap_path).exists():
                     try:
                         with open(shap_path, "rb") as img_file:
                             shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
                         best_mcc = current_mcc
                     except Exception:
-                        pass
+                        logger.warning(f"Could not load SHAP plot from {shap_path}")
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
@@ -485,24 +499,24 @@ def _alpha_diversity_to_nested_html(
             metric_btns, metric_panes = [], []
             for m_idx, (metric, fig) in enumerate(metrics.items()):
                 metric_id = f"{level_id}-metric-{next(id_counter)}"
+                plot_id = f"{prefix}-plot-{next(id_counter)}"
                 
                 # metric button
                 metric_btns.append(
                     f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
                     f'data-metric="{metric_id}" '
-                    f'onclick="showMetric(\'{metric_id}\')">{metric}</button>'
+                    f'onclick="showMetric(\'{metric_id}\', \'{plot_id}\')">{metric}</button>'
                 )
                 
                 # metric pane
                 metric_panes.append(
                     f'<div id="{metric_id}" class="metric-pane" '
                     f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'<div id="container-{metric_id}" class="plot-container"></div>'
+                    f'<div id="container-{plot_id}" class="plot-container"></div>'
                     f'</div>'
                 )
                 
                 # Add plot data
-                plot_id = f"{prefix}-plot-{next(id_counter)}"
                 try:
                     if hasattr(fig, "to_plotly_json"):
                         pj = fig.to_plotly_json()
@@ -590,24 +604,24 @@ def _alpha_correlations_to_nested_html(
             metric_btns, metric_panes = [], []
             for m_idx, (metric, fig) in enumerate(metrics.items()):
                 metric_id = f"{level_id}-metric-{next(id_counter)}"
+                plot_id = f"{prefix}-plot-{next(id_counter)}"
                 
                 # metric button
                 metric_btns.append(
                     f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
                     f'data-metric="{metric_id}" '
-                    f'onclick="showMetric(\'{metric_id}\')">{metric}</button>'
+                    f'onclick="showMetric(\'{metric_id}\', \'{plot_id}\')">{metric}</button>'
                 )
                 
                 # metric pane
                 metric_panes.append(
                     f'<div id="{metric_id}" class="metric-pane" '
                     f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'<div id="container-{metric_id}" class="plot-container"></div>'
+                    f'<div id="container-{plot_id}" class="plot-container"></div>'
                     f'</div>'
                 )
                 
                 # Add plot data
-                plot_id = f"{prefix}-plot-{next(id_counter)}"
                 try:
                     if hasattr(fig, "to_plotly_json"):
                         pj = fig.to_plotly_json()
@@ -1012,6 +1026,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     
     .dynamic-table th.asc::after         {{ content: " ▲"; font-size: 0.8em; position: absolute; right: 8px; }}
     .dynamic-table th.desc::after        {{ content: " ▼"; font-size: 0.8em; position: absolute; right: 8px; }}
+    
+    /* ML Section Styling */
+    .ml-section                          {{ margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }}
+    .ml-section h3                       {{ margin-top: 0; }}
+    .figure-container                    {{ margin-top: 20px; text-align: center; }}
+    .figure-container img                {{ max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }}
   </style>
 </head>
 <body>
@@ -1255,16 +1275,20 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
     }}
     
-    function showMetric(metricId) {{
-        // Purge all plots in current metric
-        const levelPane = document.getElementById(metricId).closest('.level-pane');
-        const currentMetric = levelPane.querySelector('.metric-pane[style*="display: block"]');
-        if (currentMetric) {{
-            const plotId = currentMetric.querySelector('.plot-container').id.replace('container-', '');
-            if (rendered.has(plotId)) purgePlot(plotId);
+    function showMetric(metricId, plotId) {{
+        // Purge any existing plot in this metric pane
+        const container = document.getElementById(`container-${{plotId}}`);
+        if (container) {{
+            container.innerHTML = '';
         }}
-
+        
         // Update UI
+        const metricPane = document.getElementById(metricId);
+        if (!metricPane) return;
+        
+        const levelPane = metricPane.closest('.level-pane');
+        if (!levelPane) return;
+        
         levelPane.querySelectorAll('.metric-pane').forEach(pane => {{
             pane.style.display = 'none';
         }});
@@ -1272,12 +1296,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             btn.classList.remove('active');
         }});
         
-        const newMetric = document.getElementById(metricId);
-        if (newMetric) newMetric.style.display = 'block';
+        metricPane.style.display = 'block';
         document.querySelector(`[data-metric="${{metricId}}"]`).classList.add('active');
         
         // Render new plot
-        const plotId = newMetric.querySelector('.plot-container').id.replace('container-', '');
         if (!rendered.has(plotId)) {{
             renderPlot(`container-${{plotId}}`, plotId);
             rendered.add(plotId);
@@ -1306,6 +1328,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         document.querySelectorAll('.method-pane').forEach(pane => {{
             const firstTable = pane.querySelector('.table-pane');
             if (firstTable) showTable(firstTable.id);
+        }});
+        
+        // Initialize alpha diversity tabs
+        document.querySelectorAll('.table-pane').forEach(pane => {{
+            const firstLevel = pane.querySelector('.level-pane');
+            if (firstLevel) {{
+                const firstMetric = firstLevel.querySelector('.metric-pane');
+                const firstButton = firstLevel.querySelector('.metric-button');
+                if (firstMetric && firstButton) {{
+                    const plotId = firstMetric.querySelector('.plot-container').id.replace('container-', '');
+                    showMetric(firstMetric.id, plotId);
+                }}
+            }}
         }});
         
         // Initialize tables
