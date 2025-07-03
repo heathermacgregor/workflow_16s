@@ -582,85 +582,61 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <title>16S Analysis Report</title>
   {plotly_js_tag}
   <style>
-    body              {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
-    .section          {{ margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }}
-    .subsection       {{ margin-left: 20px; margin-bottom: 20px; }}
+    body                                 {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+    .section                             {{ margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }}
+    .subsection                          {{ margin-left: 20px; margin-bottom: 20px; }}
     
-    .tabs             {{ display: flex; margin: 0 0 10px 0; flex-wrap: wrap; }}
-    .tabs[data-label]::before {{
-        content: attr(data-label) ": ";
-        font-weight: bold;
-        margin-right: 6px;
-        white-space: nowrap;
-    }}
-    .tabs[data-label] {{           /* all labelled rows share this rule */
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        margin-top: 6px;
-    }}
+    .tabs                                {{ display: flex; margin: 0 0 10px 0; flex-wrap: wrap; }}
+    .tabs[data-label]::before            {{ content: attr(data-label) ": "; font-weight: bold; margin-right: 6px; white-space: nowrap; }}
+    .tabs[data-label]                    {{ display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; }}
     
-    /* progressively deeper indents */
-    .tabs[data-label="table_type"] {{ margin-left: 15px; }}
-    .tabs[data-label="level"]      {{ margin-left: 30px; }}
-    .tabs[data-label="color_col"]  {{ margin-left: 45px; }}
     
-    .tab-content      {{ border: 1px solid #ccc; padding: 10px; border-radius: 4px; }}
     
-    .method-pane {{ display: none; }}
-    .method-pane:first-child {{ display: block; }}
+    .tab-content                         {{ border: 1px solid #ccc; padding: 10px; border-radius: 4px; }}
     
-    .table-tabs, .level-tabs {{ display: flex; flex-wrap: wrap; margin-bottom: 5px; }}
-    .table-pane {{ display: none; margin-left: 15px; }}
-    .table-pane:first-child {{ display: block; }}
+    .method-pane                         {{ display: none; }}
+    .method-pane:first-child             {{ display: block; }}
     
-    .level-pane {{ display: none; margin-left: 15px; }}
-    .level-pane:first-child {{ display: block; }}
+    .table-tabs, .level-tabs             {{ display: flex; flex-wrap: wrap; margin-bottom: 5px; }}
+    .table-pane                          {{ display: none; margin-left: 15px; }}
+    .table-pane:first-child              {{ display: block; }}
     
-    .plot-container   {{ }}
+    .level-pane                          {{ display: none; margin-left: 15px; }}
+    .level-pane:first-child              {{ display: block; }}
+
+    .subsection > .tab-content > .tabs   {{ margin-left:   0px; }}
+    .method-pane > .tabs                 {{ margin-left:  15px; }}
+    .table-pane > .tabs                  {{ margin-left:  30px; }}
+    .level-pane > .tabs                  {{ margin-left:  45px; }}
     
-    .error            {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
+    .plot-container                      {{ }}
     
-    .section-controls {{ margin: 10px 0; }}
-    .section-button   {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer;
-                         border-radius: 4px; margin-right: 5px; }}
+    .error                               {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
+    
+    .section-controls                    {{ margin: 10px 0; }}
+    .section-button                      {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; 
+                                            margin-right: 5px; }}
                          
     /* Table styles */
-    table             {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-    th, td            {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-    th                {{ background-color: #f2f2f2; }}
-    .feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+    table                                {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+    th, td                               {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    th                                   {{ background-color: #f2f2f2; }}
+    .feature-table tr:nth-child(even)    {{ background-color: #f9f9f9; }}
     .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}    
     
     /* Tab Buttons */
     .tab-button,
     .method-button,
     .table-button,
-    .level-button {{
-        padding: 4px 10px;          /* smaller */
-        font-size: 0.8em;           /* smaller text */
-        line-height: 1.2;
-        background: #000;           /* black bg */
-        color: #fff;                /* white text */
-        border: 1px solid #000;     /* black border */
-        border-radius: 6px;         /* rounded rectangle */
-        cursor: pointer;
-        min-width: 110px;           /* consistent width */
-        text-align: center;
-        flex: 0 0 auto;             /* keep size even in flex rows */
-        margin-right: 5px;
-        margin-bottom: 5px;
-    }}
+    .level-button                        {{ padding: 4px 10px; font-size: 0.8em; line-height: 1.2; background: #000; color: #fff; border: 1px solid #000; 
+                                            border-radius: 6px; cursor: pointer; min-width: 110px; text-align: center; flex: 0 0 auto; margin-right: 5px; 
+                                            margin-bottom: 5px; }}
     
     /* Tab Buttons ACTIVE */
     .tab-button.active,
     .method-button.active,
     .table-button.active,
-    .level-button.active {{
-        background: #fff;           /* white bg */
-        color: #000;                /* black text */
-        border-color: #000;         /* keep black outline */
-    }}
+    .level-button.active                 {{ background: #fff; color: #000; border-color: #000; }}
   </style>
 </head>
 <body>
