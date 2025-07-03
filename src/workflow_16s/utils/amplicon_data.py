@@ -1377,6 +1377,8 @@ class _AnalysisManager(_ProcessingMixin):
         if not n:
             return
             
+        self.figures["alpha_diversity"] = {}    
+        
         with get_progress_bar() as prog:
             l0_desc = "Running alpha diversity analysis..."
             l0_task = prog.add_task(
@@ -1399,7 +1401,7 @@ class _AnalysisManager(_ProcessingMixin):
                 self.alpha_diversity_stats[table_type] = {}
                 
                 # Initialize figures structure
-                if table_type not in self.figures:
+                if table_type not in self.figures["alpha_diversity"]:
                     self.figures["alpha_diversity"][table_type] = {}
                 
                 # Get enabled levels for this table type
