@@ -235,14 +235,15 @@ def generate_html_report(
             }}
             try {{
                 if (payload.layout) payload.layout.showlegend = false;
-                Plotly.newPlot(plotId, payload.data, payload.layout).catch(err => {{
-                    div.innerHTML = `<div class='error'>Plotly error: ${err}</div>`;
-                    console.error(err);
+                Plotly.newPlot(plotId, payload.data, payload.layout).catch(error => {{
+                    div.innerHTML = `<div class='error'>Plotly error: ${{error}}`</div>`;
+                    console.error(error);
                 }});
-            }} catch (err) {{
-                div.innerHTML = `<div class='error'>Render error: ${err}</div>`;
-                console.error(err);
+            }} catch (error) {{
+                div.innerHTML = `<div class='error'>Render error: ${{error}}`</div>`;
+                console.error(error);
             }}
+
         }}
 
         function showTab(tabId, plotId) {{
