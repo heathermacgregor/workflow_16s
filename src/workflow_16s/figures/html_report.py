@@ -91,7 +91,7 @@ def _collect_ord_figs(tree, meth):
         for level, methods in levels.items():
             if meth in methods:
                 for colour, fig in methods[meth].items():
-                    out[f"{table_type} – {level} – {colour}"] = fig
+                    out[f"{table_type} - {level} - {colour}"] = fig
     return out
 
 
@@ -101,7 +101,24 @@ def _flatten(tree, keys, out):
         if isinstance(v, dict):
             _flatten(v, new_keys, out)
         else:
-            out[" – ".join(new_keys)] = v
+            out[" - ".join(new_keys)] = v
+
+
+def _trace_len(trace: Dict[str, Any]) -> int:
+    """Return a best‑guess count of data points in a Plotly trace."""
+    for key in ("x", "y", "z", "values"):          # common data fields
+        arr = trace.get(key)
+        if arr is None:
+            continue
+        # 2‑D arrays (heatmap, surface) → total cells
+        if isinstance(arr, (list, tuple)) and arr and isinstance(arr[0], (list, tuple)):
+            return sum(len(row) for row in arr)
+        # NumPy array or any sequence with __len__
+        try:
+            return len(arr)
+        except TypeError:
+            pass
+    return 0   # fallback if no len() possible
 
 
 def _figs_to_html(
@@ -136,11 +153,7 @@ def _figs_to_html(
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
-                num_points = sum(
-                    len(trace.get("x", []))
-                    for trace in pj.get("data", [])
-                    if isinstance(trace.get("x", []), list)
-                )
+                num_points = sum(_trace_len(t) for t in pj.get("data", []))
                 pj["layout"].setdefault("annotations", []).append({
                     "text": f"n = {num_points}",
                     "xref": "paper", "yref": "paper",   # relative to full plot
@@ -459,7 +472,7 @@ def generate_html_report(
     include_sections = include_sections or [
         k for k, v in amplicon_data.figures.items() if v
     ]
-    ts = pd.Timestamp.now().strftime("%Y‑%m‑%d %H:%M:%S")
+    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
