@@ -495,32 +495,63 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .section          {{ margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }}
     .subsection       {{ margin-left: 20px; margin-bottom: 20px; }}
     .tabs             {{ display: flex; margin-bottom: -1px; flex-wrap: wrap; }}
-    .tab-button       {{ padding: 8px 12px; background: #eee; border: 1px solid #ccc; cursor: pointer;
-                         border-radius: 4px 4px 0 0; margin-right: 5px; margin-bottom: 5px; font-size: 0.9em; }}
-    .tab-button.active{{ background: #fff; border-bottom: 1px solid #fff; }}
+    
     .tab-content      {{ border: 1px solid #ccc; padding: 15px; border-radius: 0 4px 4px 4px; }}
+    
     .method-pane {{ display: none; }}
     .method-pane:first-child {{ display: block; }}
-    .method-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
+    
     .table-tabs, .level-tabs {{ display: flex; flex-wrap: wrap; margin-bottom: 5px; }}
     .table-pane {{ display: none; margin-left: 15px; }}
     .table-pane:first-child {{ display: block; }}
+    
     .level-pane {{ display: none; margin-left: 15px; }}
     .level-pane:first-child {{ display: block; }}
-    .table-button, .level-button {{ padding: 6px 10px; background: #f0f0f0; border: 1px solid #ddd; cursor: pointer; 
-                                    border-radius: 4px; margin-right: 5px; margin-bottom: 5px; font-size: 0.85em; }}
-    .table-button.active, .level-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
+    
     .plot-container   {{ }}
+    
     .error            {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
+    
     .section-controls {{ margin: 10px 0; }}
     .section-button   {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer;
                          border-radius: 4px; margin-right: 5px; }}
+                         
     /* Table styles */
     table             {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
     th, td            {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
     th                {{ background-color: #f2f2f2; }}
     .feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
     .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}    
+    
+    /* Tab Buttons */
+    .tab-button,
+    .method-button,
+    .table-button,
+    .level-button {
+        padding: 4px 10px;          /* smaller */
+        font-size: 0.8em;           /* smaller text */
+        line-height: 1.2;
+        background: #000;           /* black bg */
+        color: #fff;                /* white text */
+        border: 1px solid #000;     /* black border */
+        border-radius: 6px;         /* rounded rectangle */
+        cursor: pointer;
+        min-width: 110px;           /* consistent width */
+        text-align: center;
+        flex: 0 0 auto;             /* keep size even in flex rows */
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+    
+    /* Tab Buttons ACTIVE */
+    .tab-button.active,
+    .method-button.active,
+    .table-button.active,
+    .level-button.active {
+        background: #fff;           /* white bg */
+        color: #000;                /* black text */
+        border-color: #000;         /* keep black outline */
+    }
   </style>
 </head>
 <body>
@@ -588,7 +619,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Compute responsive width (min 500px, max 1000px)
         const fullWidth = container.clientWidth || window.innerWidth;
-        const minWidth  = fullWidth * 0.25;                    // 25 % floor
+        const minWidth  = fullWidth * 0.15;                    // 25 % floor
         const width     = Math.max(minWidth, Math.min(1000, fullWidth * 0.95));
         // Square only when payload.square === true
         const height = payload.square ? width : Math.round(width * 0.6);
