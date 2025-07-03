@@ -1111,7 +1111,13 @@ def plot_correlation_matrix(
         output_dir=output_path,
         show=show
     )
-    
+
+
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from scipy import stats
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 def create_alpha_diversity_boxplot(
     alpha_df: pd.DataFrame,
@@ -1121,25 +1127,29 @@ def create_alpha_diversity_boxplot(
     output_dir: Optional[Path] = None,
     show: bool = False,
     verbose: bool = False,
-    add_points: bool = True, 
-    add_stat_annot: bool = True
+    add_points: bool = True,
+    add_stat_annot: bool = True,
+    test_type: str = "parametric"
 ) -> go.Figure:
     """
-    Create boxplot for an alpha diversity metric grouped by contamination status.
+    Create interactive boxplot for alpha diversity metric.
     
     Args:
-        alpha_df:   DataFrame from alpha_diversity()
-        metadata:   Sample metadata DataFrame
-        group_col:  Column containing group labels
-        metric:     Alpha diversity metric to plot
-        output_dir: Directory to save plot
-        show:       Display figure interactively
-        verbose:    Enable debug logging
-        
+        alpha_df: DataFrame from alpha_diversity()
+        metadata: Sample metadata
+        group_column: Grouping variable in metadata
+        metric: Diversity metric to visualize
+        output_dir: Save directory
+        show: Display interactive plot
+        verbose: Enable debug logging
+        add_points: Show individual data points
+        add_stat_annot: Add statistical annotations
+        test_type: Statistical test type ('parametric' or 'nonparametric')
+    
     Returns:
-        Plotly figure object
+        Plotly Figure object
     """
-    # Merge alpha diversity with metadata
+    # Merge data
     merged = alpha_df[[metric]].merge(
         metadata[[group_column]], 
         left_index=True, 
@@ -1147,41 +1157,48 @@ def create_alpha_diversity_boxplot(
         how='inner'
     )
     
-    # Create plot
+    # Create base figure
     fig = px.box(
         merged, 
         x=group_column, 
         y=metric,
         color=group_column,
-        points="all",
-        title=f"{metric.replace('_', ' ').title()} by {group_column}",
-        labels={metric: metric.replace('_', ' ').title(), group_column: group_column.replace('_', ' ').title()}
+        points="all" if add_points else False,
+        title=f"{metric.replace('_', ' ').title()} Diversity",
+        labels={
+            metric: metric.replace('_', ' ').title(),
+            group_column: group_column.replace('_', ' ').title()
+        }
     )
-
-    # Add swarmplot for individual observations
-    if add_points:
-        ax = sns.swarmplot(
-            x=group_column, 
-            y=metric, 
-            data=merged,
-            color=".25",
-            size=3,
-            alpha=0.5
-        )
     
-    # Add statistical annotations
+    # Add statistical annotations if enabled
     if add_stat_annot:
-        add_stat_annotation(
-            ax,
-            data=merged,
-            x=group_column,
-            y=metric,
-            box_pairs=[(grp1, grp2) for grp1 in groups for grp2 in groups if grp1 < grp2],
-            test=test_type,  # 't-test' or 'Mann-Whitney'
-            text_format='star',
-            loc='inside',
-            verbose=0
-        )
+        groups = merged[group_column].unique()
+        group_pairs = [(i, j) for i in groups for j in groups if i < j]
+        annotations = []
+        
+        # Perform appropriate statistical test
+        for pair in group_pairs:
+            grp1 = merged[merged[group_column] == pair[0]][metric]
+            grp2 = merged[merged[group_column] == pair[1]][metric]
+            
+            if test_type == "parametric":
+                _, p_val = stats.ttest_ind(grp1, grp2)
+            else:
+                _, p_val = stats.mannwhitneyu(grp1, grp2)
+            
+            # Format annotation
+            stars = "****" if p_val < 0.0001 else "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
+            annotations.append(
+                dict(
+                    x=(pair[0] + pair[1])/2,
+                    y=merged[metric].max() * 1.05 + 0.05 * group_pairs.index(pair),
+                    text=stars,
+                    showarrow=False,
+                    font=dict(size=14)
+            )
+            
+        fig.update_layout(annotations=annotations)
     
     # Update layout
     fig.update_layout(
@@ -1198,69 +1215,88 @@ def create_alpha_diversity_boxplot(
         output_dir.mkdir(parents=True, exist_ok=True)
         file_stem = f"boxplot.{metric}.{group_column}"
         plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
-        
+            
     return fig
-
+    
 
 def create_alpha_diversity_stats_plot(
     stats_df: pd.DataFrame,
     output_dir: Optional[Path] = None,
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    effect_size_threshold: float = 0.5
 ) -> go.Figure:
     """
-    Create visualization for alpha diversity statistical results.
+    Create interactive visualization for statistical results.
     
     Args:
-        stats_df:   DataFrame from analyze_alpha_diversity()
-        output_dir: Directory to save plot
-        show:       Display figure interactively
-        verbose:    Enable debug logging
-        
+        stats_df: DataFrame from analyze_alpha_diversity()
+        output_dir: Save directory
+        show: Display interactive plot
+        verbose: Enable debug logging
+        effect_size_threshold: Threshold for meaningful effect size
+    
     Returns:
-        Plotly figure object
+        Plotly Figure object
     """
-    # Transform p-values for visualization
-    stats_df['-log10(p)'] = -np.log10(stats_df['p_value'])
+    # Transform p-values
+    stats_df['-log10(p_value)'] = -np.log10(stats_df['p_value'])
     stats_df['significant'] = stats_df['p_value'] < 0.05
+    stats_df['meaningful_effect'] = stats_df['effect_size'].abs() > effect_size_threshold
     
-    # Create plot
-    fig = px.bar(
-        stats_df,
-        x='metric',
-        y='-log10(p)',
-        color='significant',
-        color_discrete_map={True: '#EF553B', False: '#636EFA'},
-        text='p_value',
-        title="Alpha Diversity Statistical Results",
-        labels={
-            'metric': 'Diversity Metric',
-            '-log10(p)': '-log10(p-value)',
-            'p_value': 'p-value',
-            'test': 'Statistical Test'
-        },
-        hover_data=['test', 'statistic', 'p_value', 'groups']
-    )
+    # Create figure with dual axes
+    fig = go.Figure()
     
-    # Add significance threshold line
-    fig.add_hline(
-        y=-np.log10(0.05), 
-        line_dash="dash", 
-        line_color="red",
-        annotation_text="p=0.05 threshold", 
-        annotation_position="top right"
-    )
+    # P-value bars
+    fig.add_trace(go.Bar(
+        x=stats_df['metric'],
+        y=stats_df['-log10(p_value)'],
+        marker_color=np.where(stats_df['significant'], '#EF553B', '#636EFA'),
+        name='-log10(p-value)',
+        text=stats_df.apply(lambda x: f"p={x['p_value']:.2e}", axis=1),
+        textposition='outside'
+    ))
     
-    # Update layout
+    # Effect size markers
+    fig.add_trace(go.Scatter(
+        x=stats_df['metric'],
+        y=stats_df['effect_size'],
+        yaxis='y2',
+        mode='markers+text',
+        marker=dict(
+            size=12,
+            color=np.where(stats_df['meaningful_effect'], '#00CC96', '#AB63FA'),
+            symbol=np.where(stats_df['effect_size'] > 0, 'triangle-up', 'triangle-down')
+        ),
+        text=stats_df['effect_size'].round(2),
+        textposition="top center",
+        name='Effect Size'
+    ))
+    
+    # Layout configuration
     fig.update_layout(
+        title="Alpha Diversity Statistical Summary",
         template='heather',
         height=800,
         width=1200,
         font_size=16,
         xaxis_title="Diversity Metric",
         yaxis_title="-log10(p-value)",
-        legend_title="Significant (p<0.05)"
+        yaxis2=dict(
+            title="Effect Size",
+            overlaying="y",
+            side="right",
+            range=[stats_df['effect_size'].abs().max() * -1.5, 
+                   stats_df['effect_size'].abs().max() * 1.5]
+        ),
+        legend=dict(x=1.1, y=1.0),
+        hovermode="x unified"
     )
+    
+    # Add significance thresholds
+    fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="red")
+    fig.add_hline(y=effect_size_threshold, line_dash="dot", line_color="green", yref="y2")
+    fig.add_hline(y=-effect_size_threshold, line_dash="dot", line_color="green", yref="y2")
     
     # Improve text formatting
     fig.update_traces(
