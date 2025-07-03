@@ -1,7 +1,6 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
-
 import base64
 import itertools
 import json
@@ -104,9 +103,6 @@ def _flatten(tree, keys, out):
             _flatten(v, new_keys, out)
         else:
             out[" - ".join(new_keys)] = v
-
-
-
 
 
 def _figs_to_html(
@@ -314,10 +310,10 @@ def _format_ml_section(ml_metrics, ml_features, shap_plot_base64):
     ml_html = f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
-        {ml_metrics.to_html(index=False)}
+        {ml_metrics.to_html(index=False, classes='ml-metrics-table dynamic-table', table_id='ml-metrics')}
         
         <h3>Top Features</h3>
-        {ml_features.to_html(index=False, classes='ml-feature-table')}
+        {ml_features.to_html(index=False, classes='ml-features-table dynamic-table', table_id='ml-features')}
     """
     
     if shap_plot_base64:
@@ -436,9 +432,36 @@ def _ordination_to_nested_html(
         f'<div class="tabs" data-label="method">{"".join(buttons_html)}</div>'
     )
     return buttons_row, "".join(panes_html), plot_data
-    
-# ================================ API ENDPOINTS ==================================== #
 
+# ================================== TABLE HELPERS ================================== #
+def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
+    """Enhance table HTML with sorting, pagination, and row selection functionality."""
+    # Generate base table HTML
+    table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
+    
+    # Add sorting and pagination controls
+    enhanced_html = f"""
+    <div class="table-container" id="container-{table_id}">
+        {table_html}
+        <div class="table-controls">
+            <div class="pagination-controls">
+                <span>Rows per page:</span>
+                <select class="rows-per-page" onchange="changePageSize('{table_id}', this.value)">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="-1">All</option>
+                </select>
+                <div class="pagination-buttons" id="pagination-{table_id}"></div>
+            </div>
+        </div>
+    </div>
+    """
+    return enhanced_html
+
+# ================================ REPORT GENERATION ================================= #
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -488,15 +511,15 @@ def generate_html_report(
         <div class="subsection">
             <h3>Top Features</h3>
             <h4>Contaminated-Associated Features</h4>
-            {contam_df.to_html(index=False, classes='feature-table')}
+            {_add_table_functionality(contam_df, 'contam-table')}
             
             <h4>Pristine-Associated Features</h4>
-            {pristine_df.to_html(index=False, classes='feature-table')}
+            {_add_table_functionality(pristine_df, 'pristine-table')}
         </div>
         
         <div class="subsection">
             <h3>Statistical Summary</h3>
-            {stats_df.to_html(index=False)}
+            {_add_table_functionality(stats_df, 'stats-table')}
         </div>
         
         <div class="subsection">
@@ -526,6 +549,170 @@ def generate_html_report(
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")  # safety
 
+    # ── Table functionality JavaScript ────────────────────────────────────────
+    table_js = """
+    /* ======================= TABLE FUNCTIONALITY ======================= */
+    function sortTable(tableId, columnIndex, isNumeric) {
+        const table = document.getElementById(tableId);
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const header = table.querySelectorAll('thead th')[columnIndex];
+        const isAscending = !header.classList.contains('asc');
+        
+        // Clear previous sort indicators
+        table.querySelectorAll('thead th').forEach(th => {
+            th.classList.remove('asc', 'desc');
+        });
+        
+        // Set new sort indicator
+        header.classList.add(isAscending ? 'asc' : 'desc');
+        
+        rows.sort((a, b) => {
+            const aVal = a.cells[columnIndex].textContent.trim();
+            const bVal = b.cells[columnIndex].textContent.trim();
+            
+            if (isNumeric) {
+                const numA = parseFloat(aVal) || 0;
+                const numB = parseFloat(bVal) || 0;
+                return isAscending ? numA - numB : numB - numA;
+            }
+            return isAscending 
+                ? aVal.localeCompare(bVal) 
+                : bVal.localeCompare(aVal);
+        });
+        
+        // Clear and re-add sorted rows
+        tbody.innerHTML = '';
+        rows.forEach(row => tbody.appendChild(row));
+        
+        // Reapply pagination
+        const select = table.closest('.table-container')
+                          .querySelector('.rows-per-page');
+        changePageSize(tableId, select.value);
+    }
+    
+    function setupTableSorting(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('thead th');
+        
+        headers.forEach((header, index) => {
+            // Check if column is numeric
+            const firstRow = table.querySelector('tbody tr');
+            const isNumeric = firstRow && !isNaN(parseFloat(firstRow.cells[index].textContent));
+            
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', () => {
+                sortTable(tableId, index, isNumeric);
+            });
+        });
+    }
+    
+    function paginateTable(tableId, pageSize) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        const paginationDiv = document.getElementById(`pagination-${tableId}`);
+        const totalPages = Math.ceil(rows.length / pageSize);
+        
+        // Hide all rows
+        rows.forEach(row => row.style.display = 'none');
+        
+        // Show rows for first page
+        const start = 0;
+        const end = Math.min(start + pageSize, rows.length);
+        for (let i = start; i < end; i++) {
+            rows[i].style.display = '';
+        }
+        
+        // Generate pagination buttons
+        paginationDiv.innerHTML = '';
+        if (totalPages > 1) {
+            const prevButton = document.createElement('button');
+            prevButton.textContent = '◄';
+            prevButton.classList.add('pagination-btn');
+            prevButton.disabled = true;
+            prevButton.addEventListener('click', () => {
+                changePage(tableId, 0, pageSize); // Go to first page
+            });
+            paginationDiv.appendChild(prevButton);
+            
+            const pageButton = document.createElement('button');
+            pageButton.textContent = '1';
+            pageButton.classList.add('pagination-btn', 'active');
+            pageButton.addEventListener('click', () => {
+                changePage(tableId, 0, pageSize);
+            });
+            paginationDiv.appendChild(pageButton);
+            
+            if (totalPages > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = totalPages > 5 ? '...' : '';
+                paginationDiv.appendChild(ellipsis);
+            }
+            
+            const nextButton = document.createElement('button');
+            nextButton.textContent = '►';
+            nextButton.classList.add('pagination-btn');
+            nextButton.disabled = totalPages <= 1;
+            nextButton.addEventListener('click', () => {
+                changePage(tableId, totalPages - 1, pageSize); // Go to last page
+            });
+            paginationDiv.appendChild(nextButton);
+        }
+    }
+    
+    function changePage(tableId, pageNumber, pageSize) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        const paginationDiv = document.getElementById(`pagination-${tableId}`);
+        const totalPages = Math.ceil(rows.length / pageSize);
+        
+        // Validate page number
+        pageNumber = Math.max(0, Math.min(pageNumber, totalPages - 1));
+        
+        // Hide all rows
+        rows.forEach(row => row.style.display = 'none');
+        
+        // Show rows for current page
+        const start = pageNumber * pageSize;
+        const end = Math.min(start + pageSize, rows.length);
+        for (let i = start; i < end; i++) {
+            rows[i].style.display = '';
+        }
+        
+        // Update pagination UI
+        const buttons = paginationDiv.querySelectorAll('.pagination-btn');
+        buttons.forEach(button => button.classList.remove('active'));
+        
+        // Only activate current page button if it exists
+        if (buttons[pageNumber + 1]) {  // +1 to skip the prev button
+            buttons[pageNumber + 1].classList.add('active');
+        }
+        
+        // Update button states
+        buttons[0].disabled = pageNumber === 0;  // Prev button
+        buttons[buttons.length - 1].disabled = pageNumber === totalPages - 1;  // Next button
+    }
+    
+    function changePageSize(tableId, newSize) {
+        const pageSize = newSize === '-1' ? 10000 : parseInt(newSize);
+        paginateTable(tableId, pageSize);
+    }
+    
+    function initTables() {
+        document.querySelectorAll('.dynamic-table').forEach(table => {
+            const tableId = table.id;
+            setupTableSorting(tableId);
+            changePageSize(tableId, 10);  // Initialize with 10 rows per page
+        });
+    }
+    """
+
     # ── build the full HTML ───────────────────────────────────────────────────
     html = _HTML_TEMPLATE.format(
         plotly_js_tag=plotly_js_tag,
@@ -534,10 +721,11 @@ def generate_html_report(
         tables_html=tables_html,
         sections_html=sections_html,
         plot_data_json=payload,
+        table_js=table_js
     )
     output_path.write_text(html, encoding="utf‑8")
 
-
+# ================================= HTML TEMPLATE ================================== #
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
@@ -545,6 +733,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <title>16S Analysis Report</title>
   {plotly_js_tag}
   <style>
+    /* ======================= BASE STYLES ======================= */
     body                                 {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
     .section                             {{ margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }}
     .subsection                          {{ margin-left: 20px; margin-bottom: 20px; }}
@@ -552,8 +741,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .tabs                                {{ display: flex; margin: 0 0 10px 0; flex-wrap: wrap; }}
     .tabs[data-label]::before            {{ content: attr(data-label) ": "; font-weight: bold; margin-right: 6px; white-space: nowrap; }}
     .tabs[data-label]                    {{ display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; }}
-    
-    
     
     .tab-content                         {{ border: 1px solid #ccc; padding: 10px; border-radius: 4px; }}
     
@@ -582,26 +769,35 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .section-button                      {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; 
                                             margin-right: 5px; }}
                          
-    /* Table styles */
+    /* ======================= TABLE STYLES ======================= */
     table                                {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
     th, td                               {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-    th                                   {{ background-color: #f2f2f2; }}
+    th                                   {{ background-color: #f2f2f2; position: relative; }}
     .feature-table tr:nth-child(even)    {{ background-color: #f9f9f9; }}
-    .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}    
+    .ml-metrics-table tr:nth-child(even) {{ background-color: #f0f8ff; }}
+    .ml-features-table tr:nth-child(even) {{ background-color: #fff0f5; }}
     
-    /* Tab Buttons */
-    .tab-button,
-    .method-button,
-    .table-button,
-    .level-button                        {{ padding: 4px 10px; font-size: 0.8em; line-height: 1.2; background: #000; color: #fff; border: 1px solid #000; 
-                                            border-radius: 6px; cursor: pointer; min-width: 110px; text-align: center; flex: 0 0 auto; margin-right: 5px; 
-                                            margin-bottom: 5px; }}
+    .table-container                     {{ margin: 20px 0; overflow-x: auto; }}
     
-    /* Tab Buttons ACTIVE */
-    .tab-button.active,
-    .method-button.active,
-    .table-button.active,
-    .level-button.active                 {{ background: #fff; color: #000; border-color: #000; }}
+    .table-controls                      {{ margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }}
+    
+    .pagination-controls                 {{ display: flex; align-items: center; gap: 10px; }}
+    
+    .pagination-controls select          {{ padding: 5px; border: 1px solid #ddd; border-radius: 4px; }}
+    
+    .pagination-controls button          {{ padding: 5px 10px; background: #f0f0f0; border: 1px solid #ddd; cursor: pointer; border-radius: 4px; 
+                                            min-width: 32px; }}
+    
+    .pagination-controls button:disabled {{ background: #ddd; cursor: not-allowed; }}
+    
+    .pagination-controls button.active   {{ background: #000; color: #fff; }}
+    
+    .dynamic-table th                    {{ cursor: pointer; }}
+    
+    .dynamic-table th:hover              {{ background-color: #e6e6e6; }}
+    
+    .dynamic-table th.asc::after         {{ content: " ▲"; font-size: 0.8em; position: absolute; right: 8px; }}
+    .dynamic-table th.desc::after        {{ content: " ▼"; font-size: 0.8em; position: absolute; right: 8px; }}
   </style>
 </head>
 <body>
@@ -624,6 +820,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <script id="plot-data" type="application/json">{plot_data_json}</script>
 
   <script>
+    /* ======================= FIGURE FUNCTIONALITY ======================= */
     /* ---- data ---- */
     const plotData = JSON.parse(document.getElementById('plot-data').textContent);
     
@@ -851,6 +1048,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }});
     }}
 
+    /* ======================= TABLE FUNCTIONALITY ======================= */
+    {table_js}
+
     /* ---- initialization ---- */
     document.addEventListener('DOMContentLoaded', () => {{
         // Initialize all first-level plots
@@ -864,7 +1064,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             const firstTable = pane.querySelector('.table-pane');
             if (firstTable) showTable(firstTable.id);
         }});
+        
+        // Initialize tables
+        initTables();
     }});
-</script>
+  </script>
 </body>
-</html>"""
+</html>
+"""
