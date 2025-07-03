@@ -347,7 +347,7 @@ def _create_base_scatter_plot(
         opacity=0.8,
         size_max=10
     )
-    n_pts = sum(_pts_in_trace(t) for t in fig.data)
+    n_pts = data.shape[0]
     print(n_pts)
     fig.add_annotation(
         text=f"n = {n_pts}",
