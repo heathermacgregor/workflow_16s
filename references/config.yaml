@@ -128,34 +128,34 @@ ordination:
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
   presence_absence:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "jaccard"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   filtered:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   normalized:
     pca: True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   clr_transformed:
     pca: True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "euclidean"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
 
 # Functional Prediction
 faprotax: True
@@ -169,7 +169,13 @@ figures:
     - "env_feature"
     - "env_material"
     - "country"
-
+  alpha_diversity:
+    add_points: true
+    add_stat_annot: true
+    effect_size_threshold: 0.5
+    height: 600
+    width: 800
+    
 # Machine Learning
 run_ml: True
 ml:
@@ -180,7 +186,7 @@ ml:
     - 'genus'
   methods:
     - 'rfe'
-    - 'select_k_best'
+    #- 'select_k_best'
     #- 'chi_squared'
     #- 'lasso'
     #- 'shap'
