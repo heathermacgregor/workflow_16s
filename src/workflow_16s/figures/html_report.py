@@ -122,21 +122,31 @@ def _figs_to_html(figs: Dict[str, Any], counter, prefix) -> Tuple[str, str, Dict
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
-                plot_data[plot_id] = {"type": "plotly",
-                                      "data": pj["data"],
-                                      "layout": pj["layout"]}
+                plot_data[plot_id] = {
+                    "type": "plotly",
+                    "data": pj["data"],
+                    "layout": pj["layout"],
+                    "square": square,
+                }
             elif isinstance(fig, Figure):
                 buf = BytesIO()
                 fig.savefig(buf, format="png", bbox_inches="tight")
                 buf.seek(0)
-                plot_data[plot_id] = {"type": "image",
-                                      "data": base64.b64encode(buf.read()).decode()}
+                plot_data[plot_id] = {
+                    "type": "image",
+                    "data": base64.b64encode(buf.read()).decode()
+                }
             else:
-                plot_data[plot_id] = {"type": "error",
-                                      "error": f"Unsupported figure type {type(fig)}"}
+                plot_data[plot_id] = {
+                    "type": "error",
+                    "error": f"Unsupported figure type {type(fig)}"
+                }
         except Exception as exc:  # pragma: no cover
             logger.exception("Serialising figure failed")
-            plot_data[plot_id] = {"type": "error", "error": str(exc)}
+            plot_data[plot_id] = {
+                "type": "error", 
+                "error": str(exc)
+            }
 
     return "\n".join(tabs), "\n".join(btns), plot_data
 
@@ -414,19 +424,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                          border-radius: 4px 4px 0 0; margin-right: 5px; margin-bottom: 5px; font-size: 0.9em; }}
     .tab-button.active{{ background: #fff; border-bottom: 1px solid #fff; }}
     .tab-content      {{ border: 1px solid #ccc; padding: 15px; border-radius: 0 4px 4px 4px; }}
-    .plot-container   {{ width: 900px; height: 600px; }}
-    .error            {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
-    .section-controls {{ margin: 10px 0; }}
-    .section-button   {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer;
-                         border-radius: 4px; margin-right: 5px; }}
-    /* Table styles */
-    table             {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-    th, td            {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-    th                {{ background-color: #f2f2f2; }}
-    .feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-    .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}
-
-    /* Add these to your existing CSS */
     .method-pane {{ display: none; }}
     .method-pane:first-child {{ display: block; }}
     .method-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
@@ -438,7 +435,17 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .table-button, .level-button {{ padding: 6px 10px; background: #f0f0f0; border: 1px solid #ddd; cursor: pointer; 
                                     border-radius: 4px; margin-right: 5px; margin-bottom: 5px; font-size: 0.85em; }}
     .table-button.active, .level-button.active {{ background: #fff; border-bottom: 1px solid #fff; }}
-    
+    .plot-container   {{ }}
+    .error            {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
+    .section-controls {{ margin: 10px 0; }}
+    .section-button   {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer;
+                         border-radius: 4px; margin-right: 5px; }}
+    /* Table styles */
+    table             {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+    th, td            {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    th                {{ background-color: #f2f2f2; }}
+    .feature-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+    .ml-feature-table tr:nth-child(even) {{ background-color: #f0f8ff; }}    
   </style>
 </head>
 <body>
@@ -506,9 +513,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Compute responsive width (min 500px, max 1000px)
         const fullWidth = container.clientWidth || window.innerWidth;
-        const width = Math.max(500, Math.min(1000, fullWidth * 0.95));
-        const height = width * 0.6;  // keep 5:3 aspect ratio
-
+        const minWidth  = fullWidth * 0.25;                    // 25 % floor
+        const width     = Math.max(minWidth, Math.min(1000, fullWidth * 0.95));
+        // Square only when payload.square === true
+        const height = payload.square ? width : Math.round(width * 0.6);
+        
         // Check if this is a 3D plot
         const is3D = payload.data?.some(d => d.type.includes('3d'));
 
@@ -756,7 +765,7 @@ def _ordination_to_nested_html(
                 
                 # Colour tabs (lowest level)
                 colour_tabs, colour_btns, pd = _figs_to_html(
-                    colours, id_counter, level_id
+                    colours, id_counter, level_id, square=True
                 )
                 plot_data.update(pd)
                 level_tabs.append(
