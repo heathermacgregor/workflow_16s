@@ -504,6 +504,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return;
         }}
 
+        // Compute responsive width (min 500px, max 1000px)
+        const fullWidth = container.clientWidth || window.innerWidth;
+        const width = Math.max(500, Math.min(1000, fullWidth * 0.95));
+        const height = width * 0.6;  // keep 5:3 aspect ratio
+
         // Check if this is a 3D plot
         const is3D = payload.data?.some(d => d.type.includes('3d'));
 
@@ -511,8 +516,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             if (payload.type === 'plotly') {{
                 if (payload.layout) {{
                     payload.layout.showlegend = false;
-                    payload.layout.width = 900;
-                    payload.layout.height = 600;
+                    payload.layout.width = width;
+                    payload.layout.height = height;
                     
                     // Optimize 3D plots
                     if (is3D) {{
@@ -543,6 +548,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                 const img = document.createElement('img');
                 img.src = 'data:image/png;base64,' + payload.data;
                 img.style.maxWidth = '100%';
+                img.style.height = 'auto';
                 div.appendChild(img);
             }} 
             else if (payload.type === 'error') {{
