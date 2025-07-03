@@ -348,7 +348,6 @@ def _create_base_scatter_plot(
         size_max=10
     )
     n_pts = data.shape[0]
-    print(n_pts)
     fig.add_annotation(
         text=f"n = {n_pts}",
         xref="paper", yref="paper",        # relative to full plot
@@ -466,6 +465,17 @@ def create_geographical_map(
     
     # Create visualization
     colordict = _create_colordict(metadata[color_col])
+
+    n_pts = metadata.shape[0]
+    fig.add_annotation(
+        text=f"n = {n_pts}",
+        xref="paper", yref="paper",        # relative to full plot
+        x=0.99, y=0.01,                    # bottom‑right corner
+        xanchor="right", yanchor="bottom",
+        showarrow=False,
+        font=dict(size=12, color="black"),
+        bgcolor="rgba(255,255,255,0.4)",
+    )
     
     fig = px.scatter_geo(
         metadata,
