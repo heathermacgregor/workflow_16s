@@ -71,7 +71,9 @@ def _prepare_sections(
             flat: Dict[str, Any] = {}
             _flatten(figures[sec], [], flat)
             if flat:
-                tabs, btns, pd = _figs_to_html(flat, id_counter, sec_data["id"], row_label="color_col")
+                tabs, btns, pd = _figs_to_html(
+                    flat, id_counter, sec_data["id"], row_label="color_col"
+                )
                 plot_data.update(pd)
                 sec_data["subsections"].append({
                     "title": "All",
@@ -104,34 +106,7 @@ def _flatten(tree, keys, out):
             out[" - ".join(new_keys)] = v
 
 
-def _pts_in_trace(trace: Dict[str, Any]) -> int:
-    """
-    Return a best‑guess number of data points in a Plotly JSON trace.
-    Works for scatter/line, scatter3d, bar, heatmap, surface, histogram,
-    box/violin, pie, etc.  If no suitable field is found, returns 0.
-    """
-    # Common 1‑D fields in order of preference
-    for key in ("x", "y", "z", "values"):
-        arr = trace.get(key)
-        if arr is None:
-            continue
 
-        # 2‑D array (heatmap.z, surface.z, contour.z, etc.)
-        if isinstance(arr, (list, tuple)) and arr and isinstance(arr[0], (list, tuple)):
-            return sum(len(row) for row in arr)
-
-        # Anything with __len__ (list, tuple, NumPy ndarray, pandas Series, etc.)
-        try:
-            return len(arr)
-        except TypeError:
-            pass  # e.g. generators, None, scalars
-
-    # Special cases
-    if trace.get("type") == "pie" and "labels" in trace and "values" in trace:
-        return len(trace["values"])
-
-    # If nothing matches, 0 is safest
-    return 0
 
 
 def _figs_to_html(
@@ -166,18 +141,6 @@ def _figs_to_html(
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
-                num_points = sum(_pts_in_trace(t) for t in pj.get("data", []))
-
-                pj["layout"].setdefault("annotations", []).append({
-                    "text": f"n = {num_points}",
-                    "xref": "paper", "yref": "paper",   # relative to full plot
-                    "x": 0.99, "y": 0.01,               # near (1,0) corner
-                    "xanchor": "right", "yanchor": "bottom",
-                    "showarrow": False,
-                    "font": {"size": 12, "color": "gray"},
-                    "align": "right",
-                    "bgcolor": "rgba(255,255,255,0.4)",
-                })
                 plot_data[plot_id] = {
                     "type": "plotly",
                     "data": pj["data"],
@@ -604,11 +567,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .level-pane                          {{ display: none; margin-left: 15px; }}
     .level-pane:first-child              {{ display: block; }}
 
-    .subsection > .tab-content > .tabs   {{ margin-left:   0px; }}
-    .method-pane > .tabs                 {{ margin-left:  15px; }}
-    .table-pane > .tabs                  {{ margin-left:  30px; }}
-    .level-pane > .tabs                  {{ margin-left:  45px; }}
+    :root                                {{ --indent-step: clamp(8px, 2.2vw, 24px); }}
+
+    .subsection  > .tab-content > .tabs  {{ margin-left: 0; }}
     
+    .method-pane > .tabs                 {{ margin-left: calc(var(--indent-step) * 1); }}
+    .table-pane  > .tabs                 {{ margin-left: calc(var(--indent-step) * 2); }}
+    .level-pane  > .tabs                 {{ margin-left: calc(var(--indent-step) * 3); }}
     .plot-container                      {{ }}
     
     .error                               {{ color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }}
