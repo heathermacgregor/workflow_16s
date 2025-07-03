@@ -535,7 +535,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                         }}
                     }})
                     .catch(err => {{
-                        div.innerHTML = `<div class="error">Plotly error: ${err}</div>`;
+                        div.innerHTML = `<div class="error">Plotly error: ${{err}}</div>`;
                         console.error(err);
                     }});
             }}
@@ -546,13 +546,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                 div.appendChild(img);
             }} 
             else if (payload.type === 'error') {{
-                div.innerHTML = `<div class="error">${payload.error}</div>`;
+                div.innerHTML = `<div class="error">${{payload.error}}</div>`;
             }} 
             else {{
                 div.innerHTML = '<div class="error">Unknown plot type</div>';
             }}
         }} catch (err) {{
-            div.innerHTML = `<div class="error">Rendering error: ${err}</div>`;
+            div.innerHTML = `<div class="error">Rendering error: ${{err}}</div>`;
             console.error(err);
         }}
     }}
