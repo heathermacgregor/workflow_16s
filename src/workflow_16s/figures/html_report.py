@@ -224,29 +224,31 @@ def generate_html_report(
     }}
     
     function showTab(tabId, plotId) {{
-        // Hide all tabs in this subsection
-        const tabPanes = document.querySelectorAll(`#${{tabId}}`).closest('.subsection').querySelectorAll('.tab-pane');
-        tabPanes.forEach(tab => tab.style.display = 'none');
-        
-        // Remove active class from buttons in this subsection
-        const tabButtons = document.querySelectorAll(`#${{tabId}}`).closest('.subsection').querySelectorAll('.tab-button');
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        
-        // Show selected tab
-        const tab = document.getElementById(tabId);
-        if (tab) {{
-            tab.style.display = 'block';
-            
-            // Render plot if not initialized
-            if (!initializedPlots.has(plotId)) {{
-                renderPlot(`container-${{plotId}}`, plotId);
-                initializedPlots.add(plotId);
-            }}
+        // Grab the tab pane element
+        const tabEl = document.getElementById(tabId);
+        if (!tabEl) return console.error('No such tab:', tabId);
+    
+        // Find its subsection container
+        const subsection = tabEl.closest('.subsection');
+        if (!subsection) return console.error('Tab not inside .subsection:', tabId);
+    
+        // Hide all panes & deactivate all buttons in _that_ subsection
+        subsection.querySelectorAll('.tab-pane')
+                  .forEach(pane => pane.style.display = 'none');
+        subsection.querySelectorAll('.tab-button')
+                  .forEach(btn  => btn.classList.remove('active'));
+    
+        // Show the one we clicked on
+        tabEl.style.display = 'block';
+        document
+            .querySelector(`.tab-button[data-tab="${tabId}"]`)
+            .classList.add('active');
+    
+        // Only render the Plotly plot if needed
+        if (!initializedPlots.has(plotId)) {{
+            renderPlot(`container-${plotId}`, plotId);
+            initializedPlots.add(plotId);
         }}
-        
-        // Activate button
-        const btn = document.querySelector(`[data-tab="${{tabId}}"]`);
-        if (btn) btn.classList.add('active');
     }}
     
     // Toggle section visibility
@@ -264,16 +266,15 @@ def generate_html_report(
         }});
     }}
     
-    // Initialize first tab in each subsection
-    document.addEventListener('DOMContentLoaded', () => {{
-        document.querySelectorAll('.subsection').forEach(subsection => {{
-            const firstTab = subsection.querySelector('.tab-pane');
-            if (firstTab) {{
-                const plotId = firstTab.dataset.plotId;
-                showTab(firstTab.id, plotId);
-            }}
-        }});
+    // Immediately initialize the very first tab in each subsection
+    document.querySelectorAll('.subsection').forEach(subsection => {{
+        const firstTab = subsection.querySelector('.tab-pane');
+        if (firstTab) {{
+            const plotId = firstTab.dataset.plotId;
+            showTab(firstTab.id, plotId);
+        }}
     }});
+  }});
   </script>
 </body>
 </html>"""
