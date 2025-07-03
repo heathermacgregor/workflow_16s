@@ -241,12 +241,12 @@ def generate_html_report(
         // Show the one we clicked on
         tabEl.style.display = 'block';
         document
-            .querySelector(`.tab-button[data-tab="${tabId}"]`)
+            .querySelector(`.tab-button[data-tab="${{tabId}}"]`)
             .classList.add('active');
     
         // Only render the Plotly plot if needed
         if (!initializedPlots.has(plotId)) {{
-            renderPlot(`container-${plotId}`, plotId);
+            renderPlot(`container-${{plotId}}`, plotId);
             initializedPlots.add(plotId);
         }}
     }}
