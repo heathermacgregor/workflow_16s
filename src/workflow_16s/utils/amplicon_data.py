@@ -374,7 +374,7 @@ class _ProcessingMixin:
                     l1_desc = f"Processing {level} level"
                     child_task = prog.add_task(
                         f"[white]{l1_desc:<{DEFAULT_N}}",
-                        parent=l0_task,
+                        parent=parent_task,
                         total=1
                     )
                     
@@ -385,9 +385,9 @@ class _ProcessingMixin:
                     if log_template or log_action:
                         self._log_level_action(level, log_template, log_action, duration)
 
-                    prog.update(l1_task, completed=1)
-                    prog.remove_task(l1_task)
-                    prog.update(l0_task, advance=1)
+                    prog.update(child_task, completed=1)
+                    prog.remove_task(child_task)
+                    prog.update(parent_task, advance=1)
 
         return processed
 
@@ -1288,6 +1288,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._faprotax_cache = {}
         self.alpha_diversity_results: Dict[str, Dict[str, pd.DataFrame]] = {}
         self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
+        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {}  # NEW: Initialize correlations
 
         # Process in stages and clear intermediates
         self._run_alpha_diversity_analysis()  # NEW: Run alpha diversity analysis
@@ -1377,31 +1378,25 @@ class _AnalysisManager(_ProcessingMixin):
         if not n:
             return
         
+        # Initialize figures structures
+        self.figures["alpha_diversity"] = {}
+        self.figures["alpha_correlations"] = {}
+        
         with get_progress_bar() as prog:
             l0_desc = "Running alpha diversity analysis..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}",
-                total=len(self.tables)
+                total=n
             )
             
             for table_type, levels in self.tables.items():
                 # Skip table types not enabled in config
                 if not enabled_table_types.get(table_type, False):
                     continue
-                l1_desc = table_type.replace('_', ' ').title()
-                l1_task = prog.add_task(
-                    f"[white]{l1_desc:<{DEFAULT_N}}",
-                    parent=l0_task,
-                    total=len(levels)
-                )    
+                    
                 table_cfg = enabled_table_types[table_type]
                 self.alpha_diversity_results[table_type] = {}
                 self.alpha_diversity_stats[table_type] = {}
-
-                self.figures["alpha_diversity"] = {}    
-                # Initialize figures structure
-                if table_type not in self.figures["alpha_diversity"]:
-                    self.figures["alpha_diversity"][table_type] = {}
                 
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
@@ -1410,12 +1405,13 @@ class _AnalysisManager(_ProcessingMixin):
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
-                    new_desc = " | ".join([
+                    
+                    l1_desc = " | ".join([
                         table_type.replace('_', ' ').title(), level.capitalize()
                     ]) 
                     prog.update(
-                        l1_task,
-                        description=f"[white]{new_desc:<{DEFAULT_N}}",
+                        l0_task,
+                        description=f"[white]{l1_desc:<{DEFAULT_N}}",
                         refresh=True
                     )
                     
@@ -1435,6 +1431,20 @@ class _AnalysisManager(_ProcessingMixin):
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
                             self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
+                            
+                            # Generate correlation figures
+                            plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
+                            plot_dir.mkdir(parents=True, exist_ok=True)
+                            corr_figures = plot_alpha_correlations(
+                                corr_results,
+                                output_dir=plot_dir if generate_plots else None,
+                                top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
+                            )
+                            
+                            # Store in figures structure
+                            if table_type not in self.figures["alpha_correlations"]:
+                                self.figures["alpha_correlations"][table_type] = {}
+                            self.figures["alpha_correlations"][table_type][level] = corr_figures
                                 
                         # Analyze relationship with contamination status
                         stats_df = analyze_alpha_diversity(
@@ -1452,10 +1462,13 @@ class _AnalysisManager(_ProcessingMixin):
                             plot_dir.mkdir(parents=True, exist_ok=True)
                             
                             # Initialize figures storage for this level
+                            if table_type not in self.figures["alpha_diversity"]:
+                                self.figures["alpha_diversity"][table_type] = {}
                             if level not in self.figures["alpha_diversity"][table_type]:
                                 self.figures["alpha_diversity"][table_type][level] = {}
                             
                             # Create boxplots for each metric
+                            plot_cfg = alpha_cfg.get("plot", {})
                             for metric in metrics:
                                 # Get statistical results for this metric
                                 metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
@@ -1494,8 +1507,7 @@ class _AnalysisManager(_ProcessingMixin):
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                         
-                prog.remove_task(l1_task)
-                prog.update(l0_task, advance=1)
+                    prog.update(l0_task, advance=1)
                 
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
@@ -1514,20 +1526,13 @@ class _AnalysisManager(_ProcessingMixin):
             l0_desc = f"Running statistical tests for '{grp_col}'..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}",
-                total=len(self.tables)
+                total=n
             )
 
             for table_type, levels in self.tables.items():
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
                 self.stats[table_type] = {}
-
-                l1_desc = table_type.replace('_', ' ').title()
-                l1_task = prog.add_task(
-                    f"[white]{l1_desc:<{DEFAULT_N}}",
-                    parent=l0_task,
-                    total=len(levels)
-                )    
 
                 for level, table in levels.items():
                     # Align table/metadata once per level
@@ -1540,10 +1545,11 @@ class _AnalysisManager(_ProcessingMixin):
 
                         new_l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(),
-                            f" {level.capitalize()} → {cfg['name']}"
+                            level.capitalize(),
+                            cfg['name']
                         ])
                         prog.update(
-                            l1_task,
+                            l0_task,
                             description=f"[white]{new_l1_desc:<{DEFAULT_N}}",
                             refresh=True
                         )
@@ -1559,10 +1565,7 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             logger.error(f"Test failed: {e}")
                         finally:
-                            prog.update(l1_task, advance=1)
-                
-                prog.remove_task(l1_task)
-                prog.update(l0_task, advance=1)
+                            prog.update(l0_task, advance=1)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
@@ -1707,7 +1710,8 @@ class _AnalysisManager(_ProcessingMixin):
                     for method in methods:
                         l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
-                            f" {level.capitalize()} → {method.upper()}"
+                            level.capitalize(),
+                            method.upper()
                         ])
                         l1_task = prog.add_task(
                             f"[white]{l1_desc:<{DEFAULT_N}}",
@@ -1861,6 +1865,7 @@ class AmpliconData:
         
         self.alpha_diversity_results = am.alpha_diversity_results
         self.alpha_diversity_stats = am.alpha_diversity_stats
+        self.alpha_correlations = am.alpha_correlations
 
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
