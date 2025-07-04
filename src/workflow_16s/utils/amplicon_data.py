@@ -1288,7 +1288,9 @@ class _AnalysisManager(_ProcessingMixin):
         self._faprotax_cache = {}
         self.alpha_diversity_results: Dict[str, Dict[str, pd.DataFrame]] = {}
         self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
-        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {}  # NEW: Initialize correlations
+        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {} 
+        self.figures["alpha_diversity"] = {}
+        self.figures["alpha_correlations"] = {}
 
         # Process in stages and clear intermediates
         self._run_alpha_diversity_analysis()  # NEW: Run alpha diversity analysis
@@ -1358,7 +1360,7 @@ class _AnalysisManager(_ProcessingMixin):
         if not alpha_cfg.get("enabled", False):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
-
+    
         group_column = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
@@ -1395,8 +1397,6 @@ class _AnalysisManager(_ProcessingMixin):
                     continue
                     
                 table_cfg = enabled_table_types[table_type]
-                self.alpha_diversity_results[table_type] = {}
-                self.alpha_diversity_stats[table_type] = {}
                 
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
@@ -1419,8 +1419,6 @@ class _AnalysisManager(_ProcessingMixin):
                         # Convert to DataFrame and compute alpha diversity
                         df = table_to_dataframe(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
-                        # Store alpha diversity results
-                        self.alpha_diversity_results[table_type][level] = alpha_df
                         
                         # Run correlation analysis if enabled
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
@@ -1430,7 +1428,6 @@ class _AnalysisManager(_ProcessingMixin):
                                 max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
-                            self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
                             
                             # Generate correlation figures
                             plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
@@ -1453,7 +1450,6 @@ class _AnalysisManager(_ProcessingMixin):
                             group_column=group_column,
                             parametric=parametric
                         )
-                        self.alpha_diversity_stats[table_type][level] = stats_df
                         
                         # Generate plots if enabled
                         if generate_plots:
@@ -1508,7 +1504,7 @@ class _AnalysisManager(_ProcessingMixin):
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                         
                     prog.update(l0_task, advance=1)
-                
+                    
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -1863,9 +1859,9 @@ class AmpliconData:
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
         
-        self.alpha_diversity_results = am.alpha_diversity_results
-        self.alpha_diversity_stats = am.alpha_diversity_stats
-        self.alpha_correlations = am.alpha_correlations
+        #self.alpha_diversity_results = am.alpha_diversity_results
+        #self.alpha_diversity_stats = am.alpha_diversity_stats
+        #self.alpha_correlations = am.alpha_correlations
 
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
