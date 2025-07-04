@@ -267,8 +267,13 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
-def _prepare_ml_summary(models: Dict) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
-    """Prepare detailed ML results for HTML display."""
+# NEW: Updated ML summary function with proper SHAP plot handling
+def _prepare_ml_summary(
+    models: Dict, 
+    top_contaminated: List[Dict], 
+    top_pristine: List[Dict]
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
+    """Prepare detailed ML results for HTML display with SHAP plot."""
     if not models:
         return None, None, None
 
@@ -320,16 +325,22 @@ def _prepare_ml_summary(models: Dict) -> Tuple[Optional[pd.DataFrame], Optional[
                         with open(shap_path, "rb") as img_file:
                             shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
                         best_mcc = current_mcc
-                    except Exception:
-                        logger.warning(f"Could not load SHAP plot from {shap_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not load SHAP plot from {shap_path}: {e}")
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
     
+    # Add FAPROTAX annotations to top features (if available)
+    for feat in top_contaminated + top_pristine:
+        if "faprotax_functions" in feat:
+            feat["Functions"] = ", ".join(feat["faprotax_functions"])
+    
     return metrics_df, features_df, shap_plot_base64
 
+# NEW: Updated ML section formatting with SHAP plot
 def _format_ml_section(ml_metrics, ml_features, shap_plot_base64):
-    """Format the machine learning results section."""
+    """Format the machine learning results section with SHAP plot."""
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
     
@@ -710,24 +721,26 @@ def generate_html_report(
     
     # Top features tables
     contam_df = _prepare_features_table(
-        getattr(amplicon_data, "top_contaminated_features", []),
+        amplicon_data.top_contaminated_features,
         max_features,
         "Contaminated"
     )
     pristine_df = _prepare_features_table(
-        getattr(amplicon_data, "top_pristine_features", []),
+        amplicon_data.top_pristine_features,
         max_features,
         "Pristine"
     )
     
     # Stats summary
     stats_df = _prepare_stats_summary(
-        getattr(amplicon_data, "stats", {})
+        amplicon_data.stats
     )
     
-    # ML summary
+    # ML summary - FIXED: Pass correct ML data and top features
     ml_metrics, ml_features, shap_plot_base64 = _prepare_ml_summary(
-        getattr(amplicon_data, "models", {})
+        amplicon_data.models,
+        amplicon_data.top_contaminated_features,
+        amplicon_data.top_pristine_features
     )
     ml_html = _format_ml_section(ml_metrics, ml_features, shap_plot_base64)
     
