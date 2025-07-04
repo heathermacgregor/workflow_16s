@@ -1,5 +1,5 @@
 # ===================================== IMPORTS ====================================== #
-
+import traceback
 # Standard Library Imports
 import glob
 import logging
@@ -1709,33 +1709,38 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
-        # Check if alpha diversity analysis is enabled
+        # Check if ML is enabled in configuration
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection is disabled in configuration.")
             return
+        
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        n = sum(
-            len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
-            for table_type, levels in ml_tables.items()
-        )
-        if not n:
-            return
-
         methods = ml_cfg.get("methods", ["rfe"])
         n_top_features = ml_cfg.get("n_top_features", 100) 
         
+        # Calculate total tasks
+        total_tasks = 0
+        for table_type, levels in ml_tables.items():
+            total_tasks += len(levels) * len(methods)
+        
+        if not total_tasks:
+            logger.info("No ML tables available. Skipping ML feature selection.")
+            return
+    
         with get_progress_bar() as prog:
             l0_desc = "Running ML feature selection..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
-                total=n
+                total=total_tasks
             )
+            
             for table_type, levels in ml_tables.items():
-                self.models[table_type] = {}
-                 
+                self.models.setdefault(table_type, {})
+                
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
+                    
                     for method in methods:
                         l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
@@ -1748,16 +1753,41 @@ class _AnalysisManager(_ProcessingMixin):
                             total=1
                         )
     
-                        X = table_to_dataframe(table)
-                        X.index = X.index.str.lower()
-                        y = self.meta.set_index("#sampleid")[[group_col]]
-                        y.index = y.index.astype(str).str.lower()
-                        idx = X.index.intersection(y.index)
-                        X, y = X.loc[idx], y.loc[idx]
-                        mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
-                        
                         try:
-                            # Comprehensive ML feature selection
+                            # 1. Create output directory
+                            mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level
+                            mdir.mkdir(parents=True, exist_ok=True)
+                            
+                            # 2. Prepare data
+                            X = table_to_dataframe(table)
+                            y = self.meta.set_index("#sampleid")[[group_col]]
+                            
+                            # 3. Robust index alignment
+                            # Convert both indices to string for case-insensitive matching
+                            X.index = X.index.astype(str).str.strip().str.lower()
+                            y.index = y.index.astype(str).str.strip().str.lower()
+                            
+                            # Find common samples
+                            common_idx = X.index.intersection(y.index)
+                            
+                            if len(common_idx) == 0:
+                                raise ValueError(
+                                    f"No common samples between features ({len(X)}) "
+                                    f"and metadata ({len(y)})"
+                                )
+                                
+                            # Filter and align
+                            X = X.loc[common_idx]
+                            y = y.loc[common_idx]
+                            
+                            # 4. Check target distribution
+                            class_counts = y[group_col].value_counts()
+                            if len(class_counts) < 2:
+                                raise ValueError(
+                                    f"Only one class present: {class_counts.to_dict()}"
+                                )
+                                
+                            # 5. Run feature selection
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
@@ -1766,14 +1796,44 @@ class _AnalysisManager(_ProcessingMixin):
                                 method=method,
                                 n_top_features=n_top_features
                             )
-                            self.models[table_type][level][method] = model_result
+                            
+                            # 6. Store results with validation
+                            if not model_result:
+                                logger.warning(
+                                    f"ML ({method}) returned empty results for "
+                                    f"{table_type}/{level}"
+                                )
+                            else:
+                                self.models[table_type][level][method] = model_result
+                                
+                                if self.verbose:
+                                    scores = model_result.get("test_scores", {})
+                                    logger.info(
+                                        f"ML ({method}) for {table_type}/{level}: "
+                                        f"{len(model_result.get('top_features', []))} features | "
+                                        f"MCC: {scores.get('mcc', 0):.2f} | "
+                                        f"AUC: {scores.get('roc_auc', 0):.2f}"
+                                    )
+                                    
                         except Exception as e:
-                            logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
+                            logger.error(
+                                f"❌ ML ({method}) failed for {table_type}/{level}: {str(e)}"
+                            )
+                            logger.debug(f"Error details:\n{traceback.format_exc()}")
                             self.models[table_type][level][method] = None
                             
-                        prog.update(l1_task, completed=1)
-                        prog.remove_task(l1_task)
-                        prog.update(l0_task, advance=1)
+                        finally:
+                            prog.update(l1_task, completed=1)
+                            prog.remove_task(l1_task)
+                            prog.update(l0_task, advance=1)
+        
+        # Debug: Log ML model status
+        logger.debug("ML model summary:")
+        for table_type, levels in self.models.items():
+            for level, methods in levels.items():
+                for method, result in methods.items():
+                    status = "✅ Success" if result else "❌ Failed"
+                    logger.debug(f"  - {table_type}/{level}/{method}: {status}")
                         
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
