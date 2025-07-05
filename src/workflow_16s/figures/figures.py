@@ -251,37 +251,70 @@ def create_color_mapping(
 def plot_legend(
     color_dict: dict[str, str], 
     show: bool = False,
-    output_path: str | Path = None
+    output_path: str | Path = None,
+    max_height: int = 600  # pixels (default max height before multi-column)
 ) -> None:
     """
-    Creates a legend image from a dictionary where keys are labels and 
-    values are hex colors.
+    Creates a Plotly legend figure from a dictionary of labels and colors.
     
     Args:
-        color_dict:  Dictionary with labels as keys and hex colors as 
-                     values.
-        show:        If True, displays the legend using plt.show().
-        output_path: Path to save the generated legend image (optional).
+        color_dict:  Dictionary with labels as keys and hex colors as values.
+        show:        If True, displays the figure.
+        output_path: Path to save the figure (optional).
+        max_height:  Maximum pixel height before creating additional columns.
     """
-    n = len(color_dict)  # Number of items in the legend
+    if not color_dict:
+        return  # Exit if no items
     
-    # Create figure
-    fig, ax = plt.subplots(figsize=(3, n * 0.5))
-    ax.axis('off')  # Remove axes
+    # Reverse the order of legend items
+    items = list(color_dict.items())[::-1]
+    n = len(items)
     
-    # Add legend items
-    for i, (label, color) in enumerate(color_dict.items()):
-        ax.add_patch(plt.Rectangle((0, i), 1, 1, color=color))
-        ax.text(1.2, i + 0.5, label, va='center', fontsize=16, color='#000')
+    # Calculate layout parameters
+    row_height = 30  # pixels per row
+    max_rows = max(1, min(n, max_height // row_height))
+    n_cols = (n + max_rows - 1) // max_rows  # Ceiling division
+    n_rows = min(n, max_rows)
     
-    # Set plot limits
-    ax.set_xlim(0, 3)
-    ax.set_ylim(0, n)
+    # Create invisible scatter traces for legend items
+    fig = go.Figure()
+    for label, color in items:
+        fig.add_trace(
+            go.Scatter(
+                x=[None], 
+                y=[None],
+                mode='markers',
+                marker=dict(color=color, size=15),
+                name=label,
+                showlegend=True
+            )
+        )
     
-    # Save or show
-    if output_path:
-        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
-    if show:
-        plt.show()
+    # Configure legend layout
+    fig.update_layout(
+        legend=dict(
+            title=None,
+            orientation='v',
+            itemsizing='constant',
+            itemwidth=30,
+            traceorder='normal',  # Maintains reversed item order
+            bordercolor='black',
+            borderwidth=1
+        ),
+        template="heather",
+        width=200 * n_cols,  # Adjust width based on columns
+        height=row_height * n_rows + 100,  # Dynamic height
+        margin=dict(l=0, r=0, t=0, b=0)
+    )
     
-    plt.close(fig)  # Close the figure to free memory
+    # Hide axes and background
+    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False)
+    fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False)
+    
+    # Save/show using existing infrastructure
+    plotly_show_and_save(
+        fig=fig,
+        show=show,
+        output_path=output_path,
+        save_as=['png', 'html']
+    )
