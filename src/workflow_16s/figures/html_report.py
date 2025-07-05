@@ -335,7 +335,8 @@ def _prepare_ml_summary(
     for feat in top_contaminated + top_pristine:
         if "faprotax_functions" in feat:
             feat["Functions"] = ", ".join(feat["faprotax_functions"])
-    
+    print(metrics_df)
+    print(features_df)
     return metrics_df, features_df, shap_plot_base64
 
 # NEW: Updated ML section formatting with SHAP plot
