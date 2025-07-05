@@ -1253,11 +1253,11 @@ def create_alpha_diversity_stats_plot(
     Create interactive visualization for statistical results.
     
     Args:
-        stats_df: DataFrame from analyze_alpha_diversity()
-        output_dir: Save directory
-        show: Display interactive plot
-        verbose: Enable debug logging
-        effect_size_threshold: Threshold for meaningful effect size
+        stats_df:              DataFrame from analyze_alpha_diversity().
+        output_dir:            Save directory.
+        show:                  Display interactive plot.
+        verbose:               Enable debug logging.
+        effect_size_threshold: Threshold for meaningful effect size.
     
     Returns:
         Plotly Figure object
@@ -1277,7 +1277,7 @@ def create_alpha_diversity_stats_plot(
         marker_color=np.where(stats_df['significant'], '#EF553B', '#636EFA'),
         name='-log10(p-value)',
         text=stats_df.apply(lambda x: f"p={x['p_value']:.2e}", axis=1),
-        textposition='outside'
+        textposition='top center'
     ))
     
     # Effect size markers
@@ -1292,7 +1292,7 @@ def create_alpha_diversity_stats_plot(
             symbol=np.where(stats_df['effect_size'] > 0, 'triangle-up', 'triangle-down')
         ),
         text=stats_df['effect_size'].round(2),
-        textposition="top center",
+        textposition='top center',
         name='Effect Size'
     ))
     
@@ -1324,7 +1324,7 @@ def create_alpha_diversity_stats_plot(
     # Improve text formatting
     fig.update_traces(
         texttemplate='%{text:.2e}',
-        textposition='outside'
+        textposition='top center'
     )
     
     # Save output
