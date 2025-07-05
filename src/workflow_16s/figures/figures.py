@@ -247,24 +247,22 @@ def create_color_mapping(
       for i, value in enumerate(unique_values)
     }
 
-
 def plot_legend(
-    color_dict: dict[str, str], 
-    show: bool = False,
-    output_path: str | Path = None,
+    color_dict: dict[str, str],
     max_height: int = 600  # pixels (default max height before multi-column)
-) -> None:
+) -> go.Figure:
     """
     Creates a Plotly legend figure from a dictionary of labels and colors.
     
     Args:
         color_dict:  Dictionary with labels as keys and hex colors as values.
-        show:        If True, displays the figure.
-        output_path: Path to save the figure (optional).
         max_height:  Maximum pixel height before creating additional columns.
+    
+    Returns:
+        Plotly Figure object containing only the legend
     """
     if not color_dict:
-        return  # Exit if no items
+        return go.Figure()  # Return empty figure if no items
     
     # Reverse the order of legend items
     items = list(color_dict.items())[::-1]
@@ -276,7 +274,7 @@ def plot_legend(
     n_cols = (n + max_rows - 1) // max_rows  # Ceiling division
     n_rows = min(n, max_rows)
     
-    # Create invisible scatter traces for legend items
+    # Create figure
     fig = go.Figure()
     for label, color in items:
         fig.add_trace(
@@ -307,14 +305,70 @@ def plot_legend(
         margin=dict(l=0, r=0, t=0, b=0)
     )
     
-    # Hide axes and background
+    # Hide axes
     fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False)
     fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False)
     
-    # Save/show using existing infrastructure
-    plotly_show_and_save(
-        fig=fig,
-        show=show,
-        output_path=output_path,
-        save_as=['png', 'html']
+    return fig
+
+def attach_legend_to_figure(
+    main_fig: go.Figure,
+    legend_fig: go.Figure,
+    main_width: float = 0.8,
+    legend_width: float = 0.2
+) -> go.Figure:
+    """
+    Attaches a legend figure to the right of a main Plotly figure.
+    
+    Args:
+        main_fig:     The main Plotly figure
+        legend_fig:   The legend Plotly figure created by plot_legend
+        main_width:   Width proportion for main figure (0-1)
+        legend_width: Width proportion for legend (0-1)
+    
+    Returns:
+        Combined Plotly figure with main plot and legend side-by-side
+    """
+    # Create subplot figure with 1 row and 2 columns
+    combined_fig = make_subplots(
+        rows=1, 
+        cols=2,
+        column_widths=[main_width, legend_width],
+        specs=[[{"type": "scatter"}, {"type": "scatter"}]],
+        horizontal_spacing=0.01
     )
+    
+    # Add main figure traces to first column
+    for trace in main_fig.data:
+        combined_fig.add_trace(trace, row=1, col=1)
+    
+    # Add legend figure traces to second column
+    for trace in legend_fig.data:
+        combined_fig.add_trace(trace, row=1, col=2)
+    
+    # Update layout from main figure
+    combined_fig.update_layout(
+        title=main_fig.layout.title,
+        xaxis=main_fig.layout.xaxis,
+        yaxis=main_fig.layout.yaxis,
+        template=main_fig.layout.template,
+        showlegend=False  # We're using custom legend
+    )
+    
+    # Configure legend column
+    combined_fig.update_xaxes(
+        showgrid=False, 
+        showticklabels=False, 
+        zeroline=False,
+        row=1, 
+        col=2
+    )
+    combined_fig.update_yaxes(
+        showgrid=False, 
+        showticklabels=False, 
+        zeroline=False,
+        row=1, 
+        col=2
+    )
+    
+    return combined_fig
