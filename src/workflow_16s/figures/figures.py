@@ -375,11 +375,14 @@ def attach_legend_to_figure(
         col=2
     )
     
-    # Maintain aspect ratio settings if they exist
-    if hasattr(main_fig.layout, 'height') and hasattr(main_fig.layout, 'width'):
-        combined_fig.update_layout(
-            height=main_fig.layout.height,
-            width=main_fig.layout.width + legend_fig.layout.width
-        )
+    # Handle dimensions safely
+    main_width_val = main_fig.layout.width or 800  # Default if not set
+    main_height_val = main_fig.layout.height or 600
+    legend_width_val = legend_fig.layout.width or 200
+    
+    combined_fig.update_layout(
+        height=main_height_val,
+        width=main_width_val + legend_width_val
+    )
     
     return combined_fig
