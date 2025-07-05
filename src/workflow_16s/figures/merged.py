@@ -19,6 +19,7 @@ from workflow_16s.figures.figures import (
     plotly_show_and_save,
     largecolorset,
     plot_legend,
+    attach_legend_to_figure
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -290,8 +291,10 @@ def _save_figure_and_legend(
         show:       Display figure interactively.
         verbose:    Enable debug logging.
     """
+    legend_fig = plot_legend(colordict)
+    combined_fig = attach_legend_to_figure(fig, legend_fig)
     plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose)
-    plot_legend(colordict, color_col, output_dir / f"{file_stem}.legend.png")
+    #plot_legend(colordict, color_col, output_dir / f"{file_stem}.legend.png")
 
 
 def _pts_in_trace(trace):
