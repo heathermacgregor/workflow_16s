@@ -1254,6 +1254,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
                                 metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
+                                logger.info(metric_stats)
                                 
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
