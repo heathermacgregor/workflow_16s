@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from biom import Table
+from scipy import stats
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import (
     fisher_exact, 
@@ -23,6 +24,7 @@ from skbio.stats.ordination import pcoa as PCoA
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from tqdm import tqdm
 
 # ================================== LOCAL IMPORTS =================================== #
@@ -276,6 +278,129 @@ def analyze_alpha_diversity(
             logger.error(f"Error analyzing {metric}: {str(e)}")
     
     return pd.DataFrame(results)
+
+
+def analyze_alpha_correlations(
+    alpha_df: pd.DataFrame,
+    metadata: pd.DataFrame,
+    max_categories: int = 20,
+    min_samples: int = 5
+) -> Dict[str, pd.DataFrame]:
+    """
+    Analyze relationships between alpha diversity metrics and metadata columns.
+    
+    Args:
+        alpha_df: DataFrame of alpha diversity metrics
+        metadata: Sample metadata DataFrame
+        max_categories: Maximum unique values for categorical variables
+        min_samples: Minimum samples per group for valid comparison
+        
+    Returns:
+        Dictionary of DataFrames with correlation results per metric
+    """
+    results = {}
+    
+    # Align indices
+    common_idx = alpha_df.index.intersection(metadata.index)
+    alpha_df = alpha_df.loc[common_idx]
+    meta = metadata.loc[common_idx]
+    
+    for metric in alpha_df.columns:
+        metric_results = []
+        y = alpha_df[metric]
+        
+        for col in meta.columns:
+            # Skip columns with too many missing values
+            if meta[col].isna().mean() > 0.5:
+                continue
+                
+            col_data = meta[col].dropna()
+            common_idx = y.index.intersection(col_data.index)
+            x = col_data.loc[common_idx]
+            y_vals = y.loc[common_idx]
+            
+            # Skip if insufficient data
+            if len(x) < 10:
+                continue
+                
+            # Handle numerical columns
+            if pd.api.types.is_numeric_dtype(x):
+                # Pearson correlation
+                r_pearson, p_pearson = stats.pearsonr(x, y_vals)
+                # Spearman correlation
+                r_spearman, p_spearman = stats.spearmanr(x, y_vals)
+                
+                metric_results.append({
+                    'metadata_column': col,
+                    'type': 'numerical',
+                    'pearson_r': r_pearson,
+                    'pearson_p': p_pearson,
+                    'spearman_rho': r_spearman,
+                    'spearman_p': p_spearman,
+                    'n_samples': len(x)
+                })
+                
+            # Handle categorical columns
+            elif pd.api.types.is_categorical_dtype(x) or x.nunique() <= max_categories:
+                # ANOVA for parametric
+                groups = x.unique()
+                group_data = [y_vals[x == g] for g in groups]
+                
+                # Skip small groups
+                if any(len(g) < min_samples for g in group_data):
+                    continue
+                    
+                # Kruskal-Wallis for non-parametric
+                h_stat, p_kruskal = stats.kruskal(*group_data)
+                
+                # Calculate eta squared (effect size)
+                ss_between = h_stat
+                ss_total = len(y_vals) - 1
+                eta_squared = ss_between / ss_total if ss_total > 0 else 0
+                
+                # Pairwise comparisons
+                pairwise = []
+                if len(groups) > 2 and p_kruskal < 0.05:
+                    tukey = pairwise_tukeyhsd(
+                        y_vals.values, 
+                        x.values
+                    )
+                    pairwise = [
+                        f"{groups[i]} vs {groups[j]}: {p:.4f}" 
+                        for i, j, p in zip(tukey._results[0], tukey._results[1], tukey._results[4])
+                    ]
+                
+                metric_results.append({
+                    'metadata_column': col,
+                    'type': 'categorical',
+                    'n_categories': len(groups),
+                    'kruskal_h': h_stat,
+                    'kruskal_p': p_kruskal,
+                    'eta_squared': eta_squared,
+                    'pairwise_comparisons': "; ".join(pairwise),
+                    'n_samples': len(x)
+                })
+        
+        # Create sorted DataFrame for this metric
+        df = pd.DataFrame(metric_results)
+        
+        # Add ranking columns
+        if not df.empty:
+            # Numerical columns - rank by absolute Spearman correlation
+            num_df = df[df['type'] == 'numerical'].copy()
+            num_df['strength_rank'] = num_df['spearman_rho'].abs().rank(ascending=False)
+            
+            # Categorical columns - rank by eta squared
+            cat_df = df[df['type'] == 'categorical'].copy()
+            cat_df['strength_rank'] = cat_df['eta_squared'].rank(ascending=False)
+            
+            # Combine and sort
+            df = pd.concat([num_df, cat_df]).sort_values('strength_rank')
+            df = df.reset_index(drop=True)
+        
+        results[metric] = df
+    
+    return results
     
 
 def k_means(
