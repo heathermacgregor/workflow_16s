@@ -10,6 +10,7 @@ from typing import Union
 # 3rd‑party (Rich)
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 from rich.theme import Theme
 
 # Local
@@ -26,9 +27,10 @@ def setup_logging(
     file_level: int = logging.DEBUG        # file keeps DEBUG+
 ) -> logging.Logger:
     """
-    Configure workflow_16s logging with:
-      • colourful Rich console output (custom theme)
-      • rotating file handler for full DEBUG logs
+    Configure unified logging with:
+      • Colorful Rich console output with consistent formatting
+      • Rotating file handler for full DEBUG logs
+      • Progress bars integrated into logging system
     """
     # ───────────────────── log‑file path ──────────────────────
     log_dir_path = Path(log_dir_path)
@@ -40,9 +42,13 @@ def setup_logging(
 
     # ─────────────────── root / package logger ─────────────────
     logger = logging.getLogger("workflow_16s")
-    logger.setLevel(logging.DEBUG)                     # keep everything
+    logger.setLevel(logging.DEBUG)  # Keep everything
 
-    # ───────────────────────── FILE …──────────────────────────
+    # Remove existing handlers to avoid duplicates
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # ───────────────────────── FILE HANDLER ───────────────────
     file_handler = RotatingFileHandler(
         filename=log_file_path,
         maxBytes=max_file_size,
@@ -55,35 +61,59 @@ def setup_logging(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     file_handler.setFormatter(file_fmt)
+    logger.addHandler(file_handler)
 
-     # 1. Use EXACT theme keys required by Rich
+    # ────────────────────── CONSOLE HANDLER ────────────────────
+    # Custom theme for Rich console
     custom_theme = Theme({
         "logging.time": "bold white",
+        "logging.level.info": "bold white",
         "logging.level.debug": "dim cyan",
-        "logging.level.info": "bold white",  # Now white instead of blue
         "logging.level.warning": "bold yellow",
         "logging.level.error": "bold red",
         "logging.level.critical": "reverse bold bright_white on red",
-        "logging.name": "bold white",
-        "logging.function": "bold white",  # Note: must be "function" not "func"
-        "logging.message": "white",
+        "progress.description": "bold white",
+        "progress.percentage": "bold green",
+        "progress.bar": "blue",
     })
+    
     console = Console(theme=custom_theme)
-
-    # 2. Configure RichHandler with correct parameters
+    
+    # Configure RichHandler for consistent console logging
     rich_handler = RichHandler(
         console=console,
         rich_tracebacks=True,
         level=console_level,
-        show_time=True,           # Must be True to show timestamp
+        show_time=True,
+        show_level=True,
         show_path=False,
-        markup=False,             # Disable markup interpretation
-        log_time_format="[%X]"    # Time format matching your theme
+        markup=False,
+        log_time_format="[%X]",
     )
-
-    logger.handlers.clear()
-    logger.addHandler(file_handler)
-    logger.addHandler(rich_handler)  # Uses built-in formatting
+    
+    # Set formatter to match our desired format
+    rich_handler.setFormatter(logging.Formatter(
+        "%(message)s",
+        datefmt="%H:%M:%S"
+    ))
+    
+    logger.addHandler(rich_handler)
 
     logger.info("Logging initialised → %s", log_file_path)
     return logger
+
+
+def get_progress_bar() -> Progress:
+    """Create a Rich progress bar integrated with our logging theme"""
+    return Progress(
+        TextColumn("[progress.description]{task.description}", justify="right"),
+        BarColumn(bar_width=None, style="progress.bar"),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+        console=Console(theme=Theme({
+            "progress.description": "bold white",
+            "progress.percentage": "bold green",
+            "progress.bar": "blue",
+        })),
+        expand=True
+    )
