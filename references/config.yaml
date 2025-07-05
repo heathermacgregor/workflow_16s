@@ -149,13 +149,13 @@ ordination:
     tsne: False #True
     umap: False #True
   normalized:
-    pca: True
+    pca: False #True
     pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
     umap: False #True
   clr_transformed:
-    pca: True
+    pca: False #True
     pcoa: False #True
     pcoa_metric: "euclidean"
     tsne: False #True
