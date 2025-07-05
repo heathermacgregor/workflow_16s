@@ -1,5 +1,5 @@
 # ===================================== IMPORTS ====================================== #
-import traceback
+
 # Standard Library Imports
 import glob
 import logging
@@ -124,12 +124,8 @@ def analyze_alpha_correlations(
     
     # Align indices
     common_idx = alpha_df.index.intersection(metadata.index)
-    if not common_idx.empty:
-        alpha_df = alpha_df.loc[common_idx]
-        meta = metadata.loc[common_idx]
-    else:
-        logger.warning("No common samples between alpha diversity and metadata")
-        return results
+    alpha_df = alpha_df.loc[common_idx]
+    meta = metadata.loc[common_idx]
     
     for metric in alpha_df.columns:
         metric_results = []
@@ -142,27 +138,19 @@ def analyze_alpha_correlations(
                 
             col_data = meta[col].dropna()
             common_idx = y.index.intersection(col_data.index)
-            if len(common_idx) < 10:  # Skip if insufficient data
-                continue
-                
             x = col_data.loc[common_idx]
             y_vals = y.loc[common_idx]
             
+            # Skip if insufficient data
+            if len(x) < 10:
+                continue
+                
             # Handle numerical columns
             if pd.api.types.is_numeric_dtype(x):
                 # Pearson correlation
-                try:
-                    r_pearson, p_pearson = stats.pearsonr(x, y_vals)
-                except Exception as e:
-                    logger.warning(f"Pearson correlation failed for {col}: {e}")
-                    continue
-                    
+                r_pearson, p_pearson = stats.pearsonr(x, y_vals)
                 # Spearman correlation
-                try:
-                    r_spearman, p_spearman = stats.spearmanr(x, y_vals)
-                except Exception as e:
-                    logger.warning(f"Spearman correlation failed for {col}: {e}")
-                    continue
+                r_spearman, p_spearman = stats.spearmanr(x, y_vals)
                 
                 metric_results.append({
                     'metadata_column': col,
@@ -185,12 +173,8 @@ def analyze_alpha_correlations(
                     continue
                     
                 # Kruskal-Wallis for non-parametric
-                try:
-                    h_stat, p_kruskal = stats.kruskal(*group_data)
-                except Exception as e:
-                    logger.warning(f"Kruskal-Wallis test failed for {col}: {e}")
-                    continue
-                    
+                h_stat, p_kruskal = stats.kruskal(*group_data)
+                
                 # Calculate eta squared (effect size)
                 ss_between = h_stat
                 ss_total = len(y_vals) - 1
@@ -199,17 +183,14 @@ def analyze_alpha_correlations(
                 # Pairwise comparisons
                 pairwise = []
                 if len(groups) > 2 and p_kruskal < 0.05:
-                    try:
-                        tukey = pairwise_tukeyhsd(
-                            y_vals.values, 
-                            x.values
-                        )
-                        pairwise = [
-                            f"{groups[i]} vs {groups[j]}: {p:.4f}" 
-                            for i, j, p in zip(tukey._results[0], tukey._results[1], tukey._results[4])
-                        ]
-                    except Exception as e:
-                        logger.warning(f"Tukey HSD failed for {col}: {e}")
+                    tukey = pairwise_tukeyhsd(
+                        y_vals.values, 
+                        x.values
+                    )
+                    pairwise = [
+                        f"{groups[i]} vs {groups[j]}: {p:.4f}" 
+                        for i, j, p in zip(tukey._results[0], tukey._results[1], tukey._results[4])
+                    ]
                 
                 metric_results.append({
                     'metadata_column': col,
@@ -1140,14 +1121,16 @@ class _TableProcessor(_ProcessingMixin):
             main_desc = "Collapsing taxonomy..."
             main_task = prog.add_task(
                 f"[white]{main_desc:<{DEFAULT_N}}",
-                total=len(self.tables))
+                total=len(self.tables)
+            )
                 
             for table_type in list(self.tables.keys()):
                 child_desc = table_type.replace('_', ' ').title()
                 child_task = prog.add_task(
                     f"[white]{child_desc:<{DEFAULT_N}}",
                     parent=main_task,
-                    total=len(levels))
+                    total=len(levels)
+                )
                     
                 base_table = self.tables[table_type][self.mode]
                 processed = {}
@@ -1191,7 +1174,8 @@ class _TableProcessor(_ProcessingMixin):
             child_task = prog.add_task(
                 f"[white]{child_desc:<{DEFAULT_N}}",
                 parent=main_task,
-                total=len(levels))
+                total=len(levels)
+            )
                 
             raw_table = self.tables["raw"][self.mode]
             processed = {}
@@ -1304,9 +1288,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._faprotax_cache = {}
         self.alpha_diversity_results: Dict[str, Dict[str, pd.DataFrame]] = {}
         self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
-        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {} 
-        self.figures["alpha_diversity"] = {}
-        self.figures["alpha_correlations"] = {}
+        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {}  # NEW: Initialize correlations
 
         # Process in stages and clear intermediates
         self._run_alpha_diversity_analysis()  # NEW: Run alpha diversity analysis
@@ -1319,6 +1301,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ordination()
 
         # Keep only necessary tables for ML
+        #ml_table_types = {"normalized", "clr_transformed"}
         ml_table_types = {"clr_transformed"}
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
@@ -1375,7 +1358,7 @@ class _AnalysisManager(_ProcessingMixin):
         if not alpha_cfg.get("enabled", False):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
-    
+
         group_column = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
@@ -1412,6 +1395,8 @@ class _AnalysisManager(_ProcessingMixin):
                     continue
                     
                 table_cfg = enabled_table_types[table_type]
+                self.alpha_diversity_results[table_type] = {}
+                self.alpha_diversity_stats[table_type] = {}
                 
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
@@ -1434,10 +1419,7 @@ class _AnalysisManager(_ProcessingMixin):
                         # Convert to DataFrame and compute alpha diversity
                         df = table_to_dataframe(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
-                        
-                        # Store results
-                        if table_type not in self.alpha_diversity_results:
-                            self.alpha_diversity_results[table_type] = {}
+                        # Store alpha diversity results
                         self.alpha_diversity_results[table_type][level] = alpha_df
                         
                         # Run correlation analysis if enabled
@@ -1448,11 +1430,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
-                            
-                            # Store correlation results
-                            if table_type not in self.alpha_correlations:
-                                self.alpha_correlations[table_type] = {}
-                            self.alpha_correlations[table_type][level] = corr_results
+                            self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
                             
                             # Generate correlation figures
                             plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
@@ -1475,10 +1453,6 @@ class _AnalysisManager(_ProcessingMixin):
                             group_column=group_column,
                             parametric=parametric
                         )
-                        
-                        # Store stats results
-                        if table_type not in self.alpha_diversity_stats:
-                            self.alpha_diversity_stats[table_type] = {}
                         self.alpha_diversity_stats[table_type][level] = stats_df
                         
                         # Generate plots if enabled
@@ -1532,9 +1506,9 @@ class _AnalysisManager(_ProcessingMixin):
                                 
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
-                    finally:
-                        prog.update(l0_task, advance=1)
-                    
+                        
+                    prog.update(l0_task, advance=1)
+                
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -1662,14 +1636,10 @@ class _AnalysisManager(_ProcessingMixin):
                 
                 # Process results as they complete
                 for future in as_completed(futures):
-                    try:
-                        table_type, level, method, res, fig = future.result()
-                        self.ordination[table_type].setdefault(level, {})[method] = res
-                        self.figures["ordination"][table_type].setdefault(level, {})[method] = fig
-                    except Exception as e:
-                        logger.error(f"Failed to get ordination result: {e}")
-                    finally:
-                        prog.advance(l0_task)
+                    table_type, level, method, res, fig = future.result()
+                    self.ordination[table_type].setdefault(level, {})[method] = res
+                    self.figures["ordination"][table_type].setdefault(level, {})[method] = fig
+                    prog.advance(l0_task)
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
@@ -1707,40 +1677,36 @@ class _AnalysisManager(_ProcessingMixin):
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
             return table_type, level, method, None, None
 
+    # In the _run_ml_feature_selection method of _AnalysisManager class
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
-        # Check if ML is enabled in configuration
+        # Check if alpha diversity analysis is enabled
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection is disabled in configuration.")
             return
-        
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        n = sum(
+            len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
+            for table_type, levels in ml_tables.items()
+        )
+        if not n:
+            return
+
         methods = ml_cfg.get("methods", ["rfe"])
         n_top_features = ml_cfg.get("n_top_features", 100) 
         
-        # Calculate total tasks
-        total_tasks = 0
-        for table_type, levels in ml_tables.items():
-            total_tasks += len(levels) * len(methods)
-        
-        if not total_tasks:
-            logger.info("No ML tables available. Skipping ML feature selection.")
-            return
-    
         with get_progress_bar() as prog:
             l0_desc = "Running ML feature selection..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
-                total=total_tasks
+                total=n
             )
-            
             for table_type, levels in ml_tables.items():
-                self.models.setdefault(table_type, {})
-                
+                self.models[table_type] = {}
+                 
                 for level, table in levels.items():
                     self.models[table_type].setdefault(level, {})
-                    
                     for method in methods:
                         l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
@@ -1753,41 +1719,16 @@ class _AnalysisManager(_ProcessingMixin):
                             total=1
                         )
     
+                        X = table_to_dataframe(table)
+                        X.index = X.index.str.lower()
+                        y = self.meta.set_index("#sampleid")[[group_col]]
+                        y.index = y.index.astype(str).str.lower()
+                        idx = X.index.intersection(y.index)
+                        X, y = X.loc[idx], y.loc[idx]
+                        mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
+                        
                         try:
-                            # 1. Create output directory
-                            mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level
-                            mdir.mkdir(parents=True, exist_ok=True)
-                            
-                            # 2. Prepare data
-                            X = table_to_dataframe(table)
-                            y = self.meta.set_index("#sampleid")[[group_col]]
-                            
-                            # 3. Robust index alignment
-                            # Convert both indices to string for case-insensitive matching
-                            X.index = X.index.astype(str).str.strip().str.lower()
-                            y.index = y.index.astype(str).str.strip().str.lower()
-                            
-                            # Find common samples
-                            common_idx = X.index.intersection(y.index)
-                            
-                            if len(common_idx) == 0:
-                                raise ValueError(
-                                    f"No common samples between features ({len(X)}) "
-                                    f"and metadata ({len(y)})"
-                                )
-                                
-                            # Filter and align
-                            X = X.loc[common_idx]
-                            y = y.loc[common_idx]
-                            
-                            # 4. Check target distribution
-                            class_counts = y[group_col].value_counts()
-                            if len(class_counts) < 2:
-                                raise ValueError(
-                                    f"Only one class present: {class_counts.to_dict()}"
-                                )
-                                
-                            # 5. Run feature selection
+                            # NEW: Comprehensive ML feature selection
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
@@ -1796,44 +1737,14 @@ class _AnalysisManager(_ProcessingMixin):
                                 method=method,
                                 n_top_features=n_top_features
                             )
-                            
-                            # 6. Store results with validation
-                            if not model_result:
-                                logger.warning(
-                                    f"ML ({method}) returned empty results for "
-                                    f"{table_type}/{level}"
-                                )
-                            else:
-                                self.models[table_type][level][method] = model_result
-                                
-                                if self.verbose:
-                                    scores = model_result.get("test_scores", {})
-                                    logger.info(
-                                        f"ML ({method}) for {table_type}/{level}: "
-                                        f"{len(model_result.get('top_features', []))} features | "
-                                        f"MCC: {scores.get('mcc', 0):.2f} | "
-                                        f"AUC: {scores.get('roc_auc', 0):.2f}"
-                                    )
-                                    
+                            self.models[table_type][level][method] = model_result
                         except Exception as e:
-                            logger.error(
-                                f"❌ ML ({method}) failed for {table_type}/{level}: {str(e)}"
-                            )
-                            logger.debug(f"Error details:\n{traceback.format_exc()}")
+                            logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
                             self.models[table_type][level][method] = None
                             
-                        finally:
-                            prog.update(l1_task, completed=1)
-                            prog.remove_task(l1_task)
-                            prog.update(l0_task, advance=1)
-        
-        # Debug: Log ML model status
-        logger.debug("ML model summary:")
-        for table_type, levels in self.models.items():
-            for level, methods in levels.items():
-                for method, result in methods.items():
-                    status = "✅ Success" if result else "❌ Failed"
-                    logger.debug(f"  - {table_type}/{level}/{method}: {status}")
+                        prog.update(l1_task, completed=1)
+                        prog.remove_task(l1_task)
+                        prog.update(l0_task, advance=1)
                         
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
@@ -1952,8 +1863,16 @@ class AmpliconData:
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
         
+        self.alpha_diversity_results = am.alpha_diversity_results
+        self.alpha_diversity_stats = am.alpha_diversity_stats
+        self.alpha_correlations = am.alpha_correlations
+
         if verbose:
             logger.info(GREEN + "AmpliconData analysis finished." + RESET)
+            logger.info(
+                f"Alpha diversity calculated for {len(self.alpha_diversity_results)} "
+                f"table types and {sum(len(levels) for levels in self.alpha_diversity_results.values())} levels"
+            )
     
     def _apply_cpu_limits(self):
         """
