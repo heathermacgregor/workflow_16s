@@ -1277,7 +1277,7 @@ def create_alpha_diversity_stats_plot(
         marker_color=np.where(stats_df['significant'], '#EF553B', '#636EFA'),
         name='-log10(p-value)',
         text=stats_df.apply(lambda x: f"p={x['p_value']:.2e}", axis=1),
-        textposition='top center'
+        textposition='auto'
     ))
     
     # Effect size markers
