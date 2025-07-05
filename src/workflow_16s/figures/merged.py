@@ -1335,3 +1335,94 @@ def create_alpha_diversity_stats_plot(
         plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
         
     return fig
+
+
+def plot_alpha_correlations(
+    corr_results: Dict[str, pd.DataFrame],
+    output_dir: Optional[Path] = None,
+    top_n: int = 10,
+    height: int = 800,
+    width: int = 1000
+) -> Dict[str, go.Figure]:
+    """
+    Visualize top correlations for each alpha diversity metric.
+    
+    Args:
+        corr_results: Output from analyze_alpha_correlations()
+        output_dir: Directory to save plots
+        top_n: Number of top correlations to display
+        height: Figure height
+        width: Figure width
+        
+    Returns:
+        Dictionary of Plotly figures per metric
+    """
+    figures = {}
+    
+    for metric, df in corr_results.items():
+        if df.empty:
+            continue
+            
+        # Prepare data for visualization
+        df = df.head(top_n).copy()
+        df['abs_strength'] = df.apply(
+            lambda x: abs(x['spearman_rho']) if x['type'] == 'numerical' else x['eta_squared'],
+            axis=1
+        )
+        df['direction'] = df.apply(
+            lambda x: "positive" if (x['type'] == 'numerical' and x['spearman_rho'] > 0) else "negative",
+            axis=1
+        )
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Add bars with conditional coloring
+        colors = {'numerical': 'rgba(54, 162, 235, 0.6)', 'categorical': 'rgba(255, 99, 132, 0.6)'}
+        for _, row in df.iterrows():
+            fig.add_trace(go.Bar(
+                x=[row['metadata_column']],
+                y=[row['abs_strength']],
+                name=row['type'],
+                marker_color=colors[row['type']],
+                hoverinfo='text',
+                hovertext=(
+                    f"<b>{row['metadata_column']}</b><br>"
+                    f"Type: {row['type']}<br>"
+                    + (f"ρ = {row['spearman_rho']:.3f}<br>p = {row['spearman_p']:.4f}" 
+                       if row['type'] == 'numerical' 
+                       else f"η² = {row['eta_squared']:.3f}<br>p = {row['kruskal_p']:.4f}")
+                )
+            ))
+        
+        # Update layout
+        fig.update_layout(
+            title=f"Top {top_n} Associations with {metric.replace('_', ' ').title()}",
+            yaxis_title="Association Strength (|ρ| or η²)",
+            barmode='group',
+            height=height,
+            width=width,
+            template="plotly_white",
+            hoverlabel=dict(bgcolor="white", font_size=12),
+            legend_title="Variable Type"
+        )
+        
+        fig.add_trace(go.Scatter(
+            x=df['metadata_column'],
+            y=df['abs_strength'] * 1.05,
+            text=df.apply(lambda x: "★" if (x['spearman_p'] < 0.05 or x['kruskal_p'] < 0.05) else "", axis=1),
+            mode="text",
+            showlegend=False,
+            textfont=dict(color="red", size=16)
+        ))
+        
+        figures[metric] = fig
+        
+        # Save output
+        if output_dir:
+            output_dir = Path(output_dir) / 'alpha_diversity'
+            output_dir.mkdir(parents=True, exist_ok=True)
+            file_stem = "statistics"
+            plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
+                
+    return figures
