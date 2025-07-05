@@ -580,7 +580,7 @@ def perform_feature_selection(
     random_state: int = DEFAULT_RANDOM_STATE,
     verbose: int = 1,
     feature_selection_params: Optional[Dict] = None,
-    perm_importance_scorer: Callable = make_scorer(matthews_corrcoef),  # FIX: Convert to scorer
+    perm_importance_scorer: Optional[Callable] = None
     perm_importance_n_repeats: int = 10,
     catboost_params: Optional[Dict] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
@@ -664,7 +664,13 @@ def perform_feature_selection(
     if permutation_importance:
         if verbose:
             logger.debug("Computing permutation importances...")
-        
+
+        # Create default scorer if not provided
+        if perm_importance_scorer is None:  # ADDED DEFAULT HANDLING
+            perm_importance_scorer = make_scorer(matthews_corrcoef)
+        if not callable(perm_importance_scorer):
+            raise TypeError("perm_importance_scorer must be a callable function")
+            
         perm_model = CatBoostClassifier(
             iterations=500,
             learning_rate=0.1,
