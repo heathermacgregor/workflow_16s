@@ -1011,7 +1011,8 @@ def catboost_feature_selection(
     method: str = 'rfe',
     n_top_features: int = 100,
     filter_col: Optional[str] = None,
-    filter_val: Optional[str] = None
+    filter_val: Optional[str] = None,
+    **kwargs
 ) -> Dict:
     """
     Perform feature selection using CatBoost and save results
@@ -1056,7 +1057,8 @@ def catboost_feature_selection(
         X_test,
         y_test,
         feature_selection=method,
-        num_features=num_features
+        num_features=num_features,
+        **kwargs
     )
     
     if X_train_selected.empty:
