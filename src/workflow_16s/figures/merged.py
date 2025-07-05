@@ -1292,7 +1292,7 @@ def create_alpha_diversity_stats_plot(
             symbol=np.where(stats_df['effect_size'] > 0, 'triangle-up', 'triangle-down')
         ),
         text=stats_df['effect_size'].round(2),
-        textposition='top center',
+        #textposition='top center',
         name='Effect Size'
     ))
     
@@ -1324,7 +1324,7 @@ def create_alpha_diversity_stats_plot(
     # Improve text formatting
     fig.update_traces(
         texttemplate='%{text:.2e}',
-        textposition='top center'
+        #textposition='auto'
     )
     
     # Save output
