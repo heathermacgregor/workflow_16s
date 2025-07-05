@@ -1177,7 +1177,7 @@ def create_alpha_diversity_boxplot(
                 jitter=0.3,
                 pointpos=-1.8,
                 marker=dict(size=4),
-            )
+            ))
         
         # Update layout
         fig.update_layout(
