@@ -1279,6 +1279,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
         self.figure_output_dir = figure_output_dir
         self.stats: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
         self.ordination: Dict[str, Any] = {}
         self.models: Dict[str, Any] = {}
         self.figures: Dict[str, Any] = {}  # Initialize figures dictionary
@@ -1395,8 +1396,8 @@ class _AnalysisManager(_ProcessingMixin):
                     continue
                     
                 table_cfg = enabled_table_types[table_type]
-                self.alpha_diversity_results[table_type] = {}
-                self.alpha_diversity_stats[table_type] = {}
+                #self.alpha_diversity_results[table_type] = {}
+                #self.alpha_diversity_stats[table_type] = {}
                 
                 # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
@@ -1405,7 +1406,12 @@ class _AnalysisManager(_ProcessingMixin):
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
-                    
+
+                    if table_type not in self.alpha_diversity:
+                        self.alpha_diversity[table_type] = {}
+                    if level not in self.figures["alpha_diversity"][table_type]:
+                        self.alpha_diversity[table_type][level] = {}
+                        
                     l1_desc = " | ".join([
                         table_type.replace('_', ' ').title(), level.capitalize()
                     ]) 
@@ -1420,7 +1426,8 @@ class _AnalysisManager(_ProcessingMixin):
                         df = table_to_dataframe(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
-                        self.alpha_diversity_results[table_type][level] = alpha_df
+                        self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        #self.alpha_diversity_results[table_type][level] = alpha_df
                         
                         # Run correlation analysis if enabled
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
@@ -1453,7 +1460,8 @@ class _AnalysisManager(_ProcessingMixin):
                             group_column=group_column,
                             parametric=parametric
                         )
-                        self.alpha_diversity_stats[table_type][level] = stats_df
+                        self.alpha_diversity[table_type][level]['stats'] = stats_df
+                        #self.alpha_diversity_stats[table_type][level] = stats_df
                         
                         # Generate plots if enabled
                         if generate_plots:
@@ -1499,7 +1507,7 @@ class _AnalysisManager(_ProcessingMixin):
                             # Log significant results
                             sig = stats_df[stats_df['p_value'] < 0.05]
                             if not sig.empty:
-                                logger.info(
+                                logger.debug(
                                     f"Significant alpha diversity differences for "
                                     f"{table_type}/{level}:\n{sig.to_string()}"
                                 )
@@ -1702,11 +1710,13 @@ class _AnalysisManager(_ProcessingMixin):
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=n
             )
-            for table_type, levels in ml_tables.items():
-                self.models[table_type] = {}
-                 
+            for table_type, levels in ml_tables.items()[0:1]: # UNCOMMENT AFTER DEBUGGING                 
                 for level, table in levels.items():
-                    self.models[table_type].setdefault(level, {})
+                    if table_type not in self.models:
+                        self.models[table_type] = {}
+                    if level not in self.models[table_type]:
+                        self.models[table_type][level] = {}
+                        
                     for method in methods:
                         l1_desc = " | ".join([
                             table_type.replace('_', ' ').title(), 
@@ -1738,6 +1748,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 n_top_features=n_top_features
                             )
                             self.models[table_type][level][method] = model_result
+                            
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
                             self.models[table_type][level][method] = None
