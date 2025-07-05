@@ -312,6 +312,8 @@ def plot_legend(
     
     return fig
 
+from plotly.subplots import make_subplots
+
 def attach_legend_to_figure(
     main_fig: go.Figure,
     legend_fig: go.Figure,
@@ -322,38 +324,39 @@ def attach_legend_to_figure(
     Attaches a legend figure to the right of a main Plotly figure.
     
     Args:
-        main_fig:     The main Plotly figure
-        legend_fig:   The legend Plotly figure created by plot_legend
+        main_fig:     The main Plotly figure (geo plot)
+        legend_fig:   The legend Plotly figure
         main_width:   Width proportion for main figure (0-1)
         legend_width: Width proportion for legend (0-1)
     
     Returns:
         Combined Plotly figure with main plot and legend side-by-side
     """
-    # Create subplot figure with 1 row and 2 columns
+    # Create subplot figure with geo and cartesian subplots
     combined_fig = make_subplots(
         rows=1, 
         cols=2,
         column_widths=[main_width, legend_width],
-        specs=[[{"type": "scatter"}, {"type": "scatter"}]],
+        specs=[[{"type": "geo"}, {"type": "xy"}]],  # Specify geo and cartesian types
         horizontal_spacing=0.01
     )
     
-    # Add main figure traces to first column
+    # Add main figure traces to geo subplot
     for trace in main_fig.data:
         combined_fig.add_trace(trace, row=1, col=1)
     
-    # Add legend figure traces to second column
+    # Add legend figure traces to cartesian subplot
     for trace in legend_fig.data:
         combined_fig.add_trace(trace, row=1, col=2)
     
     # Update layout from main figure
     combined_fig.update_layout(
         title=main_fig.layout.title,
-        xaxis=main_fig.layout.xaxis,
-        yaxis=main_fig.layout.yaxis,
         template=main_fig.layout.template,
-        showlegend=False  # We're using custom legend
+        showlegend=False,  # We're using custom legend
+        # Transfer geo layout settings
+        geo=main_fig.layout.geo,
+        margin=main_fig.layout.margin
     )
     
     # Configure legend column
@@ -371,5 +374,12 @@ def attach_legend_to_figure(
         row=1, 
         col=2
     )
+    
+    # Maintain aspect ratio settings if they exist
+    if hasattr(main_fig.layout, 'height') and hasattr(main_fig.layout, 'width'):
+        combined_fig.update_layout(
+            height=main_fig.layout.height,
+            width=main_fig.layout.width + legend_fig.layout.width
+        )
     
     return combined_fig
