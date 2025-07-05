@@ -126,7 +126,7 @@ def filter_data(
     X: pd.DataFrame,
     y: pd.Series,
     metadata: pd.DataFrame,
-    contamination_status_col: str = DEFAULT_GROUP_COLUMN,
+    group_col: str = DEFAULT_GROUP_COLUMN,
     test_size: float = DEFAULT_TEST_SIZE,
     random_state: int = DEFAULT_RANDOM_STATE
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
@@ -137,7 +137,7 @@ def filter_data(
         X: Feature matrix
         y: Target vector
         metadata: Metadata dataframe
-        contamination_status_col: Column name for stratification
+        group_col: Column name for stratification
         test_size: Proportion of data for testing
         random_state: Random seed for reproducibility
         
@@ -148,14 +148,14 @@ def filter_data(
     if not all(X.index == y.index) or not all(X.index == metadata.index):
         raise ValueError("X, y, and metadata must have the same index.")
     
-    if contamination_status_col not in metadata.columns:
-        raise ValueError(f"'{contamination_status_col}' not found in metadata.")
+    if group_col not in metadata.columns:
+        raise ValueError(f"'{group_col}' not found in metadata.")
     
     if not 0 < test_size < 1:
         raise ValueError("test_size must be between 0 and 1.")
     
     # Split data while maintaining class proportions
-    stratify = metadata[contamination_status_col]
+    stratify = metadata[group_col]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
         test_size=test_size,
@@ -1007,7 +1007,7 @@ def catboost_feature_selection(
     metadata: pd.DataFrame,
     features: pd.DataFrame,
     output_dir: Union[str, Path],
-    contamination_status_col: str,
+    group_col: str,
     method: str = 'rfe',
     n_top_features: int = 100,
     filter_col: Optional[str] = None,
@@ -1021,7 +1021,7 @@ def catboost_feature_selection(
         metadata: Sample metadata
         features: Feature matrix
         output_dir: Output directory
-        contamination_status_col: Contamination status column
+        group_col: Contamination status column
         method: Feature selection method
         n_top_features: Number of top features to return
         filter_col: Column to filter on
@@ -1042,9 +1042,9 @@ def catboost_feature_selection(
         os.makedirs(output_dir, exist_ok=True)
     
     # Filter data
-    X, y = features, metadata[contamination_status_col]
+    X, y = features, metadata[group_col]
     X_train, X_test, y_train, y_test = filter_data(
-        X, y, metadata, contamination_status_col
+        X, y, metadata, group_col
     )
     
     # Determine number of features to select
