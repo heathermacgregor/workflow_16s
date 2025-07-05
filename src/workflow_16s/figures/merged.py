@@ -1226,6 +1226,7 @@ def create_alpha_diversity_boxplot(
                     text=f"{test_name} p={p_val:.4f}",
                     showarrow=False,
                     font=dict(size=12)
+                )
             except Exception as e:
                 if verbose:
                     logger.error(f"Failed to add stats annotation: {e}")
