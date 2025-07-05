@@ -1183,7 +1183,7 @@ def create_alpha_diversity_boxplot(
             template="plotly_white",
             showlegend=False
         )
-        
+        fig = _apply_common_layout(fig, group_column, metric.replace('_', ' ').title(), f"{metric.replace('_', ' ').title()} by {group_column}")
         # Add statistical annotations if requested
         if add_stat_annot and len(groups) > 1:
             try:
@@ -1311,6 +1311,7 @@ def create_alpha_diversity_stats_plot(
         legend=dict(x=1.1, y=1.0),
         hovermode="x unified"
     )
+    fig = _apply_common_layout(fig, "Diversity Metric", "-log10(p-value)", "Alpha Diversity Statistical Summary")
     
     # Add significance thresholds
     fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="red")
