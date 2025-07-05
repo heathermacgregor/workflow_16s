@@ -267,19 +267,19 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
-# NEW: Updated ML summary function with proper SHAP plot handling
 def _prepare_ml_summary(
     models: Dict, 
     top_contaminated: List[Dict], 
     top_pristine: List[Dict]
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str], Optional[str]]:
     """Prepare detailed ML results for HTML display with SHAP plot."""
     if not models:
-        return None, None, None
+        return None, None, None, None
 
     metrics_summary = []
     features_summary = []
     shap_plot_base64 = None
+    beeswarm_plot_base64 = None
     best_mcc = -1  # Track best MCC for SHAP plot selection
     
     for table_type, levels in models.items():
@@ -320,13 +320,23 @@ def _prepare_ml_summary(
                 # Track best model for SHAP plot
                 current_mcc = test_scores.get("mcc", -1)
                 shap_path = result.get("shap_summary_bar_path")
-                if current_mcc > best_mcc and shap_path and Path(shap_path).exists():
-                    try:
-                        with open(shap_path, "rb") as img_file:
-                            shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-                        best_mcc = current_mcc
-                    except Exception as e:
-                        logger.warning(f"Could not load SHAP plot from {shap_path}: {e}")
+                beeswarm_path = result.get("shap_beeswarm_path")
+                if current_mcc > best_mcc:
+                    if shap_path and Path(shap_path).exists():
+                        try:
+                            with open(shap_path, "rb") as img_file:
+                                shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+                        except Exception as e:
+                            logger.warning(f"Could not load SHAP plot from {shap_path}: {e}")
+                    
+                    if beeswarm_path and Path(beeswarm_path).exists():
+                        try:
+                            with open(beeswarm_path, "rb") as img_file:
+                                beeswarm_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+                        except Exception as e:
+                            logger.warning(f"Could not load beeswarm plot from {beeswarm_path}: {e}")
+                    
+                    best_mcc = current_mcc
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
@@ -335,12 +345,9 @@ def _prepare_ml_summary(
     for feat in top_contaminated + top_pristine:
         if "faprotax_functions" in feat:
             feat["Functions"] = ", ".join(feat["faprotax_functions"])
-    print(metrics_df)
-    print(features_df)
-    return metrics_df, features_df, shap_plot_base64
+    return metrics_df, features_df, shap_plot_base64, beeswarm_plot_base64
 
-# NEW: Updated ML section formatting with SHAP plot
-def _format_ml_section(ml_metrics, ml_features, shap_plot_base64):
+def _format_ml_section(ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64):
     """Format the machine learning results section with SHAP plot."""
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
@@ -348,17 +355,25 @@ def _format_ml_section(ml_metrics, ml_features, shap_plot_base64):
     ml_html = f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
-        {ml_metrics.to_html(index=False, classes='ml-metrics-table dynamic-table', table_id='ml-metrics')}
+        {_add_table_functionality(ml_metrics, 'ml-metrics-table')}
         
         <h3>Top Features</h3>
-        {ml_features.to_html(index=False, classes='ml-features-table dynamic-table', table_id='ml-features')}
+        {_add_table_functionality(ml_features, 'ml-features-table')}
     """
     
     if shap_plot_base64:
         ml_html += f"""
-        <h3>Feature Importance (Best Model)</h3>
+        <h3>Feature Importance</h3>
         <div class="figure-container">
             <img src="data:image/png;base64,{shap_plot_base64}" alt="SHAP Summary">
+        </div>
+        """
+    
+    if beeswarm_plot_base64:
+        ml_html += f"""
+        <h3>Feature Importance Beeswarm Plot</h3>
+        <div class="figure-container">
+            <img src="data:image/png;base64,{beeswarm_plot_base64}" alt="SHAP Beeswarm">
         </div>
         """
     
@@ -695,6 +710,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
                     <option value="-1">All</option>
                 </select>
                 <div class="pagination-buttons" id="pagination-{table_id}"></div>
+                <span class="pagination-indicator" id="indicator-{table_id}"></span>
             </div>
         </div>
     </div>
@@ -737,13 +753,13 @@ def generate_html_report(
         amplicon_data.stats
     )
     
-    # ML summary - FIXED: Pass correct ML data and top features
-    ml_metrics, ml_features, shap_plot_base64 = _prepare_ml_summary(
+    # ML summary
+    ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64 = _prepare_ml_summary(
         amplicon_data.models,
         amplicon_data.top_contaminated_features,
         amplicon_data.top_pristine_features
     )
-    ml_html = _format_ml_section(ml_metrics, ml_features, shap_plot_base64)
+    ml_html = _format_ml_section(ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64)
     
     # Build tables section HTML
     tables_html = f"""
@@ -857,14 +873,15 @@ def generate_html_report(
         
         const rows = table.querySelectorAll('tbody tr');
         const paginationDiv = document.getElementById(`pagination-${tableId}`);
-        const totalPages = Math.ceil(rows.length / pageSize);
+        const indicator = document.getElementById(`indicator-${tableId}`);
+        const totalPages = pageSize === -1 ? 1 : Math.ceil(rows.length / pageSize);
         
         // Hide all rows
         rows.forEach(row => row.style.display = 'none');
         
         // Show rows for first page
         const start = 0;
-        const end = Math.min(start + pageSize, rows.length);
+        const end = pageSize === -1 ? rows.length : Math.min(start + pageSize, rows.length);
         for (let i = start; i < end; i++) {
             rows[i].style.display = '';
         }
@@ -881,18 +898,15 @@ def generate_html_report(
             });
             paginationDiv.appendChild(prevButton);
             
-            const pageButton = document.createElement('button');
-            pageButton.textContent = '1';
-            pageButton.classList.add('pagination-btn', 'active');
-            pageButton.addEventListener('click', () => {
-                changePage(tableId, 0, pageSize);
-            });
-            paginationDiv.appendChild(pageButton);
-            
-            if (totalPages > 2) {
-                const ellipsis = document.createElement('span');
-                ellipsis.textContent = totalPages > 5 ? '...' : '';
-                paginationDiv.appendChild(ellipsis);
+            for (let i = 0; i < totalPages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i + 1;
+                pageButton.classList.add('pagination-btn');
+                if (i === 0) pageButton.classList.add('active');
+                pageButton.addEventListener('click', () => {
+                    changePage(tableId, i, pageSize);
+                });
+                paginationDiv.appendChild(pageButton);
             }
             
             const nextButton = document.createElement('button');
@@ -904,6 +918,11 @@ def generate_html_report(
             });
             paginationDiv.appendChild(nextButton);
         }
+        
+        // Update indicator
+        if (indicator) {
+            indicator.textContent = `Page 1 of ${totalPages}`;
+        }
     }
     
     function changePage(tableId, pageNumber, pageSize) {
@@ -912,7 +931,8 @@ def generate_html_report(
         
         const rows = table.querySelectorAll('tbody tr');
         const paginationDiv = document.getElementById(`pagination-${tableId}`);
-        const totalPages = Math.ceil(rows.length / pageSize);
+        const indicator = document.getElementById(`indicator-${tableId}`);
+        const totalPages = pageSize === -1 ? 1 : Math.ceil(rows.length / pageSize);
         
         // Validate page number
         pageNumber = Math.max(0, Math.min(pageNumber, totalPages - 1));
@@ -922,7 +942,7 @@ def generate_html_report(
         
         // Show rows for current page
         const start = pageNumber * pageSize;
-        const end = Math.min(start + pageSize, rows.length);
+        const end = pageSize === -1 ? rows.length : Math.min(start + pageSize, rows.length);
         for (let i = start; i < end; i++) {
             rows[i].style.display = '';
         }
@@ -939,6 +959,11 @@ def generate_html_report(
         // Update button states
         buttons[0].disabled = pageNumber === 0;  // Prev button
         buttons[buttons.length - 1].disabled = pageNumber === totalPages - 1;  // Next button
+        
+        // Update indicator
+        if (indicator) {
+            indicator.textContent = `Page ${pageNumber + 1} of ${totalPages}`;
+        }
     }
     
     function changePageSize(tableId, newSize) {
@@ -1016,8 +1041,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     th, td                               {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
     th                                   {{ background-color: #f2f2f2; position: relative; }}
     .feature-table tr:nth-child(even)    {{ background-color: #f9f9f9; }}
-    .ml-metrics-table tr:nth-child(even) {{ background-color: #f0f8ff; }}
-    .ml-features-table tr:nth-child(even) {{ background-color: #fff0f5; }}
     
     .table-container                     {{ margin: 20px 0; overflow-x: auto; }}
     
@@ -1032,7 +1055,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     
     .pagination-controls button:disabled {{ background: #ddd; cursor: not-allowed; }}
     
-    .pagination-controls button.active   {{ background: #000; color: #fff; }}
+    .pagination-indicator                {{ margin-left: 10px; font-weight: bold; }}
     
     .dynamic-table th                    {{ cursor: pointer; }}
     
@@ -1041,11 +1064,57 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .dynamic-table th.asc::after         {{ content: " ▲"; font-size: 0.8em; position: absolute; right: 8px; }}
     .dynamic-table th.desc::after        {{ content: " ▼"; font-size: 0.8em; position: absolute; right: 8px; }}
     
+    /* ======================= BUTTON STYLES ======================= */
+    .tab-button, .method-button, .table-button, 
+    .level-button, .metric-button, .pagination-btn {{
+        color: black;
+        background-color: white;
+        border: 1px solid #ddd;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-right: 5px;
+        transition: all 0.3s ease;
+    }}
+
+    .tab-button.active, .method-button.active, 
+    .table-button.active, .level-button.active, 
+    .metric-button.active, .pagination-btn.active {{
+        color: white;
+        background-color: black;
+    }}
+    
     /* ML Section Styling */
     .ml-section                          {{ margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }}
     .ml-section h3                       {{ margin-top: 0; }}
     .figure-container                    {{ margin-top: 20px; text-align: center; }}
     .figure-container img                {{ max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }}
+    
+    /* Ensure ML tables match others */
+    .ml-metrics-table, .ml-features-table {{
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 20px;
+    }}
+
+    .ml-metrics-table th, .ml-metrics-table td,
+    .ml-features-table th, .ml-features-table td {{
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }}
+
+    .ml-metrics-table th, .ml-features-table th {{
+        background-color: #f2f2f2;
+    }}
+
+    .ml-metrics-table tr:nth-child(even) {{
+        background-color: #f9f9f9;
+    }}
+
+    .ml-features-table tr:nth-child(even) {{
+        background-color: #f9f9f9;
+    }}
   </style>
 </head>
 <body>
