@@ -1409,7 +1409,7 @@ class _AnalysisManager(_ProcessingMixin):
 
                     if table_type not in self.alpha_diversity:
                         self.alpha_diversity[table_type] = {}
-                    if level not in self.figures["alpha_diversity"][table_type]:
+                    if level not in self.alpha_diversity[table_type]:
                         self.alpha_diversity[table_type][level] = {}
                         
                     l1_desc = " | ".join([
