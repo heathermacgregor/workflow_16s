@@ -1309,7 +1309,7 @@ class _AnalysisManager(_ProcessingMixin):
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
-        ml_tables = { "clr_transformed": "class" }
+        ml_tables = { "clr_transformed": self.tables["clr_transformed"]["class"] }
         self._run_ml_feature_selection(ml_tables)
         self._compare_top_features()
         del ml_tables
