@@ -1124,100 +1124,121 @@ def create_alpha_diversity_boxplot(
     metadata: pd.DataFrame,
     group_column: str,
     metric: str,
-    output_dir: Optional[Path] = None,
-    show: bool = False,
+    output_dir: Path,
+    show: bool = True,
     verbose: bool = False,
     add_points: bool = True,
     add_stat_annot: bool = True,
-    test_type: str = "parametric"
+    test_type: str = "nonparametric"
 ) -> go.Figure:
     """
-    Create interactive boxplot for alpha diversity metric.
+    Create a boxplot for alpha diversity metric with optional statistical annotations.
     
     Args:
-        alpha_df: DataFrame from alpha_diversity()
-        metadata: Sample metadata
-        group_column: Grouping variable in metadata
-        metric: Diversity metric to visualize
-        output_dir: Save directory
-        show: Display interactive plot
-        verbose: Enable debug logging
-        add_points: Show individual data points
+        alpha_df: DataFrame of alpha diversity metrics
+        metadata: Sample metadata DataFrame
+        group_column: Column in metadata defining groups
+        metric: Alpha diversity metric to plot
+        output_dir: Directory to save plot
+        show: Whether to display the plot
+        verbose: Enable verbose logging
+        add_points: Add individual points to boxplot
         add_stat_annot: Add statistical annotations
-        test_type: Statistical test type ('parametric' or 'nonparametric')
+        test_type: Type of statistical test ('parametric' or 'nonparametric')
     
     Returns:
         Plotly Figure object
     """
-    # Merge data
-    merged = alpha_df[[metric]].merge(
-        metadata[[group_column]], 
-        left_index=True, 
-        right_index=True,
-        how='inner'
-    )
-    
-    # Create base figure
-    fig = px.box(
-        merged, 
-        x=group_column, 
-        y=metric,
-        color=group_column,
-        points="all" if add_points else False,
-        title=f"{metric.replace('_', ' ').title()} Diversity",
-        labels={
-            metric: metric.replace('_', ' ').title(),
-            group_column: group_column.replace('_', ' ').title()
-        }
-    )
-    
-    # Add statistical annotations if enabled
-    if add_stat_annot:
-        groups = merged[group_column].unique()
-        group_pairs = [(i, j) for i in groups for j in groups if i < j]
-        annotations = []
+    try:
+        # Merge alpha diversity with metadata
+        merged = alpha_df[[metric]].merge(
+            metadata[[group_column]], 
+            left_index=True, 
+            right_index=True,
+            how='inner'
+        ).dropna()
         
-        # Perform appropriate statistical test
-        for pair in group_pairs:
-            grp1 = merged[merged[group_column] == pair[0]][metric]
-            grp2 = merged[merged[group_column] == pair[1]][metric]
-            
-            if test_type == "parametric":
-                _, p_val = stats.ttest_ind(grp1, grp2)
-            else:
-                _, p_val = stats.mannwhitneyu(grp1, grp2)
-            
-            # Format annotation
-            stars = "****" if p_val < 0.0001 else "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
-            annotations.append(
-                dict(
-                    x=(pair[0] + pair[1])/2,
-                    y=merged[metric].max() * 1.05 + 0.05 * group_pairs.index(pair),
-                    text=stars,
-                    showarrow=False,
-                    font=dict(size=14)
-                )
+        if merged.empty:
+            if verbose:
+                logger.warning(f"No data for {metric} after merging with metadata")
+            return go.Figure()
+        
+        # Create boxplot
+        fig = go.Figure()
+        
+        # Add box traces for each group
+        groups = merged[group_column].unique()
+        for group in groups:
+            group_data = merged[merged[group_column] == group][metric]
+            fig.add_trace(go.Box(
+                y=group_data,
+                name=str(group),
+                boxpoints='all' if add_points else False,
+                jitter=0.3,
+                pointpos=-1.8,
+                marker=dict(size=4),
             )
-            
-        fig.update_layout(annotations=annotations)
+        
+        # Update layout
+        fig.update_layout(
+            title=f"{metric.replace('_', ' ').title()} by {group_column}",
+            yaxis_title=metric.replace('_', ' ').title(),
+            xaxis_title=group_column,
+            template="plotly_white",
+            showlegend=False
+        )
+        
+        # Add statistical annotations if requested
+        if add_stat_annot and len(groups) > 1:
+            try:
+                # Perform statistical test
+                if test_type == "parametric":
+                    if len(groups) == 2:
+                        # T-test
+                        group1 = merged[merged[group_column] == groups[0]][metric]
+                        group2 = merged[merged[group_column] == groups[1]][metric]
+                        _, p_val = stats.ttest_ind(group1, group2, equal_var=False)
+                        test_name = "T-test"
+                    else:
+                        # ANOVA
+                        group_data = [merged[merged[group_column] == g][metric] for g in groups]
+                        _, p_val = stats.f_oneway(*group_data)
+                        test_name = "ANOVA"
+                else:
+                    if len(groups) == 2:
+                        # Mann-Whitney
+                        group1 = merged[merged[group_column] == groups[0]][metric]
+                        group2 = merged[merged[group_column] == groups[1]][metric]
+                        _, p_val = stats.mannwhitneyu(group1, group2)
+                        test_name = "Mann-Whitney"
+                    else:
+                        # Kruskal-Wallis
+                        group_data = [merged[merged[group_column] == g][metric] for g in groups]
+                        _, p_val = stats.kruskal(*group_data)
+                        test_name = "Kruskal-Wallis"
+                
+                # Add annotation
+                fig.add_annotation(
+                    x=0.5,
+                    y=1.05,
+                    xref="paper",
+                    yref="paper",
+                    text=f"{test_name} p={p_val:.4f}",
+                    showarrow=False,
+                    font=dict(size=12)
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Failed to add stats annotation: {e}")
+        
+        # Save plot
+        output_path = output_dir / f"alpha_boxplot_{metric}.html"
+        fig.write_html(str(output_path), include_plotlyjs="cdn")
+        
+        return fig
     
-    # Update layout
-    fig.update_layout(
-        template='heather',
-        height=800,
-        width=1000,
-        font_size=16,
-        showlegend=False
-    )
-    
-    # Save output
-    if output_dir:
-        output_dir = output_dir / 'alpha_diversity'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        file_stem = f"boxplot.{metric}.{group_column}"
-        plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
-            
-    return fig
+    except Exception as e:
+        logger.error(f"Failed to create boxplot for {metric}: {e}")
+        return go.Figure()
     
 
 def create_alpha_diversity_stats_plot(
