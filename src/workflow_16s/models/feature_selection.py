@@ -60,7 +60,7 @@ DEFAULT_TEST_SIZE = 0.3
 DEFAULT_RANDOM_STATE = 42
 
 DEFAULT_METHOD = 'rfe'
-DEFAULT_USE_PERMUTATION_IMPORTANCE = True
+DEFAULT_permutation_importance = True
 DEFAULT_THREAD_COUNT = 4
 DEFAULT_STEP_SIZE = 1000
 DEFAULT_NUM_FEATURES = 500
@@ -573,7 +573,7 @@ def perform_feature_selection(
     X_test: pd.DataFrame,
     y_test: pd.Series,
     feature_selection: str = DEFAULT_METHOD,
-    use_permutation_importance: bool = DEFAULT_USE_PERMUTATION_IMPORTANCE,
+    permutation_importance: bool = DEFAULT_permutation_importance,
     thread_count: int = DEFAULT_THREAD_COUNT,
     step_size: int = DEFAULT_STEP_SIZE,
     num_features: int = DEFAULT_NUM_FEATURES,
@@ -593,7 +593,7 @@ def perform_feature_selection(
         X_test: Testing feature matrix
         y_test: Testing target vector
         feature_selection: Feature selection method
-        use_permutation_importance: Apply permutation importance
+        permutation_importance: Apply permutation importance
         thread_count: Number of threads
         step_size: Step size for RFE
         num_features: Number of features to select
@@ -661,7 +661,7 @@ def perform_feature_selection(
         )
     
     # Apply permutation importance if required
-    if use_permutation_importance:
+    if permutation_importance:
         if verbose:
             logger.debug("Computing permutation importances...")
         
