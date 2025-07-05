@@ -1309,7 +1309,6 @@ class _AnalysisManager(_ProcessingMixin):
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
-        ml_tables = { "clr_transformed": self.tables["clr_transformed"]["class"] }
         self._run_ml_feature_selection(ml_tables)
         self._compare_top_features()
         del ml_tables
@@ -1688,32 +1687,60 @@ class _AnalysisManager(_ProcessingMixin):
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
             return table_type, level, method, None, None
 
-    # In the _run_ml_feature_selection method of _AnalysisManager class
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
-        # Check if alpha diversity analysis is enabled
+        # Check if ML feature selection is enabled
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection is disabled in configuration.")
             return
+    
+        # Get configuration parameters
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        n = sum(
-            len(levels) * len(self.cfg.get("ml", {}).get("methods", ["rfe"]))
-            for table_type, levels in ml_tables.items()
-        )
-        if not n:
-            return
-
         methods = ml_cfg.get("methods", ["rfe"])
-        n_top_features = ml_cfg.get("n_top_features", 100) 
+        n_top_features = ml_cfg.get("num_features", 100)
+        step_size = ml_cfg.get("step_size", 100)
+        permutation_importance = ml_cfg.get("permutation_importance", True)
+        n_threads = ml_cfg.get("n_threads", 8)
         
+        # Get enabled table types and levels from config
+        enabled_table_types = set(ml_cfg.get("table_types", ["clr_transformed"]))
+        enabled_levels = set(ml_cfg.get("levels", ["genus"]))
+        
+        # Filter ml_tables to only include enabled table types and levels
+        filtered_ml_tables = {}
+        for table_type, levels in ml_tables.items():
+            if table_type not in enabled_table_types:
+                continue
+                
+            # Filter levels to only include enabled levels
+            filtered_levels = {
+                level: table 
+                for level, table in levels.items() 
+                if level in enabled_levels
+            }
+            
+            if filtered_levels:
+                filtered_ml_tables[table_type] = filtered_levels
+    
+        # Calculate total tasks
+        n = sum(
+            len(levels) * len(methods)
+            for table_type, levels in filtered_ml_tables.items()
+        )
+        
+        if not n:
+            logger.info("No ML tasks to run after filtering by table types and levels")
+            return
+    
         with get_progress_bar() as prog:
             l0_desc = "Running ML feature selection..."
             l0_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=n
             )
-            for table_type, levels in ml_tables.items(): # UNCOMMENT AFTER DEBUGGING                 
+            
+            for table_type, levels in filtered_ml_tables.items():
                 for level, table in levels.items():
                     if table_type not in self.models:
                         self.models[table_type] = {}
@@ -1741,14 +1768,16 @@ class _AnalysisManager(_ProcessingMixin):
                         mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
                         
                         try:
-                            # NEW: Comprehensive ML feature selection
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
                                 output_dir=mdir,
                                 contamination_status_col=group_col,
                                 method=method,
-                                n_top_features=n_top_features
+                                n_top_features=n_top_features,
+                                step_size=step_size,
+                                permutation_importance=permutation_importance,
+                                n_jobs=n_threads
                             )
                             self.models[table_type][level][method] = model_result
                             
