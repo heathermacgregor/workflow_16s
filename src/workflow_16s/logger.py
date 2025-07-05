@@ -43,6 +43,8 @@ def setup_logging(
     # ─────────────────── root / package logger ─────────────────
     logger = logging.getLogger("workflow_16s")
     logger.setLevel(logging.DEBUG)  # Keep everything
+    # Disable propagation to avoid duplicate logs from parent/root
+    logger.propagate = False  # 🚀 Key fix
 
     # Remove existing handlers to avoid duplicates
     for handler in logger.handlers[:]:
