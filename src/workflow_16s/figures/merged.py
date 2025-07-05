@@ -1150,13 +1150,9 @@ def create_alpha_diversity_boxplot(
         Plotly Figure object
     """
     try:
-        # Merge alpha diversity with metadata
-        merged = alpha_df[[metric]].merge(
-            metadata[[group_column]], 
-            left_index=True, 
-            right_index=True,
-            how='inner'
-        ).dropna()
+        merged = _prepare_visualization_data(
+            alpha_df[[metric]], metadata, 'dataset_name', group_column, verbose=verbose
+        )
         
         if merged.empty:
             if verbose:
