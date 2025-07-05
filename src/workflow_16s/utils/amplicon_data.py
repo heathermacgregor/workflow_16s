@@ -1195,6 +1195,9 @@ class _AnalysisManager(_ProcessingMixin):
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        if alpha_df.empty:
+                            logger.error(f"Alpha diversity table empty for {table_type}/{level}")
+                            continue
                         #self.alpha_diversity_results[table_type][level] = alpha_df
                         
                         # Run correlation analysis if enabled
@@ -1247,6 +1250,8 @@ class _AnalysisManager(_ProcessingMixin):
                             plot_cfg = alpha_cfg.get("plot", {})
                             for metric in metrics:
                                 # Get statistical results for this metric
+                                if alpha_df[metric].isnull().all():
+                                    logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
                                 metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
                                 
                                 fig = create_alpha_diversity_boxplot(
