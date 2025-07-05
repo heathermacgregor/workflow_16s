@@ -23,9 +23,7 @@ logger = logging.getLogger('workflow_16s')
 # ===================================== CLASSES ====================================== #
 
 class NumpySafeJSONEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles NumPy data types safely."""
     def default(self, obj):  # noqa: D401
-        """Convert NumPy objects to Python-native types."""
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
@@ -43,19 +41,6 @@ def _prepare_sections(
     include_sections: List[str],
     id_counter,
 ) -> Tuple[List[Dict], Dict]:
-    """
-    Prepare section data for HTML report generation.
-    
-    Args:
-        figures: Dictionary of figures organized by section
-        include_sections: List of sections to include in report
-        id_counter: Iterator for generating unique IDs
-        
-    Returns:
-        Tuple containing:
-            - List of section data dictionaries
-            - Dictionary of plot data
-    """
     sections = []
     plot_data: Dict[str, Any] = {}
 
@@ -138,7 +123,6 @@ def _prepare_sections(
 
 
 def _flatten(tree, keys, out):
-    """Flatten nested dictionary structure into flat dictionary."""
     for k, v in tree.items():
         new_keys = keys + [k]
         if isinstance(v, dict):
@@ -155,22 +139,6 @@ def _figs_to_html(
     square=False,
     row_label: str | None = None
 ) -> Tuple[str, str, Dict]:
-    """
-    Convert figures to HTML tabs and buttons.
-    
-    Args:
-        figs: Dictionary of figures
-        counter: ID counter iterator
-        prefix: HTML ID prefix
-        square: Whether to make plots square
-        row_label: Label for row tabs
-        
-    Returns:
-        Tuple containing:
-            - HTML for tabs
-            - HTML for buttons
-            - Plot data dictionary
-    """
     tabs, btns, plot_data = [], [], {}
 
     for title, fig in figs.items():
@@ -212,10 +180,10 @@ def _figs_to_html(
             else:
                 plot_data[plot_id] = {
                     "type": "error",
-                    "error": f"Unsupported figure type {type(fig)}"
+                    "error": f"Unsupported figure type {type(fig)}"
                 }
         except Exception as exc:  # pragma: no cover
-            logger.exception("Serializing figure failed")
+            logger.exception("Serialising figure failed")
             plot_data[plot_id] = {
                 "type": "error", 
                 "error": str(exc)
@@ -233,7 +201,6 @@ def _figs_to_html(
 
 
 def _section_html(sec):
-    """Generate HTML for a section."""
     sub_html = "\n".join(
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
@@ -255,17 +222,7 @@ def _prepare_features_table(
     max_features: int,
     category: str
 ) -> pd.DataFrame:
-    """
-    Prepare top features table for HTML display.
-    
-    Args:
-        features: List of feature dictionaries
-        max_features: Maximum number of features to display
-        category: Category name for features
-        
-    Returns:
-        Formatted DataFrame of features
-    """
+    """Prepare top features table for HTML display"""
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
     
@@ -310,25 +267,13 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
+# NEW: Updated ML summary function with proper SHAP plot handling
 def _prepare_ml_summary(
     models: Dict, 
     top_contaminated: List[Dict], 
     top_pristine: List[Dict]
 ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str]]:
-    """
-    Prepare detailed ML results for HTML display with SHAP plot.
-    
-    Args:
-        models: Dictionary of ML models
-        top_contaminated: Top contaminated-associated features
-        top_pristine: Top pristine-associated features
-        
-    Returns:
-        Tuple containing:
-            - ML metrics DataFrame
-            - ML features DataFrame
-            - Base64 encoded SHAP plot
-    """
+    """Prepare detailed ML results for HTML display with SHAP plot."""
     if not models:
         return None, None, None
 
@@ -393,19 +338,9 @@ def _prepare_ml_summary(
     
     return metrics_df, features_df, shap_plot_base64
 
-
+# NEW: Updated ML section formatting with SHAP plot
 def _format_ml_section(ml_metrics, ml_features, shap_plot_base64):
-    """
-    Format the machine learning results section with SHAP plot.
-    
-    Args:
-        ml_metrics: ML metrics DataFrame
-        ml_features: ML features DataFrame
-        shap_plot_base64: Base64 encoded SHAP plot
-        
-    Returns:
-        HTML string for ML section
-    """
+    """Format the machine learning results section with SHAP plot."""
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
     
@@ -436,23 +371,12 @@ def _ordination_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     """
-    Build the three‑level nested tab structure for ordination section.
+    Build the three‑level nested tab structure used for the ordination section.
 
     ┌ method (PCA/PCoA/…) ┐
         ┌ table_type (ASV/Genus/…) ┐
             ┌ level (L2/L3/…) ┐
                 colour buttons (SampleType/Site/…)
-                
-    Args:
-        figures: Dictionary of ordination figures
-        id_counter: ID counter iterator
-        prefix: HTML ID prefix
-        
-    Returns:
-        Tuple containing:
-            - Buttons HTML
-            - Tabs HTML
-            - Plot data dictionary
     """
     buttons_html, panes_html, plot_data = [], [], {}
     ordination_methods = ["pca", "pcoa", "tsne", "umap"]
@@ -552,22 +476,11 @@ def _alpha_diversity_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     """
-    Build nested tab structure for alpha diversity section.
+    Build the nested tab structure for alpha diversity section.
     
     ┌ table_type (raw/normalized/...) ┐
         ┌ level (phylum/class/...) ┐
             ┌ metric (shannon/observed_features/...) ┐
-            
-    Args:
-        figures: Dictionary of alpha diversity figures
-        id_counter: ID counter iterator
-        prefix: HTML ID prefix
-        
-    Returns:
-        Tuple containing:
-            - Buttons HTML
-            - Tabs HTML
-            - Plot data dictionary
     """
     buttons_html, panes_html, plot_data = [], [], {}
     
@@ -668,22 +581,11 @@ def _alpha_correlations_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     """
-    Build nested tab structure for alpha diversity correlations.
+    Build the nested tab structure for alpha diversity correlations.
     
     ┌ table_type (raw/normalized/...) ┐
         ┌ level (phylum/class/...) ┐
             ┌ metric (shannon/observed_features/...) ┐
-            
-    Args:
-        figures: Dictionary of correlation figures
-        id_counter: ID counter iterator
-        prefix: HTML ID prefix
-        
-    Returns:
-        Tuple containing:
-            - Buttons HTML
-            - Tabs HTML
-            - Plot data dictionary
     """
     buttons_html, panes_html, plot_data = [], [], {}
     
@@ -772,16 +674,7 @@ def _alpha_correlations_to_nested_html(
 
 # ================================== TABLE HELPERS ================================== #
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
-    """
-    Enhance table HTML with sorting, pagination, and row selection functionality.
-    
-    Args:
-        df: DataFrame to display
-        table_id: HTML ID for the table
-        
-    Returns:
-        Enhanced HTML string for the table
-    """
+    """Enhance table HTML with sorting, pagination, and row selection functionality."""
     # Generate base table HTML
     table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
     
@@ -814,15 +707,7 @@ def generate_html_report(
     include_sections: List[str] | None = None,
     max_features: int = 20  
 ) -> None:
-    """
-    Write an HTML file with interactive Plotly/Matplotlib figures and analysis tables.
-    
-    Args:
-        amplicon_data: Processed amplicon data object
-        output_path: Path to save HTML report
-        include_sections: List of sections to include
-        max_features: Maximum number of features to display
-    """
+    """Write an HTML file with interactive Plotly/Matplotlib figures and analysis tables."""
     include_sections = include_sections or [
         k for k, v in amplicon_data.figures.items() if v
     ]
@@ -851,7 +736,7 @@ def generate_html_report(
         amplicon_data.stats
     )
     
-    # ML summary
+    # ML summary - FIXED: Pass correct ML data and top features
     ml_metrics, ml_features, shap_plot_base64 = _prepare_ml_summary(
         amplicon_data.models,
         amplicon_data.top_contaminated_features,
