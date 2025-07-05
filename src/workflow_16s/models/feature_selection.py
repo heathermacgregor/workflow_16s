@@ -580,7 +580,7 @@ def perform_feature_selection(
     random_state: int = DEFAULT_RANDOM_STATE,
     verbose: int = 1,
     feature_selection_params: Optional[Dict] = None,
-    perm_importance_scorer: Optional[Callable] = None
+    perm_importance_scorer: Optional[Callable] = None,
     perm_importance_n_repeats: int = 10,
     catboost_params: Optional[Dict] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
