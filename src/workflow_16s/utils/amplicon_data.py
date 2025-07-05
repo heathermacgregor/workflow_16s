@@ -1195,6 +1195,7 @@ class _AnalysisManager(_ProcessingMixin):
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        logger.info(alpha_df)
                         if alpha_df.empty:
                             logger.error(f"Alpha diversity table empty for {table_type}/{level}")
                             continue
@@ -1542,7 +1543,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 metadata=y,
                                 features=X,
                                 output_dir=mdir,
-                                contamination_status_col=group_col,
+                                group_col=group_col,
                                 method=method,
                                 n_top_features=n_top_features,
                                 step_size=step_size,
