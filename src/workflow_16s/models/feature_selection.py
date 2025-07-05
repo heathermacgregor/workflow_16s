@@ -26,7 +26,7 @@ from sklearn.feature_selection import (
     SelectKBest, 
     VarianceThreshold
 )
-from sklearn.inspection import permutation_importance
+from sklearn.inspection import permutation_importance as sklearn_permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import (
@@ -689,7 +689,7 @@ def perform_feature_selection(
         )
         
         # Compute permutation importance
-        perm_importance = permutation_importance(
+        perm_importance = sklearn_permutation_importance(
             perm_model,
             X_test_selected.values,
             y_test,
