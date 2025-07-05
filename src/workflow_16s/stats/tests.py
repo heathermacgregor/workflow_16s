@@ -179,7 +179,7 @@ def analyze_alpha_diversity(
         parametric:         Use parametric tests (False for non-parametric)
         
     Returns:
-        DataFrame with statistical results (metric, test, p-value, etc.)
+        DataFrame with statistical results (metric, test, p-value, effect_size)
     """
     merged = merge_table_with_metadata(alpha_diversity_df, metadata, group_column)
     
@@ -208,6 +208,7 @@ def analyze_alpha_diversity(
         # Statistical testing
         test_name = ""
         test_result = None
+        effect_size = np.nan
         
         try:
             if parametric:
@@ -217,11 +218,28 @@ def analyze_alpha_diversity(
                     t_stat, p_val = ttest_ind(*group_data, equal_var=False)
                     test_name = "Welch's t-test"
                     test_result = (t_stat, p_val)
+                    
+                    # Cohen's d effect size
+                    n1 = len(group_data[0])
+                    n2 = len(group_data[1])
+                    pooled_std = np.sqrt(
+                        ((n1-1)*np.var(group_data[0], ddof=1) + 
+                         (n2-1)*np.var(group_data[1], ddof=1)) 
+                        / (n1+n2-2)
+                    )
+                    effect_size = (np.mean(group_data[0]) - np.mean(group_data[1])) / pooled_std
                 else:
                     # One-way ANOVA for >2 groups
                     f_stat, p_val = f_oneway(*group_data)
                     test_name = "ANOVA"
                     test_result = (f_stat, p_val)
+                    
+                    # Eta squared effect size
+                    all_values = np.concatenate(group_data)
+                    grand_mean = np.mean(all_values)
+                    ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in group_data)
+                    ss_total = sum((x - grand_mean)**2 for x in all_values)
+                    effect_size = ss_between / ss_total if ss_total != 0 else 0.0
             else:
                 # Non-parametric tests
                 if len(group_data) == 2:
@@ -229,11 +247,20 @@ def analyze_alpha_diversity(
                     u_stat, p_val = mannwhitneyu(*group_data)
                     test_name = "Mann-Whitney U"
                     test_result = (u_stat, p_val)
+                    
+                    # Rank-biserial correlation effect size
+                    n1 = len(group_data[0])
+                    n2 = len(group_data[1])
+                    effect_size = 1 - (2 * u_stat) / (n1 * n2)
                 else:
                     # Kruskal-Wallis for >2 groups
                     h_stat, p_val = kruskal(*group_data)
                     test_name = "Kruskal-Wallis"
                     test_result = (h_stat, p_val)
+                    
+                    # Epsilon squared effect size
+                    n_total = sum(len(g) for g in group_data)
+                    effect_size = h_stat / ((n_total**2 - 1) / (n_total + 1))
             
             # Store results
             results.append({
@@ -241,6 +268,7 @@ def analyze_alpha_diversity(
                 'test': test_name,
                 'statistic': test_result[0],
                 'p_value': test_result[1],
+                'effect_size': effect_size,
                 'groups': len(group_data)
             })
             
