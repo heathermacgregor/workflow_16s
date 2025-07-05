@@ -106,9 +106,16 @@ stats:
 alpha_diversity:
   enabled: True
   metrics:  # Metrics to calculate
-    - shannon
-    - observed_features
-    - simpson
+    - 'shannon'
+    - 'observed_features'
+    - 'simpson'
+    - 'pielou_evenness'
+    - 'chao1'
+    - 'ace'
+    - 'gini_index'
+    - 'goods_coverage'
+    - 'heip_evenness' 
+    - 'dominance'
   parametric: False  # Statistical test type
   generate_plots: True  # Enable/disable plot generation
   tables:
@@ -117,49 +124,52 @@ alpha_diversity:
       levels:  # Taxonomic levels
         - 'genus'
         - 'family'
+        - 'class'
     normalized:
       enabled: True
       levels: 
         - 'genus'
+        - 'family'
+        
   correlation_analysis: true
   max_categories: 20       # Max unique values for categorical variables
   min_group_size: 5        # Min samples per group for valid comparison
-  top_columns: 10          # Number of top associations to show
+  top_columns: 20          # Number of top associations to show
     
 # Beta Diversity + Ordination
 ordination:
-  max_workers: 1  # Max concurrent ordination tasks
+  max_workers: 2  # Max concurrent ordination tasks
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
   presence_absence:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "jaccard"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   filtered:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   normalized:
-    pca: False #True
-    pcoa: False #True
+    pca: True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   clr_transformed:
-    pca: False #True
-    pcoa: False #True
+    pca: True
+    pcoa: True
     pcoa_metric: "euclidean"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
 
 # Functional Prediction
 faprotax: True
@@ -186,14 +196,19 @@ ml:
   enabled: True
   table_types:
     - 'clr_transformed'
+    - 'normalized'
   levels:
     - 'genus'
+    - 'family'
+    - 'order'
+    - 'class'
+    - 'phylum'
   methods:
     - 'rfe'
-    #- 'select_k_best'
-    #- 'chi_squared'
-    #- 'lasso'
-    #- 'shap'
+    - 'select_k_best'
+    - 'chi_squared'
+    - 'lasso'
+    - 'shap'
   num_features: 500
   step_size: 100
   permutation_importance: True
