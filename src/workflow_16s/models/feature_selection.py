@@ -1,5 +1,4 @@
 # ===================================== IMPORTS ====================================== #
-
 # Standard Library Imports
 import itertools
 import logging
@@ -51,7 +50,6 @@ from sklearn.metrics import (
 )
 
 # ================================== LOCAL IMPORTS =================================== #
-
 from workflow_16s.figures.models.models import (
     plot_confusion_matrix, 
     plot_roc_curve,  
@@ -59,12 +57,10 @@ from workflow_16s.figures.models.models import (
 )
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
-
 warnings.filterwarnings("ignore") # Hide all warnings
 logger = logging.getLogger('workflow_16s')
 
 # ================================= GLOBAL VARIABLES ================================= #
-
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_TEST_SIZE = 0.3
 DEFAULT_RANDOM_STATE = 42
@@ -99,7 +95,6 @@ def _validate_inputs(X_train, y_train, X_test, y_test):
           f"must have the same number of samples"
         )
 
-
 def _save_dataframe(
     df: pd.DataFrame, 
     output_path: Union[str, Path], 
@@ -113,16 +108,12 @@ def _save_dataframe(
     else:
         raise ValueError("file_format must be 'csv' or 'excel'")
 
-
 def _check_shap_installed():
     """Helper function to check if SHAP is installed"""
     try:
         import shap
     except ImportError:
-        raise ImportError(
-          "SHAP library is not installed"
-        )
-
+        raise ImportError("SHAP library is not installed")
 
 # Feature Selection Functions
 def filter_data(
@@ -136,18 +127,6 @@ def filter_data(
     """
     Splits the data into training and testing sets while maintaining the proportion of 
     contaminated and non-contaminated samples.
-
-    Args:
-        X:                        Features DataFrame.
-        y:                        Target Series.
-        metadata:                 DataFrame containing metadata, including the contamination 
-                                  status column.
-        contamination_status_col: Column name in metadata indicating contamination status.
-        test_size:                Proportion of the dataset to include in the test split.
-        random_state:             Seed for random number generation.
-
-    Returns:
-        X_train, X_test, y_train, y_test: Split datasets.
     """
     # Input validation
     if not all(X.index == y.index) or not all(X.index == metadata.index):
@@ -170,7 +149,6 @@ def filter_data(
 
     return X_train, X_test, y_train, y_test
 
-
 def rfe_feature_selection(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -188,54 +166,24 @@ def rfe_feature_selection(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform Recursive Feature Elimination (RFE) using a CatBoostClassifier.
-
-    Args:
-        X_train:           Training feature DataFrame.
-        y_train:           Training target Series.
-        X_test:            Testing feature DataFrame.
-        y_test:            Testing target Series.
-        num_features:      Number of features to select.
-        step_size:         Number of features to remove at each step.
-        threads:           Number of threads to use for CatBoost.
-        random_state:      Random seed for reproducibility.
-        iterations:        Number of boosting iterations for CatBoost.
-        learning_rate:     Learning rate for CatBoost.
-        depth:             Depth of the trees in CatBoost.
-        verbose:           Controls verbosity (0 for silent, 1 for progress).
-        catboost_params:   Dictionary of additional CatBoost parameters (optional).
-
-    Returns:
-        X_train_selected:  Training data with selected features.
-        X_test_selected:   Testing data with selected features.
-        selected_features: List of selected feature names.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
 
     if num_features <= 0 or step_size <= 0:
-        raise ValueError(
-          "num_features and step_size must be positive integers."
-        )
+        raise ValueError("num_features and step_size must be positive integers.")
 
     if num_features > X_train.shape[1]:
-        raise ValueError(
-          "num_features cannot be greater than the total number of features."
-        )
+        raise ValueError("num_features cannot be greater than the total number of features.")
 
     if threads <= 0:
-        raise ValueError(
-          "threads must be a positive integer."
-        )
+        raise ValueError("threads must be a positive integer.")
 
     if iterations <= 0 or depth <= 0:
-        raise ValueError(
-          "iterations and depth must be positive integers."
-        )
+        raise ValueError("iterations and depth must be positive integers.")
 
     if learning_rate <= 0:
-        raise ValueError(
-          "learning_rate must be a positive float."
-        )
+        raise ValueError("learning_rate must be a positive float.")
 
     # Initialize CatBoostClassifier
     if catboost_params is None:
@@ -261,9 +209,17 @@ def rfe_feature_selection(
 
     rfe.fit(X_train, y_train)
 
-    # Transform datasets
-    X_train_selected = rfe.transform(X_train)
-    X_test_selected = rfe.transform(X_test)
+    # Transform datasets using the fitted RFE object
+    X_train_selected = pd.DataFrame(
+        rfe.transform(X_train), 
+        columns=X_train.columns[rfe.support_],
+        index=X_train.index
+    )
+    X_test_selected = pd.DataFrame(
+        rfe.transform(X_test),
+        columns=X_train.columns[rfe.support_],
+        index=X_test.index
+    )
 
     # Get selected feature names
     selected_features = X_train.columns[rfe.support_].tolist()
@@ -272,7 +228,6 @@ def rfe_feature_selection(
         logger.info(f"Selected features: {selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def select_k_best_feature_selection(
     X_train: pd.DataFrame,
@@ -285,54 +240,39 @@ def select_k_best_feature_selection(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform feature selection using SelectKBest.
-
-    Args:
-        X_train:           Training feature DataFrame.
-        y_train:           Training target Series.
-        X_test:            Testing feature DataFrame.
-        y_test:            Testing target Series.
-        num_features:      Number of top features to select.
-        score_func:        Scoring function to use for feature selection 
-                           (default: f_classif).
-        verbose:           Controls verbosity (0 for silent, 1 for progress).
-
-    Returns:
-        X_train_selected:  Training data with selected features
-        X_test_selected:   Testing data with selected features
-        selected_features: List of selected feature names
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
 
     if num_features <= 0:
-        raise ValueError(
-          "num_features must be a positive integer."
-        )
+        raise ValueError("num_features must be a positive integer.")
 
     if num_features > X_train.shape[1]:
-        raise ValueError(
-          "num_features cannot be greater than the total number of features."
-        )
+        raise ValueError("num_features cannot be greater than the total number of features.")
 
     # Perform SelectKBest
     skb = SelectKBest(score_func=score_func, k=num_features)
     skb.fit(X_train, y_train)
 
     # Transform datasets
-    X_train_selected = skb.transform(X_train)
-    X_test_selected = skb.transform(X_test)
+    X_train_selected = pd.DataFrame(
+        skb.transform(X_train),
+        columns=X_train.columns[skb.get_support()],
+        index=X_train.index
+    )
+    X_test_selected = pd.DataFrame(
+        skb.transform(X_test),
+        columns=X_train.columns[skb.get_support()],
+        index=X_test.index
+    )
 
     # Get selected feature names
     selected_features = X_train.columns[skb.get_support()].tolist()
 
     if verbose > 0:
-        logger.info(
-          f"Selected {num_features} features using {score_func.__name__}:"
-          f"\n{selected_features}"
-        )
+        logger.info(f"Selected {num_features} features using {score_func.__name__}:\n{selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def chi_squared_feature_selection(
     X_train: pd.DataFrame,
@@ -344,57 +284,42 @@ def chi_squared_feature_selection(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform feature selection using the Chi-Squared test.
-
-    Args:
-        X_train:           Training feature DataFrame.
-        y_train:           Training target Series.
-        X_test:            Testing feature DataFrame.
-        y_test:            Testing target Series.
-        num_features:      Number of top features to select.
-        verbose:           Controls verbosity (0 for silent, 1 for progress).
-
-    Returns:
-        X_train_selected:  Training data with selected features.
-        X_test_selected:   Testing data with selected features.
-        selected_features: List of selected feature names.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
 
     if num_features <= 0:
-        raise ValueError(
-          "num_features must be a positive integer."
-        )
+        raise ValueError("num_features must be a positive integer.")
 
     if num_features > X_train.shape[1]:
-        raise ValueError(
-          "num_features cannot be greater than the total number of features."
-        )
+        raise ValueError("num_features cannot be greater than the total number of features.")
 
     if (X_train < 0).any().any() or (X_test < 0).any().any():
-        raise ValueError(
-          "Chi-Squared test requires non-negative feature values."
-        )
+        raise ValueError("Chi-Squared test requires non-negative feature values.")
 
     # Perform Chi-Squared feature selection
     chi2_selector = SelectKBest(score_func=chi2, k=num_features)
     chi2_selector.fit(X_train, y_train)
 
     # Transform datasets
-    X_train_selected = chi2_selector.transform(X_train)
-    X_test_selected = chi2_selector.transform(X_test)
+    X_train_selected = pd.DataFrame(
+        chi2_selector.transform(X_train),
+        columns=X_train.columns[chi2_selector.get_support()],
+        index=X_train.index
+    )
+    X_test_selected = pd.DataFrame(
+        chi2_selector.transform(X_test),
+        columns=X_train.columns[chi2_selector.get_support()],
+        index=X_test.index
+    )
 
     # Get selected feature names
     selected_features = X_train.columns[chi2_selector.get_support()].tolist()
 
     if verbose > 0:
-        logger.info(
-          f"Selected {num_features} features using Chi-Squared Test:"
-          f"\n{selected_features}"
-        )
+        logger.info(f"Selected {num_features} features using Chi-Squared Test:\n{selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def lasso_feature_selection(
     X_train: pd.DataFrame,
@@ -411,49 +336,21 @@ def lasso_feature_selection(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform feature selection using Lasso (L1-regularized Logistic Regression).
-
-    Args:
-        X_train:           Training feature DataFrame.
-        y_train:           Training target Series.
-        X_test:            Testing feature DataFrame.
-        y_test:            Testing target Series.
-        num_features:      Number of top features to select.
-        penalty:           Type of regularization ('l1' or 'l2').
-        solver:            Optimization algorithm to use (e.g., 'liblinear', 
-                           'saga').
-        max_iter:          Maximum number of iterations for the solver.
-        random_state:      Random seed for reproducibility.
-        verbose:           Controls verbosity (0 for silent, 1 for progress).
-        lasso_params:      Dictionary of additional LogisticRegression 
-                           parameters (optional).
-
-    Returns:
-        X_train_selected:  Training data with selected features.
-        X_test_selected:   Testing data with selected features.
-        selected_features: List of selected feature names.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
 
     if num_features <= 0:
-        raise ValueError(
-          "num_features must be a positive integer."
-        )
+        raise ValueError("num_features must be a positive integer.")
 
     if num_features > X_train.shape[1]:
-        raise ValueError(
-          "num_features cannot be greater than the total number of features."
-        )
+        raise ValueError("num_features cannot be greater than the total number of features.")
 
     if penalty not in ['l1', 'l2']:
-        raise ValueError(
-          "penalty must be either 'l1' or 'l2'."
-        )
+        raise ValueError("penalty must be either 'l1' or 'l2'.")
 
     if solver not in ['liblinear', 'saga'] and penalty == 'l1':
-        raise ValueError(
-          "For L1 penalty, solver must be 'liblinear' or 'saga'."
-        )
+        raise ValueError("For L1 penalty, solver must be 'liblinear' or 'saga'.")
 
     # Initialize LogisticRegression
     if lasso_params is None:
@@ -478,20 +375,24 @@ def lasso_feature_selection(
     )
 
     # Transform datasets
-    X_train_selected = model.transform(X_train)
-    X_test_selected = model.transform(X_test)
+    X_train_selected = pd.DataFrame(
+        model.transform(X_train),
+        columns=X_train.columns[model.get_support()],
+        index=X_train.index
+    )
+    X_test_selected = pd.DataFrame(
+        model.transform(X_test),
+        columns=X_train.columns[model.get_support()],
+        index=X_test.index
+    )
 
     # Get selected feature names
     selected_features = X_train.columns[model.get_support()].tolist()
 
     if verbose > 0:
-        logger.info(
-          f"Selected {num_features} features using Lasso ({penalty} penalty):"
-          f"\n{selected_features}"
-        )
+        logger.info(f"Selected {num_features} features using Lasso ({penalty} penalty):\n{selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def shap_feature_selection(
     X_train: pd.DataFrame,
@@ -508,24 +409,6 @@ def shap_feature_selection(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform feature selection using SHAP (SHapley Additive exPlanations) values.
-
-    Args:
-        X_train:           Training feature DataFrame.
-        y_train:           Training target Series.
-        X_test:            Testing feature DataFrame.
-        y_test:            Testing target Series.
-        num_features:      Number of top features to select.
-        threads:           Number of threads to use for CatBoost.
-        iterations:        Number of boosting iterations for CatBoost.
-        learning_rate:     Learning rate for CatBoost.
-        depth:             Depth of the trees in CatBoost.
-        verbose:           Controls verbosity (0 for silent, 1 for progress).
-        catboost_params:   Dictionary of additional CatBoost parameters (optional).
-
-    Returns:
-        X_train_selected:  Training data with selected features.
-        X_test_selected:   Testing data with selected features.
-        selected_features: List of selected feature names.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
@@ -569,7 +452,8 @@ def shap_feature_selection(
         logger.info("Explaining model with SHAP values...")
 
     explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_train)
+    shap_obj = explainer(X_train)  # Use new SHAP API
+    shap_values = shap_obj.values
 
     # Calculate mean absolute SHAP values
     shap_sum = np.abs(shap_values).mean(axis=0)
@@ -581,13 +465,9 @@ def shap_feature_selection(
     X_test_selected = X_test[selected_features]
 
     if verbose > 0:
-        logger.info(
-          f"Selected {num_features} features using SHAP values: "
-          f"{selected_features}"
-        )
+        logger.info(f"Selected {num_features} features using SHAP values: {selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def perform_feature_selection(
     X_train: pd.DataFrame,
@@ -602,48 +482,20 @@ def perform_feature_selection(
     random_state: int = DEFAULT_RANDOM_STATE,
     verbose: int = 1,
     feature_selection_params: Union[Dict, None] = None,
-    perm_importance_scorer: Callable = make_scorer(matthews_corrcoef),
+    perm_importance_scorer: Callable = matthews_corrcoef,  # Changed to raw metric function
     perm_importance_n_repeats: int = 10,
     catboost_params: Union[Dict, None] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Perform feature selection using one of the supported methods and optionally apply 
     permutation importance.
-
-    Argss:
-        X_train:                    Training feature DataFrame.
-        y_train:                    Training target Series.
-        X_test:                     Testing feature DataFrame.
-        y_test:                     Testing target Series.
-        feature_selection:          Feature selection method to use ('rfe', 'select_k_best', 
-                                    'chi_squared', 'lasso', 'shap').
-        use_permutation_importance: Whether to apply permutation importance after feature 
-                                    selection.
-        thread_count:               Number of threads to use for parallel computation.
-        step_size:                  Step size for RFE feature selection.
-        num_features:               Number of top features to select.
-        random_state:               Random seed for reproducibility.
-        verbose:                    Controls verbosity (0 for silent, 1 for progress).
-        feature_selection_params:   Dictionary of additional parameters for the feature 
-                                    selection method (optional).
-        perm_importance_scorer:     Scoring function for permutation importance (default: 
-                                    Matthews correlation coefficient).
-        perm_importance_n_repeats:  Number of repeats for permutation importance.
-        catboost_params:            Dictionary of additional CatBoost parameters for permutation 
-                                    importance (optional).
-
-    Returns:
-        X_train_selected:           Training data with selected features.
-        X_test_selected:            Testing data with selected features.
-        selected_features:          List of selected feature names.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
 
     if feature_selection not in ['rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap']:
         raise ValueError(
-            "feature_selection must be one of 'rfe', 'select_k_best', 'chi_squared',"
-            "'lasso', 'shap'."
+            "feature_selection must be one of 'rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap'."
         )
 
     if num_features <= 0 or step_size <= 0 or thread_count <= 0:
@@ -715,9 +567,10 @@ def perform_feature_selection(
             early_stopping_rounds=100
         )
 
+        # Compute permutation importance using raw metric function
         perm_importance = permutation_importance(
             perm_model,
-            X_test_selected,
+            X_test_selected.values,  # Use numpy array
             y_test,
             scoring=perm_importance_scorer,
             n_repeats=perm_importance_n_repeats,
@@ -728,17 +581,13 @@ def perform_feature_selection(
             perm_importance.importances_mean, index=selected_features
         )
         selected_features = importances[importances > 0].index.tolist()
-        X_train_selected = X_train[selected_features]
-        X_test_selected = X_test[selected_features]
+        X_train_selected = X_train_selected[selected_features]
+        X_test_selected = X_test_selected[selected_features]
 
     if verbose > 0:
-        logger.info(
-          f"Selected {len(selected_features)} features:"
-          f"\n{selected_features}"
-        )
+        logger.info(f"Selected {len(selected_features)} features:\n{selected_features}")
 
     return X_train_selected, X_test_selected, selected_features
-
 
 def train_and_evaluate(
     X_train: pd.DataFrame,
@@ -754,26 +603,6 @@ def train_and_evaluate(
 ) -> Tuple[CatBoostClassifier, float, float, float, pd.Series]:
     """
     Train and evaluate a CatBoostClassifier model.
-
-    Args:
-        X_train:               Training feature DataFrame.
-        y_train:               Training target Series.
-        X_test:                Testing feature DataFrame.
-        y_test:                Testing target Series.
-        params:                Dictionary of CatBoostClassifier parameters.
-        output_dir:            Directory to save the trained model and logs.
-        plot:                  Whether to plot training progress (default: False).
-        verbose:               Controls verbosity (0 for silent, 10 for 
-                               detailed output).
-        early_stopping_rounds: Number of rounds for early stopping.
-        custom_metrics:        Dictionary of custom evaluation metrics (optional).
-
-    Returns:
-        model:                 Trained CatBoostClassifier model.
-        accuracy:              Accuracy score on the test set.
-        f1:                    F1 score on the test set.
-        mcc:                   Matthews correlation coefficient on the test set.
-        y_pred:                Predicted labels for the test set.
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
@@ -824,7 +653,6 @@ def train_and_evaluate(
 
     return model, accuracy, f1, mcc, y_pred
 
-
 def grid_search(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -833,47 +661,17 @@ def grid_search(
     param_grid: Dict[str, List],
     output_dir: Union[str, Path],
     n_splits: int = 5,
-    scoring: Dict[str, Callable] = None,
     refit: str = 'mcc',
     verbose: int = 1,
-    fixed_params: Dict = None  # NEW: Added fixed parameters
+    fixed_params: Dict = None
 ) -> Tuple[CatBoostClassifier, Dict, float, Dict]:
     """
     Enhanced grid search with cross-validation and comprehensive model evaluation.
-    
-    Args:
-        X_train:     Training feature DataFrame
-        y_train:     Training target Series
-        X_test:      Testing feature DataFrame
-        y_test:      Testing target Series
-        param_grid:  Dictionary of hyperparameter grids
-        output_dir:  Directory to save results
-        n_splits:    Number of cross-validation folds (default: 5)
-        scoring:     Dictionary of scoring metrics (name: function)
-        refit:       Metric to use for selecting best model
-        verbose:     Verbosity level (0-2)
-        fixed_params: Fixed parameters for all models (NEW)
-    
-    Returns:
-        best_model:  Best trained CatBoostClassifier
-        best_params: Best hyperparameters
-        best_score:  Best score of the reference metric
-        test_scores: Test set performance metrics (NEW)
     """
     # Input validation
     _validate_inputs(X_train, y_train, X_test, y_test)
     output_dir = Path(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Default scoring metrics
-    if scoring is None:
-        scoring = {
-            'accuracy': make_scorer(accuracy_score),
-            'f1': make_scorer(f1_score),
-            'mcc': make_scorer(matthews_corrcoef),
-            'roc_auc': make_scorer(roc_auc_score, needs_proba=True),
-            'pr_auc': make_scorer(average_precision_score, needs_proba=True)
-        }
     
     # Initialize results storage
     results = []
@@ -899,7 +697,14 @@ def grid_search(
         if fixed_params:
             current_params.update(fixed_params)
         
-        fold_scores = {metric: [] for metric in scoring}
+        # Initialize fold scores with all metrics
+        fold_scores = {
+            'accuracy': [],
+            'f1': [],
+            'mcc': [],
+            'roc_auc': [],
+            'pr_auc': []
+        }
         
         if verbose:
             logger.info(f"\n[{i}/{total_combinations}] Testing params: {current_params}")
@@ -926,14 +731,19 @@ def grid_search(
             
             # Evaluate on validation fold
             y_pred = model.predict(X_fold_val)
-            y_proba = model.predict_proba(X_fold_val)[:, 1]
+            y_proba = model.predict_proba(X_fold_val)[:, 1]  # Probability for positive class
             
-            for metric_name, scorer in scoring.items():
-                if "auc" in metric_name or "pr_auc" in metric_name:
-                    score = scorer(y_fold_val, y_proba)
-                else:
-                    score = scorer(y_fold_val, y_pred)
-                fold_scores[metric_name].append(score)
+            # Compute metrics directly
+            scores = {
+                'accuracy': accuracy_score(y_fold_val, y_pred),
+                'f1': f1_score(y_fold_val, y_pred),
+                'mcc': matthews_corrcoef(y_fold_val, y_pred),
+                'roc_auc': roc_auc_score(y_fold_val, y_proba),
+                'pr_auc': average_precision_score(y_fold_val, y_proba)
+            }
+            
+            for metric_name, score_val in scores.items():
+                fold_scores[metric_name].append(score_val)
             
             # Clean up memory
             del model
@@ -976,11 +786,13 @@ def grid_search(
         y_pred = cv_model.predict(X_test)
         y_proba = cv_model.predict_proba(X_test)[:, 1]
         
-        for metric_name, scorer in scoring.items():
-            if "auc" in metric_name or "pr_auc" in metric_name:
-                test_scores[metric_name] = scorer(y_test, y_proba)
-            else:
-                test_scores[metric_name] = scorer(y_test, y_pred)
+        test_scores = {
+            'accuracy': accuracy_score(y_test, y_pred),
+            'f1': f1_score(y_test, y_pred),
+            'mcc': matthews_corrcoef(y_test, y_pred),
+            'roc_auc': roc_auc_score(y_test, y_proba),
+            'pr_auc': average_precision_score(y_test, y_proba)
+        }
         
         # Save final model
         best_model = cv_model
@@ -1004,7 +816,7 @@ def grid_search(
         
         # Add test scores to results
         for result in results:
-            if result.get('params') == best_params:
+            if result == best_params:  # Match by parameter set
                 result.update({f"test_{k}": v for k, v in test_scores.items()})
     
     # Save results
@@ -1020,8 +832,24 @@ def grid_search(
             for metric, score in test_scores.items():
                 logger.info(f"{metric}: {score:.4f}")
     
-    return best_model, best_params, best_score, test_scores  # Added test_scores return
+    return best_model, best_params, best_score, test_scores
 
+def save_feature_importances(
+    model: CatBoostClassifier, 
+    X_train: pd.DataFrame, 
+    output_dir: Union[str, Path]
+):
+    """
+    Save feature importances from a trained model.
+    """
+    if hasattr(model, 'feature_importances_'):
+        importances = model.feature_importances_
+    else:
+        importances = np.zeros(X_train.shape[1])
+    
+    feat_imp = pd.Series(importances, index=X_train.columns, name='importance')
+    feat_imp = feat_imp.sort_values(ascending=False)
+    feat_imp.to_csv(Path(output_dir) / "feature_importances.csv")
 
 def catboost_feature_selection(
     metadata: pd.DataFrame,
@@ -1035,18 +863,6 @@ def catboost_feature_selection(
 ) -> Dict:
     """
     Perform feature selection using CatBoost and save results.
-    
-    Args:
-        metadata:                 DataFrame containing metadata.
-        features:                 DataFrame containing features.
-        output_dir:               Directory to save results.
-        contamination_status_col: Column name in metadata indicating contamination 
-                                  status.
-        method:                   Feature selection method to use ('rfe', 
-                                  'select_k_best', 'chi_squared', 'lasso', 'shap').
-        n_top_features:           Number of top features to return.
-        filter_col:               Column to filter metadata by (optional).
-        filter_val:               Value to filter metadata by (optional).
     """
     output_dir = Path(output_dir) / method
     os.makedirs(output_dir, exist_ok=True)
@@ -1064,9 +880,7 @@ def catboost_feature_selection(
         X, y, metadata, contamination_status_col
     )
 
-    num_features = 500
-    if X_train.shape[1] < 500:
-        num_features = X_train.shape[1]
+    num_features = min(500, X_train.shape[1])
         
     # Perform feature selection
     X_train_selected, X_test_selected, final_selected_features = perform_feature_selection(
@@ -1079,7 +893,7 @@ def catboost_feature_selection(
     )
     logger.info(X_train_selected.var().describe())  # Check feature variance after correction
 
-    # NEW: Comprehensive parameter grid with fixed parameters
+    # Comprehensive parameter grid with fixed parameters
     param_grid = {
         'iterations': [500, 1000, 1500],
         'learning_rate': [0.01, 0.05, 0.1],
@@ -1102,7 +916,7 @@ def catboost_feature_selection(
         y_test, 
         param_grid, 
         output_dir,
-        fixed_params=fixed_params  # NEW: Pass fixed parameters
+        fixed_params=fixed_params
     )
     
     # Save feature importances
@@ -1129,12 +943,12 @@ def catboost_feature_selection(
     try:
         _check_shap_installed()
         explainer = shap.TreeExplainer(best_model)
-        shap_values = explainer.shap_values(X_train)
+        shap_obj = explainer(X_train_selected)  # Use new SHAP API
         
         # Save SHAP summary plot (bar plot)
         plt.figure()
         shap.summary_plot(
-            shap_values, X_train, plot_type="bar", 
+            shap_obj.values, X_train_selected, plot_type="bar", 
             class_names=best_model.classes_, show=False
         )
         bar_path = output_dir / "shap_summary_bar.png"
@@ -1144,8 +958,8 @@ def catboost_feature_selection(
         # Save SHAP summary plot (beeswarm plot)
         plt.figure()
         shap.summary_plot(
-            shap_values, X_train.values, 
-            feature_names=X_train.columns, show=False
+            shap_obj.values, X_train_selected.values, 
+            feature_names=X_train_selected.columns, show=False
         )
         beeswarm_path = output_dir / "shap_summary_beeswarm.png"
         plt.savefig(beeswarm_path, bbox_inches='tight')
