@@ -1549,7 +1549,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 n_top_features=n_top_features,
                                 step_size=step_size,
                                 permutation_importance=permutation_importance,
-                                n_jobs=n_threads
+                                n_threads=n_threads
                             )
                             self.models[table_type][level][method] = model_result
                             
