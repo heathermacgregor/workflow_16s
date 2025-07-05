@@ -1307,6 +1307,7 @@ class _AnalysisManager(_ProcessingMixin):
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
+        ml_tables = { "clr_transformed": "class" }
         self._run_ml_feature_selection(ml_tables)
         self._compare_top_features()
         del ml_tables
@@ -1710,7 +1711,7 @@ class _AnalysisManager(_ProcessingMixin):
                 f"[white]{l0_desc:<{DEFAULT_N}}", 
                 total=n
             )
-            for table_type, levels in ml_tables.items()[0:1]: # UNCOMMENT AFTER DEBUGGING                 
+            for table_type, levels in ml_tables.items(): # UNCOMMENT AFTER DEBUGGING                 
                 for level, table in levels.items():
                     if table_type not in self.models:
                         self.models[table_type] = {}
