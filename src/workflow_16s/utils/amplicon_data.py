@@ -273,7 +273,6 @@ def plot_alpha_correlations(
                 y=[row['abs_strength']],
                 name=row['type'],
                 marker_color=colors[row['type']],
-                textposition='auto',
                 hoverinfo='text',
                 hovertext=(
                     f"<b>{row['metadata_column']}</b><br>"
@@ -296,7 +295,7 @@ def plot_alpha_correlations(
             legend_title="Variable Type"
         )
         
-        # Add significance markers
+        # Add significance markers - REMOVED textposition parameter
         fig.add_trace(go.Scatter(
             x=df['metadata_column'],
             y=df['abs_strength'] * 1.05,
@@ -308,11 +307,14 @@ def plot_alpha_correlations(
         
         figures[metric] = fig
         
-        # Save output
+        # Save output with error handling
         if output_dir:
             save_path = output_dir / f"alpha_correlations_{metric}.html"
-            fig.write_html(str(save_path), include_plotlyjs="cdn")
-            
+            try:
+                fig.write_html(str(save_path), include_plotlyjs="cdn")
+            except Exception as e:
+                logger.warning(f"Failed to save plot for {metric}: {str(e)}")
+                
     return figures
 #####################################################################
 
