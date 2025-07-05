@@ -257,7 +257,7 @@ def rfe_feature_selection(
     selected_features = X_train.columns[rfe.support_].tolist()
     
     if verbose:
-        logger.info(f"Selected {len(selected_features)} features using RFE")
+        logger.debug(f"Selected {len(selected_features)} features using RFE")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -314,7 +314,7 @@ def select_k_best_feature_selection(
     selected_features = X_train.columns[skb.get_support()].tolist()
     
     if verbose:
-        logger.info(f"Selected {num_features} features using {score_func.__name__}")
+        logger.debug(f"Selected {num_features} features using {score_func.__name__}")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -372,7 +372,7 @@ def chi_squared_feature_selection(
     selected_features = X_train.columns[chi2_selector.get_support()].tolist()
     
     if verbose:
-        logger.info(f"Selected {num_features} features using Chi-Squared Test")
+        logger.debug(f"Selected {num_features} features using Chi-Squared Test")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -459,7 +459,7 @@ def lasso_feature_selection(
     selected_features = X_train.columns[model.get_support()].tolist()
     
     if verbose:
-        logger.info(f"Selected {len(selected_features)} features using Lasso")
+        logger.debug(f"Selected {len(selected_features)} features using Lasso")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -534,7 +534,7 @@ def shap_feature_selection(
     
     # Explain model with SHAP values
     if verbose:
-        logger.info("Calculating SHAP values...")
+        logger.debug("Calculating SHAP values...")
     
     # Subsample if dataset is large
     if len(X_train) > sample_size:
@@ -563,7 +563,7 @@ def shap_feature_selection(
     X_test_selected = X_test[selected_features]
     
     if verbose:
-        logger.info(f"Selected {len(selected_features)} features using SHAP")
+        logger.debug(f"Selected {len(selected_features)} features using SHAP")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -663,7 +663,7 @@ def perform_feature_selection(
     # Apply permutation importance if required
     if use_permutation_importance:
         if verbose:
-            logger.info("Computing permutation importances...")
+            logger.debug("Computing permutation importances...")
         
         perm_model = CatBoostClassifier(
             iterations=500,
@@ -702,7 +702,7 @@ def perform_feature_selection(
         X_test_selected = X_test_selected[selected_features]
     
     if verbose:
-        logger.info(f"Selected {len(selected_features)} features")
+        logger.debug(f"Selected {len(selected_features)} features")
     
     return X_train_selected, X_test_selected, selected_features
 
@@ -753,7 +753,7 @@ def train_and_evaluate(
     )
     
     if verbose:
-        logger.info(f"Training with parameters: {params}")
+        logger.debug(f"Training with parameters: {params}")
     
     # Train the model
     model.fit(
@@ -774,10 +774,10 @@ def train_and_evaluate(
     if custom_metrics:
         for metric_name, metric_func in custom_metrics.items():
             metric_value = metric_func(y_test, y_pred)
-            logger.info(f"{metric_name}: {metric_value}")
+            logger.debug(f"{metric_name}: {metric_value}")
     
     if verbose:
-        logger.info(f"Model evaluation: Accuracy={accuracy:.4f}, F1={f1:.4f}, MCC={mcc:.4f}")
+        logger.debug(f"Model evaluation: Accuracy={accuracy:.4f}, F1={f1:.4f}, MCC={mcc:.4f}")
     
     # Save the model
     model.save_model(str(output_dir / 'model.cbm'))
@@ -831,8 +831,8 @@ def grid_search(
     total_combinations = len(param_combinations)
     
     if verbose:
-        logger.info(f"Starting grid search with {total_combinations} parameter combinations")
-        logger.info(f"Using {n_splits}-fold cross-validation")
+        logger.debug(f"Starting grid search with {total_combinations} parameter combinations")
+        logger.debug(f"Using {n_splits}-fold cross-validation")
     
     # Cross-validation setup
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=DEFAULT_RANDOM_STATE)
@@ -853,7 +853,7 @@ def grid_search(
         }
         
         if verbose:
-            logger.info(f"\n[{i}/{total_combinations}] Testing params: {current_params}")
+            logger.debug(f"\n[{i}/{total_combinations}] Testing params: {current_params}")
         
         # Cross-validation
         for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train), 1):
@@ -905,7 +905,7 @@ def grid_search(
             best_score = current_ref_score
             best_params = current_params
             if verbose:
-                logger.info(f"🔥 New best {refit} (CV): {current_ref_score:.4f}")
+                logger.debug(f"🔥 New best {refit} (CV): {current_ref_score:.4f}")
             
             # Train on full training set with best params
             cv_model = CatBoostClassifier(
@@ -944,9 +944,12 @@ def grid_search(
             confusion_matrix(y_test, y_pred),
             str(output_dir / "best_confusion_matrix.png")
         )
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
+        auc_score = roc_auc_score(y_test, y_proba)
         plot_roc_curve(
-            *roc_curve(y_test, y_proba),
-            roc_auc_score(y_test, y_proba),
+            fpr, 
+            tpr, 
+            auc_score,
             str(output_dir / "best_roc_curve.png")
         )
         plot_precision_recall_curve(
@@ -965,13 +968,13 @@ def grid_search(
     results_df.to_csv(output_dir / "grid_search_results.csv", index=False)
     
     if verbose:
-        logger.info("\nGrid search completed")
-        logger.info(f"Best parameters: {best_params}")
-        logger.info(f"Best CV {refit}: {best_score:.4f}")
+        logger.debug("\nGrid search completed")
+        logger.debug(f"Best parameters: {best_params}")
+        logger.debug(f"Best CV {refit}: {best_score:.4f}")
         if test_scores:
-            logger.info("Test set performance:")
+            logger.debug("Test set performance:")
             for metric, score in test_scores.items():
-                logger.info(f"{metric}: {score:.4f}")
+                logger.debug(f"{metric}: {score:.4f}")
     
     return best_model, best_params, best_score, test_scores
 
@@ -1059,7 +1062,7 @@ def catboost_feature_selection(
     if X_train_selected.empty:
         raise ValueError("Feature selection returned no features. Check input data.")
     
-    logger.info(f"Feature variance after selection: {X_train_selected.var().describe()}") 
+    logger.debug(f"Feature variance after selection: {X_train_selected.var().describe()}") 
     
     # Comprehensive parameter grid with fixed parameters
     param_grid = {
