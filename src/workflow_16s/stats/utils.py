@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # Third-Party Imports
 import numpy as np
 import pandas as pd
-from biom import Table
+from biom import Table as BiomTable
 from scipy import stats
 from skbio.stats.composition import clr
 
@@ -25,8 +25,7 @@ DEFAULT_PSEUDOCOUNT = 1e-5
 
 # ================================ CORE FUNCTIONALITY ================================ #
 
-
-def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
+def table_to_dataframe(table: Union[Dict, BiomTable, pd.DataFrame]) -> pd.DataFrame:
     """
     Convert BIOM Table/dict to samples × features DataFrame.
     """
@@ -51,21 +50,20 @@ def merge_table_with_metadata(
     Automatically handles orientation, ID matching, and duplicate detection.
     
     Args:
-        table: Feature table (Samples × features) or (features × Samples)
-        metadata: Metadata table
-        group_column: Metadata column to add
-        metadata_id_column: Column in metadata containing sample IDs
-        verbose: Enable debug output
+        table:              Feature table (Samples × features) or 
+                            (features × Samples).
+        metadata:           Metadata table.
+        group_column:       Metadata column to add.
+        metadata_id_column: Column in metadata containing sample IDs.
+        verbose:            Enable debug output.
         
     Returns:
-        Table with added group_column (Samples × features+1)
+        Table with added group_column (Samples × features+1).
         
     Raises:
-        ValueError for common data issues
+        ValueError for common data issues.
     """
-    # =====================================================================
-    # 1. Identify sample IDs in metadata
-    # =====================================================================
+    # Identify sample IDs in metadata
     if metadata_id_column:
         if verbose:
             print(f"Using metadata column '{metadata_id_column}' for sample IDs")
@@ -80,9 +78,6 @@ def merge_table_with_metadata(
             print("Using metadata index for sample IDs")
         meta_ids = metadata.index.astype(str).str.strip().str.lower()
 
-    # =====================================================================
-    # 2. Check for duplicate IDs in metadata
-    # =====================================================================
     # Check for duplicates in normalized metadata IDs
     duplicate_mask = meta_ids.duplicated(keep=False)
     if duplicate_mask.any():
@@ -105,16 +100,12 @@ def merge_table_with_metadata(
             "Please resolve duplicate entries in metadata"
         )
     
-    # =====================================================================
-    # 3. Identify sample IDs in table
-    # =====================================================================
-    # First try: assume samples are rows (standard orientation)
+    # Assume samples are rows (standard orientation)
     table_ids = table.index.astype(str).str.strip().str.lower()
-    
     # Check intersection
     shared_ids = set(table_ids) & set(meta_ids)
     
-    # Second try: if no overlap, transpose table (features as rows)
+    # If no overlap, transpose table (features as rows)
     if not shared_ids:
         if verbose:
             print("No shared IDs found - transposing table")
@@ -135,12 +126,8 @@ def merge_table_with_metadata(
     if verbose:
         print(f"Found {len(shared_ids)} shared sample IDs")
     
-    # =====================================================================
-    # 4. Prepare metadata mapping
-    # =====================================================================
     # Create normalized ID to group mapping
     if metadata_id_column:
-        # Create mapping from normalized IDs to group values
         group_map = (
             metadata
             .assign(norm_id=meta_ids)
@@ -150,12 +137,8 @@ def merge_table_with_metadata(
         # Use normalized index directly
         group_map = metadata.set_index(meta_ids)[group_column]
     
-    # =====================================================================
-    # 5. Merge group column into table
-    # =====================================================================
     # Create normalized table index
     table_normalized_index = table.index.astype(str).str.strip().str.lower()
-    
     # Map group values using normalized IDs
     table[group_column] = table_normalized_index.map(group_map)
     
@@ -170,9 +153,6 @@ def merge_table_with_metadata(
     
     return table
 
-
-
-from biom import Table as BiomTable
 
 def to_biom_table(table: Union[dict, BiomTable, pd.DataFrame]) -> BiomTable:
     """Robust conversion to BIOM Table with orientation handling"""
@@ -191,6 +171,7 @@ def to_biom_table(table: Union[dict, BiomTable, pd.DataFrame]) -> BiomTable:
         )
     else:
         raise ValueError(f"Unsupported table type: {type(table)}")
+        
 
 def filter_table(
     table: Union[dict, BiomTable, pd.DataFrame],
@@ -203,6 +184,7 @@ def filter_table(
     biom_table = filter_features(biom_table, min_rel_abundance, min_samples)
     biom_table = filter_samples(biom_table, min_counts)
     return biom_table
+    
 
 def filter_features(
     table: BiomTable, 
@@ -227,6 +209,7 @@ def filter_features(
     ids_to_keep = [fid for fid, keep in zip(feature_ids, feature_mask) if keep]
     
     return table.filter(ids_to_keep, axis='observation')
+    
 
 def filter_samples(table: BiomTable, min_counts: int) -> BiomTable:
     """Filter samples using BIOM-native methods"""
@@ -244,6 +227,7 @@ def filter_samples(table: BiomTable, min_counts: int) -> BiomTable:
     ids_to_keep = [sid for sid, keep in zip(sample_ids, sample_mask) if keep]
     
     return table.filter(ids_to_keep, axis='sample')
+    
 
 def normalize_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
@@ -258,13 +242,13 @@ def normalize_table(
         return biom_table.norm(axis='observation')
     else:
         raise ValueError("axis must be 0 (features) or 1 (samples)")
+        
 
 def clr_transform_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> BiomTable:
     """CLR transformation with strict type enforcement"""
-    from skbio.stats.composition import clr
     biom_table = to_biom_table(table)
     
     # Convert to dense array (samples x features)
