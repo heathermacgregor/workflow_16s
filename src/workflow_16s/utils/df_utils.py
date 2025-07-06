@@ -1,36 +1,32 @@
 # ===================================== IMPORTS ====================================== #
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple, Union
-
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 import re
 import numpy as np
 import pandas as pd
 from pandarallel import pandarallel
-
 from Bio import SeqIO
-
 from biom import load_table
 from biom import Table as BiomTable
-
 from scipy import sparse
 from scipy.spatial.distance import cdist
-
 from tabulate import tabulate
-
 import matplotlib.pyplot as plt
-
 import logging
-logger = logging.getLogger('workflow_16s')
 
 # ================================== LOCAL IMPORTS =================================== #
 
 #from workflow_16s.time import timer
 
+# ================================== LOGGER SETUP ==================================== #
+
+logger = logging.getLogger('workflow_16s')
+
 # ================================= DEFAULT VALUES =================================== #
 
 # Metadata column standardization
-COLUMN_ORDER = [
+COLUMN_ORDER: List[str] = [
     'dataset_id', 'dataset_type', 'ena_project_accession', 'ena_project_description',
     'instrument_platform', 'instrument_model', 'library_layout', 'target_subfragment',
     'sequence_length_bp', 'pcr_primer_fwd', 'pcr_primer_rev', 'pcr_primer_fwd_seq',
@@ -46,11 +42,8 @@ COLUMN_ORDER = [
     'temperature_c', 'env_biome', 'env_feature', 'env_material', 'ph'
 ]
 
-# Required columns
-#MANUAL_METADATA_REQUIRED_COLUMNS = ['dataset_id']
-#ENA_METADATA_REQUIRED_COLUMNS = ['run_accession']
-
-ENA_METADATA_UNNECCESSARY_COLUMNS = [
+# ENA metadata columns to drop
+ENA_METADATA_UNNECCESSARY_COLUMNS: List[str] = [
     'sra_bytes', 'sra_aspera', 'sra_galaxy', 'sra_md5', 'sra_ftp', 
     'fastq_bytes', 'fastq_aspera', 'fastq_galaxy', 'fastq_md5',
     'collection_date_start', 'collection_date_end',
@@ -60,124 +53,106 @@ ENA_METADATA_UNNECCESSARY_COLUMNS = [
     'tax_lineage', 'tax_id', 'scientific_name', 'isolation_source',
     'first_created', 'first_public', 'last_updated', 'status'
 ]
-ENA_METADATA_COLUMNS_TO_RENAME = {
+
+# ENA metadata columns to rename
+ENA_METADATA_COLUMNS_TO_RENAME: Dict[str, str] = {
     'lat': 'latitude_deg',
     'lon': 'longitude_deg'
 }
 
-# ==================================== FUNCTIONS ===================================== #
+# =================================== DATA UTILS ===================================== #
 
-def table_to_dataframe(
-    table: Union[Dict, BiomTable]
-) -> pd.DataFrame:
-    """Convert a feature table to a pandas DataFrame."""
-    # Convert table to DataFrame 
-    if isinstance(table, BiomTable):
-        table = table.to_dataframe(dense=True) # features x samples
-        table = table.T                        # samples  x features
-    if isinstance(table, Dict):
-        table = pd.DataFrame(table)            # samples  x features
-
-    return table
-
-def match_indices_or_transpose(df1, df2):
+def table_to_dataframe(table: Union[Dict, BiomTable]) -> pd.DataFrame:
     """
-    If df1 and df2 have overlapping indices, return them as-is.
-    If not, transpose df2 and check again.
+    Convert a BIOM table to pandas DataFrame with samples as rows.
+    
+    Args:
+        table: Input table as either a dictionary or BIOM Table object.
+    
     Returns:
-        Tuple: (df1, possibly transposed df2, boolean indicating whether transpose occurred)
+        DataFrame with samples as rows and features as columns.
     """
-    if not isinstance(df2, pd.DataFrame):
-        df2 = table_to_dataframe(df2)
-    df1.index = df1['#sampleid']
-    if df1.index.intersection(df2.index).any():
-        return df1, df2, False  # No transpose needed
+    if isinstance(table, BiomTable):
+        df = table.to_dataframe(dense=True)  # features x samples
+        return df.T                          # samples  x features
+    if isinstance(table, Dict):
+        return pd.DataFrame(table)           # samples  x features
+    raise TypeError("Input must be BIOM Table or dictionary")
 
-    # Try transposing df2
-    df2_t = df2.T
-    if df1.index.intersection(df2_t.index).any():
-        return df1, df2_t, True  # Transposed
 
-    # Still no match
-    return df1, df2, False  # Return as-is, no match found
-
-def get_first_existing_column(df, columns):
-    # Loop through the list of columns
-    for col in columns:
-        if col in df.columns:
-            return df[col]  # Return the first existing column's data
-    return None  # Return None if none are found
+# ================================ METADATA HANDLING ================================ #
 
 def combine_ena_and_manual_metadata(
     ena_meta: pd.DataFrame,
     manual_meta: pd.DataFrame
-):
-    """"""
+) -> pd.DataFrame:
+    """
+    Merge ENA metadata with manual curation, resolving column conflicts.
+    
+    Steps:
+    1. Standardizes column names to lowercase
+    2. Checks for required 'run_accession' column
+    3. Resolves duplicate columns (manual takes precedence)
+    4. Drops unnecessary ENA columns
+    5. Renames ENA columns to standardized names
+    6. Merges datasets on run_accession
+    
+    Args:
+        ena_meta:    DataFrame from European Nucleotide Archive.
+        manual_meta: DataFrame from local user curation.
+    
+    Returns:
+        Merged metadata DataFrame.
+    
+    Raises:
+        ValueError: If required 'run_accession' column is missing.
+    """
     # Standardize column names
-    ena_meta.columns = ena_meta.columns.astype(str).str.lower().str.strip()
-    manual_meta.columns = manual_meta.columns.astype(str).str.lower().str.strip()
+    ena_meta.columns = ena_meta.columns.str.lower().str.strip()
+    manual_meta.columns = manual_meta.columns.str.lower().str.strip()
     
-    # Check that both dataframes have the 'run_accession' column
-    required_columns = ['run_accession']
-    ena_missing_cols = [col for col in required_columns 
-                        if col not in ena_meta.columns] 
-    if ena_missing_cols:
-        raise ValueError(
-            f"ENA metadata for dataset '{dataset}' missing required columns: "
-            f"{', '.join(ena_missing_cols)}"
-        )
-    manual_missing_cols = [col for col in required_columns 
-                           if col not in manual_meta.columns]
-    if manual_missing_cols:
-        raise ValueError(
-            f"ENA metadata for dataset '{dataset}' missing required columns: "
-            f"{', '.join(manual_missing_cols)}"
-        )
-    
-    def _resolve_column_conflicts(manual_meta, ena_meta):
-        # Identify common columns between the two dataframes
-        common_cols = set(ena_meta.columns) & set(manual_meta.columns) - {'run_accession'}
+    # Validate required columns
+    required = ['run_accession']
+    if not set(required).issubset(ena_meta.columns):
+        missing = set(required) - set(ena_meta.columns)
+        raise ValueError(f"ENA metadata missing required columns: {missing}")
+    if not set(required).issubset(manual_meta.columns):
+        missing = set(required) - set(manual_meta.columns)
+        raise ValueError(f"Manual metadata missing required columns: {missing}")
+
+    def resolve_column_conflicts(
+        manual: pd.DataFrame, 
+        ena: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Handle duplicate columns between metadata sources."""
+        common = set(ena.columns) & set(manual.columns) - {'run_accession'}
+        ena_processed = ena.copy()
         
-        # Create a copy of the second dataframe to avoid modifying the original
-        ena_meta_processed = ena_meta.copy()
-
-        for col in common_cols:
-            # Check if the columns in both dataframes are duplicates
-            if manual_meta[col].equals(ena_meta_processed[col]):
-                # Drop the column from the second dataframe
-                ena_meta_processed = ena_meta_processed.drop(columns=col)
+        for col in common:
+            if manual[col].equals(ena[col]):
+                ena_processed = ena_processed.drop(columns=col)
             else:
-                # Rename the column in the second dataframe with '_ena' suffix
-                new_col_name = f"{col}_ena"
-                ena_meta_processed = ena_meta_processed.rename(columns={col: new_col_name})
-
-        return manual_meta, ena_meta_processed
+                ena_processed = ena_processed.rename(
+                    columns={col: f"{col}_ena"}
+                )
+        return manual, ena_processed
     
-    # Resolve column conflicts
-    manual_meta, ena_meta = _resolve_column_conflicts(manual_meta, ena_meta)
+    # Resolve conflicts
+    manual_meta, ena_meta = resolve_column_conflicts(manual_meta, ena_meta)
     
-    # Drop unneccessary columns from ENA metadata
+    # Clean ENA metadata
     ena_meta = ena_meta.drop(
-        columns=ena_meta.columns.intersection(ENA_METADATA_UNNECCESSARY_COLUMNS)
+        columns=ena_meta.columns.intersection(ENA_METADATA_UNNECCESSARY_COLUMNS),
+        errors='ignore'
     )
-    
-    # Rename columns from ENA metadata
     ena_meta = ena_meta.rename(columns={
-        col: ENA_METADATA_COLUMNS_TO_RENAME[col] for col in ena_meta.columns.intersection(
-            ENA_METADATA_COLUMNS_TO_RENAME.keys()
-        )
+        col: new for col, new in ENA_METADATA_COLUMNS_TO_RENAME.items() 
+        if col in ena_meta.columns
     })
     
-    # Merge the ENA and manual metadata, only keeping samples that were retained in 
-    # the manual metadata
-    meta = manual_meta.merge(ena_meta, on='run_accession', how='left')
-    
-    # Create a 'dataset_id' column if it does not already exist
-    if 'dataset_id' not in meta.columns:
-        meta['dataset_id'] = f"ENA_{dataset}"
-        
-    return meta
-    
+    # Merge datasets
+    return manual_meta.merge(ena_meta, on='run_accession', how='left')
+
 
 def combine_metadata(
     ena_meta: pd.DataFrame,
@@ -185,7 +160,14 @@ def combine_metadata(
     dataset_id: str
 ) -> pd.DataFrame:
     """
-    Merge ENA and manual metadata with comprehensive error handling.
+    Robustly merge ENA and manual metadata with comprehensive validation.
+    
+    Features:
+    - Column name standardization
+    - Missing column handling
+    - Conflict resolution (manual data priority)
+    - Type validation
+    - Final column ordering
     
     Args:
         ena_meta:    DataFrame from European Nucleotide Archive.
@@ -194,30 +176,23 @@ def combine_metadata(
         
     Returns:
         Integrated DataFrame with standardized columns.
-        
-    Notes:
-        - Column name standardization
-        - Missing column handling
-        - Conflict resolution (manual data priority)
-        - Type validation
     """
     # Standardize column names
-    ena_meta.columns = ena_meta.columns.astype(str).str.lower().str.strip()
-    manual_meta.columns = manual_meta.columns.astype(str).str.lower().str.strip()
+    ena_meta.columns = ena_meta.columns.str.lower().str.strip()
+    manual_meta.columns = manual_meta.columns.str.lower().str.strip()
 
     # Add dataset identifier
     for df in [ena_meta, manual_meta]:
         if not df.empty:
-            df.insert(0, 'dataset_id', str(dataset_id))
+            df.insert(0, 'dataset_id', dataset_id)
 
     # Ensure required columns exist
-    required_columns = set(COLUMN_ORDER)
+    required = set(COLUMN_ORDER)
     for df in [ena_meta, manual_meta]:
-        missing_cols = required_columns - set(df.columns)
-        for col in missing_cols:
-            df[col] = pd.NA  # Add missing columns with empty values
+        for col in required - set(df.columns):
+            df[col] = pd.NA  # Add missing columns
 
-    # Merge datasets using outer join
+    # Merge with conflict resolution
     merged = pd.merge(
         ena_meta,
         manual_meta,
@@ -231,20 +206,80 @@ def combine_metadata(
     conflict_cols = set(ena_meta.columns) & set(manual_meta.columns) - {'run_accession'}
     for col in conflict_cols:
         merged[col] = merged[f"{col}_manual"].combine_first(merged[f"{col}_ena"])
-        merged.drop(columns=[f"{col}_ena", f"{col}_manual"], inplace=True)
+        merged = merged.drop(columns=[f"{col}_ena", f"{col}_manual"])
 
-    # Final column validation
-    missing_final = required_columns - set(merged.columns)
-    if missing_final:
-        logger.warning(f"Adding missing final columns: {missing_final}")
-        for col in missing_final:
-            merged[col] = pd.NA
-
-    # Type enforcement and cleanup
+    # Final validation and cleanup
+    for col in required - set(merged.columns):
+        merged[col] = pd.NA
+        
     merged['run_accession'] = merged['run_accession'].astype(str)
     merged['dataset_id'] = merged['dataset_id'].astype(str)
     
     return merged[COLUMN_ORDER].dropna(axis=1, how='all')
+
+
+def get_first_existing_column(
+    df: pd.DataFrame, 
+    columns: List[str]
+) -> Optional[pd.Series]:
+    """
+    Retrieve the first existing column from a list of candidates.
+    
+    Args:
+        df:      DataFrame to search.
+        columns: Ordered list of column names to try.
+        
+    Returns:
+        Series from first existing column, or None if none found.
+    """
+    for col in columns:
+        if col in df.columns:
+            return df[col]
+    return None
+
+
+# ============================== DATA ALIGNMENT UTILS ================================ #
+
+def match_indices_or_transpose(
+    df1: pd.DataFrame, 
+    df2: Union[pd.DataFrame, BiomTable]
+) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
+    """
+    Align DataFrames by index or transpose to find matches.
+    
+    Checks for index matches between:
+    - df1.index and df2.index
+    - df1.index and df2.columns (after transpose)
+    
+    Args:
+        df1: Primary DataFrame with index to match.
+        df2: Secondary DataFrame or BIOM table.
+        
+    Returns:
+        Tuple: 
+            - df1 (unchanged)
+            - Aligned df2 (possibly transposed)
+            - Boolean indicating if transpose occurred
+    """
+    # Convert BIOM tables to DataFrame
+    if not isinstance(df2, pd.DataFrame):
+        df2 = table_to_dataframe(df2)
+        
+    # Ensure df1 has sample IDs in index
+    if '#sampleid' in df1.columns:
+        df1 = df1.set_index('#sampleid')
+    
+    # Check direct index match
+    if df1.index.intersection(df2.index).any():
+        return df1, df2, False
+
+    # Try transposing df2
+    df2_t = df2.T
+    if df1.index.intersection(df2_t.index).any():
+        return df1, df2_t, True
+
+    # No matches found
+    return df1, df2, False
 
 
 def check_matching_index(
@@ -252,112 +287,136 @@ def check_matching_index(
     features: pd.DataFrame
 ) -> bool:
     """
-    Checks if there are any matching values between metadata's index 
-    and either features's index or features's columns.
+    Check for overlapping indices between metadata and features.
     
     Args:
-        metadata:
-        features:
-
+        metadata: DataFrame with sample metadata.
+        features: Feature table (samples x features).
+        
     Returns:
-        True if there are matches, False otherwise.
+        True if any matching indices found, False otherwise.
     """
     samples = set(metadata.index)
-    
-    # Check if there's any overlap with df2's index or columns
-    index_match = not samples.isdisjoint(features.index)
-    columns_match = samples.isdisjoint(features.columns)
+    return samples.intersection(features.index) or samples.intersection(features.columns)
 
-    return index_match and columns_match
 
 def match_samples(
     metadata: pd.DataFrame, 
     features: pd.DataFrame
-):
-    matching_values = metadata.index.intersection(features.columns)
-
-    metadata = metadata.loc[matching_values]
-    features = features[matching_values]
-
-    return metadata, features
-
-
-def classify_feature_format(columns) -> Dict[str, int]:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Classifies column names into taxonomic formats, QIIME 2-style hashes (MD5/SHA256),
-    IUPAC nucleotide sequences, or unknown patterns.
-
+    Filter and align metadata and features to common samples.
+    
     Args:
-        columns: An iterable of column names to classify.
-
+        metadata: Sample metadata.
+        features: Feature table (samples x features).
+        
     Returns:
-        A dictionary with counts for each category.
-
-    Examples:
-        >>> classify_column_format(['d__Bacteria;p__Firmicutes', 
-        ...                         '1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p',
-        ...                         'ACTGNYR'])
-        {'taxonomic': 1, 'hashes': 1, 'raw_sequences': 1, 'unknown': 0}
+        Tuple of aligned (metadata, features) DataFrames.
     """
-    # Pre-compiled regex patterns for efficiency
-    TAXONOMIC_PATTERN = re.compile(
-        r'^d__[\w]+(;p__[\w]+)?(;c__[\w]+)?(;o__[\w]+)?(;f__[\w]+)?(;g__[\w]+)?(;s__[\w]+)?$'
-    )
-    QIIME_HASH_PATTERN = re.compile(
-        r'^[a-f0-9]{32}$|^[a-f0-9]{64}$'  # MD5 (32) or SHA256 (64)
-    )
-    IUPAC_SEQUENCE_PATTERN = re.compile(
-        r'^[ACGTRYSWKMBDHVN]+$',  # All IUPAC nucleotide codes
-        re.IGNORECASE
-    )
+    common = metadata.index.intersection(features.columns)
+    return metadata.loc[common], features[common]
 
-    counts = {
-        "taxonomic": 0,
-        "hashes": 0,
-        "raw_sequences": 0,
-        "unknown": 0
+
+# ============================== FEATURE PROCESSING ================================== #
+
+def classify_feature_format(columns: Iterable[str]) -> Dict[str, int]:
+    """
+    Classify feature IDs into taxonomic, hash, sequence, or unknown types.
+    
+    Uses regex patterns to identify:
+    - Taxonomic strings (e.g., 'd__Bacteria;p__Firmicutes')
+    - QIIME-style hashes (32/64 character hex strings)
+    - IUPAC nucleotide sequences
+    - Unknown patterns
+    
+    Args:
+        columns: Feature IDs to classify.
+        
+    Returns:
+        Dictionary with counts for each category.
+    """
+    patterns = {
+        "taxonomic": re.compile(
+            r'^d__[\w]+(;p__[\w]+)?(;c__[\w]+)?(;o__[\w]+)?'
+            r'(;f__[\w]+)?(;g__[\w]+)?(;s__[\w]+)?$'
+        ),
+        "hashes": re.compile(r'^[a-f0-9]{32}$|^[a-f0-9]{64}$'),
+        "raw_sequences": re.compile(r'^[ACGTRYSWKMBDHVN]+$', re.IGNORECASE)
     }
     
-    for col in columns:
-        # Normalize input and handle empty strings
-        col_str = str(col).strip()
-        if not col_str:
+    counts = {k: 0 for k in patterns}
+    counts["unknown"] = 0
+    
+    for col in map(str, columns):
+        col = col.strip()
+        if not col:
             counts["unknown"] += 1
             continue
-
-        if TAXONOMIC_PATTERN.match(col_str):
-            counts["taxonomic"] += 1
-        elif QIIME_HASH_PATTERN.match(col_str):
-            counts["hashes"] += 1
-        elif IUPAC_SEQUENCE_PATTERN.match(col_str):
-            counts["raw_sequences"] += 1
-        else:
+            
+        matched = False
+        for name, pattern in patterns.items():
+            if pattern.match(col):
+                counts[name] += 1
+                matched = True
+                break
+                
+        if not matched:
             counts["unknown"] += 1
             
-    column_format = max(counts, key=counts.get)
-    confidence = round(max(counts.values()) / sum(counts.values()), 2)
-    print(f"Columns are {column_format} ({confidence} confidence)")
-    return column_format 
+    # Print classification summary
+    total = sum(counts.values())
+    if total > 0:
+        dominant = max(counts, key=counts.get)
+        confidence = counts[dominant] / total
+        logger.info(
+            f"Feature classification: {dominant} "
+            f"({confidence:.0%} confidence)"
+        )
+        
+    return counts
 
 
 def trim_and_merge_asvs(
     asv_table: pd.DataFrame,
     asv_sequences: List[str],
     trim_length: int = 250
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
     """
-    BIOM-optimized ASV merging with correct matrix orientation and duplicate 
-    handling.
+    Trim ASV sequences and merge identical trimmed variants.
+    
+    Optimized workflow:
+    1. Parallel sequence trimming
+    2. BIOM table creation with temporary feature IDs
+    3. Collapse by trimmed sequences
+    4. Convert back to DataFrame
+    
+    Args:
+        asv_table:        Feature table (features x samples).
+        asv_sequences:    Raw sequences corresponding to features.
+        trim_length:      Number of bases to keep from sequence start.
+        
+    Returns:
+        Tuple:
+            - Merged feature table (features x samples)
+            - Series of trimmed sequences
+            - Temporary feature IDs
+            
+    Raises:
+        ValueError: For dimension mismatch or invalid trim length.
     """
-    # Initialize parallel processing
-    pandarallel.initialize(progress_bar=False)
-
     # Validate inputs
     if len(asv_sequences) != asv_table.shape[0]:
-        raise ValueError("ASV sequences count must match table rows")
+        raise ValueError(
+            f"ASV count mismatch: "
+            f"{len(asv_sequences)} sequences vs {asv_table.shape[0]} features"
+        )
     if trim_length < 1:
-        raise ValueError("Trim length must be ≥1")
-
+        raise ValueError(f"Invalid trim length: {trim_length}")
+    
+    # Initialize parallel processing
+    pandarallel.initialize(progress_bar=False, nb_workers=8)
+    
     # Trim sequences in parallel
     trimmed_seqs = (
         pd.Series(asv_sequences)
@@ -365,16 +424,16 @@ def trim_and_merge_asvs(
     )
     trimmed_seqs.index = asv_sequences
 
-    # Create unique temporary IDs for initial table
-    unique_obs_ids = [f"TMP_FEATURE_{i}" for i in range(asv_table.shape[0])]
-    # Create BIOM table with CORRECT ORIENTATION
+    # Create BIOM table with temporary feature IDs
+    obs_ids = [f"TMP_FEATURE_{i}" for i in range(len(asv_sequences))]
     biom_table = BiomTable(
-        data=asv_table.values.astype(np.uint32),  # Remove .T for correct orientation
-        observation_ids=unique_obs_ids,
-        sample_ids=asv_table.columns.astype(str).tolist(),
+        data=asv_table.values.astype(np.uint32),
+        observation_ids=obs_ids,
+        sample_ids=asv_table.columns.tolist(),
         observation_metadata=[{'trimmed_seq': s} for s in trimmed_seqs]
     )
-    # Collapse by trimmed sequences
+
+    # Collapse features by trimmed sequences
     merged_biom = biom_table.collapse(
         lambda id_, md: md['trimmed_seq'],
         axis='observation',
@@ -386,8 +445,13 @@ def trim_and_merge_asvs(
     # Convert to DataFrame
     merged_df = merged_biom.to_dataframe(dense=True).astype(np.uint32)
     
-    print(f"Feature reduction: {len(asv_sequences)} → {merged_df.shape[0]} "
-          f"({merged_df.shape[0]/len(asv_sequences):.1%})")
+    # Log reduction statistics
+    orig = len(asv_sequences)
+    new = merged_df.shape[0]
+    logger.info(
+        f"Feature reduction: {orig} → {new} "
+        f"({new/orig:.1%}) after {trim_length}bp trim"
+    )
     
-    return merged_df, trimmed_seqs, unique_obs_ids
-
+    return merged_df, trimmed_seqs, obs_ids
+    
