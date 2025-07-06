@@ -29,6 +29,7 @@ from plotly.subplots import make_subplots
 from workflow_16s.figures.figures import (
     attach_legend_to_figure, largecolorset, plot_legend, plotly_show_and_save,
 )
+from workflow_16s.figures.merged import _apply_common_layout
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -36,100 +37,246 @@ logger = logging.getLogger('workflow_16s')
 sns.set_style('whitegrid')  # Set seaborn style globally
 warnings.filterwarnings("ignore") # Suppress warnings
 
-# ================================= GLOBAL VARIABLES ================================= #
-
-
 # ==================================== FUNCTIONS ===================================== #
 
 def plot_confusion_matrix(
-    cm_flipped, 
-    output_path: Union[str, Path]
+    cm_flipped: np.ndarray,
+    output_path: Union[str, Path],
+    class_names: List[str] = ['Positive', 'Negative'],
+    show: bool = False,
+    verbose: bool = True
 ) -> None:
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(
-        cm_flipped, 
-        annot=True, 
-        fmt='d', 
-        cmap='Blues', 
-        xticklabels=['Predicted 1', 'Predicted 0'], 
-        yticklabels=['Actual 1', 'Actual 0']
+    """
+    Create an interactive confusion matrix plot using Plotly.
+    
+    Args:
+        cm_flipped:  Confusion matrix (2x2) as [[TN, FP], [FN, TP]].
+        output_path: Output path for saving the plot (without extension).
+        class_names: Names for the classes [Actual, Predicted].
+        show:        Whether to display the plot.
+        verbose:     Verbosity flag.
+    """
+    # Create annotation text with values and percentages
+    annotations = []
+    total = cm_flipped.sum()
+    for i in range(cm_flipped.shape[0]):
+        for j in range(cm_flipped.shape[1]):
+            count = cm_flipped[i, j]
+            percentage = f"{count/total:.1%}" if total > 0 else "0%"
+            annotations.append(
+                f"<b>{count}</b><br>({percentage})"
+            )
+    
+    # Reshape annotations to match matrix shape
+    annotations = np.array(annotations).reshape(cm_flipped.shape).tolist()
+    
+    # Create heatmap
+    fig = ff.create_annotated_heatmap(
+        z=cm_flipped,
+        annotation_text=annotations,
+        colorscale='Blues',
+        x=[f'Predicted {name}' for name in class_names],
+        y=[f'Actual {name}' for name in class_names],
+        hoverinfo='z',
+        showscale=True
     )
-    plt.ylabel('Actual label')
-    plt.xlabel('Predicted label')
-    plt.title('Confusion Matrix')
-    plt.savefig(output_path)
-    plt.close()
-    logger.info(f"Confusion matrix plot saved to: {output_path}")
+    
+    # Add title and labels
+    fig.update_layout(
+        title_text='<b>Confusion Matrix</b>',
+        title_x=0.5,
+        xaxis_title='Predicted Label',
+        yaxis_title='Actual Label',
+        width=600,
+        height=600,
+        margin=dict(t=100, l=100),
+        font=dict(size=12)
+    )
+    
+    # Customize hover text
+    fig.update_traces(
+        hovertemplate=(
+            "<b>Actual</b>: %{y}<br>"
+            "<b>Predicted</b>: %{x}<br>"
+            "<b>Count</b>: %{z}<br>"
+            "<b>Percentage</b>: %{text}"
+        ),
+        texttemplate="%{text}",
+        textfont_size=14
+    )
+    
+    # Reverse y-axis to match typical confusion matrix orientation
+    fig.update_yaxes(autorange="reversed")
+    
+    # Add border lines
+    fig.add_shape(
+        type="rect",
+        xref="paper", yref="paper",
+        x0=0, y0=0, x1=1, y1=1,
+        line=dict(color="black", width=2)
+    )
+    
+    fig = _apply_common_layout(fig, 'Predicted Label', 'Actual Label', '<b>Confusion Matrix</b>') 
+    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    if verbose:
+        logger.info(f"Confusion matrix plot saved to: {output_path}")
 
         
 def plot_roc_curve(
     fpr, 
     tpr, 
     roc_auc, 
-    output_path: Union[str, Path]
-) -> None:
-    plt.figure()
-    plt.plot(
-        fpr, 
-        tpr, 
-        label=f'ROC curve (area = {roc_auc:.2f})'
+    output_path: Union[str, Path],
+    show: bool = False,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Plot ROC curve using Plotly.
+    
+    Args:
+        fpr:         False Positive Rates.
+        tpr:         True Positive Rates.
+        roc_auc:     Area Under ROC Curve.
+        output_path: Output path for saving the plot.
+        show:        Whether to display the plot.
+        verbose:     Whether to log output.
+    """
+    fig = go.Figure()
+    
+    # ROC curve
+    fig.add_trace(go.Scatter(
+        x=fpr, 
+        y=tpr,
+        mode='lines',
+        name=f'ROC curve (AUC = {roc_auc:.2f})',
+        line=dict(width=3, color='#1f77b4')
+    ))
+    
+    # Random chance line
+    fig.add_trace(go.Scatter(
+        x=[0, 1], 
+        y=[0, 1],
+        mode='lines',
+        name='Random (AUC = 0.50)',
+        line=dict(dash='dash', color='#444')
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title='Receiver Operating Characteristic',
+        xaxis_title='False Positive Rate',
+        yaxis_title='True Positive Rate',
+        xaxis=dict(range=[0, 1], constrain='domain'),
+        yaxis=dict(range=[0, 1.05], scaleanchor='x', scaleratio=1),
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template='plotly_white',
+        width=700,
+        height=600
     )
-    plt.plot([0, 1], [0, 1], 'k--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic')
-    plt.legend(loc="lower right")
-    plt.savefig(output_path)
-    plt.close()
-    logger.info(f"ROC curve plot saved to: {output_path}")
-
+    fig = _apply_common_layout(fig, 'False Positive Rate', 'True Positive Rate', 'Receiver Operating Characteristic') 
+    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    if verbose:
+        logger.info(f"ROC curve plot saved to: {output_path}")
+    return fig
+    
 
 def plot_precision_recall_curve(
     precision, 
     recall, 
     average_precision, 
-    output_path: Union[str, Path]
-) -> None:
-    plt.figure()
-    plt.step(
-        recall, 
-        precision, 
-        where='post'
-    )
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.ylim([0.0, 1.05])
-    plt.xlim([0.0, 1.0])
-    plt.title(f'Precision-Recall curve: AP={average_precision:.2f}')
-    plt.savefig(output_path)
-    plt.close()
-    logger.info(f"Precision recall curve plot saved to: {output_path}")
+    output_path: Union[str, Path],
+    show: bool = False,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Plot Precision-Recall curve using Plotly.
     
+    Args:
+        precision:         Precision values.
+        recall:            Recall values.
+        average_precision: Average precision score.
+        output_path:       Output path for saving the plot.
+        show:              Whether to display the plot.
+        verbose:           Verbosity flag.
+    """
+    fig = go.Figure()
+    
+    # Precision-Recall curve
+    fig.add_trace(go.Scatter(
+        x=recall, 
+        y=precision,
+        mode='lines',
+        name=f'PR curve (AP = {average_precision:.2f})',
+        line=dict(width=3, color='#ff7f0e'),
+        fill='tozeroy'
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title='Precision-Recall Curve',
+        xaxis_title='Recall',
+        yaxis_title='Precision',
+        xaxis=dict(range=[0, 1], constrain='domain'),
+        yaxis=dict(range=[0, 1.05]),
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template='plotly_white',
+        width=700,
+        height=600
+    )
+    fig = _apply_common_layout(fig, 'Recall', 'Precision', 'Precision-Recall Curve')
+    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    if verbose:
+        logger.info(f"Precision-Recall curve plot saved to: {output_path}")
+    return fig
+
 
 def plot_feature_importance(
-  shap_values, 
-  X_test, 
-  X_train, 
-  cbmpf
-) -> None:
-    shap.summary_plot(
-        shap_values, X_train, plot_type="bar", class_names=cbmpf.classes_
-    )
-    shap.summary_plot(
-        shap_values, X_train.values, feature_names = X_train.columns
-    )
+    feature_importances: pd.Series,
+    threshold: float = 0.5,
+    output_path: Union[str, Path],
+    show: bool = False,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Plot horizontal bar chart of feature importances using Plotly.
     
-    sns.set_context("talk", font_scale=0.5)
-    fea_imp = pd.DataFrame({
-      'imp': cbmpf.feature_importances_, 
-      'col': X_test.columns
-    }).sort_values(['imp', 'col'], ascending=[True, False])
-    fea_imp=fea_imp[fea_imp['imp']>0.5]
-    fea_imp['fn']=['fn:'+str(i) for i in fea_imp.index]
-    fea_imp.plot(kind='barh', x='col', y='imp', figsize=(20, 10))
-  
+    Args:
+        feature_importances: Series with feature importances.
+        threshold:           Minimum importance to display.
+        output_path:         Output path for saving the plot.
+        show:                Whether to display the plot.
+        verbose:             Verbosity flag.
+    """
+    # Filter and sort features
+    filtered = feature_importances[feature_importances > threshold]
+    sorted_features = filtered.sort_values(ascending=True)
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        y=sorted_features.index,
+        x=sorted_features.values,
+        orientation='h',
+        marker_color='#2ca02c'
+    ))
+    
+    fig.update_layout(
+        title='Feature Importances',
+        xaxis_title='Importance Score',
+        yaxis_title='Features',
+        template='plotly_white',
+        height=600 + len(sorted_features) * 10,  # Dynamic height
+        width=800,
+        margin=dict(l=150)  # Extra margin for long feature names
+    )
+    fig = _apply_common_layout(
+        fig, 'Importance Score', 'Features', 'Feature Importances'
+    )
+    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    if verbose:
+        logger.info(f"Feature importance plot saved to: {output_path}")
+    return fig
+    
 
 def shap_summary_bar_plotly(
     shap_values: np.array, 
@@ -173,6 +320,7 @@ def shap_summary_bar_plotly(
         height=600,
         margin=dict(l=150)
     )
+    fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
     return fig
     
 
@@ -266,6 +414,7 @@ def shap_beeswarm_plotly(
         plot_bgcolor='white'
     )
     fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
+    fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
     return fig
     
 
@@ -355,11 +504,11 @@ def shap_dependency_plot_plotly(
         height=500,
         template='plotly_white'
     )
-    
+    fig = _apply_common_layout(fig, f'Feature Value: {feature}', 'SHAP Value', f'SHAP Dependency Plot: {feature}')
     return fig
 
 
-def plot_shap(
+def create_shap_plots(
     shap_values: np.array, 
     feature_values: np.array, 
     feature_names: list, 
@@ -418,4 +567,3 @@ def plot_shap(
                     f"Error creating dependency plot for {feature}: {str(e)}"
                 )
     return bar_fig, beeswarm_fig, dependency_figs
-  
