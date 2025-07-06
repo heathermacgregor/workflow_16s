@@ -1520,44 +1520,53 @@ class _AnalysisManager(_ProcessingMixin):
                         self.models[table_type][level] = {}
                         
                     for method in methods:
-                        l1_desc = " | ".join([
-                            table_type.replace('_', ' ').title(), 
-                            level.capitalize(),
-                            method.upper()
-                        ])
-                        l1_task = prog.add_task(
-                            f"[white]{l1_desc:<{DEFAULT_N}}",
-                            parent=l0_task,
-                            total=1
-                        )
-    
-                        X = table_to_dataframe(table)
-                        X.index = X.index.str.lower()
-                        y = self.meta.set_index("#sampleid")[[group_col]]
-                        y.index = y.index.astype(str).str.lower()
-                        idx = X.index.intersection(y.index)
-                        X, y = X.loc[idx], y.loc[idx]
-                        mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
-                        
-                        try:
-                            model_result = catboost_feature_selection(
-                                metadata=y,
-                                features=X,
-                                output_dir=mdir,
-                                group_col=group_col,
-                                method=method,
-                                n_top_features=n_top_features,
-                                step_size=step_size,
-                                permutation_importance=permutation_importance,
-                                thread_count=n_threads
+                        if table_type == "clr_transformed" and method == "chi_squared":
+                            logger.warning(
+                                "Skipping chi_squared feature selection for clr_transformed table. "
+                                "Chi-squared test is not appropriate for CLR transformed data because "
+                                "it requires non-negative values and CLR transformation produces values "
+                                "with both positive and negative magnitudes."
                             )
+                            self.models[table_type][level][method] = None
+                        else:
+                            l1_desc = " | ".join([
+                                table_type.replace('_', ' ').title(), 
+                                level.capitalize(),
+                                method.upper()
+                            ])
+                            l1_task = prog.add_task(
+                                f"[white]{l1_desc:<{DEFAULT_N}}",
+                                parent=l0_task,
+                                total=1
+                            )
+        
+                            X = table_to_dataframe(table)
+                            X.index = X.index.str.lower()
+                            y = self.meta.set_index("#sampleid")[[group_col]]
+                            y.index = y.index.astype(str).str.lower()
+                            idx = X.index.intersection(y.index)
+                            X, y = X.loc[idx], y.loc[idx]
+                            mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
                             
-                            self.models[table_type][level][method] = model_result
-                            if method not in self.models[table_type]:
-                                self.models[table_type][level][method] = {}
-                            self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
-                            self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
-                            self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
+                            try:
+                                model_result = catboost_feature_selection(
+                                    metadata=y,
+                                    features=X,
+                                    output_dir=mdir,
+                                    group_col=group_col,
+                                    method=method,
+                                    n_top_features=n_top_features,
+                                    step_size=step_size,
+                                    permutation_importance=permutation_importance,
+                                    thread_count=n_threads
+                                )
+                                
+                                self.models[table_type][level][method] = model_result
+                                if method not in self.models[table_type]:
+                                    self.models[table_type][level][method] = {}
+                                self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
+                                self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
+                                self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
                             
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
