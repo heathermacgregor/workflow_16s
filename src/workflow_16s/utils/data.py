@@ -686,6 +686,8 @@ def trim_and_merge_asvs(
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
+    progress=None, 
+    task_id=None,
     verbose: bool = False
 ) -> Table:
     """
@@ -715,23 +717,17 @@ def collapse_taxa(
 
     # Create taxonomy mapping
     id_map = {}
-    with get_progress_bar() as progress:
-        task_desc = "Mapping taxonomy..."
-        task = progress.add_task(
-            f"[white]{task_desc:<{DEFAULT_N}}", 
-            total=len(table.ids(axis='observation').astype(str))
-        )
-        for taxon in table.ids(axis='observation').astype(str):
-            try:
-                parts = taxon.split(';')
-                truncated = ';'.join(
-                    parts[:level_idx + 1]
-                ) if len(parts) >= level_idx + 1 else 'Unclassified'
-                id_map[taxon] = truncated
-            except Exception as e:
-                logger.error(f"Mapping failed for taxon {taxon}: {e!r}")
-            finally:
-                progress.update(task, advance=1)
+    for taxon in table.ids(axis='observation').astype(str):
+        try:
+            parts = taxon.split(';')
+            truncated = ';'.join(
+                parts[:level_idx + 1]
+            ) if len(parts) >= level_idx + 1 else 'Unclassified'
+            id_map[taxon] = truncated
+        except Exception as e:
+            logger.error(f"Mapping failed for taxon {taxon}: {e!r}")
+        finally:
+            progress.update(task_id, advance=1)
 
     # Collapse table
     collapsed_table = table.collapse(
