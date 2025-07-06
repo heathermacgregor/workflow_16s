@@ -22,15 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import pandas as pd
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -46,11 +37,11 @@ from workflow_16s.qiime.workflows.execute_workflow import (
 )
 from workflow_16s.sequences.sequence_processing import process_sequences
 from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
-from workflow_16s.utils.io import (
-    import_metadata_tsv, import_table_biom, load_datasets_info, load_datasets_list,
-    safe_delete, write_manifest_tsv, write_metadata_tsv
-)
 from workflow_16s.utils.amplicon_data import AmpliconData
+from workflow_16s.utils.io import (
+    dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
+    load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
+)
 
 # ================================ CUSTOM TMP CONFIG ================================= #
 
@@ -82,17 +73,21 @@ ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
 # =================================== MAIN WORKFLOW ================================== #
 
 def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
-    """Identify existing subsets with required QIIME outputs without running upstream processing.
+    """
+    Identify existing subsets with required QIIME outputs without running upstream 
+    processing.
     
     Args:
-        cfg: Configuration dictionary from the workflow
-        logger: Logger instance for logging messages
+        cfg:    Configuration dictionary from the workflow.
+        logger: Logger instance for logging messages.
         
     Returns:
-        Dictionary mapping subset IDs to dictionaries of file paths
+        Dictionary mapping subset IDs to dictionaries of file paths.
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
+    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get(
+        "classifier", DEFAULT_CLASSIFIER
+    )
     datasets = load_datasets_list(cfg["dataset_list"])
     datasets_info = load_datasets_info(cfg["dataset_info"])
     existing_subsets = {}
@@ -111,7 +106,7 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     for dataset in datasets:
         try:
             # Get dataset info
-            dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
+            dataset_info = dataset_first_match(dataset, datasets_info)
 
             # Generate potential subsets
             subsets = SubsetDataset(cfg)
@@ -171,7 +166,7 @@ def upstream(cfg, logger) -> None:
         for dataset in datasets:
             try:
                 # Partition datasets by processing requirements 
-                dataset_info = file_utils.fetch_first_match(dataset, datasets_info)
+                dataset_info = dataset_first_match(dataset, datasets_info)
 
                 subsets = SubsetDataset(cfg)
                 subsets.process(dataset, dataset_info)
@@ -305,7 +300,7 @@ def downstream(cfg, logger) -> None:
     generate_html_report(
         amplicon_data=data,
         output_path=report_path,
-        #max_features=50
+        max_features=50
     )
     logger.info(f"HTML report generated at: {report_path}")
     
@@ -316,13 +311,9 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     logger = setup_logging(project_dir.logs)
 
-    
-        
-    upstream_enabled = cfg["upstream"]
-    downstream_enabled = cfg["downstream"]
-    if upstream_enabled:
+    if cfg["upstream"]:
         upstream(cfg, logger)
-    if downstream_enabled:
+    if cfg["downstream"]:
         downstream(cfg, logger)
         
 if __name__ == "__main__":
