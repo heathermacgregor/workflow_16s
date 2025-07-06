@@ -34,6 +34,7 @@ from workflow_16s.stats.utils import merge_table_with_metadata, table_to_datafra
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
+debug_mode = False
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -53,11 +54,7 @@ DEFAULT_ALPHA_METRICS = [
     'gini_index',
     'goods_coverage'
 ]
-
-
 PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
-
-debug_mode = False
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -71,13 +68,13 @@ def alpha_diversity(
     Calculate alpha diversity metrics for each sample.
     
     Args:
-        table:        Input abundance table (samples x features)
-        metrics:      List of alpha diversity metrics to compute
-        tree:         Phylogenetic tree (required for phylogenetic metrics)
-        pseudo_count: Small value to avoid log(0) (default: 1e-12)
+        table:        Input abundance table (samples x features).
+        metrics:      List of alpha diversity metrics to compute.
+        tree:         Phylogenetic tree (required for phylogenetic metrics).
+        pseudo_count: Small value to avoid log(0) (default: 1e-12).
         
     Returns:
-        DataFrame with alpha diversity values (samples x metrics)
+        DataFrame with alpha diversity values (samples x metrics).
     """
     df = table_to_dataframe(table)
     results = pd.DataFrame(index=df.index)
@@ -87,8 +84,13 @@ def alpha_diversity(
     non_zeros = (df > 0).sum(axis=1)
     proportions = df.div(totals, axis=0).fillna(0)
     
-    def calculate_metric(metric: str, values: np.ndarray, total: float, 
-                         non_zero: int, proportions: np.ndarray) -> float:
+    def calculate_metric(
+        metric: str, 
+        values: np.ndarray, 
+        total: float, 
+        non_zero: int, 
+        proportions: np.ndarray
+    ) -> float:
         """Helper function to compute a single metric for a sample"""
         try:
             # Phylogenetic metrics
@@ -175,20 +177,22 @@ def analyze_alpha_diversity(
     Analyze relationship between alpha diversity metrics and a grouping variable.
     
     Args:
-        alpha_diversity_df: DataFrame from alpha_diversity() (samples x metrics)
-        metadata:           Metadata DataFrame (must include group_col)
-        group_col:          Metadata column containing group labels
-        parametric:         Use parametric tests (False for non-parametric)
+        alpha_diversity_df: DataFrame from alpha_diversity() (samples x metrics).
+        metadata:           Metadata DataFrame (must include group_col).
+        group_col:          Metadata column containing group labels.
+        parametric:         Use parametric tests (False for non-parametric).
         
     Returns:
-        DataFrame with statistical results (metric, test, p-value, effect_size)
+        DataFrame with statistical results (metric, test, p-value, effect_size).
     """
     merged = merge_table_with_metadata(alpha_diversity_df, metadata, group_column)
     
     # Check group validity
     groups = merged[group_column].dropna().unique()
     if len(groups) < 2:
-        raise ValueError(f"Grouping column '{group_column}' must contain at least 2 groups")
+        raise ValueError(
+            f"Grouping column '{group_column}' must contain at least 2 groups"
+        )
     
     results = []
     
@@ -290,13 +294,13 @@ def analyze_alpha_correlations(
     Analyze relationships between alpha diversity metrics and metadata columns.
     
     Args:
-        alpha_df: DataFrame of alpha diversity metrics
-        metadata: Sample metadata DataFrame
-        max_categories: Maximum unique values for categorical variables
-        min_samples: Minimum samples per group for valid comparison
+        alpha_df:       DataFrame of alpha diversity metrics.
+        metadata:       Sample metadata DataFrame.
+        max_categories: Maximum unique values for categorical variables.
+        min_samples:    Minimum samples per group for valid comparison.
         
     Returns:
-        Dictionary of DataFrames with correlation results per metric
+        Dictionary of DataFrames with correlation results per metric.
     """
     results = {}
     
@@ -367,7 +371,9 @@ def analyze_alpha_correlations(
                     )
                     pairwise = [
                         f"{groups[i]} vs {groups[j]}: {p:.4f}" 
-                        for i, j, p in zip(tukey._results[0], tukey._results[1], tukey._results[4])
+                        for i, j, p in zip(
+                            tukey._results[0], tukey._results[1], tukey._results[4]
+                        )
                     ]
                 
                 metric_results.append({
@@ -413,6 +419,16 @@ def k_means(
 ) -> pd.Series:
     """
     Apply K-means clustering and return cluster labels.
+
+    Args:
+        table:
+        metadata:
+        group_column:
+        n_clusters:
+        random_state:
+        verbose:
+
+    Returns:
     """
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
@@ -447,6 +463,7 @@ def ttest(
         group_column:        Metadata column containing group labels.
         group_column_values: Two group identifiers to compare.
         equal_var:           Whether to assume equal population variances (default: False).
+        verbose:
         
     Returns:
         DataFrame with significant features (p < Bonferroni-corrected threshold).
@@ -528,6 +545,7 @@ def mwu_bonferroni(
         metadata:            Sample metadata DataFrame.
         group_column:        Metadata column containing group labels.
         group_column_values: Two group identifiers to compare.
+        verbose:
         
     Returns:
         Results with p-values below Bonferroni-corrected threshold.
@@ -613,6 +631,7 @@ def kruskal_bonferroni(
         group_column:        Metadata column containing group labels.
         group_column_values: List of group identifiers to compare 
                              (None = use all groups).
+        verbose:
         
     Returns:
         DataFrame with significant features after Bonferroni correction.
@@ -700,14 +719,15 @@ def anova(
         group_column:        Metadata column containing group labels.
         group_column_values: List of group identifiers to compare 
                              (None = use all groups).
+        verbose:
         
     Returns:
         DataFrame with significant features after Bonferroni correction.
     
-    Note: Effect size (eta squared) represents the proportion of variance 
-    explained by groups.
-    Values range from 0 to 1, with higher values indicating stronger group 
-    separation.
+    Note: 
+        - Effect size (eta squared) represents the proportion of variance 
+          explained by groups. Values range from 0 to 1, with higher values 
+          indicating stronger group separation.
     """
     table = table_to_dataframe(table)
     table_with_column = merge_table_with_metadata(table, metadata, group_column)
@@ -785,13 +805,17 @@ def fisher_exact_bonferroni(
     presence-absence data.
     
     Args:
-        table: Input presence-absence table (samples x features, binary 0/1)
-        metadata: Sample metadata DataFrame
-        group_column: Metadata column containing group labels
-        group_column_values: Two group identifiers to compare
-        alpha: Significance level before correction (default: 0.01)
-        min_samples: Minimum samples required per group (default: 5)
-        debug_mode: Print debug information if True
+        table:               Input presence-absence table (samples x 
+                             features, binary 0/1).
+        metadata:            Sample metadata DataFrame.
+        group_column:        Metadata column containing group labels.
+        group_column_values: Two group identifiers to compare.
+        alpha:               Significance level before correction 
+                             (default: 0.01).
+        min_samples:         Minimum samples required per group 
+                             (default: 5).
+        debug_mode:          Print debug information if True.
+        verbose:
         
     Returns:
         DataFrame with significant results (p-value ≤ Bonferroni-
@@ -892,13 +916,13 @@ def spearman_correlation(
     metadata variable.
     
     Args:
-        table: Input abundance table
-        metadata: Sample metadata
-        continuous_column: Metadata column with continuous values
-        alpha: Significance threshold
+        table:             Input abundance table.
+        metadata:          Sample metadata.
+        continuous_column: Metadata column with continuous values.
+        alpha:             Significance threshold.
         
     Returns:
-        DataFrame with correlation results
+        DataFrame with correlation results.
     """
     df = table_to_dataframe(table)
     merged = merge_table_with_metadata(df, metadata, continuous_column)
@@ -925,7 +949,9 @@ def spearman_correlation(
     
     result_df = pd.DataFrame(results)
     result_df['p_adj'] = result_df['p_value'] * len(result_df)
-    results_df = result_df[result_df['p_adj'] <= alpha].sort_values('rho', key=abs, ascending=False)
+    results_df = result_df[result_df['p_adj'] <= alpha].sort_values(
+        'rho', key=abs, ascending=False
+    )
     return results_df
 
 
@@ -941,7 +967,7 @@ def calculate_distance_matrix(
         metric: Distance metric (default: braycurtis).
         
     Returns:
-        skbio DistanceMatrix object
+        skbio DistanceMatrix object.
     """
     df = table_to_dataframe(table)
     ids = df.index.tolist()
@@ -960,7 +986,8 @@ def run_ordination(
     
     Args:
         table:        Input abundance table.
-        method:       'pca', 'pcoa', 'tsne', or 'umap'.
+        method:       Ordination method to use: 'pca', 'pcoa', 'tsne', 
+                      or 'umap'.
         n_components: Number of dimensions to keep.
         random_state: Random seed.
         
