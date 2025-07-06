@@ -370,7 +370,7 @@ def shap_beeswarm_plotly(
         # Custom red-blue color scale
         colors = [
             f'rgb({int(30 + 225*(1 - nv)) if nv < 0.5 else 255}, '
-            f'{int(136 + 119*(1 - 2*abs(nv - 0.5))) if nv < 0.5 else 67 + 188*(1 - nv))}, '
+            f'{int(136 + 119*(1 - 2*abs(nv - 0.5))) if nv < 0.5 else 67 + 188*(1 - nv)}, '
             f'{int(229 - 229*nv) if nv < 0.5 else 54 + 201*(1 - nv)})'
             for nv in normalized_vals
         ]
