@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Union
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils import file_utils
+from workflow_16s.utils.io import missing_files
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -111,7 +111,7 @@ def execute_per_dataset_qiime_workflow(
         qiime_dir / qiime_config["taxonomy"]["classifier"] / "taxonomy" / "taxonomy.tsv",
         qiime_dir / "table_6" / "feature-table.biom",
     ]
-    missing_outputs = file_utils.missing_output_files(expected_outputs)
+    missing_outputs = missing_files(expected_outputs)
     if missing_outputs:
         missing_outputs_txt = '\n'.join(['  • ' + str(item) for item in missing_outputs])
         raise RuntimeError(f"Missing required QIIME outputs: \n{missing_outputs_txt}")
