@@ -8,7 +8,7 @@ import logging
 import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # Third Party Imports
 import numpy as np
