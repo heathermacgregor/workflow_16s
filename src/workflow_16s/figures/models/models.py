@@ -1,36 +1,33 @@
 # ===================================== IMPORTS ====================================== #
-import warnings
-warnings.filterwarnings("ignore") 
 
+# Standard Library Imports
+import logging
+import os
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
-import logging
 
-import os
+# Third-Party Imports
+import colorcet as cc
 import numpy as np
-import pandas as pd 
-import shap
-
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import LogNorm
-
-import seaborn as sns
-
+import pandas as pd
 import plotly.express as px
-import plotly.io as pio
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
+import plotly.io as pio
+import seaborn as sns
+import shap
+from matplotlib import (
+    colors as mcolors,
+    pyplot as plt
+)
+from matplotlib.colors import LogNorm
 from plotly.subplots import make_subplots
-import colorcet as cc
 
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.figures.figures import (
-    plotly_show_and_save,
-    largecolorset,
-    plot_legend,
-    attach_legend_to_figure
+    attach_legend_to_figure, largecolorset, plot_legend, plotly_show_and_save,
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -117,32 +114,38 @@ def plot_feature_importance(
   X_train, 
   cbmpf
 ) -> None:
-    shap.summary_plot(shap_values, X_train, plot_type="bar", class_names=cbmpf.classes_)
-    shap.summary_plot(shap_values, X_train.values, feature_names = X_train.columns)
+    shap.summary_plot(
+        shap_values, X_train, plot_type="bar", class_names=cbmpf.classes_
+    )
+    shap.summary_plot(
+        shap_values, X_train.values, feature_names = X_train.columns
+    )
     
     sns.set_context("talk", font_scale=0.5)
     fea_imp = pd.DataFrame({
       'imp': cbmpf.feature_importances_, 
       'col': X_test.columns
-    })
-    fea_imp = fea_imp.sort_values(['imp', 'col'], ascending=[True, False])
+    }).sort_values(['imp', 'col'], ascending=[True, False])
     fea_imp=fea_imp[fea_imp['imp']>0.5]
     fea_imp['fn']=['fn:'+str(i) for i in fea_imp.index]
     fea_imp.plot(kind='barh', x='col', y='imp', figsize=(20, 10))
   
 
-
-def shap_summary_bar_plotly(shap_values, feature_names, max_display=20):
+def shap_summary_bar_plotly(
+    shap_values: np.array, 
+    feature_names: List, 
+    max_display: int = 20
+) -> go.Figure:
     """
     Convert SHAP summary bar plot to a Plotly figure.
     
-    Parameters:
-    shap_values (np.array): SHAP values array (n_samples, n_features).
-    feature_names (list): List of feature names.
-    max_display (int): Maximum number of features to display.
+    Args:
+        shap_values:   SHAP values array (n_samples, n_features).
+        feature_names: List of feature names.
+        max_display:   Maximum number of features to display.
     
     Returns:
-    plotly.graph_objects.Figure: Horizontal bar plot of mean absolute SHAP values.
+        Horizontal bar plot of mean absolute SHAP values.
     """
     # Compute mean absolute SHAP values for each feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
@@ -173,18 +176,23 @@ def shap_summary_bar_plotly(shap_values, feature_names, max_display=20):
     return fig
     
 
-def shap_beeswarm_plotly(shap_values, feature_values, feature_names, max_display=20):
+def shap_beeswarm_plotly(
+    shap_values: np.array, 
+    feature_values: np.array, 
+    feature_names: List, 
+    max_display: int = 20
+) -> go.Figure:
     """
     Convert SHAP beeswarm plot to a Plotly figure.
     
-    Parameters:
-    shap_values (np.array): SHAP values array (n_samples, n_features).
-    feature_values (np.array): Feature values array (n_samples, n_features).
-    feature_names (list): List of feature names.
-    max_display (int): Maximum number of features to display.
+    Args:
+        shap_values:    SHAP values array (n_samples, n_features).
+        feature_values: Feature values array (n_samples, n_features).
+        feature_names:  List of feature names.
+        max_display:    Maximum number of features to display.
     
     Returns:
-    plotly.graph_objects.Figure: Beeswarm plot of SHAP values.
+        Beeswarm plot of SHAP values.
     """
     # Compute mean absolute SHAP for feature ordering
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
@@ -202,7 +210,9 @@ def shap_beeswarm_plotly(shap_values, feature_values, feature_names, max_display
         feat_vals = feature_values[:, feature_idx]
         
         # Generate jittered y-coordinates
-        jitter = np.random.uniform(-y_offset, y_offset, size=len(shap_vals))
+        jitter = np.random.uniform(
+            -y_offset, y_offset, size=len(shap_vals)
+        )
         y_pos = idx + jitter
         
         # Normalize feature values for coloring
@@ -259,19 +269,25 @@ def shap_beeswarm_plotly(shap_values, feature_values, feature_names, max_display
     return fig
     
 
-def shap_dependency_plot_plotly(shap_values, feature_values, feature_names, feature, max_points=1000):
+def shap_dependency_plot_plotly(
+    shap_values: np.array, 
+    feature_values: np.array, 
+    feature_names: List, 
+    feature: str, 
+    max_points: int = 1000
+) -> go.Figure:
     """
     Create a SHAP dependency plot for a single feature.
     
-    Parameters:
-    shap_values (np.array): SHAP values array
-    feature_values (np.array): Feature values array
-    feature_names (list): List of feature names
-    feature (str): Feature to plot
-    max_points (int): Maximum points to show (downsample if exceeded)
+    Args:
+        shap_values:    SHAP values array.
+        feature_values: Feature values array.
+        feature_names:  List of feature names.
+        feature:        Feature to plot.
+        max_points:     Maximum points to show (downsample if exceeded).
     
     Returns:
-    plotly.graph_objects.Figure: Dependency plot figure
+        Dependency plot figure.
     """
     # Find feature index
     if feature not in feature_names:
@@ -349,7 +365,7 @@ def create_shap_plots(
     n_features: int = 20, 
     output_dir: Union[str, Path] = None,
     verbose: bool = False
-):
+) -> Tuple[go.Figure, go.Figure, List[go.Figure]]:
     """
     Generate both SHAP bar plot, beeswarm plot, and dependency plots as Plotly figures.
     
@@ -358,9 +374,11 @@ def create_shap_plots(
         feature_values: Feature values array.
         feature_names:  List of feature names.
         n_features:     Maximum features to display.
+        output_dir:
+        verbose:
     
     Returns:
-        tuple: (bar_plot_fig, beeswarm_plot_fig)
+        Tuple of bar_plot_fig, beeswarm_plot_fig, dependency_plot_figs.
     """
     bar_fig = shap_summary_bar_plotly(
         shap_values, feature_names, n_features
