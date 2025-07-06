@@ -1532,18 +1532,30 @@ class _AnalysisManager(_ProcessingMixin):
                             mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
                             
                             try:
-                                model_result = catboost_feature_selection(
-                                    metadata=y,
-                                    features=X,
-                                    output_dir=mdir,
-                                    group_col=group_col,
-                                    method=method,
-                                    n_top_features=n_top_features,
-                                    step_size=step_size,
-                                    permutation_importance=permutation_importance,
-                                    thread_count=n_threads
-                                )
-                                
+                                if method == "select_k_best":
+                                    model_result = catboost_feature_selection(
+                                        metadata=y,
+                                        features=X,
+                                        output_dir=mdir,
+                                        group_col=group_col,
+                                        method=method,
+                                        n_top_features=n_top_features,
+                                        step_size=step_size,
+                                        # REMOVE unsupported parameters
+                                        permutation_importance=False
+                                    )
+                                else:
+                                    model_result = catboost_feature_selection(
+                                        metadata=y,
+                                        features=X,
+                                        output_dir=mdir,
+                                        group_col=group_col,
+                                        method=method,
+                                        n_top_features=n_top_features,
+                                        step_size=step_size,
+                                        permutation_importance=permutation_importance,
+                                        thread_count=n_threads
+                                    )
                                 self.models[table_type][level][method] = model_result
                                 if method not in self.models[table_type]:
                                     self.models[table_type][level][method] = {}
