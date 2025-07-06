@@ -28,8 +28,12 @@ DEFAULT_PER_DATASET = (
 
 def get_conda_env_path(env_name_substring: str) -> str:
     try:
-        result = subprocess.run(["conda", "env", "list"], capture_output=True, 
-                               text=True, check=True)
+        result = subprocess.run(
+            ["conda", "env", "list"], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
         for line in result.stdout.splitlines():
             if env_name_substring in line:
                 return line.split()[-1]
