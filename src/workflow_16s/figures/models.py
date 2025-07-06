@@ -508,7 +508,7 @@ def shap_dependency_plot_plotly(
     return fig
 
 
-def create_shap_plots(
+def plot_shap(
     shap_values: np.array, 
     feature_values: np.array, 
     feature_names: list, 
