@@ -46,6 +46,10 @@ from workflow_16s.qiime.workflows.execute_workflow import (
 )
 from workflow_16s.sequences.sequence_processing import process_sequences
 from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
+from workflow_16s.utils.io import (
+    import_metadata_tsv, import_table_biom, load_datasets_info, load_datasets_list,
+    safe_delete, write_manifest_tsv, write_metadata_tsv
+)
 from workflow_16s.utils.amplicon_data import AmpliconData
 
 # ================================ CUSTOM TMP CONFIG ================================= #
@@ -89,8 +93,8 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
     """
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get("classifier", DEFAULT_CLASSIFIER)
-    datasets = file_utils.load_datasets_list(cfg["dataset_list"])
-    datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
+    datasets = load_datasets_list(cfg["dataset_list"])
+    datasets_info = load_datasets_info(cfg["dataset_info"])
     existing_subsets = {}
 
     # Define required files and their keys
@@ -191,7 +195,7 @@ def upstream(cfg, logger) -> None:
                         # Write the sample metadata TSV file
                         metadata = subset["metadata"]
                         metadata_path = subset_dirs["metadata"] / "sample-metadata.tsv"
-                        file_utils.write_metadata_tsv(metadata, metadata_path)
+                        write_metadata_tsv(metadata, metadata_path)
 
                         # If hard_rerun is not enabled, skip QIIME if the necessary outputs already exist
                         if not qiime_hard_rerun:
@@ -222,7 +226,7 @@ def upstream(cfg, logger) -> None:
 
                         # Write the manifest TSV file
                         manifest_path = subset_dirs["qiime"] / "manifest.tsv"
-                        file_utils.write_manifest_tsv(seq_paths, manifest_path)
+                        write_manifest_tsv(seq_paths, manifest_path)
 
                         qiime_dir = subset_dirs["qiime"]
                         qiime_outputs = execute_qiime(
@@ -242,7 +246,7 @@ def upstream(cfg, logger) -> None:
                                 if not dir_path.exists():
                                     continue
                                 for fastq_file in dir_path.glob("*.fastq.gz"):
-                                    file_utils.safe_delete(fastq_file)
+                                    safe_delete(fastq_file)
                             logger.info(
                                 f"Cleaned up intermediate files for subset: "
                                 f"{subset['dataset']}"
@@ -266,7 +270,7 @@ def upstream(cfg, logger) -> None:
                                                                       for dataset, error in fail_subsets])
             logger.info(fail_subsets_report)
 
-        metadata_dfs = [file_utils.import_metadata_tsv(i['metadata']) 
+        metadata_dfs = [import_metadata_tsv(i['metadata']) 
                         for i in qiime_outputs.values()]
         metadata_df = pd.concat(metadata_dfs)
         # Calculate the percentage of non-null values for each column
@@ -274,7 +278,7 @@ def upstream(cfg, logger) -> None:
         logger.info(f"\n{completeness}")
 
         table_type = 'table_6' if cfg['target_subfragment_mode'] == 'any' else 'table'
-        table_dfs = [file_utils.import_table_biom(i[table_type]) 
+        table_dfs = [import_table_biom(i[table_type]) 
                      for i in qiime_outputs.values()]
         table_df = pd.concat(table_dfs)
         logger.info(f"Feature table shape: {table_df.shape}")
