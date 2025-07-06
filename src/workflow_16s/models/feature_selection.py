@@ -697,7 +697,7 @@ def perform_feature_selection(
         )
         
         # Compute permutation importance
-        perm_importance = (
+        perm_importance = permutation_importance(
             perm_model,
             X_test_selected.values,
             y_test,
