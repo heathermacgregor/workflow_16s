@@ -232,8 +232,8 @@ def plot_precision_recall_curve(
 
 def plot_feature_importance(
     feature_importances: pd.Series,
-    threshold: float = 0.5,
     output_path: Union[str, Path],
+    threshold: float = 0.5,
     show: bool = False,
     verbose: bool = False
 ) -> go.Figure:
