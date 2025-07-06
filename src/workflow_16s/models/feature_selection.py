@@ -1,11 +1,10 @@
 # ===================================== IMPORTS ====================================== #
+
 # Standard Library Imports
 import itertools
 import logging
 import os
-import re
 import warnings
-from argparse import Namespace as Args
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -13,28 +12,23 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import shap
-from biom import load_table
 from catboost import CatBoostClassifier, cv, Pool
-import matplotlib.pyplot as plt
-from scipy.stats import kendalltau
-from skbio.stats.composition import clr
 from sklearn.feature_selection import (
     chi2, f_classif, RFE, SelectFromModel, SelectKBest, VarianceThreshold
 )
-from sklearn.inspection import permutation_importance as sklearn_permutation_importance
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import (
     accuracy_score, auc, average_precision_score, confusion_matrix, f1_score, 
     get_scorer, matthews_corrcoef, make_scorer, precision_recall_curve,
     roc_auc_score, roc_curve 
 )
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.figures.models.models import (
-    create_shap_plots, plot_confusion_matrix, plot_roc_curve,  
-    plot_precision_recall_curve,
+from workflow_16s.figures.models import (
+    plot_confusion_matrix, plot_precision_recall_curve, plot_roc_curve, plot_shap,
 )
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
@@ -49,7 +43,7 @@ DEFAULT_TEST_SIZE = 0.3
 DEFAULT_RANDOM_STATE = 42
 
 DEFAULT_METHOD = 'rfe'
-DEFAULT_permutation_importance = True
+DEFAULT_USE_PERMUTATION_IMPORTANCE = True
 DEFAULT_THREAD_COUNT = 4
 DEFAULT_STEP_SIZE = 1000
 DEFAULT_NUM_FEATURES = 500
@@ -586,7 +580,7 @@ def perform_feature_selection(
     X_test: pd.DataFrame,
     y_test: pd.Series,
     feature_selection: str = DEFAULT_METHOD,
-    permutation_importance: bool = DEFAULT_permutation_importance,
+    use_permutation_importance: bool = DEFAULT_USE_PERMUTATION_IMPORTANCE,
     thread_count: int = DEFAULT_THREAD_COUNT,
     step_size: int = DEFAULT_STEP_SIZE,
     num_features: int = DEFAULT_NUM_FEATURES,
@@ -602,21 +596,21 @@ def perform_feature_selection(
     importance.
     
     Args:
-        X_train:                   Training feature matrix.
-        y_train:                   Training target vector.
-        X_test:                    Testing feature matrix.
-        y_test:                    Testing target vector.
-        feature_selection:         Feature selection method.
-        permutation_importance:    Apply permutation importance.
-        thread_count:              Number of threads.
-        step_size:                 Step size for RFE.
-        num_features:              Number of features to select.
-        random_state:              Random seed.
-        verbose:                   Verbosity level.
-        feature_selection_params:  Parameters for feature selection method.
-        perm_importance_scorer:    Scorer for permutation importance.
-        perm_importance_n_repeats: Repeats for permutation importance.
-        catboost_params:           CatBoost parameters.
+        X_train:                    Training feature matrix.
+        y_train:                    Training target vector.
+        X_test:                     Testing feature matrix.
+        y_test:                     Testing target vector.
+        feature_selection:          Feature selection method.
+        use_permutation_importance: Apply permutation importance.
+        thread_count:               Number of threads.
+        step_size:                  Step size for RFE.
+        num_features:               Number of features to select.
+        random_state:               Random seed.
+        verbose:                    Verbosity level.
+        feature_selection_params:   Parameters for feature selection method.
+        perm_importance_scorer:     Scorer for permutation importance.
+        perm_importance_n_repeats:  Repeats for permutation importance.
+        catboost_params:            CatBoost parameters.
         
     Returns:
         Tuple of (X_train_selected, X_test_selected, selected_features).
@@ -675,7 +669,7 @@ def perform_feature_selection(
         )
     
     # Apply permutation importance if required
-    if permutation_importance:
+    if use_permutation_importance:
         if verbose:
             logger.debug("Computing permutation importances...")
 
@@ -703,7 +697,7 @@ def perform_feature_selection(
         )
         
         # Compute permutation importance
-        perm_importance = sklearn_permutation_importance(
+        perm_importance = (
             perm_model,
             X_test_selected.values,
             y_test,
@@ -1184,7 +1178,7 @@ def catboost_feature_selection(
         feature_names = X_sample.columns.tolist()
         
         # Generate SHAP figures
-        bar_fig, beeswarm_fig, dependency_figs = create_shap_plots(
+        bar_fig, beeswarm_fig, dependency_figs = plot_shap(
             shap_vals, 
             feature_vals, 
             feature_names, 
