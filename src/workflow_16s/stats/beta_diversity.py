@@ -155,7 +155,7 @@ def distance_matrix(
     Raises:
         ValueError: If fewer than 2 samples are provided.
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     return pairwise_distances(df.values, metric=metric)
     
@@ -188,7 +188,7 @@ def pcoa(
     Raises:
         ValueError: For insufficient samples or invalid component count.
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     
     # Handle duplicate sample IDs
@@ -236,7 +236,7 @@ def pca(
     Raises:
         ValueError: For insufficient samples or invalid component count.
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     
@@ -281,7 +281,7 @@ def tsne(
     Raises:
         ValueError: For insufficient samples, invalid components, or data issues
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     
@@ -327,7 +327,7 @@ def umap(
         ValueError: For insufficient samples or invalid components.
         RuntimeError: For threading issues (handled internally).
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     n_components = safe_component_limit(df, n_components)
