@@ -1537,7 +1537,7 @@ class _AnalysisManager(_ProcessingMixin):
                         y.index = y.index.astype(str).str.lower()
                         idx = X.index.intersection(y.index)
                         X, y = X.loc[idx], y.loc[idx]
-                        mdir = Path(self.figure_output_dir).parent / "ml" / level / table_type
+                        mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
                         
                         try:
                             model_result = catboost_feature_selection(
@@ -1551,7 +1551,13 @@ class _AnalysisManager(_ProcessingMixin):
                                 permutation_importance=permutation_importance,
                                 thread_count=n_threads
                             )
+                            
                             self.models[table_type][level][method] = model_result
+                            if method not in self.models[table_type]:
+                                self.models[table_type][level][method] = {}
+                            self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
+                            self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
+                            self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
                             
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
