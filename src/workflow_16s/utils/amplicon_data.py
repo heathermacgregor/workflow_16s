@@ -1714,10 +1714,11 @@ class AmpliconData:
         cpu_limit = self.cfg.get("cpu", {}).get("limit", 1)
         
         # Set for common parallel libraries
-        os.environ["OMP_NUM_THREADS"] = str(cpu_limit)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(cpu_limit)
-        os.environ["MKL_NUM_THREADS"] = str(cpu_limit)
-        os.environ["BLIS_NUM_THREADS"] = str(cpu_limit)
-        os.environ["VECLIB_MAXIMUM_THREADS"] = str(cpu_limit)
-        os.environ["NUMBA_NUM_THREADS"] = str(cpu_limit)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_limit)
+        vars = [
+            "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+            "BLIS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS",
+            "NUMEXPR_NUM_THREADS"
+        ]
+        for var in vars:
+            os.environ[var] = str(cpu_limit)
+        os.environ["MKL_DYNAMIC"] = "FALSE"  
