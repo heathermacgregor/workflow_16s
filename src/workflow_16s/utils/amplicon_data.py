@@ -902,7 +902,7 @@ class _TableProcessor(_ProcessingMixin):
                         refresh=True
                     )
                     start_time = time.perf_counter()
-                    processed[level] = collapse_taxa(base_table, level)
+                    processed[level] = collapse_taxa(base_table, level, progress, child_task)
                     duration = time.perf_counter() - start_time
                     if self.verbose:
                         logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
