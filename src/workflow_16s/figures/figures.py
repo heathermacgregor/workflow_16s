@@ -83,22 +83,21 @@ def plotly_show_and_save(
     Save a Plotly figure to PNG and/or HTML formats and optionally display it.
     
     Args:
-        fig:         Plotly Figure object to be saved/displayed.
-        show:        Whether to display the figure (default: False).
-        output_path: Base output path for files. Actual files will have format-
-                     specific extensions appended (.png, .html). Directory will 
-                     be created if needed.
-        save_as:     List of formats to save ('png', 'html'). 
-                     Default: ['png','html']
-        scale:       DPI‑like scale factor for raster outputs.
-        engine:      Backend used for static image export ('kaleido', 'orca').
-        verbose:     If True, logs success messages; errors are always logged.
+        fig:            Plotly Figure object to be saved/displayed.
+        show:           Whether to display the figure (default: False).
+        output_path:    Base output path for files. Actual files will have format-
+                        specific extensions appended (.png, .html). Directory will 
+                        be created if needed.
+        save_as:        List of formats to save ('png', 'html'). 
+                        Default: ['png', 'html']
+        scale:          DPI‑like scale factor for raster outputs.
+        engine:         Backend used for static image export ('kaleido', 'orca').
+        verbose:        If True, logs success messages; errors are always logged.
         **write_kwargs: Extra args forwarded to `fig.write_image` / `fig.write_html`.
     
     Notes:
-        - PNG saving requires kaleido: install with `pip install -U kaleido`
-        - File extensions are automatically handled (e.g., 'plot' becomes 'plot.png')
-        - Directory creation errors will propagate (not caught in exception handling)
+        - Saving PNG files requires kaleido: install with `pip install -U kaleido`.
+        - File extensions are automatically handled (e.g., 'plot' becomes 'plot.png').
     """
     if output_path:
         output_path = Path(output_path).expanduser().resolve()
@@ -127,7 +126,7 @@ def plotly_show_and_save(
                 )
         
         if 'html' in save_as:
-            target = output_path.with_suffix('.html')  # Replace with .html
+            target = output_path.with_suffix('.html')
             try:
                 fig.write_html(str(target), **write_kwargs)
                 log_ok(f"Saved figure to '{target}'.")
@@ -135,6 +134,7 @@ def plotly_show_and_save(
                 logger.error(f"Failed to save figure: {str(e)}")
               
 
+#TODO: Delete this class if it is unused
 class PlotlyFigure:
     def __init__(
         self,
@@ -176,21 +176,21 @@ def marker_color_map(
         tuple: 
             - For continuous: (ScalarMappable, list) 
                 - ScalarMappable: Matplotlib mappable object for colorbar 
-                  creation
-                - list: RGBA color strings for each data point
+                  creation.
+                - list: RGBA color strings for each data point.
             - For categorical: (dict, pd.Series)
-                - dict: Color mapping dictionary {category: rgba_color}
+                - dict: Color mapping dictionary {category: rgba_color}.
                 - Series: RGBA color strings for each data point (aligned 
-                  with df index)
+                  with df index).
     
     Raises:
         ValueError: If `continuous_color_set=True` but column contains 
-        non-numeric data
+        non-numeric data.
     
     Notes:
-        - Handles NaN values by assigning transparent black (rgba(0,0,0,0))
-        - Continuous mode adds a 'marker_color' column to the input DataFrame
-        - Categorical mode does not modify the input DataFrame
+        - Handles NaN values by assigning transparent black (rgba(0,0,0,0)).
+        - Continuous mode adds a 'marker_color' column to the input DataFrame.
+        - Categorical mode does not modify the input DataFrame.
     """
     nan_color = (0, 0, 0, 0)
     if continuous_color_set:
@@ -248,8 +248,9 @@ def create_color_mapping(
       for i, value in enumerate(unique_values)
     }
 
+
 def plot_legend(
-    color_dict: dict[str, str],
+    color_dict: Dict[str, str],
     max_height: int = 600  # pixels (default max height before multi-column)
 ) -> go.Figure:
     """
@@ -307,12 +308,11 @@ def plot_legend(
     )
     
     # Hide axes
-    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False)
-    fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False)
+    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False, mirror=True)
+    fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False, mirror=True)
     
     return fig
 
-from plotly.subplots import make_subplots
 
 def attach_legend_to_figure(
     main_fig: go.Figure,
@@ -324,13 +324,13 @@ def attach_legend_to_figure(
     Attaches a legend figure to the right of a main Plotly figure.
     
     Args:
-        main_fig:     The main Plotly figure (geo plot)
-        legend_fig:   The legend Plotly figure
-        main_width:   Width proportion for main figure (0-1)
-        legend_width: Width proportion for legend (0-1)
+        main_fig:     The main Plotly figure (geo plot).
+        legend_fig:   The legend Plotly figure.
+        main_width:   Width proportion for main figure (0-1).
+        legend_width: Width proportion for legend (0-1).
     
     Returns:
-        Combined Plotly figure with main plot and legend side-by-side
+        Combined Plotly figure with main plot and legend side-by-side.
     """
     # Create subplot figure with geo and cartesian subplots
     combined_fig = make_subplots(
