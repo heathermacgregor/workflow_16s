@@ -511,7 +511,9 @@ def import_merged_table_biom(
     if not tables:
         raise ValueError("No valid BIOM tables loaded")
 
-    merged_table = (lambda t1, t2: t1.merge(t2), tables)
+    # ACTUALLY MERGE THE TABLES USING REDUCE
+    merged_table = reduce(lambda t1, t2: t1.merge(t2), tables)
+    
     return merged_table if as_type == 'table' else table_to_df(merged_table)
 
 
