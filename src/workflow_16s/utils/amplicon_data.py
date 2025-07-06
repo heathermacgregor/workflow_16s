@@ -25,9 +25,10 @@ from workflow_16s.utils.biom import (
 )
 from workflow_16s.utils.progress import get_progress_bar
 from workflow_16s.utils.file_utils import (
-    import_merged_table_biom,
-    import_merged_metadata_tsv,
     filter_and_reorder_biom_and_metadata as update_tables,
+)
+from workflow_16s.utils.io import (
+    import_merged_metadata_tsv, import_merged_table_biom
 )
 from workflow_16s.stats.utils import (
     clr_transform_table,
