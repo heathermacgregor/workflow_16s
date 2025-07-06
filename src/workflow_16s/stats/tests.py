@@ -24,7 +24,7 @@ from tqdm import tqdm
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.stats.utils import merge_table_with_metadata, table_to_dataframe
+from workflow_16s.utils.data import merge_table_with_meta, table_to_df
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -65,7 +65,7 @@ def alpha_diversity(
     Returns:
         DataFrame with alpha diversity values (samples x metrics).
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     results = pd.DataFrame(index=df.index)
     
     # Precompute common statistics vectorially
@@ -174,7 +174,7 @@ def analyze_alpha_diversity(
     Returns:
         DataFrame with statistical results (metric, test, p-value, effect_size).
     """
-    merged = merge_table_with_metadata(alpha_diversity_df, metadata, group_column)
+    merged = merge_table_with_meta(alpha_diversity_df, metadata, group_column)
     
     # Check group validity
     groups = merged[group_column].dropna().unique()
@@ -419,8 +419,8 @@ def k_means(
 
     Returns:
     """
-    table = table_to_dataframe(table)
-    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    table = table_to_df(table)
+    table_with_column = merge_table_with_meta(table, metadata, group_column)
     
     kmeans = KMeans(
         n_clusters, 
@@ -457,8 +457,8 @@ def ttest(
     Returns:
         DataFrame with significant features (p < Bonferroni-corrected threshold).
     """
-    table = table_to_dataframe(table)
-    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    table = table_to_df(table)
+    table_with_column = merge_table_with_meta(table, metadata, group_column)
     
     results = []
     for feature in table_with_column.columns.drop(group_column):
@@ -539,8 +539,8 @@ def mwu_bonferroni(
     Returns:
         Results with p-values below Bonferroni-corrected threshold.
     """
-    table = table_to_dataframe(table)
-    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    table = table_to_df(table)
+    table_with_column = merge_table_with_meta(table, metadata, group_column)
     
     # Total features tested (for Bonferroni)
     total_features = len(table_with_column.columns.drop(group_column))
@@ -625,8 +625,8 @@ def kruskal_bonferroni(
     Returns:
         DataFrame with significant features after Bonferroni correction.
     """
-    table = table_to_dataframe(table)
-    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    table = table_to_df(table)
+    table_with_column = merge_table_with_meta(table, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
     if group_column_values is None:
@@ -718,8 +718,8 @@ def anova(
           explained by groups. Values range from 0 to 1, with higher values 
           indicating stronger group separation.
     """
-    table = table_to_dataframe(table)
-    table_with_column = merge_table_with_metadata(table, metadata, group_column)
+    table = table_to_df(table)
+    table_with_column = merge_table_with_meta(table, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
     if group_column_values is None:
@@ -811,8 +811,8 @@ def fisher_exact_bonferroni(
         corrected threshold)
     """
     # Convert to DataFrame and merge with metadata
-    table_df = table_to_dataframe(table)
-    merged_df = merge_table_with_metadata(table_df, metadata, group_column)
+    table_df = table_to_df(table)
+    merged_df = merge_table_with_meta(table_df, metadata, group_column)
     
     # Total features for Bonferroni correction
     total_features = len(merged_df.columns) - 1  # Exclude group column
@@ -913,8 +913,8 @@ def spearman_correlation(
     Returns:
         DataFrame with correlation results.
     """
-    df = table_to_dataframe(table)
-    merged = merge_table_with_metadata(df, metadata, continuous_column)
+    df = table_to_df(table)
+    merged = merge_table_with_meta(df, metadata, continuous_column)
     
     results = []
     for feature in tqdm(
@@ -958,7 +958,7 @@ def calculate_distance_matrix(
     Returns:
         skbio DistanceMatrix object.
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     ids = df.index.tolist()
     dist_array = pdist(df.values, metric=metric)
     return DistanceMatrix(squareform(dist_array), ids)
@@ -983,7 +983,7 @@ def run_ordination(
     Returns:
         DataFrame with ordination coordinates
     """
-    df = table_to_dataframe(table)
+    df = table_to_df(table)
     scaled = StandardScaler().fit_transform(df)
     
     if method == 'pca':
