@@ -308,8 +308,12 @@ def plot_legend(
     )
     
     # Hide axes
-    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False, mirror=True)
-    fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False, mirror=True)
+    fig.update_xaxes(
+      showgrid=False, showticklabels=False, zeroline=False, mirror=True
+    )
+    fig.update_yaxes(
+      showgrid=False, showticklabels=False, zeroline=False, mirror=True
+    )
     
     return fig
 
