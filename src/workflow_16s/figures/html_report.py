@@ -23,7 +23,28 @@ logger = logging.getLogger('workflow_16s')
 # ===================================== CLASSES ====================================== #
 
 class NumpySafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj):  # noqa: D401
+    """
+    Custom JSON encoder that handles NumPy data types.
+    Extends `json.JSONEncoder` to support encoding of NumPy integers, floats,
+    arrays, and booleans into native Python types for JSON serialization.
+    
+    Methods:
+        default: Overridden method to handle NumPy types.
+    """
+    def default(self, obj) -> Any:  
+        """
+        Convert NumPy types to Python types for JSON serialization.
+        
+        Args:
+            obj: Object to encode. Supported NumPy types: integer, float,
+                ndarray, bool_.
+        
+        Returns:
+            Python-native representation of the NumPy object.
+        
+        Note:
+            Falls back to default JSON encoder for unsupported types.
+        """
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
@@ -39,8 +60,25 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
 def _prepare_sections(
     figures: Dict,
     include_sections: List[str],
-    id_counter,
+    id_counter: Iterator[int],
 ) -> Tuple[List[Dict], Dict]:
+    """
+    Organize figures into report sections with hierarchical structure.
+    
+    Processes visualization figures into HTML-ready section structures. Handles
+    special section types (ordination, alpha diversity, etc.) with nested tab
+    layouts and prepares plot data for client-side rendering.
+    
+    Args:
+        figures:          Dictionary of section names to figure objects.
+        include_sections: List of section names to include in report.
+        id_counter:       Iterator generating unique IDs for DOM elements.
+    
+    Returns:
+        Tuple containing:
+            - sections: List of section dictionaries with HTML metadata
+            - plot_data: Dictionary of plot data for client-side rendering
+    """
     sections = []
     plot_data: Dict[str, Any] = {}
 
@@ -101,6 +139,17 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
+        elif sec == "shap":
+            # SHAP plots section
+            btns, tabs, pd = _shap_to_nested_html(
+                figures[sec], id_counter, sec_data["id"]
+            )
+            plot_data.update(pd)
+            sec_data["subsections"].append({
+                "title": "SHAP Interpretability",
+                "tabs_html": tabs,
+                "buttons_html": btns
+            })
         else:
             # Existing non-ordination sections
             flat: Dict[str, Any] = {}
@@ -122,7 +171,18 @@ def _prepare_sections(
     return sections, plot_data
 
 
-def _flatten(tree, keys, out):
+def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
+    """
+    Recursively flatten a nested dictionary structure.
+    
+    Converts nested dictionaries into flat key-value pairs where keys are
+    concatenated using ' - ' separator.
+    
+    Args:
+        tree: Nested dictionary to flatten.
+        keys: Current key path (used recursively).
+        out:  Target dictionary for flattened output.
+    """
     for k, v in tree.items():
         new_keys = keys + [k]
         if isinstance(v, dict):
@@ -133,12 +193,34 @@ def _flatten(tree, keys, out):
 
 def _figs_to_html(
     figs: Dict[str, Any], 
-    counter, 
-    prefix, 
+    counter: Iterator[int], 
+    prefix: str, 
     *, 
-    square=False,
-    row_label: str | None = None
+    square: bool = False,
+    row_label: Optional[str] = None
 ) -> Tuple[str, str, Dict]:
+    """
+    Convert figure objects to HTML tab structures and serialized plot data.
+    
+    Generates HTML tabs/buttons for figure navigation and prepares plot data
+    in a format suitable for client-side rendering (Plotly/Matplotlib).
+    
+    Args:
+        figs:      Dictionary of figure titles to figure objects.
+        counter:   Iterator for generating unique DOM IDs.
+        prefix:    HTML ID prefix for generated elements.
+        square:    Whether plots should maintain square aspect ratio.
+        row_label: Optional label for row grouping in UI.
+    
+    Returns:
+        Tuple containing:
+            - HTML string for tab panes
+            - HTML string for tab buttons
+            - Dictionary of plot data for client-side rendering
+    
+    Note:
+        Supports Plotly figures and Matplotlib Figure objects.
+    """
     tabs, btns, plot_data = [], [], {}
 
     for title, fig in figs.items():
@@ -200,14 +282,26 @@ def _figs_to_html(
     return "\n".join(tabs), buttons_html, plot_data
 
 
-def _section_html(sec):
+def _section_html(sec: Dict) -> str:
+    """
+    Generate HTML for a report section with subsections.
+    
+    Args:
+        sec: Section dictionary containing:
+            - id: HTML ID for section
+            - title: Section title
+            - subsections: List of subsection dictionaries
+    
+    Returns:
+        HTML string representing the full section structure.
+    """
     sub_html = "\n".join(
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tab-content">\n'           # ⟵  wrapper starts
+        f'  <div class="tab-content">\n'          
         f'    <div class="tabs">{sub["buttons_html"]}</div>\n'
         f'    {sub["tabs_html"]}\n'
-        f'  </div>\n'                             # ⟵  wrapper ends
+        f'  </div>\n'                             
         f'</div>'
         for sub in sec["subsections"]
     )
@@ -215,14 +309,25 @@ def _section_html(sec):
            f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
 
 
-# ==================================== FUNCTIONS ===================================== #
-
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
     category: str
 ) -> pd.DataFrame:
-    """Prepare top features table for HTML display"""
+    """
+    Format top differential features into display-ready DataFrame.
+    
+    Args:
+        features:     List of feature dictionaries with statistical results.
+        max_features: Maximum number of features to include.
+        category:     Feature category label ('Contaminated'/'Pristine').
+    
+    Returns:
+        Formatted DataFrame with selected columns and formatted values.
+    
+    Note:
+        Returns placeholder DataFrame if no features found.
+    """
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
     
@@ -250,8 +355,17 @@ def _prepare_features_table(
     return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
                "P-value", "Direction", "Functions"]]
 
+
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
-    """Prepare statistical summary table."""
+    """
+    Create statistical test summary table.
+    
+    Args:
+        stats: Nested dictionary of statistical results.
+    
+    Returns:
+        DataFrame summarizing number of significant features per test/level.
+    """
     summary = []
     for table_type, tests in stats.items():
         for test_name, levels in tests.items():
@@ -267,20 +381,30 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
+
 def _prepare_ml_summary(
     models: Dict, 
     top_contaminated: List[Dict], 
     top_pristine: List[Dict]
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[str], Optional[str]]:
-    """Prepare detailed ML results for HTML display with SHAP plot."""
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """
+    Compile machine learning results into summary DataFrames.
+    
+    Args:
+        models:           Nested dictionary of ML model results.
+        top_contaminated: Top contaminated-associated features.
+        top_pristine:     Top pristine-associated features.
+    
+    Returns:
+        Tuple containing:
+            - Model metrics DataFrame (accuracy, AUC, etc.)
+            - Feature importance DataFrame
+    """
     if not models:
-        return None, None, None, None
+        return None, None
 
     metrics_summary = []
     features_summary = []
-    shap_plot_base64 = None
-    beeswarm_plot_base64 = None
-    best_mcc = -1  # Track best MCC for SHAP plot selection
     
     for table_type, levels in models.items():
         for level, methods in levels.items():
@@ -316,267 +440,120 @@ def _prepare_ml_summary(
                         "Feature": feat,
                         "Importance": f"{importance:.4f}"
                     })
-                
-                # Track best model for SHAP plot
-                current_mcc = test_scores.get("mcc", -1)
-                shap_path = result.get("shap_summary_bar_path")
-                beeswarm_path = result.get("shap_beeswarm_path")
-                if current_mcc > best_mcc:
-                    if shap_path and Path(shap_path).exists():
-                        try:
-                            with open(shap_path, "rb") as img_file:
-                                shap_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-                        except Exception as e:
-                            logger.warning(f"Could not load SHAP plot from {shap_path}: {e}")
-                    
-                    if beeswarm_path and Path(beeswarm_path).exists():
-                        try:
-                            with open(beeswarm_path, "rb") as img_file:
-                                beeswarm_plot_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-                        except Exception as e:
-                            logger.warning(f"Could not load beeswarm plot from {beeswarm_path}: {e}")
-                    
-                    best_mcc = current_mcc
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
     
-    # Add FAPROTAX annotations to top features (if available)
-    for feat in top_contaminated + top_pristine:
-        if "faprotax_functions" in feat:
-            feat["Functions"] = ", ".join(feat["faprotax_functions"])
-    return metrics_df, features_df, shap_plot_base64, beeswarm_plot_base64
+    return metrics_df, features_df
 
-def _format_ml_section(ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64):
-    """Format the machine learning results section with SHAP plot."""
+
+def _format_ml_section(
+    ml_metrics: pd.DataFrame, 
+    ml_features: pd.DataFrame
+) -> str:
+    """
+    Generate HTML for machine learning results section.
+    
+    Args:
+        ml_metrics:  Model performance metrics DataFrame.
+        ml_features: Feature importance DataFrame.
+    
+    Returns:
+        HTML string for ML section with interactive tables.
+    """
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
     
-    ml_html = f"""
+    return f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
         {_add_table_functionality(ml_metrics, 'ml-metrics-table')}
         
         <h3>Top Features</h3>
         {_add_table_functionality(ml_features, 'ml-features-table')}
+    </div>
     """
-    
-    if shap_plot_base64:
-        ml_html += f"""
-        <h3>Feature Importance</h3>
-        <div class="figure-container">
-            <img src="data:image/png;base64,{shap_plot_base64}" alt="SHAP Summary">
-        </div>
-        """
-    
-    if beeswarm_plot_base64:
-        ml_html += f"""
-        <h3>Feature Importance Beeswarm Plot</h3>
-        <div class="figure-container">
-            <img src="data:image/png;base64,{beeswarm_plot_base64}" alt="SHAP Beeswarm">
-        </div>
-        """
-    
-    ml_html += "</div>"
-    return ml_html
 
 
-def _ordination_to_nested_html(
+def _shap_to_nested_html(
     figures: Dict[str, Any],
-    id_counter,
+    id_counter: Iterator[int],
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     """
-    Build the three‑level nested tab structure used for the ordination section.
-
-    ┌ method (PCA/PCoA/…) ┐
-        ┌ table_type (ASV/Genus/…) ┐
-            ┌ level (L2/L3/…) ┐
-                colour buttons (SampleType/Site/…)
+    Generate nested HTML structure for SHAP visualization section.
+    
+    Creates 4-level tab hierarchy (table_type → level → method → plot type).
+    
+    Args:
+        figures:    Nested dictionary of SHAP plots.
+        id_counter: Iterator for unique DOM IDs.
+        prefix:     HTML ID prefix for generated elements.
+    
+    Returns:
+        Tuple containing:
+            - HTML for section buttons
+            - HTML for tab panes
+            - Serialized plot data dictionary
     """
     buttons_html, panes_html, plot_data = [], [], {}
-    ordination_methods = ["pca", "pcoa", "tsne", "umap"]
-
-    for meth in ordination_methods:
-        # ---------- collect figures for this ordination method ----------
-        meth_figs: Dict[str, Dict[str, Dict[str, Any]]] = {}
-        for table_type, levels in figures.items():
-            for level, methods in levels.items():
-                if meth in methods:
-                    meth_figs.setdefault(table_type, {})[level] = methods[meth]
-
-        if not meth_figs:      # skip empty methods
-            continue
-
-        # ---------- IDs ----------
-        meth_id = f"{prefix}-meth-{next(id_counter)}"
-
-        # ---------- method‑level button ----------
-        is_first_meth = not buttons_html  # first method becomes active
+    
+    for table_type, levels in figures.items():
+        # Table type button
+        table_id = f"{prefix}-table-{next(id_counter)}"
+        is_first_table = not buttons_html
         buttons_html.append(
-            f'<button class="method-button {"active" if is_first_meth else ""}" '
-            f'data-method="{meth_id}" '
-            f'onclick="showMethod(\'{meth_id}\')">{meth.upper()}</button>'
+            f'<button class="table-button {"active" if is_first_table else ""}" '
+            f'data-table="{table_id}" '
+            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
         )
-
-        # ---------- build method pane ----------
-        table_btns, table_panes = [], []
-        for t_idx, (table_type, levels) in enumerate(meth_figs.items()):
-            table_id = f"{meth_id}-table-{next(id_counter)}"
-
-            # table_type button
-            table_btns.append(
-                f'<button class="table-button {"active" if t_idx == 0 else ""}" '
-                f'data-table="{table_id}" '
-                f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+        
+        # Build table pane
+        level_btns, level_panes = [], []
+        for l_idx, (level, methods) in enumerate(levels.items()):
+            level_id = f"{table_id}-level-{next(id_counter)}"
+            
+            # Level button
+            level_btns.append(
+                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
+                f'data-level="{level_id}" '
+                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
             )
-
-            # ---------- build table‑type pane ----------
-            level_btns, level_panes = [], []
-            for l_idx, (level, colours) in enumerate(levels.items()):
-                level_id = f"{table_id}-level-{next(id_counter)}"
-
-                # level button
-                level_btns.append(
-                    f'<button class="level-button {"active" if l_idx == 0 else ""}" '
-                    f'data-level="{level_id}" '
-                    f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+            
+            # Build level pane
+            method_btns, method_panes = [], []
+            for m_idx, (method, plots) in enumerate(methods.items()):
+                method_id = f"{level_id}-method-{next(id_counter)}"
+                
+                # Method button
+                method_btns.append(
+                    f'<button class="method-button {"active" if m_idx == 0 else ""}" '
+                    f'data-method="{method_id}" '
+                    f'onclick="showMethod(\'{method_id}\')">{method}</button>'
                 )
-
-                # colour row & panes (comes fully wrapped/labelled)
-                colour_tabs, colour_btns, pd = _figs_to_html(
-                    colours,
-                    id_counter,
-                    level_id,
-                    square=True,
-                    row_label="color_col",
+                
+                # Build method pane with plots
+                plot_btns, plot_tabs, pd = _figs_to_html(
+                    plots, id_counter, method_id
                 )
                 plot_data.update(pd)
-
-                # level pane: colour buttons + colour panes
-                level_panes.append(
-                    f'<div id="{level_id}" class="level-pane" '
-                    f'style="display:{"block" if l_idx == 0 else "none"};">'
-                    f'{colour_btns}'
-                    f'{colour_tabs}'
-                    f'</div>'
-                )
-
-            # table‑type pane: level buttons + level panes
-            table_panes.append(
-                f'<div id="{table_id}" class="table-pane" '
-                f'style="display:{"block" if t_idx == 0 else "none"};">'
-                f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-                f'{"".join(level_panes)}'
-                f'</div>'
-            )
-
-        # method pane: table_type buttons + table panes
-        panes_html.append(
-            f'<div id="{meth_id}" class="method-pane" '
-            f'style="display:{"block" if is_first_meth else "none"};">'
-            f'<div class="tabs" data-label="table_type">{"".join(table_btns)}</div>'
-            f'{"".join(table_panes)}'
-            f'</div>'
-        )
-
-    # wrap top‑level (method) buttons row
-    buttons_row = (
-        f'<div class="tabs" data-label="method">{"".join(buttons_html)}</div>'
-    )
-    return buttons_row, "".join(panes_html), plot_data
-
-def _alpha_diversity_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter,
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    """
-    Build the nested tab structure for alpha diversity section.
-    
-    ┌ table_type (raw/normalized/...) ┐
-        ┌ level (phylum/class/...) ┐
-            ┌ metric (shannon/observed_features/...) ┐
-    """
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for table_type, levels in figures.items():
-        # ---------- table type button ----------
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_first_table = not buttons_html
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        # ---------- build table pane ----------
-        level_btns, level_panes = [], []
-        for l_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            
-            # level button
-            level_btns.append(
-                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            # ---------- build level pane ----------
-            metric_btns, metric_panes = [], []
-            for m_idx, (metric, fig) in enumerate(metrics.items()):
-                metric_id = f"{level_id}-metric-{next(id_counter)}"
-                plot_id = f"{prefix}-plot-{next(id_counter)}"
                 
-                # metric button
-                metric_btns.append(
-                    f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
-                    f'data-metric="{metric_id}" '
-                    f'onclick="showMetric(\'{metric_id}\', \'{plot_id}\')">{metric}</button>'
-                )
-                
-                # metric pane
-                metric_panes.append(
-                    f'<div id="{metric_id}" class="metric-pane" '
+                method_panes.append(
+                    f'<div id="{method_id}" class="method-pane" '
                     f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'<div id="container-{plot_id}" class="plot-container"></div>'
+                    f'{plot_btns}'
+                    f'{plot_tabs}'
                     f'</div>'
                 )
-                
-                # Add plot data
-                try:
-                    if hasattr(fig, "to_plotly_json"):
-                        pj = fig.to_plotly_json()
-                        plot_data[plot_id] = {
-                            "type": "plotly",
-                            "data": pj["data"],
-                            "layout": pj["layout"],
-                        }
-                    elif isinstance(fig, Figure):
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", bbox_inches="tight")
-                        buf.seek(0)
-                        plot_data[plot_id] = {
-                            "type": "image",
-                            "data": base64.b64encode(buf.read()).decode()
-                        }
-                except Exception as exc:
-                    logger.exception("Serializing figure failed")
-                    plot_data[plot_id] = {
-                        "type": "error", 
-                        "error": str(exc)
-                    }
             
-            # level pane: metric buttons + metric panes
             level_panes.append(
                 f'<div id="{level_id}" class="level-pane" '
                 f'style="display:{"block" if l_idx == 0 else "none"};">'
-                f'<div class="tabs" data-label="metric">{"".join(metric_btns)}</div>'
-                f'{"".join(metric_panes)}'
+                f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
+                f'{"".join(method_panes)}'
                 f'</div>'
             )
         
-        # table pane: level buttons + level panes
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_first_table else "none"};">'
@@ -585,112 +562,25 @@ def _alpha_diversity_to_nested_html(
             f'</div>'
         )
     
-    # Wrap top-level buttons
     buttons_row = (
         f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     )
     return buttons_row, "".join(panes_html), plot_data
 
-def _alpha_correlations_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter,
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    """
-    Build the nested tab structure for alpha diversity correlations.
-    
-    ┌ table_type (raw/normalized/...) ┐
-        ┌ level (phylum/class/...) ┐
-            ┌ metric (shannon/observed_features/...) ┐
-    """
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for table_type, levels in figures.items():
-        # ---------- table type button ----------
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_first_table = not buttons_html
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        # ---------- build table pane ----------
-        level_btns, level_panes = [], []
-        for l_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            
-            # level button
-            level_btns.append(
-                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            # ---------- build level pane ----------
-            metric_btns, metric_panes = [], []
-            for m_idx, (metric, fig) in enumerate(metrics.items()):
-                metric_id = f"{level_id}-metric-{next(id_counter)}"
-                plot_id = f"{prefix}-plot-{next(id_counter)}"
-                
-                # metric button
-                metric_btns.append(
-                    f'<button class="metric-button {"active" if m_idx == 0 else ""}" '
-                    f'data-metric="{metric_id}" '
-                    f'onclick="showMetric(\'{metric_id}\', \'{plot_id}\')">{metric}</button>'
-                )
-                
-                # metric pane
-                metric_panes.append(
-                    f'<div id="{metric_id}" class="metric-pane" '
-                    f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'<div id="container-{plot_id}" class="plot-container"></div>'
-                    f'</div>'
-                )
-                
-                # Add plot data
-                try:
-                    if hasattr(fig, "to_plotly_json"):
-                        pj = fig.to_plotly_json()
-                        plot_data[plot_id] = {
-                            "type": "plotly",
-                            "data": pj["data"],
-                            "layout": pj["layout"],
-                        }
-                except Exception as exc:
-                    logger.exception("Serializing figure failed")
-                    plot_data[plot_id] = {
-                        "type": "error", 
-                        "error": str(exc)
-                    }
-            
-            # level pane: metric buttons + metric panes
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if l_idx == 0 else "none"};">'
-                f'<div class="tabs" data-label="metric">{"".join(metric_btns)}</div>'
-                f'{"".join(metric_panes)}'
-                f'</div>'
-            )
-        
-        # table pane: level buttons + level panes
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_first_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    # Wrap top-level buttons
-    buttons_row = (
-        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    )
-    return buttons_row, "".join(panes_html), plot_data
 
-# ================================== TABLE HELPERS ================================== #
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
-    """Enhance table HTML with sorting, pagination, and row selection functionality."""
+    """
+    Enhance DataFrame HTML with interactive features.
+    
+    Adds sorting, pagination, and row controls to generated tables.
+    
+    Args:
+        df:       DataFrame to display.
+        table_id: Unique HTML ID for the table.
+    
+    Returns:
+        HTML string with table and interactive controls.
+    """
     # Generate base table HTML
     table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
     
@@ -717,14 +607,28 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     """
     return enhanced_html
 
-# ================================ REPORT GENERATION ================================= #
+
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
-    include_sections: List[str] | None = None,
+    include_sections: Optional[List[str]] = None,
     max_features: int = 20  
 ) -> None:
-    """Write an HTML file with interactive Plotly/Matplotlib figures and analysis tables."""
+    """
+    Generate interactive HTML report for 16S analysis results.
+    
+    Compiles visualizations, statistical summaries, and machine learning
+    results into a self-contained HTML file with interactive elements.
+    
+    Args:
+        amplicon_data:    Analysis results container.
+        output_path:      Destination path for HTML report.
+        include_sections: Sections to include (default: all non-empty sections).
+        max_features:     Maximum features to display in differential analysis tables.
+    
+    Raises:
+        IOError: If report file cannot be written.
+    """
     include_sections = include_sections or [
         k for k, v in amplicon_data.figures.items() if v
     ]
@@ -733,7 +637,7 @@ def generate_html_report(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # ── Prepare tables section ────────────────────────────────────────────────
+    # Prepare tables section 
     tables_html = ""
     
     # Top features tables
@@ -754,47 +658,59 @@ def generate_html_report(
     )
     
     # ML summary
-    ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64 = _prepare_ml_summary(
+    ml_metrics, ml_features = _prepare_ml_summary(
         amplicon_data.models,
         amplicon_data.top_contaminated_features,
         amplicon_data.top_pristine_features
     )
-    ml_html = _format_ml_section(ml_metrics, ml_features, shap_plot_base64, beeswarm_plot_base64)
+    ml_html = _format_ml_section(ml_metrics, ml_features)
     
     # Build tables section HTML
     tables_html = f"""
-    <div class="section">
-        <h2>Analysis Summary</h2>
+    <div class="subsection">
+        <h3>Top Features</h3>
+        <h4>Contaminated-Associated Features</h4>
+        {_add_table_functionality(contam_df, 'contam-table')}
         
-        <div class="subsection">
-            <h3>Top Features</h3>
-            <h4>Contaminated-Associated Features</h4>
-            {_add_table_functionality(contam_df, 'contam-table')}
-            
-            <h4>Pristine-Associated Features</h4>
-            {_add_table_functionality(pristine_df, 'pristine-table')}
-        </div>
-        
-        <div class="subsection">
-            <h3>Statistical Summary</h3>
-            {_add_table_functionality(stats_df, 'stats-table')}
-        </div>
-        
-        <div class="subsection">
-            <h3>Machine Learning Results</h3>
-            {ml_html}
-        </div>
+        <h4>Pristine-Associated Features</h4>
+        {_add_table_functionality(pristine_df, 'pristine-table')}
+    </div>
+    
+    <div class="subsection">
+        <h3>Statistical Summary</h3>
+        {_add_table_functionality(stats_df, 'stats-table')}
+    </div>
+    
+    <div class="subsection">
+        <h3>Machine Learning Results</h3>
+        {ml_html}
     </div>
     """
 
-    # ── Prepare figures sections ───────────────────────────────────────────────
+    # Prepare figures section
     id_counter = itertools.count()
     sections, plot_data = _prepare_sections(
         amplicon_data.figures, include_sections, id_counter
     )
     sections_html = "\n".join(_section_html(s) for s in sections)
 
-    # ── CDN tag for Plotly ────────────────────────────────────────────────────
+    # Prepare navigation section
+    nav_items = [
+        ("Analysis Summary", "analysis-summary"),
+        *[(sec['title'], sec['id']) for sec in sections]
+    ]
+    
+    # Generate navigation HTML
+    nav_html = """
+    <div class="toc">
+        <h2>Table of Contents</h2>
+        <ul>
+    """
+    for title, section_id in nav_items:
+        nav_html += f'<li><a href="#{section_id}">{title}</a></li>\n'
+    nav_html += "        </ul>\n    </div>"
+
+    # Prepare CDN tag for Plotly 
     try:
         plotly_ver = get_plotlyjs_version()
     except Exception:
@@ -803,11 +719,12 @@ def generate_html_report(
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
 
-    # ── JSON payload (escape "</" so it can never close the <script>) ────────
+    # JSON payload (escape "</" so it can never close the <script>)
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")  # safety
 
-    # ── Table functionality JavaScript ────────────────────────────────────────
+    # Table functionality JavaScript
+    # TODO: Move this
     table_js = """
     /* ======================= TABLE FUNCTIONALITY ======================= */
     function sortTable(tableId, columnIndex, isNumeric) {
@@ -980,11 +897,12 @@ def generate_html_report(
     }
     """
 
-    # ── build the full HTML ───────────────────────────────────────────────────
+    # Build the full HTML
     html = _HTML_TEMPLATE.format(
         plotly_js_tag=plotly_js_tag,
         generated_ts=ts,
         section_list=", ".join(include_sections),
+        nav_html=nav_html,
         tables_html=tables_html,
         sections_html=sections_html,
         plot_data_json=payload,
@@ -993,6 +911,7 @@ def generate_html_report(
     output_path.write_text(html, encoding="utf‑8")
 
 # ================================= HTML TEMPLATE ================================== #
+
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
@@ -1036,6 +955,57 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .section-button                      {{ background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; 
                                             margin-right: 5px; }}
                          
+    /* ======================= NAVIGATION STYLES ======================= */
+    .toc {{
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }}
+    
+    .toc h2 {{
+        margin-top: 0;
+        color: #2c3e50;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 10px;
+    }}
+    
+    .toc ul {{
+        list-style-type: none;
+        padding-left: 0;
+        column-count: 2;
+        column-gap: 30px;
+    }}
+    
+    .toc li {{
+        margin-bottom: 10px;
+        break-inside: avoid;
+    }}
+    
+    .toc a {{
+        display: block;
+        padding: 8px 15px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        color: #495057;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-weight: 500;
+    }}
+    
+    .toc a:hover {{
+        background-color: #3498db;
+        color: white;
+        transform: translateX(5px);
+    }}
+    
+    @media (max-width: 768px) {{
+        .toc ul {{
+            column-count: 1;
+        }}
+    }}
+    
     /* ======================= TABLE STYLES ======================= */
     table                                {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
     th, td                               {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
@@ -1122,13 +1092,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <p>Generated: {generated_ts}</p>
   <p>Sections: {section_list}</p>
 
+  <!-- Navigation Section -->
+  {nav_html}
+
   <div class="section-controls">
     <button class="section-button" onclick="toggleAllSections(true)">Expand All</button>
     <button class="section-button" onclick="toggleAllSections(false)">Collapse All</button>
   </div>
 
-  <!-- Tables Section -->
-  {tables_html}
+  <!-- Analysis Summary Section -->
+  <div class="section" id="analysis-summary">
+    <h2>Analysis Summary</h2>
+    {tables_html}
+  </div>
 
   <!-- Figures Sections -->
   {sections_html}
@@ -1275,37 +1251,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     }}
 
     /* ---- nested tab management ---- */
-    function showMethod(methodId) {{
-        // Purge all plots in current method
-        const currentMethod = document.querySelector('.method-pane[style*="display: block"]');
-        if (currentMethod) {{
-            currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
-                const plotId = pane.dataset.plotId;
-                if (rendered.has(plotId)) purgePlot(plotId);
-            }});
-        }}
-
-        // Update UI
-        document.querySelectorAll('.method-pane').forEach(pane => {{
-            pane.style.display = 'none';
-        }});
-        document.querySelectorAll('.method-button').forEach(btn => {{
-            btn.classList.remove('active');
-        }});
-        
-        const newMethod = document.getElementById(methodId);
-        if (newMethod) newMethod.style.display = 'block';
-        document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
-        
-        // Show first table
-        const firstTable = newMethod.querySelector('.table-pane');
-        if (firstTable) showTable(firstTable.id);
-    }}
-    
     function showTable(tableId) {{
         // Purge all plots in current table
-        const methodPane = document.getElementById(tableId).closest('.method-pane');
-        const currentTable = methodPane.querySelector('.table-pane[style*="display: block"]');
+        const currentTable = document.querySelector('.table-pane[style*="display: block"]');
         if (currentTable) {{
             currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
                 const plotId = pane.dataset.plotId;
@@ -1314,10 +1262,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }}
 
         // Update UI
-        methodPane.querySelectorAll('.table-pane').forEach(pane => {{
+        document.querySelectorAll('.table-pane').forEach(pane => {{
             pane.style.display = 'none';
         }});
-        methodPane.querySelectorAll('.table-button').forEach(btn => {{
+        document.querySelectorAll('.table-button').forEach(btn => {{
             btn.classList.remove('active');
         }});
         
@@ -1353,9 +1301,37 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         if (newLevel) newLevel.style.display = 'block';
         document.querySelector(`[data-level="${{levelId}}"]`).classList.add('active');
         
-        // Show first colour plot
-        const firstColour = newLevel.querySelector('.tab-pane');
-        if (firstColour) showTab(firstColour.id, firstColour.dataset.plotId);
+        // Show first method
+        const firstMethod = newLevel.querySelector('.method-pane');
+        if (firstMethod) showMethod(firstMethod.id);
+    }}
+    
+    function showMethod(methodId) {{
+        // Purge all plots in current method
+        const levelPane = document.getElementById(methodId).closest('.level-pane');
+        const currentMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
+        if (currentMethod) {{
+            currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                const plotId = pane.dataset.plotId;
+                if (rendered.has(plotId)) purgePlot(plotId);
+            }});
+        }}
+
+        // Update UI
+        levelPane.querySelectorAll('.method-pane').forEach(pane => {{
+            pane.style.display = 'none';
+        }});
+        levelPane.querySelectorAll('.method-button').forEach(btn => {{
+            btn.classList.remove('active');
+        }});
+        
+        const newMethod = document.getElementById(methodId);
+        if (newMethod) newMethod.style.display = 'block';
+        document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
+        
+        // Show first plot
+        const firstPlot = newMethod.querySelector('.tab-pane');
+        if (firstPlot) showTab(firstPlot.id, firstPlot.dataset.plotId);
     }}
     
     function showMetric(metricId, plotId) {{
@@ -1408,9 +1384,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }});
         
         // Initialize nested tabs
-        document.querySelectorAll('.method-pane').forEach(pane => {{
-            const firstTable = pane.querySelector('.table-pane');
-            if (firstTable) showTable(firstTable.id);
+        document.querySelectorAll('.table-pane').forEach(pane => {{
+            const firstLevel = pane.querySelector('.level-pane');
+            if (firstLevel) showLevel(firstLevel.id);
+        }});
+        
+        // Initialize SHAP tabs
+        document.querySelectorAll('.level-pane').forEach(pane => {{
+            const firstMethod = pane.querySelector('.method-pane');
+            if (firstMethod) showMethod(firstMethod.id);
         }});
         
         // Initialize alpha diversity tabs
