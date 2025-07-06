@@ -15,7 +15,7 @@ from biom.table import Table
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.stats.utils import table_to_dataframe
+from workflow_16s.utils.data import table_to_df
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.progress import get_progress_bar
 
@@ -31,7 +31,7 @@ DEFAULT_N: int = 65 # Length of description for progress bar
 
 def safe_delete(file_path: Union[str, Path]) -> None:
     """
-    Safely delete a file if it exists, logging warnings on errors.
+    Safely delete a file if it exists, logging any errors.
     
     Args:
         file_path: Path to the file to be deleted.
@@ -39,7 +39,7 @@ def safe_delete(file_path: Union[str, Path]) -> None:
     try:
         Path(file_path).unlink(missing_ok=True)
     except Exception as e:
-        logger.warning(f"Error deleting {file_path}: {e}")
+        logger.error(f"Error deleting {file_path}: {e}")
 
 
 def load_datasets_list(path: Union[str, Path]) -> List[str]:
@@ -59,7 +59,7 @@ def load_datasets_list(path: Union[str, Path]) -> List[str]:
         return [line.strip() for line in f if line.strip()]
       
 
-  def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
+def load_datasets_info(tsv_path: Union[str, Path]) -> pd.DataFrame:
     """
     Load dataset metadata from TSV file.
     
@@ -72,6 +72,44 @@ def load_datasets_list(path: Union[str, Path]) -> List[str]:
     tsv_path = Path(tsv_path)
     df = pd.read_csv(tsv_path, sep="\t", dtype={'ena_project_accession': str})
     return df.loc[:, ~df.columns.str.startswith('Unnamed')]
+
+
+def dataset_first_match(dataset: str, dataset_info: pd.DataFrame) -> pd.Series:
+    """
+    Find the best matching metadata record for a dataset.
+    
+    Args:
+        dataset:      Dataset identifier to search for.
+        dataset_info: DataFrame containing dataset metadata.
+    
+    Returns:
+        First matching row as a pandas Series.
+    
+    Raises:
+        ValueError: If no matches found for the dataset.
+    """
+    mask_ena_type = dataset_info['dataset_type'].str.lower().eq('ena')
+    mask_manual_type = dataset_info['dataset_type'].str.lower().eq('manual')
+    
+    mask_ena = (
+        dataset_info['ena_project_accession'].str.contains(dataset, case=False, regex=False) |
+        dataset_info['dataset_id'].str.contains(dataset, case=False, regex=False)
+    ) & mask_ena_type
+
+    mask_manual = (
+        dataset_info['dataset_id'].str.contains(dataset, case=False, regex=False)
+    ) & mask_manual_type
+
+    combined_mask = mask_ena | mask_manual
+    matching_rows = dataset_info[combined_mask]
+
+    if matching_rows.empty:
+        raise ValueError(f"No metadata matches found for dataset: {dataset}")
+
+    return matching_rows.sort_values(
+        by='dataset_type', 
+        key=lambda x: x.str.lower().map({'ena': 0, 'manual': 1})
+    ).iloc[0]
 
 
 # TODO: Delete if unused
@@ -112,6 +150,66 @@ def processed_dataset_files(
     }
 
 
+# TODO: Delete if unused
+def check_qiime_output(
+    test: Dict[str, Path]
+) -> Optional[Dict[str, Path]]:
+    """
+    Check for required output files in QIIME directories.
+    
+    Args:
+        test: Dictionary containing base paths for QIIME output directories.
+    
+    Returns:
+        Dictionary of found file paths keyed by file type or None if any 
+        required file is missing.
+    """
+    targets: List[Tuple[str, Optional[str]]] = [
+        ("feature-table.biom", "table"),
+        ("feature-table.biom", "table_6"),
+        ("dna-sequences.fasta", "rep-seqs"),
+        ("taxonomy.tsv", "taxonomy"),
+        ("sample-metadata.tsv", None)
+    ]
+    qiime_base: Optional[Path] = test.get('qiime')
+    metadata_base: Optional[Path] = test.get('metadata')
+    found: Dict[str, Path] = {}
+    
+    for fname, subdir in targets:
+        if subdir:
+            base = qiime_base
+            pattern = f"{subdir}/{fname}"
+        else:
+            base = metadata_base
+            pattern = fname
+            
+        if not base:
+            continue
+            
+        for p in Path(base).rglob(pattern):
+            if p.is_file():
+                key = f"{subdir}/{fname}" if subdir else fname
+                found[key] = p.resolve()
+                break
+                
+    required_keys: List[str] = [f"{subdir}/{fname}" if subdir else fname 
+                    for fname, subdir in targets]
+    return found if all(k in found for k in required_keys) else None
+
+
+def missing_files(file_list: List[Union[str, Path]]) -> List[Path]:
+    """
+    Identify missing files from a list of expected paths.
+    
+    Args:
+        file_list: List of file paths to check for existence.
+    
+    Returns:
+        List of Path objects for files that don't exist.
+    """
+    return [Path(file) for file in file_list if not Path(file).exists()]
+
+
 def write_metadata_tsv(
     df: pd.DataFrame, 
     tsv_path: Union[str, Path],
@@ -123,7 +221,7 @@ def write_metadata_tsv(
     Args:
         df:       Metadata DataFrame.
         tsv_path: Output file path.
-        verbose:  Whether to log success message.
+        verbose:  Verbosity flag.
     """
     df = df.copy()
     if '#SampleID' not in df.columns and 'run_accession' in df.columns:
@@ -145,7 +243,7 @@ def write_manifest_tsv(
     Args:
         seq_paths: Dictionary mapping sample IDs to file paths.
         tsv_path:  Output file path.
-        verbose:   Whether to log success message.
+        verbose:   Verbosity flag.
     """
     rows: List[Dict[str, str]] = []
     for sample_id, paths in seq_paths.items():
@@ -188,7 +286,8 @@ def import_metadata_tsv(
     df.columns = df.columns.str.lower()
 
     sample_id_col = next(
-        (col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns),
+        (col for col in ['run_accession', '#sampleid', 'sample-id'] 
+         if col in df.columns),
         None
     )
     df['SAMPLE ID'] = (
@@ -198,7 +297,8 @@ def import_metadata_tsv(
     )
 
     dataset_id_col = next(
-        (col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns),
+        (col for col in ['project_accession', 'dataset_id', 'dataset_name'] 
+         if col in df.columns),
         None
     )
     df['DATASET ID'] = (
@@ -228,7 +328,7 @@ def import_merged_metadata_tsv(
     Args:
         meta_paths:     List of paths to metadata files.
         column_renames: List of (old_name, new_name) tuples for column renaming.
-        verbose:        Enable detailed logging during loading.
+        verbose:        Verbosity flag.
     
     Returns:
         Concatenated metadata DataFrame.
@@ -250,7 +350,7 @@ def import_merged_metadata_tsv(
         with get_progress_bar() as progress:
             task_desc = "Loading metadata files..."
             task = progress.add_task(
-                f"[white]{task_desc<:{DEFAULT_N}}", 
+                f"[white]{task_desc:<{DEFAULT_N}}", 
                 total=len(meta_paths)
             )
             for path in meta_paths:
@@ -288,6 +388,35 @@ def manual_meta(
     return pd.read_csv(path, sep="\t") if path.exists() else pd.DataFrame()
 
 
+def export_h5py(
+    table: Table,
+    output_path: Union[str, Path]
+) -> None:
+    """
+    Export a BIOM Table to HDF5 format.
+    
+    Args:
+        table:       BIOM Table object containing feature abundance data.
+        output_path: File path where the HDF5 file should be saved.
+        
+    Raises:
+        OSError: If there are issues creating the output directory.
+        IOError: If there are problems writing to the specified path.
+        
+    Notes:
+        - Ensures the output directory exists.
+        - The output file will be overwritten if it already exists.
+        - HDF5 format provides efficient compression and random access capabilities.
+        - The generated_by metadata will be set to "Table" in the output file.
+    """
+    # Create parent directories if they don't exist
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write table to HDF5 format
+    with h5py.File(output_path, 'w') as f:
+        table.to_hdf5(f, generated_by="Table")
+
+
 def import_table_biom(
     biom_path: Union[str, Path], 
     as_type: str = 'table'
@@ -303,7 +432,7 @@ def import_table_biom(
         BIOM Table object or pandas DataFrame.
     
     Raises:
-        ValueError: For invalid as_type values.
+        ValueError: For invalid 'as_type' values.
     """
     try:
         with h5py.File(biom_path) as f:
@@ -314,7 +443,7 @@ def import_table_biom(
     if as_type == 'table':
         return table
     elif as_type == 'dataframe':
-        return table_to_dataframe(table)
+        return table_to_df(table)
     else:
         raise ValueError(
             f"Invalid output type: {as_type}. Use 'table' or 'dataframe'"
@@ -332,7 +461,7 @@ def import_merged_table_biom(
     Args:
         biom_paths: List of paths to .biom files.
         as_type:    Output format ('table' or 'dataframe').
-        verbose:    Enable detailed logging during loading.
+        verbose:    Verbosity flag.
     
     Returns:
         Merged BIOM Table or DataFrame.
@@ -349,7 +478,7 @@ def import_merged_table_biom(
                 tables.append(table)
                 logger.info(f"Loaded {Path(path).name} with {table.shape[1]} samples")
             except Exception as e:
-                logger.error(f"BIOM load failed for {path}: {str(e)}")
+                logger.error(f"BIOM load failed for {path}: {e}")
     else:
         with get_progress_bar() as progress:
             task_desc = "Loading feature tables..."
@@ -361,15 +490,15 @@ def import_merged_table_biom(
                 try:
                     tables.append(import_table_biom(path, 'table'))
                 except Exception as e:
-                    logger.error(f"BIOM load failed for {path}: {str(e)}")
+                    logger.error(f"BIOM load failed for {path}: {e}")
                 finally:
                     progress.update(task, advance=1)
 
     if not tables:
         raise ValueError("No valid BIOM tables loaded")
 
-    merged_table = reduce(lambda t1, t2: t1.merge(t2), tables)
-    return merged_table if as_type == 'table' else table_to_dataframe(merged_table)
+    merged_table = (lambda t1, t2: t1.merge(t2), tables)
+    return merged_table if as_type == 'table' else table_to_df(merged_table)
 
 
 # TODO: Delete if unused
