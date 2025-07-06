@@ -29,6 +29,20 @@ DEFAULT_N: int = 65 # Length of description for progress bar
 
 # ==================================== FUNCTIONS ===================================== #  
 
+def import_js_as_str(path_js: Union[str, Path]) -> str:
+    """
+    Import a JavaScript file as a string.
+
+    Args:
+        path_js:
+
+    Returns:
+    """
+    path_js = Path(path_js)
+    with open(path_js, 'r', encoding='utf-8') as file:
+        return file.read()
+
+
 def safe_delete(file_path: Union[str, Path]) -> None:
     """
     Safely delete a file if it exists, logging any errors.
