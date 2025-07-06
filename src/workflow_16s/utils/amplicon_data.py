@@ -17,41 +17,6 @@ from biom.table import Table
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.biom import (
-    collapse_taxa,
-    convert_to_biom,
-    export_h5py,
-    presence_absence,
-)
-from workflow_16s.utils.progress import get_progress_bar
-from workflow_16s.utils.file_utils import (
-    filter_and_reorder_biom_and_metadata as update_tables,
-)
-from workflow_16s.utils.io import (
-    import_merged_metadata_tsv, import_merged_table_biom
-)
-from workflow_16s.stats.utils import (
-    clr_transform_table,
-    filter_table,
-    merge_table_with_metadata,
-    normalize_table,
-    table_to_dataframe,
-)
-from workflow_16s.stats.tests import (
-    alpha_diversity,
-    analyze_alpha_diversity,
-    analyze_alpha_correlations,
-    fisher_exact_bonferroni,
-    kruskal_bonferroni,
-    mwu_bonferroni,
-    ttest,
-)
-from workflow_16s.stats.beta_diversity import (
-    pcoa as calculate_pcoa,
-    pca as calculate_pca,
-    tsne as calculate_tsne,
-    umap as calculate_umap,
-)
 from workflow_16s.figures.merged import (
     mds as plot_mds,
     pca as plot_pca,
@@ -62,12 +27,29 @@ from workflow_16s.figures.merged import (
     plot_alpha_correlations
 )
 from workflow_16s.function.faprotax import (
-    faprotax_functions_for_taxon,
-    get_faprotax_parsed,
+    faprotax_functions_for_taxon, get_faprotax_parsed
 )
 from workflow_16s.models.feature_selection import (
     catboost_feature_selection,
 )
+from workflow_16s.stats.beta_diversity import (
+    pcoa as calculate_pcoa,
+    pca as calculate_pca,
+    tsne as calculate_tsne,
+    umap as calculate_umap,
+)
+from workflow_16s.stats.tests import (
+    alpha_diversity, analyze_alpha_diversity, analyze_alpha_correlations,
+    fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
+)
+from workflow_16s.utils.data import (
+    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
+    update_table_and_meta, to_biom
+)
+from workflow_16s.utils.io import (
+    export_h5py, import_merged_metadata_tsv, import_merged_table_biom
+)
+from workflow_16s.utils.progress import get_progress_bar
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -276,7 +258,7 @@ class StatisticalAnalyzer:
             Dictionary of test results keyed by test identifier.
         """
         results: Dict[str, Any] = {}
-        table, metadata = update_tables(table, metadata)
+        table, metadata = update_table_and_meta(table, metadata)
 
         for test_name in enabled_tests:
             if test_name not in self.TEST_CONFIG:
@@ -410,7 +392,7 @@ class Ordination:
         if not tests_to_run:
             return {}, {}
 
-        table, metadata = update_tables(table, metadata)
+        table, metadata = update_table_and_meta(table, metadata)
         return self._run_without_progress(
             table, metadata, symbol_col, transformation,
             tests_to_run, trans_cfg, kwargs,
@@ -808,7 +790,7 @@ class _DataLoader(_ProcessingMixin):
     def _filter_and_align(self) -> None:
         """Filters and aligns feature table with metadata."""
         orig_n = self.table.shape[1]
-        self.table, self.meta = update_tables(self.table, self.meta, "#sampleid")
+        self.table, self.meta = update_table_and_meta(self.table, self.meta, "#sampleid")
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
             f"{'Loaded metadata:':<{LABEL_W}}"             
@@ -881,15 +863,15 @@ class _TableProcessor(_ProcessingMixin):
 
         # Pipeline processing to avoid intermediate copies
         if feat_cfg["filter"]:
-            table = filter_table(table)
+            table = filter(table)
             self.tables.setdefault("filtered", {})[self.mode] = table
 
         if feat_cfg["normalize"]:
-            table = normalize_table(table, axis=1)
+            table = normalize(table, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = table
 
         if feat_cfg["clr_transform"]:
-            table = clr_transform_table(table)
+            table = clr(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
     def _collapse_taxa(self) -> None:
@@ -1192,7 +1174,7 @@ class _AnalysisManager(_ProcessingMixin):
                     
                     try:
                         # Convert to DataFrame and compute alpha diversity
-                        df = table_to_dataframe(levels[level])
+                        df = table_to_df(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
@@ -1320,7 +1302,7 @@ class _AnalysisManager(_ProcessingMixin):
 
                 for level, table in levels.items():
                     # Align table/metadata once per level
-                    table_aligned, meta_aligned = update_tables(table, self.meta)
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
                     
                     for test_name in enabled_for_table_type:
                         if test_name not in san.TEST_CONFIG:
@@ -1541,7 +1523,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 total=1
                             )
         
-                            X = table_to_dataframe(table)
+                            X = table_to_df(table)
                             X.index = X.index.str.lower()
                             y = self.meta.set_index("#sampleid")[[group_col]]
                             y.index = y.index.astype(str).str.lower()
