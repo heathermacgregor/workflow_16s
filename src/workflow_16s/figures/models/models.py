@@ -318,6 +318,7 @@ def shap_dependency_plot_plotly(
             color=y,
             colorscale='RdBu',
             colorbar=dict(title='SHAP Value'),
+        )
         name=feature,
         hovertemplate="<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}<extra></extra>"
     ))
