@@ -23,12 +23,16 @@ os.environ.setdefault('NUMBA_NUM_THREADS', '1')
 os.environ.setdefault('OMP_NUM_THREADS', '1')
 from umap import UMAP
 
-# ================================ CONFIGURATION ====================================== #
+# ================================== LOCAL IMPORTS =================================== #
+
+from workflow_16s.utils.data import table_to_dataframe
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
-warnings.filterwarnings("ignore")  # Suppress warnings
+warnings.filterwarnings("ignore") 
 
-# ================================== CONSTANTS ======================================= #
+# ================================= DEFAULT VALUES =================================== #
 
 DEFAULT_METRIC = 'braycurtis'
 DEFAULT_N_PCA = 20
@@ -45,27 +49,29 @@ def validate_min_samples(df: pd.DataFrame, min_samples: int = 2) -> None:
     Validate that the input contains sufficient samples for analysis.
     
     Args:
-        df: Input data as pandas DataFrame with samples as rows
-        min_samples: Minimum required number of samples
+        df:          Input data as pandas DataFrame with samples as rows.
+        min_samples: Minimum required number of samples.
         
     Raises:
-        ValueError: If number of samples is less than required minimum
+        ValueError: If number of samples is less than required minimum.
     """
     if len(df) < min_samples:
         raise ValueError(f"At least {min_samples} samples required")
+        
 
 def validate_component_count(n_components: int) -> None:
     """
     Validate that the requested number of components is valid.
     
     Args:
-        n_components: Requested number of components
+        n_components: Requested number of components.
         
     Raises:
-        ValueError: If n_components is less than 1
+        ValueError: If n_components is less than 1.
     """
     if n_components < 1:
         raise ValueError("n_components must be ≥ 1")
+        
 
 def safe_component_limit(df: pd.DataFrame, requested: int) -> int:
     """
@@ -76,14 +82,15 @@ def safe_component_limit(df: pd.DataFrame, requested: int) -> int:
     - For distance-based methods: n_samples - 1
     
     Args:
-        df: Input data as pandas DataFrame
-        requested: Originally requested number of components
+        df:        Input data as pandas DataFrame.
+        requested: Originally requested number of components.
         
     Returns:
-        Safe number of components to compute (min(requested, max_possible))
+        Safe number of components to compute (min(requested, max_possible)).
     """
     max_components = min(len(df) - 1, df.shape[1])
     return min(requested, max_components)
+
 
 def create_result_dataframe(
     data: np.ndarray, 
@@ -95,16 +102,17 @@ def create_result_dataframe(
     Create standardized result DataFrame with named components.
     
     Args:
-        data: Embedding array of shape (n_samples, n_components)
-        index: Sample identifiers for DataFrame index
-        prefix: Component name prefix (e.g., 'PC', 'UMAP')
-        n_components: Number of components in the result
+        data:         Embedding array of shape (n_samples, n_components).
+        index:        Sample identifiers for DataFrame index.
+        prefix:       Component name prefix (e.g., 'PC', 'UMAP').
+        n_components: Number of components in the result.
         
     Returns:
-        DataFrame with named components (prefix + number) and sample index
+        DataFrame with named components (prefix + number) and sample index.
     """
     columns = [f"{prefix}{i+1}" for i in range(n_components)]
     return pd.DataFrame(data, index=index, columns=columns)
+
 
 def handle_duplicate_ids(ids: list) -> list:
     """
@@ -114,10 +122,10 @@ def handle_duplicate_ids(ids: list) -> list:
         Input: ['A', 'B', 'A'] → Output: ['A_1', 'B', 'A_2']
     
     Args:
-        ids: List of original sample identifiers
+        ids: List of original sample identifiers.
         
     Returns:
-        List of unique identifiers with duplicates disambiguated
+        List of unique identifiers with duplicates disambiguated.
     """
     seen = {}
     new_ids = []
@@ -129,32 +137,6 @@ def handle_duplicate_ids(ids: list) -> list:
 
 # =============================== CORE FUNCTIONALITY ================================== #
 
-def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
-    """
-    Convert various table formats to standardized DataFrame (samples × features).
-    
-    Supports:
-    - BIOM Table (transposed to samples × features)
-    - Dictionary of {sample_id: {feature: count}} mappings
-    - Existing pandas DataFrame (returned as-is)
-    
-    Args:
-        table: Input data in supported format
-        
-    Returns:
-        DataFrame with samples as rows and features as columns
-        
-    Raises:
-        ValueError: For unsupported input types or empty tables
-    """
-    if isinstance(table, Table):
-        return table.to_dataframe(dense=True).T
-    if isinstance(table, dict):
-        return pd.DataFrame.from_dict(table, orient='index')
-    if isinstance(table, pd.DataFrame):
-        return table
-    raise ValueError("Unsupported input type: must be Table, dict or DataFrame")
-
 def distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
     metric: str = DEFAULT_METRIC
@@ -163,19 +145,20 @@ def distance_matrix(
     Compute pairwise distance matrix from feature abundance data.
     
     Args:
-        table: Input data in supported format (BIOM, dict, or DataFrame)
+        table:  Input data in supported format (BIOM, dict, or DataFrame).
         metric: Distance metric (default: 'braycurtis'). Valid options include:
                 'euclidean', 'jaccard', 'braycurtis', 'cityblock', etc.
                 
     Returns:
-        Symmetric distance matrix of shape (n_samples, n_samples)
+        Symmetric distance matrix of shape (n_samples, n_samples).
         
     Raises:
-        ValueError: If fewer than 2 samples are provided
+        ValueError: If fewer than 2 samples are provided.
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
     return pairwise_distances(df.values, metric=metric)
+    
 
 def pcoa(
     table: Union[Dict, Table, pd.DataFrame], 
@@ -191,10 +174,10 @@ def pcoa(
     3. Returns principal coordinates and variance explained
     
     Args:
-        table: Input data in supported format
-        metric: Distance metric (default: 'braycurtis')
+        table:        Input data in supported format.
+        metric:       Distance metric (default: 'braycurtis').
         n_dimensions: Number of principal coordinates to return. 
-                     If None, computes all possible components.
+                      If None, computes all possible components.
                      
     Returns:
         skbio PCoA result object containing:
@@ -203,7 +186,7 @@ def pcoa(
         - eigenvalues: Component eigenvalues
         
     Raises:
-        ValueError: For insufficient samples or invalid component count
+        ValueError: For insufficient samples or invalid component count.
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
@@ -225,6 +208,7 @@ def pcoa(
     # Standardize component names
     pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
     return pcoa_result
+    
 
 def pca(
     table: Union[Dict, Table, pd.DataFrame],
@@ -239,8 +223,8 @@ def pca(
     3. Returns component scores and loadings
     
     Args:
-        table: Input data in supported format
-        n_components: Number of principal components to compute
+        table:        Input data in supported format.
+        n_components: Number of principal components to compute.
         
     Returns:
         Dictionary with:
@@ -250,7 +234,7 @@ def pca(
         - 'loadings': Feature loadings (n_features × n_components)
         
     Raises:
-        ValueError: For insufficient samples or invalid component count
+        ValueError: For insufficient samples or invalid component count.
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
@@ -271,6 +255,7 @@ def pca(
         'loadings': pca_model.components_.T * np.sqrt(pca_model.explained_variance_)
     }
 
+
 def tsne(
     table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_TSNE,
@@ -285,10 +270,10 @@ def tsne(
     2. Optimizes low-dimensional embedding to preserve local structures
     
     Args:
-        table: Input data in supported format
-        n_components: Dimension of embedding space (typically 2-3)
-        random_state: Seed for reproducible results
-        n_jobs: CPU cores to use (-1 for all available)
+        table:        Input data in supported format.
+        n_components: Dimension of embedding space (typically 2-3).
+        random_state: Seed for reproducible results.
+        n_jobs:       CPU cores to use (-1 for all available).
         
     Returns:
         DataFrame of t-SNE coordinates (n_samples × n_components)
@@ -315,6 +300,7 @@ def tsne(
     embeddings = tsne_model.fit_transform(df.values)
     return create_result_dataframe(embeddings, df.index, "TSNE", n_components)
 
+
 def umap(
     table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_UMAP,
@@ -329,17 +315,17 @@ def umap(
     2. Optimizes low-dimensional embedding
     
     Args:
-        table: Input data in supported format
-        n_components: Dimension of embedding space (typically 2-3)
-        random_state: Seed for reproducible results
-        n_jobs: CPU cores to use
+        table:        Input data in supported format.
+        n_components: Dimension of embedding space (typically 2-3).
+        random_state: Seed for reproducible results.
+        n_jobs:       CPU cores to use.
         
     Returns:
-        DataFrame of UMAP coordinates (n_samples × n_components)
+        DataFrame of UMAP coordinates (n_samples × n_components).
         
     Raises:
-        ValueError: For insufficient samples or invalid components
-        RuntimeError: For threading issues (handled internally)
+        ValueError: For insufficient samples or invalid components.
+        RuntimeError: For threading issues (handled internally).
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
