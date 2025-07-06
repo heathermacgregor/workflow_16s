@@ -36,8 +36,9 @@ from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
+from workflow_16s.utils.data import merge_table_with_meta, table_to_df
 from workflow_16s.stats.utils import (
-    create_progress, table_to_dataframe, merge_table_with_metadata
+    create_progress
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -84,8 +85,8 @@ def t_test(
     Returns:
         results:    Results sorted by p-value with test statistics, excluding features with p=0 or NaN.
     """
-    table = table_to_dataframe(table)
-    table_with_col = merge_table_with_metadata(table, metadata, group_col)
+    table = table_to_df(table)
+    table_with_col = merge_table_with_meta(table, metadata, group_col)
     features = list(table_with_col.columns.drop(group_col))
 
     task_desc = f"[white]T-Test[/] ({level or 'all features'})".ljust(DEFAULT_PROGRESS_TEXT_N)
