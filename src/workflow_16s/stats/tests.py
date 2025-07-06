@@ -11,12 +11,7 @@ from biom import Table
 from scipy import stats
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import (
-    fisher_exact, 
-    f_oneway, 
-    kruskal, 
-    mannwhitneyu, 
-    spearmanr, 
-    ttest_ind
+    fisher_exact, f_oneway, kruskal, mannwhitneyu, spearmanr, ttest_ind
 )
 from skbio.diversity import alpha
 from skbio.stats.distance import DistanceMatrix
@@ -45,14 +40,8 @@ DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 DEFAULT_ALPHA_METRICS = [
-    'shannon', 
-    'observed_features', 
-    'simpson',
-    'pielou_evenness',
-    'chao1',
-    'ace',
-    'gini_index',
-    'goods_coverage'
+    'ace', 'chao1', 'gini_index', 'goods_coverage', 'observed_features', 
+    'pielou_evenness', 'shannon', 'simpson' 
 ]
 PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
