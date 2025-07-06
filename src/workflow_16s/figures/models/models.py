@@ -16,7 +16,6 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LogNorm
 
 import seaborn as sns
-sns.set_style('whitegrid')
 
 import plotly.express as px
 import plotly.io as pio
@@ -25,37 +24,23 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import colorcet as cc
 
+# ================================== LOCAL IMPORTS =================================== #
+
+from workflow_16s.figures.figures import (
+    plotly_show_and_save,
+    largecolorset,
+    plot_legend,
+    attach_legend_to_figure
+)
+
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger('workflow_16s')
+sns.set_style('whitegrid')  # Set seaborn style globally
+warnings.filterwarnings("ignore") # Suppress warnings
+
 # ================================= GLOBAL VARIABLES ================================= #
 
-largecolorset = list(
-    cc.glasbey + cc.glasbey_light + cc.glasbey_warm + cc.glasbey_cool + cc.glasbey_dark
-)
-
-# Define the plot template
-pio.templates["heather"] = go.layout.Template(
-    layout={
-        'title': {
-            'font': {
-                'family': 'HelveticaNeue-CondensedBold, Helvetica, Sans-serif', 
-                'size': 30, 
-                'color': '#000'
-            }
-        }, 
-        'font': {
-            'family': 'Helvetica Neue, Helvetica, Sans-serif', 
-            'size': 16, 
-            'color': '#000'
-        }, 
-        'paper_bgcolor': 'rgba(0, 0, 0, 0)', 
-        'plot_bgcolor': '#fff', 
-        'colorway': largecolorset, 
-        'xaxis': {'showgrid': False}, 
-        'yaxis': {'showgrid': False}
-    }
-)
-
-#from workflow_16s.figures.legends import marker_color_map, plot_legend
-logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -145,3 +130,272 @@ def plot_feature_importance(
     fea_imp['fn']=['fn:'+str(i) for i in fea_imp.index]
     fea_imp.plot(kind='barh', x='col', y='imp', figsize=(20, 10))
   
+
+
+def shap_summary_bar_plotly(shap_values, feature_names, max_display=20):
+    """
+    Convert SHAP summary bar plot to a Plotly figure.
+    
+    Parameters:
+    shap_values (np.array): SHAP values array (n_samples, n_features).
+    feature_names (list): List of feature names.
+    max_display (int): Maximum number of features to display.
+    
+    Returns:
+    plotly.graph_objects.Figure: Horizontal bar plot of mean absolute SHAP values.
+    """
+    # Compute mean absolute SHAP values for each feature
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    
+    # Select top features
+    top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
+    top_features = [feature_names[i] for i in top_indices]
+    top_values = mean_abs_shap[top_indices]
+    
+    # Create horizontal bar plot
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=top_features,
+        x=top_values,
+        orientation='h',
+        marker_color='#1e88e5'
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title='SHAP Summary Bar Plot',
+        xaxis_title='Mean |SHAP Value|',
+        yaxis_title='Features',
+        showlegend=False,
+        height=600,
+        margin=dict(l=150)
+    )
+    return fig
+    
+
+def shap_beeswarm_plotly(shap_values, feature_values, feature_names, max_display=20):
+    """
+    Convert SHAP beeswarm plot to a Plotly figure.
+    
+    Parameters:
+    shap_values (np.array): SHAP values array (n_samples, n_features).
+    feature_values (np.array): Feature values array (n_samples, n_features).
+    feature_names (list): List of feature names.
+    max_display (int): Maximum number of features to display.
+    
+    Returns:
+    plotly.graph_objects.Figure: Beeswarm plot of SHAP values.
+    """
+    # Compute mean absolute SHAP for feature ordering
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
+    top_features = [feature_names[i] for i in top_indices]
+    
+    # Prepare figure
+    fig = go.Figure()
+    y_offset = 0.3  # Vertical spread for jitter
+    
+    # Add scatter traces for each feature
+    np.random.seed(42)  # Consistent jitter
+    for idx, feature_idx in enumerate(top_indices):
+        shap_vals = shap_values[:, feature_idx]
+        feat_vals = feature_values[:, feature_idx]
+        
+        # Generate jittered y-coordinates
+        jitter = np.random.uniform(-y_offset, y_offset, size=len(shap_vals))
+        y_pos = idx + jitter
+        
+        # Normalize feature values for coloring
+        vmin, vmax = np.min(feat_vals), np.max(feat_vals)
+        normalized_vals = (feat_vals - vmin) / (vmax - vmin + 1e-8)
+        
+        # Custom red-blue color scale
+        colors = [
+            f'rgb({int(30 + 225*(1 - nv) if nv < 0.5 else 255}, '
+            f'{int(136 + 119*(1 - 2*abs(nv - 0.5)) if nv < 0.5 else 67 + 188*(1 - nv))}, '
+            f'{int(229 - 229*nv) if nv < 0.5 else 54 + 201*(1 - nv)})'
+            for nv in normalized_vals
+        ]
+        
+        # Add trace
+        fig.add_trace(go.Scatter(
+            x=shap_vals,
+            y=y_pos,
+            mode='markers',
+            marker=dict(size=5, color=colors),
+            name=feature_names[feature_idx],
+            hoverinfo='text',
+            text=[
+                f"<b>Feature</b>: {feature_names[feature_idx]}<br>"
+                f"<b>SHAP</b>: {shap_val:.4f}<br>"
+                f"<b>Value</b>: {fv:.4f}"
+                for shap_val, fv in zip(shap_vals, feat_vals)
+            ],
+            showlegend=False
+        ))
+    
+    # Add zero line
+    fig.add_shape(
+        type='line',
+        x0=0, y0=-0.5, x1=0, y1=len(top_features) - 0.5,
+        line=dict(color='gray', width=1, dash='dash')
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title='SHAP Beeswarm Plot',
+        xaxis_title='SHAP Value',
+        yaxis=dict(
+            tickvals=list(range(len(top_features))),
+            ticktext=top_features,
+            title='Features'
+        ),
+        height=600,
+        hovermode='closest',
+        margin=dict(l=150),
+        plot_bgcolor='white'
+    )
+    fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
+    return fig
+    
+
+def shap_dependency_plot_plotly(shap_values, feature_values, feature_names, feature, max_points=1000):
+    """
+    Create a SHAP dependency plot for a single feature.
+    
+    Parameters:
+    shap_values (np.array): SHAP values array
+    feature_values (np.array): Feature values array
+    feature_names (list): List of feature names
+    feature (str): Feature to plot
+    max_points (int): Maximum points to show (downsample if exceeded)
+    
+    Returns:
+    plotly.graph_objects.Figure: Dependency plot figure
+    """
+    # Find feature index
+    if feature not in feature_names:
+        raise ValueError(f"Feature '{feature}' not found in feature_names")
+    idx = feature_names.index(feature)
+    
+    # Get values
+    x = feature_values[:, idx]
+    y = shap_values[:, idx]
+    
+    # Downsample if too many points
+    if len(x) > max_points:
+        indices = np.random.choice(len(x), max_points, replace=False)
+        x = x[indices]
+        y = y[indices]
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add scatter plot
+    fig.add_trace(go.Scatter(
+        x=x, 
+        y=y, 
+        mode='markers',
+        marker=dict(
+            size=6,
+            opacity=0.5,
+            color=y,
+            colorscale='RdBu',
+            colorbar=dict(title='SHAP Value'),
+        name=feature,
+        hovertemplate="<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}<extra></extra>"
+    ))
+    
+    # Add trend line using LOWESS smoothing
+    try:
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+        smoothed = lowess(y, x, frac=0.3, it=2)
+        fig.add_trace(go.Scatter(
+            x=smoothed[:, 0],
+            y=smoothed[:, 1],
+            mode='lines',
+            line=dict(color='black', width=3),
+            name='Trend'
+        ))
+    except ImportError:
+        # Fallback to rolling average if statsmodels not available
+        df = pd.DataFrame({'x': x, 'y': y}).sort_values('x')
+        df['rolling'] = df['y'].rolling(50, min_periods=1).mean()
+        fig.add_trace(go.Scatter(
+            x=df['x'],
+            y=df['rolling'],
+            mode='lines',
+            line=dict(color='black', width=3),
+            name='Trend'
+        ))
+    
+    # Update layout
+    fig.update_layout(
+        title=f'SHAP Dependency Plot: {feature}',
+        xaxis_title=f'Feature Value: {feature}',
+        yaxis_title='SHAP Value',
+        showlegend=False,
+        height=500,
+        template='plotly_white'
+    )
+    
+    return fig
+
+
+def create_shap_plots(
+    shap_values: np.array, 
+    feature_values: np.array, 
+    feature_names: list, 
+    n_features: int = 20, 
+    output_dir: Union[str, Path] = None,
+    verbose: bool = False
+):
+    """
+    Generate both SHAP bar plot, beeswarm plot, and dependency plots as Plotly figures.
+    
+    Args:
+        shap_values:    SHAP values array.
+        feature_values: Feature values array.
+        feature_names:  List of feature names.
+        n_features:     Maximum features to display.
+    
+    Returns:
+        tuple: (bar_plot_fig, beeswarm_plot_fig)
+    """
+    bar_fig = shap_summary_bar_plotly(
+        shap_values, feature_names, n_features
+    )
+    plotly_show_and_save(
+        bar_fig, show, 
+        output_dir / f"shap.summary.bar.{n_features}", 
+        ['png', 'html'], verbose
+    )
+    beeswarm_fig = shap_beeswarm_plotly(
+        shap_values, feature_values, feature_names, n_features
+    )
+    plotly_show_and_save(
+        beeswarm_fig, show, 
+        output_dir / f"shap.summary.beeswarm.{n_features}",
+        ['png', 'html'], verbose
+    )
+    # Create dependency plots for top features
+    dependency_figs = []
+    if dependency_top_features > 0:
+        # Get top n features from bar plot data
+        top_features = bar_fig.data[0].y[:n_features]
+        
+        for feature in top_features:
+            try:
+                dep_fig = shap_dependency_plot_plotly(
+                    shap_values, feature_values, feature_names, feature
+                )
+                plotly_show_and_save(
+                    dep_fig, show, output_dir / f"shap.dependency.{feature}", 
+                    ['png', 'html'], verbose
+                )
+                dependency_figs.append(dep_fig)
+            except Exception as e:
+                print(
+                    f"Error creating dependency plot for {feature}: {str(e)}"
+                )
+    return bar_fig, beeswarm_fig, dependency_figs
