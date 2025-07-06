@@ -47,6 +47,14 @@ TAXONOMIC_LEVELS = {
     "species": 6
 }
 
+levels = {
+    'phylum': 1, 
+    'class': 2, 
+    'order': 3, 
+    'family': 4, 
+    'genus': 5
+}
+
 FEATURE_PATTERNS = {
     "taxonomic": re.compile(
         r'^d__[\w]+(;p__[\w]+)?(;c__[\w]+)?(;o__[\w]+)?'
