@@ -25,7 +25,7 @@ from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.data import table_to_dataframe
+from workflow_16s.utils.data import table_to_df
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
