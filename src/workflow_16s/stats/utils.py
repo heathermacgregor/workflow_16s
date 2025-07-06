@@ -3,7 +3,7 @@
 # Standard Library Imports
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import numpy as np
@@ -18,25 +18,73 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
-DEFAULT_MIN_REL_ABUNDANCE = 1
-DEFAULT_MIN_SAMPLES = 10
-DEFAULT_MIN_COUNTS = 1000
-DEFAULT_PSEUDOCOUNT = 1e-5
+DEFAULT_MIN_REL_ABUNDANCE: float = 1
+DEFAULT_MIN_SAMPLES: int = 10
+DEFAULT_MIN_COUNTS: int = 1000
+DEFAULT_PSEUDOCOUNT: float = 1e-5
 
-# ================================ CORE FUNCTIONALITY ================================ #
+# ================================ TABLE CONVERSION ================================== #
 
-def table_to_dataframe(table: Union[Dict, BiomTable, pd.DataFrame]) -> pd.DataFrame:
+def table_to_dataframe(
+    table: Union[Dict, BiomTable, pd.DataFrame]
+) -> pd.DataFrame:
     """
-    Convert BIOM Table/dict to samples × features DataFrame.
+    Convert various table formats to samples × features DataFrame.
+    
+    Handles:
+    - Pandas DataFrame (returns unchanged)
+    - BIOM Table (transposes to samples × features)
+    - Dictionary (converts to DataFrame)
+    
+    Args:
+        table: Input table in various formats
+        
+    Returns:
+        DataFrame in samples × features orientation
+        
+    Raises:
+        TypeError: For unsupported input types
     """
-    if isinstance(table, pd.DataFrame):  # samples  × features
+    if isinstance(table, pd.DataFrame):  # samples × features
         return table
-    if isinstance(table, Table):  # features × samples
+    if isinstance(table, BiomTable):     # features × samples
         return table.to_dataframe(dense=True).T
-    if isinstance(table, dict):  # samples  × features
+    if isinstance(table, dict):          # samples × features
         return pd.DataFrame(table)
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
+
+def to_biom_table(
+    table: Union[dict, BiomTable, pd.DataFrame]
+) -> BiomTable:
+    """Convert various table formats to BIOM Table with features × samples orientation.
+    
+    Args:
+        table: Input table in various formats
+        
+    Returns:
+        BIOM Table in features × samples orientation
+        
+    Raises:
+        ValueError: For unsupported input types
+    """
+    if isinstance(table, BiomTable):
+        return table
+    if isinstance(table, dict):
+        return BiomTable.from_json(table)
+    if isinstance(table, pd.DataFrame):
+        # Ensure features x samples orientation
+        return BiomTable(
+            table.values,
+            observation_ids=table.index.tolist(),
+            sample_ids=table.columns.tolist(),
+            observation_metadata=None,
+            sample_metadata=None
+        )
+    raise ValueError(f"Unsupported table type: {type(table)}")
+
+
+# ================================ TABLE OPERATIONS ================================== #
 
 def merge_table_with_metadata(
     table: pd.DataFrame,
@@ -46,12 +94,16 @@ def merge_table_with_metadata(
     verbose: bool = False
 ) -> pd.DataFrame:
     """
-    Merge abundance table with metadata column using direct ID matching.
-    Automatically handles orientation, ID matching, and duplicate detection.
+    Merge feature table with metadata column using direct ID matching.
+    
+    Features:
+    - Automatic orientation detection
+    - Duplicate ID detection
+    - Case normalization
+    - Transposition when needed
     
     Args:
-        table:              Feature table (Samples × features) or 
-                            (features × Samples).
+        table:              Feature table (Samples × features) or (features × Samples).
         metadata:           Metadata table.
         group_column:       Metadata column to add.
         metadata_id_column: Column in metadata containing sample IDs.
@@ -61,7 +113,7 @@ def merge_table_with_metadata(
         Table with added group_column (Samples × features+1).
         
     Raises:
-        ValueError for common data issues.
+        ValueError: For duplicate IDs or mismatched samples.
     """
     # Identify sample IDs in metadata
     if metadata_id_column:
@@ -71,7 +123,7 @@ def merge_table_with_metadata(
         if metadata_id_column not in metadata.columns:
             raise ValueError(f"Column '{metadata_id_column}' not found in metadata")
         
-        # Extract metadata sample IDs
+        # Extract and normalize metadata sample IDs
         meta_ids = metadata[metadata_id_column].astype(str).str.strip().str.lower()
     else:
         if verbose:
@@ -94,10 +146,9 @@ def merge_table_with_metadata(
         example_originals = original_values[:5]
         
         raise ValueError(
-            f"Found {n_duplicates} duplicate sample IDs in metadata after normalization\n"
+            f"Found {n_duplicates} duplicate sample IDs in metadata\n"
             f"Duplicate normalized IDs: {example_duplicates}\n"
-            f"Original values: {example_originals}\n"
-            "Please resolve duplicate entries in metadata"
+            f"Original values: {example_originals}"
         )
     
     # Assume samples are rows (standard orientation)
@@ -118,7 +169,7 @@ def merge_table_with_metadata(
             table_examples = sorted(table_ids)[:5]
             meta_examples = sorted(meta_ids)[:5]
             raise ValueError(
-                "No common sample IDs found after transposition\n"
+                "No common sample IDs found\n"
                 f"Table IDs: {table_examples}\n"
                 f"Metadata IDs: {meta_examples}"
             )
@@ -154,24 +205,7 @@ def merge_table_with_metadata(
     return table
 
 
-def to_biom_table(table: Union[dict, BiomTable, pd.DataFrame]) -> BiomTable:
-    """Robust conversion to BIOM Table with orientation handling"""
-    if isinstance(table, BiomTable):
-        return table
-    elif isinstance(table, dict):
-        return BiomTable.from_json(table)
-    elif isinstance(table, pd.DataFrame):
-        # Ensure features x samples orientation
-        return BiomTable(
-            table.values,
-            observation_ids=table.index.tolist(),
-            sample_ids=table.columns.tolist(),
-            observation_metadata=None,
-            sample_metadata=None
-        )
-    else:
-        raise ValueError(f"Unsupported table type: {type(table)}")
-        
+# ================================ TABLE FILTERING =================================== #
 
 def filter_table(
     table: Union[dict, BiomTable, pd.DataFrame],
@@ -179,7 +213,22 @@ def filter_table(
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS,
 ) -> BiomTable:
-    """Filter features and samples with strict type enforcement"""
+    """
+    Filter features and samples with strict type enforcement.
+    
+    Applies two-step filtering:
+    1. Feature filtering (min_rel_abundance and min_samples)
+    2. Sample filtering (min_counts)
+    
+    Args:
+        table: Input table
+        min_rel_abundance: Minimum relative abundance (%) for feature retention.
+        min_samples:       Minimum samples where feature must appear.
+        min_counts:        Minimum total counts per sample.
+        
+    Returns:
+        Filtered BIOM Table.
+    """
     biom_table = to_biom_table(table)
     biom_table = filter_features(biom_table, min_rel_abundance, min_samples)
     biom_table = filter_samples(biom_table, min_counts)
@@ -191,7 +240,17 @@ def filter_features(
     min_rel_abundance: float, 
     min_samples: int
 ) -> BiomTable:
-    """Filter features using BIOM-native methods"""
+    """
+    Filter features based on prevalence and abundance.
+    
+    Args:
+        table:             BIOM Table to filter.
+        min_rel_abundance: Minimum relative abundance (%).
+        min_samples:       Minimum samples where feature must appear.
+        
+    Returns:
+        Filtered BIOM Table.
+    """
     min_abs_abundance = min_rel_abundance / 100
     
     # Convert to DataFrame for vectorized operations
@@ -211,8 +270,20 @@ def filter_features(
     return table.filter(ids_to_keep, axis='observation')
     
 
-def filter_samples(table: BiomTable, min_counts: int) -> BiomTable:
-    """Filter samples using BIOM-native methods"""
+def filter_samples(
+    table: BiomTable, 
+    min_counts: int
+) -> BiomTable:
+    """
+    Filter samples based on minimum total counts.
+    
+    Args:
+        table:      BIOM Table to filter.
+        min_counts: Minimum total counts per sample.
+        
+    Returns:
+        Filtered BIOM Table.
+    """
     # Convert to DataFrame for vectorized operations
     df = table.to_dataframe().astype(float)
     
@@ -227,16 +298,30 @@ def filter_samples(table: BiomTable, min_counts: int) -> BiomTable:
     ids_to_keep = [sid for sid, keep in zip(sample_ids, sample_mask) if keep]
     
     return table.filter(ids_to_keep, axis='sample')
-    
+
+
+# ========================== TABLE NORMALIZATION & TRANSFORM ========================= #
 
 def normalize_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
     axis: int = 1
 ) -> BiomTable:
-    """Normalize with strict type enforcement"""
+    """
+    Normalize table to relative abundance with strict type enforcement.
+    
+    Args:
+        table: Input table.
+        axis:  Normalization axis (0=features, 1=samples).
+        
+    Returns:
+        Normalized BIOM Table.
+        
+    Raises:
+        ValueError: For invalid axis values.
+    """
     biom_table = to_biom_table(table)
     
-    if axis == 1:  # Sample-wise normalization
+    if axis == 1:  # Sample-wise normalization (convert to relative abundance)
         return biom_table.norm(axis='sample')
     elif axis == 0:  # Feature-wise normalization
         return biom_table.norm(axis='observation')
@@ -248,7 +333,16 @@ def clr_transform_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
     pseudocount: float = DEFAULT_PSEUDOCOUNT
 ) -> BiomTable:
-    """CLR transformation with strict type enforcement"""
+    """
+    Apply centered log-ratio (CLR) transformation to table.
+    
+    Args:
+        table:       Input table.
+        pseudocount: Small value to add to avoid log(0).
+        
+    Returns:
+        CLR-transformed BIOM Table.
+    """
     biom_table = to_biom_table(table)
     
     # Convert to dense array (samples x features)
