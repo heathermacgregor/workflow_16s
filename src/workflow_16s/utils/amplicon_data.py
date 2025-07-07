@@ -1602,9 +1602,11 @@ class _AnalysisManager(_ProcessingMixin):
                                     self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
                                     self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
                                     self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
+                                    
                         except Exception as e:
                             logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
                             self.models[table_type][level][method] = None
+                            
                         finally:
                             # Always update progress even on failure
                             now = time.time()
