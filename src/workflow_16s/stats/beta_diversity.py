@@ -18,6 +18,9 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 
+import multiprocessing
+from multiprocessing import get_context
+
 # ============================== CRITICAL FIX FOR UMAP =============================== #
 # Force thread-safe environment BEFORE importing UMAP
 os.environ['NUMBA_NUM_THREADS'] = '1'
@@ -173,34 +176,25 @@ def umap(
     n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
     """Compute Uniform Manifold Approximation and Projection (UMAP)."""
-    df = table_to_df(table)
+        df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     n_components = safe_component_limit(df, n_components)
     
-    # Main attempt with environment enforcement
-    try:
+    # Wrapper function for process isolation
+    def _run_umap(data: np.ndarray) -> np.ndarray:
+        os.environ['NUMBA_NUM_THREADS'] = '1'
+        os.environ['OMP_NUM_THREADS'] = '1'
         reducer = UMAP(
             n_components=n_components,
             init='random',
             random_state=random_state,
-            n_jobs=n_jobs
+            n_jobs=1
         )
-        embeddings = reducer.fit_transform(df.values)
-    except RuntimeError as e:
-        # Handle threading conflicts specifically
-        if "NUMBA_NUM_THREADS" in str(e) or "thread" in str(e).lower():
-            logger.warning("Threading conflict detected - falling back to single-threaded UMAP")
-            reducer = UMAP(
-                n_components=n_components,
-                init='random',
-                random_state=random_state,
-                n_jobs=1  # Force single-threaded execution
-            )
-            embeddings = reducer.fit_transform(df.values)
-        else:
-            raise RuntimeError(f"UMAP failed: {str(e)}") from e
-    except Exception as e:
-        raise RuntimeError(f"UMAP failed unexpectedly: {str(e)}") from e
+        return reducer.fit_transform(data)
+    
+    # Execute in isolated process
+    with get_context("spawn").Pool(1) as pool:
+        embeddings = pool.apply(_run_umap, (df.values,))
     
     return create_result_dataframe(embeddings, df.index, "UMAP", n_components)
