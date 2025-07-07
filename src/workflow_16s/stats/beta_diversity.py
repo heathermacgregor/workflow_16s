@@ -111,6 +111,12 @@ def pcoa(
     sample_ids = handle_duplicate_ids(df.index.tolist())
     
     distance_array = pairwise_distances(df.values, metric=metric)
+    if not np.isfinite(distance_array).all():
+        raise ValueError("Distance matrix contains non-finite values")
+    if not (distance_array >= 0).all():
+        raise ValueError("Distance matrix contains negative values")
+    if not np.allclose(distance_array, distance_array.T):
+        raise ValueError("Distance matrix is not symmetric")
     distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
     
     n_dimensions = n_dimensions or len(df)
@@ -176,7 +182,7 @@ def umap(
     n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
     """Compute Uniform Manifold Approximation and Projection (UMAP)."""
-        df = table_to_df(table)
+    df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     n_components = safe_component_limit(df, n_components)
