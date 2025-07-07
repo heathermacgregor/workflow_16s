@@ -1498,11 +1498,11 @@ class _AnalysisManager(_ProcessingMixin):
         if not hasattr(self, 'figures'):
             self.figures = {}
         
-        with get_progress_bar(expand=True) as prog:
+        with get_progress_bar() as prog:
             # Master task for entire feature selection process
-            master_desc = "[bold cyan]ML Feature Selection[/]"
+            master_desc = "ML Feature Selection..."
             master_task = prog.add_task(
-                master_desc, 
+                f"{master_desc:<{DEFAULT_N}}", , 
                 total=n,
                 start_time=time.time()
             )
@@ -1515,7 +1515,7 @@ class _AnalysisManager(_ProcessingMixin):
                     self.figures[table_type] = {}
                 
                 # Task for current table type
-                table_desc = f"[bold yellow]{table_type.replace('_', ' ').title()}[/]"
+                table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     table_desc,
                     parent=master_task,
@@ -1531,7 +1531,7 @@ class _AnalysisManager(_ProcessingMixin):
                         self.figures[table_type][level] = {}
                     
                     # Task for current taxonomic level
-                    level_desc = f"[magenta]Level: {level.capitalize()}[/]"
+                    level_desc = f"Level: {level.capitalize()}"
                     level_task = prog.add_task(
                         level_desc,
                         parent=table_task,
@@ -1544,7 +1544,7 @@ class _AnalysisManager(_ProcessingMixin):
                         self.figures[table_type][level][method] = {}
                         
                         # Task for current method
-                        method_desc = f"[green]Method: {method.upper()}[/]"
+                        method_desc = f"Method: {method.upper()}"
                         method_task = prog.add_task(
                             method_desc,
                             parent=level_task,
@@ -1570,58 +1570,57 @@ class _AnalysisManager(_ProcessingMixin):
                                 X, y = X.loc[idx], y.loc[idx]
                                 mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
                                 
-                                try:
-                                    if method == "select_k_best":
-                                        model_result = catboost_feature_selection(
-                                            metadata=y,
-                                            features=X,
-                                            output_dir=mdir,
-                                            group_col=group_col,
-                                            method=method,
-                                            n_top_features=n_top_features,
-                                            step_size=step_size,
-                                            # REMOVE unsupported parameters
-                                            permutation_importance=False,
-                                            thread_count=n_threads
-                                        )
-                                    else:
-                                        model_result = catboost_feature_selection(
-                                            metadata=y,
-                                            features=X,
-                                            output_dir=mdir,
-                                            group_col=group_col,
-                                            method=method,
-                                            n_top_features=n_top_features,
-                                            step_size=step_size,
-                                            permutation_importance=permutation_importance,
-                                            thread_count=n_threads
-                                        )
-                                    self.models[table_type][level][method] = model_result
-                                    if method not in self.models[table_type]:
-                                        self.models[table_type][level][method] = {}
-                                    self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
-                                    self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
-                                    self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
-                                    
-                            except Exception as e:
-                                logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
-                                self.models[table_type][level][method] = None
+                                if method == "select_k_best":
+                                    model_result = catboost_feature_selection(
+                                        metadata=y,
+                                        features=X,
+                                        output_dir=mdir,
+                                        group_col=group_col,
+                                        method=method,
+                                        n_top_features=n_top_features,
+                                        step_size=step_size,
+                                        permutation_importance=False,
+                                        thread_count=n_threads
+                                    )
+                                else:
+                                    model_result = catboost_feature_selection(
+                                        metadata=y,
+                                        features=X,
+                                        output_dir=mdir,
+                                        group_col=group_col,
+                                        method=method,
+                                        n_top_features=n_top_features,
+                                        step_size=step_size,
+                                        permutation_importance=permutation_importance,
+                                        thread_count=n_threads
+                                    )
                                 
-                            finally:
-                                # Always update progress even on failure
-                                now = time.time()
-                                elapsed = now - prog.tasks[method_task].start_time
-                                prog.update(
+                                self.models[table_type][level][method] = model_result
+                                if method not in self.models[table_type]:
+                                    self.models[table_type][level][method] = {}
+                                self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
+                                self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
+                                self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
+                                    
+                        except Exception as e:
+                            logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
+                            self.models[table_type][level][method] = None
+                                
+                        finally:
+                            # Always update progress even on failure
+                            now = time.time()
+                            elapsed = now - prog.tasks[method_task].start_time
+                            prog.update(
                                     method_task,
                                     completed=1,
                                     elapsed=elapsed,
                                     refresh=True
-                                )
+                            )
                             
-                            # Update parent tasks
-                            prog.advance(level_task)
-                            prog.advance(table_task)
-                            prog.advance(master_task)
+                        # Update parent tasks
+                        prog.advance(level_task)
+                        prog.advance(table_task)
+                        pprog.advance(master_task)
                     
                     # Complete level task after all its methods
                     prog.update(
