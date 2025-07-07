@@ -718,7 +718,7 @@ def collapse_taxa(
 
     # Create taxonomy mapping
     id_map = {}
-    sub_desc = level.capitalize()
+    sub_desc = target_level.capitalize()
     sub_task = progress.add_task(
         f"[white]{l1_desc:<{DEFAULT_N}}",
         parent=task_id,
