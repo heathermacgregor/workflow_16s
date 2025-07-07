@@ -1009,7 +1009,7 @@ class _AnalysisManager(_ProcessingMixin):
         cfg: Dict,
         tables: Dict[str, Dict[str, Table]],
         meta: pd.DataFrame,
-        figure_output_dir: Path,
+        output_dir: Path,
         verbose: bool,
         faprotax_enabled: bool = False,
         fdb: Optional[Dict] = None,
@@ -1028,7 +1028,10 @@ class _AnalysisManager(_ProcessingMixin):
             fdb:               Loaded FAPROTAX database.
         """
         self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
-        self.figure_output_dir = figure_output_dir
+        self.output_dir = output_dir
+        self.figure_output_dir = Path(output_dir) / 'figures'
+        self.table_output_dir = Path(output_dir) / 'tables'
+        self.ml_output_dir = Path(output_dir) / 'ml'
         self.stats: Dict[str, Any] = {}
         self.alpha_diversity: Dict[str, Any] = {}
         self.ordination: Dict[str, Any] = {}
@@ -1110,7 +1113,7 @@ class _AnalysisManager(_ProcessingMixin):
         if not alpha_cfg.get("enabled", False):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
-
+        
         group_column = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
@@ -1147,12 +1150,7 @@ class _AnalysisManager(_ProcessingMixin):
                     continue
                     
                 table_cfg = enabled_table_types[table_type]
-                #self.alpha_diversity_results[table_type] = {}
-                #self.alpha_diversity_stats[table_type] = {}
-                
-                # Get enabled levels for this table type
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
-                
                 for level in enabled_levels:
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
@@ -1164,7 +1162,8 @@ class _AnalysisManager(_ProcessingMixin):
                         self.alpha_diversity[table_type][level] = {}
                         
                     l1_desc = " | ".join([
-                        table_type.replace('_', ' ').title(), level.capitalize()
+                        table_type.replace('_', ' ').title(), 
+                        level.capitalize()
                     ]) 
                     l1_task = prog.add_task(
                         f"[white]{l1_desc:<{DEFAULT_N}}",
@@ -1178,12 +1177,12 @@ class _AnalysisManager(_ProcessingMixin):
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
-                        logger.info(alpha_df)
                         if alpha_df.empty:
                             logger.error(f"Alpha diversity table empty for {table_type}/{level}")
                             continue
-                        #self.alpha_diversity_results[table_type][level] = alpha_df
-                        
+                        table_output_dir = Path(self.table_output_dir) / 'alpha_diversity' / table_type / level
+                        table_output_dir.mkdir(parents=True, exist_ok=True)
+                        alpha_df.to_csv(table_output_dir / 'results.tsv', sep='\t', index=True)
                         # Run correlation analysis if enabled
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                             corr_results = analyze_alpha_correlations(
@@ -1193,7 +1192,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
                             self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
-                            
+                            corr_results.to_csv(table_output_dir / 'correlations.tsv', sep='\t', index=True)
                             # Generate correlation figures
                             plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
                             plot_dir.mkdir(parents=True, exist_ok=True)
@@ -1216,7 +1215,7 @@ class _AnalysisManager(_ProcessingMixin):
                             parametric=parametric
                         )
                         self.alpha_diversity[table_type][level]['stats'] = stats_df
-                        #self.alpha_diversity_stats[table_type][level] = stats_df
+                        stats_df.to_csv(table_output_dir / 'stats.tsv', sep='\t', index=True)
                         
                         # Generate plots if enabled
                         if generate_plots:
@@ -1305,6 +1304,8 @@ class _AnalysisManager(_ProcessingMixin):
                 for level, table in levels.items():
                     # Align table/metadata once per level
                     table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                    table_output_dir = Path(self.table_output_dir) / 'stats' / table_type / level
+                    table_output_dir.mkdir(parents=True, exist_ok=True)
                     
                     for test_name in enabled_for_table_type:
                         if test_name not in san.TEST_CONFIG:
@@ -1330,6 +1331,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 group_column_values=grp_vals,
                             )
                             self.stats[table_type].setdefault(cfg['key'], {})[level] = result
+                            result.to_csv(table_output_dir / f'{test_name}.tsv', sep='\t', index=True)
                         except Exception as e:
                             logger.error(f"Test failed: {e}")
                         finally:
@@ -1664,9 +1666,9 @@ class AmpliconData:
         self.meta, self.table = data.meta, data.table
 
         # Process
-        self.figure_output_dir = Path(self.project_dir.figures)
+        self.output_dir = Path(self.project_dir.final)
         tp = _TableProcessor(
-            cfg, self.table, mode, self.meta, self.figure_output_dir, 
+            cfg, self.table, mode, self.meta, self.output_dir, 
             project_dir, verbose
         )
         self.tables = tp.tables
@@ -1680,7 +1682,7 @@ class AmpliconData:
 
         # Analysis
         am = _AnalysisManager(
-            cfg, self.tables, self.meta, self.figure_output_dir,
+            cfg, self.tables, self.meta, self.output_dir,
             verbose, cfg.get("faprotax", False), self.fdb,
         )
         self.stats = am.stats
