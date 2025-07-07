@@ -1503,6 +1503,16 @@ class _AnalysisManager(_ProcessingMixin):
                         self.models[table_type][level] = {}
                         
                     for method in methods:
+                        l1_desc = " | ".join([
+                            table_type.replace('_', ' ').title(), 
+                            level.capitalize(),
+                            method.upper()
+                        ])
+                        l1_task = prog.add_task(
+                            f"[white]{l1_desc:<{DEFAULT_N}}",
+                            parent=l0_task,
+                            total=1
+                        )
                         if table_type == "clr_transformed" and method == "chi_squared":
                             logger.warning(
                                 "Skipping chi_squared feature selection for clr_transformed table. "
@@ -1512,17 +1522,6 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             self.models[table_type][level][method] = None
                         else:
-                            l1_desc = " | ".join([
-                                table_type.replace('_', ' ').title(), 
-                                level.capitalize(),
-                                method.upper()
-                            ])
-                            l1_task = prog.add_task(
-                                f"[white]{l1_desc:<{DEFAULT_N}}",
-                                parent=l0_task,
-                                total=1
-                            )
-        
                             X = table_to_df(table)
                             X.index = X.index.str.lower()
                             y = self.meta.set_index("#sampleid")[[group_col]]
@@ -1542,7 +1541,8 @@ class _AnalysisManager(_ProcessingMixin):
                                         n_top_features=n_top_features,
                                         step_size=step_size,
                                         # REMOVE unsupported parameters
-                                        permutation_importance=False
+                                        permutation_importance=False,
+                                        thread_count=n_threads
                                     )
                                 else:
                                     model_result = catboost_feature_selection(
