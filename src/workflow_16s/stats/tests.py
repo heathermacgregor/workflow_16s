@@ -73,6 +73,9 @@ def alpha_diversity(
     non_zeros = (df > 0).sum(axis=1)
     proportions = df.div(totals, axis=0).fillna(0)
     
+    # Track which metrics we've warned about non-integer values
+    warned_metrics = set()
+    
     def calculate_metric(
         metric: str, 
         values: np.ndarray, 
@@ -81,6 +84,8 @@ def alpha_diversity(
         proportions: np.ndarray
     ) -> float:
         """Helper function to compute a single metric for a sample"""
+        nonlocal warned_metrics
+        
         try:
             # Phylogenetic metrics
             if metric in ['faith_pd', 'pd_whole_tree']:
@@ -90,7 +95,18 @@ def alpha_diversity(
             elif metric == 'observed_features':
                 return non_zero
             elif metric == 'chao1':
-                return alpha.chao1(values + pseudo_count)
+                # Check and convert to integers for chao1
+                if np.allclose(values, np.round(values), atol=1e-5):
+                    int_vals = np.round(values).astype(int)
+                    return alpha.chao1(int_vals)
+                else:
+                    if metric not in warned_metrics:
+                        logger.warning(
+                            f"Non-integer values detected for {metric}. "
+                            "Requires integer counts. Returning NaN."
+                        )
+                        warned_metrics.add(metric)
+                    return np.nan
             
             # Diversity indices
             elif metric == 'shannon':
@@ -111,13 +127,40 @@ def alpha_diversity(
                 return np.max(values) / total if total > 0 else 0.0
             elif metric == 'mcintosh_dominance':
                 return total / np.sqrt(np.sum(values**2)) if total > 0 else 0.0
+            elif metric == 'dominance':
+                # Simpson's dominance index (1 - Simpson's evenness)
+                return 1 - alpha.simpson(proportions)
             
             # Rarefaction metrics
             elif metric == 'ace':
-                return alpha.ace(values)
+                # Check and convert to integers for ace
+                if np.allclose(values, np.round(values), atol=1e-5):
+                    int_vals = np.round(values).astype(int)
+                    return alpha.ace(int_vals)
+                else:
+                    if metric not in warned_metrics:
+                        logger.warning(
+                            f"Non-integer values detected for {metric}. "
+                            "Requires integer counts. Returning NaN."
+                        )
+                        warned_metrics.add(metric)
+                    return np.nan
+                    
             elif metric == 'goods_coverage':
-                singletons = np.sum(values == 1)
-                return 1 - singletons/total if total > 0 else 0.0
+                # Check and convert to integers for goods_coverage
+                if np.allclose(values, np.round(values), atol=1e-5):
+                    int_vals = np.round(values).astype(int)
+                    total_int = int_vals.sum()
+                    singletons = (int_vals == 1).sum()
+                    return 1 - singletons/total_int if total_int > 0 else 0.0
+                else:
+                    if metric not in warned_metrics:
+                        logger.warning(
+                            f"Non-integer values detected for {metric}. "
+                            "Requires integer counts. Returning NaN."
+                        )
+                        warned_metrics.add(metric)
+                    return np.nan
             
             # Gini index
             elif metric == 'gini_index':
@@ -126,9 +169,20 @@ def alpha_diversity(
                 cum_sum = np.cumsum(sorted_vals)
                 return 1 - (2 * np.sum(cum_sum)) / (n * total) if total > 0 else 0.0
             
-            # Fallback to skbio's alpha function
+            # Fallback to skbio's alpha functions
             else:
-                return alpha(metric, values)
+                # Check if metric exists in skbio's alpha module
+                if hasattr(alpha, metric):
+                    func = getattr(alpha, metric)
+                    # For metrics that require proportions
+                    if metric in ['shannon', 'simpson', 'pielou_e', 'heip_e']:
+                        return func(proportions)
+                    # For metrics that require counts
+                    else:
+                        return func(values)
+                else:
+                    logger.warning(f"Unsupported alpha diversity metric: {metric}")
+                    return np.nan
                 
         except Exception as e:
             logger.warning(f"Error calculating {metric}: {str(e)}")
