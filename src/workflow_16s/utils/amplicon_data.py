@@ -1495,87 +1495,156 @@ class _AnalysisManager(_ProcessingMixin):
             logger.info("No ML tasks to run after filtering by table types and levels")
             return
     
-        with get_progress_bar() as prog:
-            l0_desc = "Running ML feature selection..."
-            l0_task = prog.add_task(
-                f"[white]{l0_desc:<{DEFAULT_N}}", 
-                total=n
+        # Initialize figures structure if missing
+        if not hasattr(self, 'figures'):
+            self.figures = {}
+        
+        with get_progress_bar(expand=True) as prog:
+            # Master task for entire feature selection process
+            master_desc = "[bold cyan]ML Feature Selection[/]"
+            master_task = prog.add_task(
+                master_desc, 
+                total=n,
+                start_time=time.time()
             )
+            
             for table_type, levels in filtered_ml_tables.items():
+                # Initialize nested dicts
+                if table_type not in self.models:
+                    self.models[table_type] = {}
+                if table_type not in self.figures:
+                    self.figures[table_type] = {}
+                
+                # Task for current table type
+                table_desc = f"[bold yellow]{table_type.replace('_', ' ').title()}[/]"
+                table_task = prog.add_task(
+                    table_desc,
+                    parent=master_task,
+                    total=len(levels) * len(methods),
+                    start_time=time.time()
+                )
+                
                 for level, table in levels.items():
-                    if table_type not in self.models:
-                        self.models[table_type] = {}
+                    # Initialize level dicts
                     if level not in self.models[table_type]:
                         self.models[table_type][level] = {}
-                        
+                    if level not in self.figures[table_type]:
+                        self.figures[table_type][level] = {}
+                    
+                    # Task for current taxonomic level
+                    level_desc = f"[magenta]Level: {level.capitalize()}[/]"
+                    level_task = prog.add_task(
+                        level_desc,
+                        parent=table_task,
+                        total=len(methods),
+                        start_time=time.time()
+                    )
+                    
                     for method in methods:
-                        l1_desc = " | ".join([
-                            table_type.replace('_', ' ').title(), 
-                            level.capitalize(),
-                            method.upper()
-                        ])
-                        l1_task = prog.add_task(
-                            f"[white]{l1_desc:<{DEFAULT_N}}",
-                            parent=l0_task,
-                            total=1
+                        # Initialize method entry
+                        self.figures[table_type][level][method] = {}
+                        
+                        # Task for current method
+                        method_desc = f"[green]Method: {method.upper()}[/]"
+                        method_task = prog.add_task(
+                            method_desc,
+                            parent=level_task,
+                            total=1,
+                            start_time=time.time()
                         )
-                        if table_type == "clr_transformed" and method == "chi_squared":
-                            logger.warning(
-                                "Skipping chi_squared feature selection for clr_transformed table. "
-                                "Chi-squared test is not appropriate for CLR transformed data because "
-                                "it requires non-negative values and CLR transformation produces values "
-                                "with both positive and negative magnitudes."
-                            )
-                            self.models[table_type][level][method] = None
-                        else:
-                            X = table_to_df(table)
-                            X.index = X.index.str.lower()
-                            y = self.meta.set_index("#sampleid")[[group_col]]
-                            y.index = y.index.astype(str).str.lower()
-                            idx = X.index.intersection(y.index)
-                            X, y = X.loc[idx], y.loc[idx]
-                            mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
-                            
-                            try:
-                                if method == "select_k_best":
-                                    model_result = catboost_feature_selection(
-                                        metadata=y,
-                                        features=X,
-                                        output_dir=mdir,
-                                        group_col=group_col,
-                                        method=method,
-                                        n_top_features=n_top_features,
-                                        step_size=step_size,
-                                        # REMOVE unsupported parameters
-                                        permutation_importance=False,
-                                        thread_count=n_threads
-                                    )
-                                else:
-                                    model_result = catboost_feature_selection(
-                                        metadata=y,
-                                        features=X,
-                                        output_dir=mdir,
-                                        group_col=group_col,
-                                        method=method,
-                                        n_top_features=n_top_features,
-                                        step_size=step_size,
-                                        permutation_importance=permutation_importance,
-                                        thread_count=n_threads
-                                    )
-                                self.models[table_type][level][method] = model_result
-                                if method not in self.models[table_type]:
-                                    self.models[table_type][level][method] = {}
-                                self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
-                                self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
-                                self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
-                            
-                            except Exception as e:
-                                logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
+                        
+                        try:
+                            if table_type == "clr_transformed" and method == "chi_squared":
+                                logger.warning(
+                                    "Skipping chi_squared feature selection for clr_transformed table. "
+                                    "Chi-squared test is not appropriate for CLR transformed data because "
+                                    "it requires non-negative values and CLR transformation produces values "
+                                    "with both positive and negative magnitudes."
+                                )
                                 self.models[table_type][level][method] = None
+                            else:
+                                X = table_to_df(table)
+                                X.index = X.index.str.lower()
+                                y = self.meta.set_index("#sampleid")[[group_col]]
+                                y.index = y.index.astype(str).str.lower()
+                                idx = X.index.intersection(y.index)
+                                X, y = X.loc[idx], y.loc[idx]
+                                mdir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
+                                
+                                try:
+                                    if method == "select_k_best":
+                                        model_result = catboost_feature_selection(
+                                            metadata=y,
+                                            features=X,
+                                            output_dir=mdir,
+                                            group_col=group_col,
+                                            method=method,
+                                            n_top_features=n_top_features,
+                                            step_size=step_size,
+                                            # REMOVE unsupported parameters
+                                            permutation_importance=False,
+                                            thread_count=n_threads
+                                        )
+                                    else:
+                                        model_result = catboost_feature_selection(
+                                            metadata=y,
+                                            features=X,
+                                            output_dir=mdir,
+                                            group_col=group_col,
+                                            method=method,
+                                            n_top_features=n_top_features,
+                                            step_size=step_size,
+                                            permutation_importance=permutation_importance,
+                                            thread_count=n_threads
+                                        )
+                                    self.models[table_type][level][method] = model_result
+                                    if method not in self.models[table_type]:
+                                        self.models[table_type][level][method] = {}
+                                    self.figures[table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
+                                    self.figures[table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
+                                    self.figures[table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
+                        except Exception as e:
+                            logger.error(f"Model training with {method} failed for {table_type}/{level}: {e}")
+                            self.models[table_type][level][method] = None
+                        finally:
+                            # Always update progress even on failure
+                            now = time.time()
+                            elapsed = now - prog.tasks[method_task].start_time
+                            prog.update(
+                                method_task,
+                                completed=1,
+                                elapsed=elapsed,
+                                refresh=True
+                            )
                             
-                        prog.update(l1_task, completed=1)
-                        prog.remove_task(l1_task)
-                        prog.update(l0_task, advance=1)
+                            # Update parent tasks
+                            prog.advance(level_task)
+                            prog.advance(table_task)
+                            prog.advance(master_task)
+                    
+                    # Complete level task after all its methods
+                    prog.update(
+                        level_task,
+                        completed=len(methods),
+                        elapsed=time.time() - prog.tasks[level_task].start_time,
+                        refresh=True
+                    )
+                
+                # Complete table task after all its levels
+                prog.update(
+                    table_task,
+                    completed=len(levels) * len(methods),
+                    elapsed=time.time() - prog.tasks[table_task].start_time,
+                    refresh=True
+                )
+            
+            # Complete master task
+            prog.update(
+                master_task,
+                completed=n,
+                elapsed=time.time() - prog.tasks[master_task].start_time,
+                refresh=True
+            )
                         
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
