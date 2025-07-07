@@ -110,12 +110,12 @@ alpha_diversity:
     - 'observed_features'
     - 'simpson'
     - 'pielou_evenness'
-    - 'chao1'
-    - 'ace'
+    #- 'chao1'
+    #- 'ace'
     - 'gini_index'
-    - 'goods_coverage'
+    #- 'goods_coverage'
     - 'heip_evenness' 
-    - 'dominance'
+    #- 'dominance'
   parametric: False  # Statistical test type
   generate_plots: True  # Enable/disable plot generation
   tables:
@@ -200,16 +200,16 @@ ml:
   levels:
     - 'genus'
     - 'family'
-    - 'order'
-    - 'class'
-    - 'phylum'
+    #- 'order'
+    #- 'class'
+    #- 'phylum'
   methods:
     - 'rfe'
     - 'select_k_best'
-    - 'chi_squared'
-    - 'lasso'
-    - 'shap'
+    #- 'chi_squared'
+    #- 'lasso'
+    #- 'shap'
   num_features: 500
   step_size: 100
   permutation_importance: True
-  n_threads: 8
+  n_threads: 16
