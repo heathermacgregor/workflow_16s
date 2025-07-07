@@ -1502,7 +1502,7 @@ class _AnalysisManager(_ProcessingMixin):
             # Master task for entire feature selection process
             master_desc = "ML Feature Selection..."
             master_task = prog.add_task(
-                f"{master_desc:<{DEFAULT_N}}", , 
+                f"{master_desc:<{DEFAULT_N}}", 
                 total=n,
                 start_time=time.time()
             )
