@@ -682,7 +682,6 @@ def trim_and_merge_asvs(
     return merged_df, trimmed_seqs, obs_ids
 
 
-# TODO: Delete if unused
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
     target_level: str, 
@@ -720,7 +719,7 @@ def collapse_taxa(
     id_map = {}
     sub_desc = target_level.capitalize()
     sub_task = progress.add_task(
-        f"[white]{l1_desc:<{DEFAULT_N}}",
+        f"[white]{sub_desc:<{DEFAULT_N}}",
         parent=task_id,
         total=len(table.ids(axis='observation').astype(str))
     )
