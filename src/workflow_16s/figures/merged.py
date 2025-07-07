@@ -1357,7 +1357,7 @@ def plot_alpha_correlations(
     Returns:
         Dictionary of Plotly figures per metric
     """
-    figures = {}
+    figs = {}
     
     for metric, df in corr_results.items():
         if df.empty:
@@ -1415,8 +1415,8 @@ def plot_alpha_correlations(
             showlegend=False,
             textfont=dict(color="red", size=16)
         ))
-        
-        figures[metric] = fig
+        fig = _apply_common_layout(fig, "", "Association Strength (|ρ| or η²)", f"Top {top_n} Associations with {metric.replace('_', ' ').title()}")
+        figs[metric] = fig
         
         # Save output
         if output_dir:
@@ -1425,4 +1425,4 @@ def plot_alpha_correlations(
             file_stem = "statistics"
             plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
                 
-    return figures
+    return figs
