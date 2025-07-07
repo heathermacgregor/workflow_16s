@@ -326,9 +326,10 @@ def attach_legend_to_figure(
 ) -> go.Figure:
     """
     Attaches a legend figure to the right of a main Plotly figure.
+    Dynamically handles both geographic (geo) and Cartesian (xy) main plots.
     
     Args:
-        main_fig:     The main Plotly figure (geo plot).
+        main_fig:     The main Plotly figure (geo or xy plot).
         legend_fig:   The legend Plotly figure.
         main_width:   Width proportion for main figure (0-1).
         legend_width: Width proportion for legend (0-1).
@@ -336,51 +337,46 @@ def attach_legend_to_figure(
     Returns:
         Combined Plotly figure with main plot and legend side-by-side.
     """
-    # Create subplot figure with geo and cartesian subplots
+    # Determine subplot type based on main figure traces
+    main_type = "geo" if any(trace.type in ["scattergeo", "choropleth"] for trace in main_fig.data) else "xy"
+    
+    # Create subplot figure with dynamic types
     combined_fig = make_subplots(
         rows=1, 
         cols=2,
         column_widths=[main_width, legend_width],
-        specs=[[{"type": "geo"}, {"type": "xy"}]],  # Specify geo and cartesian types
+        specs=[[{"type": main_type}, {"type": "xy"}]],
         horizontal_spacing=0.01
     )
     
-    # Add main figure traces to geo subplot
+    # Add main figure traces
     for trace in main_fig.data:
         combined_fig.add_trace(trace, row=1, col=1)
     
-    # Add legend figure traces to cartesian subplot
+    # Add legend figure traces
     for trace in legend_fig.data:
         combined_fig.add_trace(trace, row=1, col=2)
     
     # Update layout from main figure
-    combined_fig.update_layout(
-        title=main_fig.layout.title,
-        template=main_fig.layout.template,
-        showlegend=False,  # We're using custom legend
-        # Transfer geo layout settings
-        geo=main_fig.layout.geo,
-        margin=main_fig.layout.margin
-    )
+    layout_updates = {
+        "title": main_fig.layout.title,
+        "template": main_fig.layout.template,
+        "showlegend": False,
+        "margin": main_fig.layout.margin
+    }
     
-    # Configure legend column
-    combined_fig.update_xaxes(
-        showgrid=False, 
-        showticklabels=False, 
-        zeroline=False,
-        row=1, 
-        col=2
-    )
-    combined_fig.update_yaxes(
-        showgrid=False, 
-        showticklabels=False, 
-        zeroline=False,
-        row=1, 
-        col=2
-    )
+    # Conditionally add geo layout if applicable
+    if main_type == "geo" and hasattr(main_fig.layout, "geo"):
+        layout_updates["geo"] = main_fig.layout.geo
     
-    # Handle dimensions safely
-    main_width_val = main_fig.layout.width or 800  # Default if not set
+    combined_fig.update_layout(**layout_updates)
+    
+    # Configure legend column axes
+    combined_fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False, row=1, col=2)
+    combined_fig.update_yaxes(showgrid=False, showticklabels=False, zeroline=False, row=1, col=2)
+    
+    # Handle dimensions
+    main_width_val = main_fig.layout.width or 800
     main_height_val = main_fig.layout.height or 600
     legend_width_val = legend_fig.layout.width or 200
     
