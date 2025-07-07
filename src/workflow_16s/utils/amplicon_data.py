@@ -1192,7 +1192,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
                             self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
-                            df = pd.DataFrame.from_dict(corr_results, orient='index')
+                            df = pd.DataFrame.from_dict([corr_results], orient='index')
                             df.to_csv(table_output_dir / 'correlations.tsv', sep='\t', index=True)
                             # Generate correlation figures
                             plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
