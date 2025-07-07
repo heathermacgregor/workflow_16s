@@ -1166,10 +1166,10 @@ class _AnalysisManager(_ProcessingMixin):
                     l1_desc = " | ".join([
                         table_type.replace('_', ' ').title(), level.capitalize()
                     ]) 
-                    prog.update(
-                        l0_task,
-                        description=f"[white]{l1_desc:<{DEFAULT_N}}",
-                        refresh=True
+                    l1_task = prog.add_task(
+                        f"[white]{l1_desc:<{DEFAULT_N}}",
+                        parent=l0_task,
+                        total=1
                     )
                     
                     try:
@@ -1273,6 +1273,8 @@ class _AnalysisManager(_ProcessingMixin):
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                         
+                    prog.update(l1_task, completed=1)
+                    prog.remove_task(l1_task)    
                     prog.update(l0_task, advance=1)
                 
     def _run_statistical_tests(self) -> None:
