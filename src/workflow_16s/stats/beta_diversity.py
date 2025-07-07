@@ -18,9 +18,10 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 
-# Thread-safe UMAP import
-os.environ.setdefault('NUMBA_NUM_THREADS', '1')
-os.environ.setdefault('OMP_NUM_THREADS', '1')
+# ============================== CRITICAL FIX FOR UMAP =============================== #
+# Force thread-safe environment BEFORE importing UMAP
+os.environ['NUMBA_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
 from umap import UMAP
 
 # ================================== LOCAL IMPORTS =================================== #
