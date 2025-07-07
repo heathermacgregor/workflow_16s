@@ -1675,7 +1675,7 @@ class AmpliconData:
 
         # Figures
         self.figures: Dict[str, Any] = {}
-
+        self.figure_output_dir = Path(self.project_dir.figures)
         if cfg["figures"].get("map", False):
             self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
             self.figures["map"] = self.plotter.generate_sample_map(self.meta)
