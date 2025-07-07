@@ -878,17 +878,17 @@ class _TableProcessor(_ProcessingMixin):
         """Collapses feature tables to different taxonomic levels."""
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
-            main_desc = "Collapsing taxonomy..."
-            main_task = prog.add_task(
-                f"[white]{main_desc:<{DEFAULT_N}}",
+            l0_desc = "Collapsing taxonomy..."
+            l0_task = prog.add_task(
+                f"[white]{l0_desc:<{DEFAULT_N}}",
                 total=len(self.tables)
             )   
             
             for table_type in list(self.tables.keys()):
-                child_desc = table_type.replace('_', ' ').title()
-                child_task = prog.add_task(
-                    f"[white]{child_desc:<{DEFAULT_N}}",
-                    parent=main_task,
+                l1_desc = table_type.replace('_', ' ').title()
+                l1_task = prog.add_task(
+                    f"[white]{l1_desc:<{DEFAULT_N}}",
+                    parent=l0_task,
                     total=len(levels)
                 )
                 base_table = self.tables[table_type][self.mode]
@@ -897,21 +897,21 @@ class _TableProcessor(_ProcessingMixin):
                 for level in levels:
                     new_desc = f"{table_type.replace('_', ' ').title()} → {level.capitalize()}"
                     prog.update(
-                        child_task,
+                        l1_task,
                         description=f"[white]{new_desc:<{DEFAULT_N}}",
                         refresh=True
                     )
                     start_time = time.perf_counter()
-                    processed[level] = collapse_taxa(base_table, level, prog, child_task)
+                    processed[level] = collapse_taxa(base_table, level, prog, l1_task)
                     duration = time.perf_counter() - start_time
                     if self.verbose:
                         logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
-                    prog.update(child_task, advance=1)
+                    prog.update(l1_task, advance=1)
                     
                 # Store processed tables and clean up
                 self.tables[table_type] = processed
-                prog.remove_task(child_task)
-                prog.update(main_task, advance=1)
+                prog.remove_task(l1_task)
+                prog.update(l0_task, advance=1)
     
     def _create_presence_absence(self) -> None:
         """Creates presence/absence versions of feature tables."""
