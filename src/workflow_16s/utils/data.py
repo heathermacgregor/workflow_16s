@@ -705,6 +705,7 @@ def collapse_taxa(
     Raises:
         ValueError: For invalid target_level.
     """
+    
     table = table.copy()
     table = to_biom(table)
         
@@ -717,6 +718,12 @@ def collapse_taxa(
 
     # Create taxonomy mapping
     id_map = {}
+    sub_desc = level.capitalize()
+    sub_task = progress.add_task(
+        f"[white]{l1_desc:<{DEFAULT_N}}",
+        parent=task_id,
+        total=len(table.ids(axis='observation').astype(str))
+    )
     for taxon in table.ids(axis='observation').astype(str):
         try:
             parts = taxon.split(';')
@@ -727,7 +734,7 @@ def collapse_taxa(
         except Exception as e:
             logger.error(f"Mapping failed for taxon {taxon}: {e!r}")
         finally:
-            progress.update(task_id, advance=1)
+            progress.update(sub_task, advance=1)
 
     # Collapse table
     collapsed_table = table.collapse(
@@ -736,7 +743,7 @@ def collapse_taxa(
         axis='observation',
         include_collapsed_metadata=False
     ).remove_empty()
-    
+    progress.remove_task(sub_task)
     return collapsed_table
   
 
