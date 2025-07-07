@@ -175,6 +175,27 @@ def tsne(
     return create_result_dataframe(embeddings, df.index, "TSNE", n_components)
 
 
+import os
+import numpy as np
+from multiprocessing import get_context
+from umap import UMAP  # Ensure correct import: `from umap import UMAP`
+
+# Top-level helper function (required for pickling in "spawn" context)
+def _run_umap_isolated(
+    data: np.ndarray,
+    n_components: int,
+    random_state: int
+) -> np.ndarray:
+    os.environ['NUMBA_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    reducer = UMAP(
+        n_components=n_components,
+        init='random',
+        random_state=random_state,
+        n_jobs=1  # Force single-threaded in worker
+    )
+    return reducer.fit_transform(data)
+
 def umap(
     table: Union[Dict, Table, pd.DataFrame],
     n_components: int = DEFAULT_N_UMAP,
@@ -187,20 +208,11 @@ def umap(
     validate_component_count(n_components)
     n_components = safe_component_limit(df, n_components)
     
-    # Wrapper function for process isolation
-    def _run_umap(data: np.ndarray) -> np.ndarray:
-        os.environ['NUMBA_NUM_THREADS'] = '1'
-        os.environ['OMP_NUM_THREADS'] = '1'
-        reducer = UMAP(
-            n_components=n_components,
-            init='random',
-            random_state=random_state,
-            n_jobs=1
-        )
-        return reducer.fit_transform(data)
-    
-    # Execute in isolated process
+    # Execute in isolated process using top-level function
     with get_context("spawn").Pool(1) as pool:
-        embeddings = pool.apply(_run_umap, (df.values,))
+        embeddings = pool.apply(
+            _run_umap_isolated,
+            (df.values, n_components, random_state)
+        )
     
     return create_result_dataframe(embeddings, df.index, "UMAP", n_components)
