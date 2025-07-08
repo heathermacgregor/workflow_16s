@@ -142,25 +142,25 @@ ordination:
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
   presence_absence:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "jaccard"
     tsne: False #True
     umap: False #True
   filtered:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
     umap: False #True
   normalized:
     pca: True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
     umap: False #True
@@ -189,8 +189,9 @@ figures:
     effect_size_threshold: 0.5
     height: 600
     width: 800
+    
 violin_plots: 
-  enabled: true,
+  enabled: True
   n: 50  # Number of features to plot per category
 
 # Machine Learning
@@ -202,13 +203,13 @@ ml:
     - 'normalized'
   levels:
     - 'genus'
-    - 'family'
+    #- 'family'
     #- 'order'
     #- 'class'
     #- 'phylum'
   methods:
     - 'rfe'
-    - 'select_k_best'
+    #- 'select_k_best'
     #- 'chi_squared'
     #- 'lasso'
     #- 'shap'
