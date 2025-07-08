@@ -1285,18 +1285,18 @@ class _AnalysisManager(_ProcessingMixin):
                         prog.update(master_task, advance=1)
                     
                     # Complete level task after all its methods
-                    elapsed = time.time() - prog.tasks[level_task].start_time
-                    prog.update(level_task, advance=len(enabled_levels), refresh=True, elapsed=elapsed)
+                    #elapsed = time.time() - prog.tasks[level_task].start_time
+                    #prog.update(level_task, advance=len(enabled_levels), refresh=True, elapsed=elapsed)
                     prog.remove_task(level_task)
                 
                 # Complete table task after all its levels
-                elapsed = time.time() - prog.tasks[table_task].start_time
-                prog.update(table_task, advance=len(levels) * len(enabled_levels), refresh=True, elapsed=elapsed)
+                #elapsed = time.time() - prog.tasks[table_task].start_time
+                #prog.update(table_task, advance=len(levels) * len(enabled_levels), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
             
             # Complete master task
-            elapsed = time.time() - prog.tasks[master_task].start_time
-            prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
+            #elapsed = time.time() - prog.tasks[master_task].start_time
+            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
             
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
@@ -1394,18 +1394,18 @@ class _AnalysisManager(_ProcessingMixin):
                             prog.update(master_task, advance=1)
                     
                     # Complete level task after all its methods
-                    elapsed = time.time() - prog.tasks[level_task].start_time
-                    prog.update(level_task, completed=len(enabled_for_table_type), refresh=True, elapsed=elapsed)
+                    #elapsed = time.time() - prog.tasks[level_task].start_time
+                    #prog.update(level_task, completed=len(enabled_for_table_type), refresh=True, elapsed=elapsed)
                     prog.remove_task(level_task)
                 
                 # Complete table task after all its levels
-                elapsed = time.time() - prog.tasks[table_task].start_time
-                prog.update(table_task, completed=len(levels) * len(enabled_for_table_type), refresh=True, elapsed=elapsed)
+                #elapsed = time.time() - prog.tasks[table_task].start_time
+                #prog.update(table_task, completed=len(levels) * len(enabled_for_table_type), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
             
             # Complete master task
-            elapsed = time.time() - prog.tasks[master_task].start_time
-            prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
+            #elapsed = time.time() - prog.tasks[master_task].start_time
+            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
@@ -1678,18 +1678,18 @@ class _AnalysisManager(_ProcessingMixin):
                             prog.update(master_task, advance=1)
                     
                     # Complete level task after all its methods
-                    elapsed = time.time() - prog.tasks[level_task].start_time
-                    prog.update(level_task, completed=len(methods), refresh=True, elapsed=elapsed)
+                    #elapsed = time.time() - prog.tasks[level_task].start_time
+                    #prog.update(level_task, completed=len(methods), refresh=True, elapsed=elapsed)
                     prog.remove_task(level_task)
                 
                 # Complete table task after all its levels
-                elapsed = time.time() - prog.tasks[table_task].start_time
-                prog.update(table_task, completed=len(levels) * len(methods), refresh=True, elapsed=elapsed)
+                #elapsed = time.time() - prog.tasks[table_task].start_time
+                #prog.update(table_task, completed=len(levels) * len(methods), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
             
             # Complete master task
-            elapsed = time.time() - prog.tasks[master_task].start_time
-            prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
+            #elapsed = time.time() - prog.tasks[master_task].start_time
+            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
                         
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
