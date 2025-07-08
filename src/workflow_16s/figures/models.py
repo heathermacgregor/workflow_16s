@@ -550,7 +550,7 @@ def plot_shap(
     )
     # Create dependency plots for top features
     dependency_figs = []
-    if dependency_top_features > 0:
+    if n_features > 0:
         # Get top n features from bar plot data
         top_features = bar_fig.data[0].y[:n_features]
         
