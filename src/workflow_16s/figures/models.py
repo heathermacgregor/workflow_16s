@@ -514,6 +514,7 @@ def plot_shap(
     feature_names: list, 
     n_features: int = 20, 
     output_dir: Union[str, Path] = None,
+    show: bool = False,
     verbose: bool = False
 ) -> Tuple[go.Figure, go.Figure, List[go.Figure]]:
     """
@@ -525,7 +526,8 @@ def plot_shap(
         feature_names:  List of feature names.
         n_features:     Maximum features to display.
         output_dir:
-        verbose:
+        show:
+        verbose:        Verbosity flag.
     
     Returns:
         Tuple of bar_plot_fig, beeswarm_plot_fig, dependency_plot_figs.
