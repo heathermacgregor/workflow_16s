@@ -189,7 +189,10 @@ figures:
     effect_size_threshold: 0.5
     height: 600
     width: 800
-    
+violin_plots: 
+  enabled: true,
+  n: 50  # Number of features to plot per category
+
 # Machine Learning
 run_ml: True
 ml:
