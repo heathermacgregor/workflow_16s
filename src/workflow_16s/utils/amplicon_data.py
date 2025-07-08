@@ -21,10 +21,8 @@ from workflow_16s.figures.merged import (
     mds as plot_mds,
     pca as plot_pca,
     pcoa as plot_pcoa,
-    sample_map_categorical,
-    create_alpha_diversity_boxplot,
-    create_alpha_diversity_stats_plot,
-    plot_alpha_correlations
+    create_alpha_diversity_boxplot, create_alpha_diversity_stats_plot,
+    plot_alpha_correlations, sample_map_categorical, violin_feature
 )
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
@@ -1069,6 +1067,8 @@ class _AnalysisManager(_ProcessingMixin):
         if self.faprotax_enabled and self.top_contaminated_features:
             self._annotate_top_features()
 
+        self._generate_violin_plots(n=cfg.get("violin_plots", {}).get("n", 50))
+
     def _get_cached_faprotax(
         self, 
         taxon: str
@@ -1138,19 +1138,27 @@ class _AnalysisManager(_ProcessingMixin):
         self.figures["alpha_correlations"] = {}
         
         with get_progress_bar() as prog:
-            l0_desc = "Running alpha diversity analysis..."
-            l0_task = prog.add_task(
+            main_desc = "Running alpha diversity analysis..."
+            main_task = prog.add_task(
                 f"[white]{l0_desc:<{DEFAULT_N}}",
-                total=n
+                total=n #len(self.tables.items()) #n
             )
             
             for table_type, levels in self.tables.items():
                 # Skip table types not enabled in config
                 if not enabled_table_types.get(table_type, False):
                     continue
-                    
+
                 table_cfg = enabled_table_types[table_type]
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
+                
+                table_desc = table_type.replace('_', ' ').title()
+                table_task = prog.add_task(
+                    f"[white]{l1_desc:<{DEFAULT_N}}",
+                    parent=main_task,
+                    total=len(enabled_levels)
+                )    
+                
                 for level in enabled_levels:
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
@@ -1160,16 +1168,13 @@ class _AnalysisManager(_ProcessingMixin):
                         self.alpha_diversity[table_type] = {}
                     if level not in self.alpha_diversity[table_type]:
                         self.alpha_diversity[table_type][level] = {}
-                        
-                    l1_desc = " | ".join([
-                        table_type.replace('_', ' ').title(), 
-                        level.capitalize()
-                    ]) 
-                    l1_task = prog.add_task(
+
+                    level_desc = level.capitalize()
+                    level_task = prog.add_task(
                         f"[white]{l1_desc:<{DEFAULT_N}}",
-                        parent=l0_task,
+                        parent=level_task,
                         total=1
-                    )
+                    )    
                     
                     try:
                         # Convert to DataFrame and compute alpha diversity
@@ -1183,6 +1188,7 @@ class _AnalysisManager(_ProcessingMixin):
                         table_output_dir = Path(self.table_output_dir) / 'alpha_diversity' / table_type / level
                         table_output_dir.mkdir(parents=True, exist_ok=True)
                         alpha_df.to_csv(table_output_dir / 'results.tsv', sep='\t', index=True)
+                        
                         # Run correlation analysis if enabled
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                             corr_results = analyze_alpha_correlations(
@@ -1194,6 +1200,7 @@ class _AnalysisManager(_ProcessingMixin):
                             self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
                             #df = pd.DataFrame.from_dict([corr_results], orient='index')
                             #df.to_csv(table_output_dir / 'correlations.tsv', sep='\t', index=True)
+                            
                             # Generate correlation figures
                             plot_dir = self.figure_output_dir / "alpha_correlations" / table_type / level
                             plot_dir.mkdir(parents=True, exist_ok=True)
@@ -1272,10 +1279,14 @@ class _AnalysisManager(_ProcessingMixin):
                     except Exception as e:
                         logger.error(f"Alpha diversity failed for {table_type}/{level}: {e}")
                         
-                    prog.update(l1_task, completed=1)
-                    prog.remove_task(l1_task)    
-                    prog.update(l0_task, advance=1)
-                
+                    prog.update(level_task, completed=1)
+                    prog.remove_task(level_task)    
+                    prog.update(table_task, advance=1)
+                    prog.update(main_task, advance=1)
+                prog.update(table_task, completed=1)
+                prog.remove_task(table_task)
+            prog.update(main_task, completed=1)
+            
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
         grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -1686,6 +1697,73 @@ class _AnalysisManager(_ProcessingMixin):
                         f"Statistical features: {len(stat_set)}, "
                         f"Overlap: {len(overlap)} ({jaccard:.1%})"
                     )
+                    
+    def _generate_violin_plots(self, n=50):
+        """Generate violin plots for top features"""
+        if not hasattr(self, 'figures'):
+            self.figures = {}
+            
+        self.figures['violin'] = {'contaminated': {}, 'pristine': {}}
+        
+        # Process contaminated features
+        for feat in self.top_contaminated_features[:n]:
+            try:
+                table_type = feat['table_type']
+                level = feat['level']
+                feature_name = feat['feature']
+                
+                # Get the table for this feature
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                
+                # Merge with metadata to get status column
+                merged_df = df.merge(
+                    self.meta[[DEFAULT_SYMBOL_COL]], 
+                    left_index=True, 
+                    right_index=True
+                )
+                
+                # Generate violin plot
+                output_dir = self.figure_output_dir / 'violin' / 'contaminated' / table_type / level
+                fig = violin_feature(
+                    df=merged_df,
+                    feature=feature_name,
+                    output_dir=output_dir,
+                    status_col=DEFAULT_SYMBOL_COL
+                )
+                self.figures['violin']['contaminated'][feature_name] = fig
+            except Exception as e:
+                logger.error(f"Failed to generate violin plot for {feature_name}: {e}")
+        
+        # Process pristine features
+        for feat in self.top_pristine_features[:n]:
+            try:
+                table_type = feat['table_type']
+                level = feat['level']
+                feature_name = feat['feature']
+                
+                # Get the table for this feature
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                
+                # Merge with metadata to get status column
+                merged_df = df.merge(
+                    self.meta[[DEFAULT_SYMBOL_COL]], 
+                    left_index=True, 
+                    right_index=True
+                )
+                
+                # Generate violin plot
+                output_dir = self.figure_output_dir / 'violin' / 'pristine' / table_type / level
+                fig = violin_feature(
+                    df=merged_df,
+                    feature=feature_name,
+                    output_dir=output_dir,
+                    status_col=DEFAULT_SYMBOL_COL
+                )
+                self.figures['violin']['pristine'][feature_name] = fig
+            except Exception as e:
+                logger.error(f"Failed to generate violin plot for {feature_name}: {e}")
 
 class AmpliconData:
     """
