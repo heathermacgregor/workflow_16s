@@ -473,25 +473,95 @@ def _format_ml_section(
     ml_features: pd.DataFrame
 ) -> str:
     """
-    Generate HTML for machine learning results section.
+    Generate HTML for machine learning results section with MCC tooltip.
     
     Args:
         ml_metrics:  Model performance metrics DataFrame.
         ml_features: Feature importance DataFrame.
     
     Returns:
-        HTML string for ML section with interactive tables.
+        HTML string for ML section with interactive tables and MCC tooltip.
     """
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
     
+    ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
+    
+    # Add tooltips to headers
+    tooltip_map = {
+        "MCC": (
+            "Balanced classifier metric (-1 to 1) that considers all confusion matrix values. "
+            "Interpreting scores:<br>"
+            "✓ 1.0 = Perfect prediction<br>"
+            "✓ 0.8 = Strong model<br>"
+            "✓ 0.5 = Moderate<br>"
+            "✓ 0.0 = Random guessing<br>"
+            "✓ -1.0 = Inverse prediction<br>"
+            "<i>Ideal for imbalanced data where accuracy is misleading</i>"
+        ),
+        "ROC AUC": (
+            "Probability that random positive ranks higher than random negative. "
+            "Interpreting scores:<br>"
+            "✓ 0.90-1.00 = Excellent separation<br>"
+            "✓ 0.80-0.90 = Good discrimination<br>"
+            "✓ 0.70-0.80 = Fair performance<br>"
+            "✓ 0.60-0.70 = Poor discrimination<br>"
+            "✓ 0.50 = Random ordering<br>"
+            "<i>Robust to class imbalance - shows overall ranking ability</i>"
+        ),
+        "F1 Score": (
+            "Balance between precision (avoid false alarms) and recall (find all positives). "
+            "Interpreting scores:<br>"
+            "✓ 0.90+ = Exceptional balance<br>"
+            "✓ 0.80-0.90 = Strong performance<br>"
+            "✓ 0.60-0.80 = Moderate utility<br>"
+            "✓ &lt;0.60 = Significant tradeoffs<br>"
+            "<i>Crucial when false positives and false negatives have similar costs</i>"
+        ),
+        "PR AUC": (
+            "Positive-class focused metric for imbalanced data. "
+            "Interpreting scores:<br>"
+            "✓ 0.90+ = Excellent positive identification<br>"
+            "✓ 0.70-0.90 = Good minority class handling<br>"
+            "✓ 0.50-0.70 = Limited reliability<br>"
+            "✓ &lt;0.50 = Fails on minority class<br>"
+            "<i>Superior to ROC AUC when negatives vastly outnumber positives</i>"
+        )
+    }
+    ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
+    
+    # Add table functionality
+    enhanced_metrics = f"""
+    <div class="table-container" id="container-ml-metrics-table">
+        {ml_metrics_html}
+        <div class="table-controls">
+            <div class="pagination-controls">
+                <span>Rows per page:</span>
+                <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="-1">All</option>
+                </select>
+                <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
+                <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
+            </div>
+        </div>
+    </div>
+    """
+    
+    # Prepare features table
+    features_html = _add_table_functionality(ml_features, 'ml-features-table')
+    
     return f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
-        {_add_table_functionality(ml_metrics, 'ml-metrics-table')}
+        {enhanced_metrics}
         
         <h3>Top Features</h3>
-        {_add_table_functionality(ml_features, 'ml-features-table')}
+        {features_html}
     </div>
     """
 
@@ -703,7 +773,32 @@ def _alpha_diversity_to_nested_html(
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data
     
-
+def _add_header_tooltips(
+    table_html: str, 
+    tooltip_map: Dict[str, str]
+) -> str:
+    """
+    Add tooltips to table headers based on a mapping.
+    
+    Args:
+        table_html: HTML string of the table
+        tooltip_map: Dictionary mapping header text to tooltip content
+    
+    Returns:
+        Modified HTML string with tooltips added to specified headers
+    """
+    for header, tooltip_text in tooltip_map.items():
+        tooltip_html = (
+            f'<span class="tooltip">{header}'
+            f'<span class="tooltiptext">{tooltip_text}</span>'
+            f'</span>'
+        )
+        table_html = table_html.replace(
+            f'<th>{header}</th>', 
+            f'<th>{tooltip_html}</th>'
+        )
+    return table_html
+    
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     """
     Enhance DataFrame HTML with interactive features.
@@ -981,11 +1076,60 @@ def generate_html_report(
         logger.error(f"Error reading JavaScript file: {e}")
         table_js = ""
     # CSS
+    # Append tooltip CSS to existing styles
+    tooltip_css = """
+    /* Tooltip styles */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+        cursor: help;
+        border-bottom: 1px dashed #3498db;
+    }
+    
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 280px;
+        background-color: #222;
+        color: #fff;
+        text-align: left;
+        border-radius: 6px;
+        padding: 12px;
+        position: absolute;
+        z-index: 1000;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 14px;
+        line-height: 1.5;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+    
+    .tooltip .tooltiptext::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: #222 transparent transparent transparent;
+    }
+    
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    """
+    
+    # CSS
     try:
         css_content = css_path.read_text(encoding='utf-8')
+        css_content += tooltip_css  # Append tooltip styles
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
-        css_content = ""
+        css_content = tooltip_css  # Fallback to just tooltip styles
     # HTML template
     try:
         html_template = html_template_path.read_text(encoding="utf-8")
