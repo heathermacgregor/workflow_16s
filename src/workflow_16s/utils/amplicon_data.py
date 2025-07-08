@@ -1155,7 +1155,7 @@ class _AnalysisManager(_ProcessingMixin):
             return
 
         with get_progress_bar() as prog:
-            master_desc = f"Running alpha diversity analysis for '{group_column}'..."
+            master_desc = f"Running alpha diversity analysis for '{group_col}'..."
             master_task = prog.add_task(
                 f"[white]{master_desc:<{DEFAULT_N}}", 
                 total=n, # Total tasks
@@ -1203,7 +1203,7 @@ class _AnalysisManager(_ProcessingMixin):
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
                             metadata=self.meta,
-                            group_column=group_column,
+                            group_column=group_col,
                             parametric=parametric
                         )
                         self.alpha_diversity[table_type][level]['stats'] = stats_df
