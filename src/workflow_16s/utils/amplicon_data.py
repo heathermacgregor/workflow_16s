@@ -80,6 +80,16 @@ PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 # ===================================== CLASSES ====================================== #
 
+def _init_dict_level(a, b, c=None, d=None, e=None):
+    if b not in a:
+        a[b] = {}
+    if c and c not in a[b]:
+        a[b][c] = {}
+    if d and d not in a[b][c]:
+        a[b][c][d] = {}
+    if e and e not in a[b][c][d]:
+        a[b][c][d][e] = {}
+
 class _ProcessingMixin:
     """
     Provides reusable methods for processing steps with progress tracking and logging.
@@ -877,40 +887,46 @@ class _TableProcessor(_ProcessingMixin):
         """Collapses feature tables to different taxonomic levels."""
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
-            l0_desc = "Collapsing taxonomy..."
-            l0_task = prog.add_task(
-                f"[white]{l0_desc:<{DEFAULT_N}}",
+            master_desc = "Collapsing taxonomy..."
+            master_task = prog.add_task(
+                f"[white]{master_desc:<{DEFAULT_N}}",
                 total=len(self.tables)
             )   
             
             for table_type in list(self.tables.keys()):
-                l1_desc = table_type.replace('_', ' ').title()
-                l1_task = prog.add_task(
-                    f"[white]{l1_desc:<{DEFAULT_N}}",
-                    parent=l0_task,
+                table_desc = table_type.replace('_', ' ').title()
+                table_task = prog.add_task(
+                    f"[white]{table_desc:<{DEFAULT_N}}",
+                    parent=master_task,
                     total=len(levels)
                 )
                 base_table = self.tables[table_type][self.mode]
                 processed = {}
                 
                 for level in levels:
-                    new_desc = f"{table_type.replace('_', ' ').title()} → {level.capitalize()}"
-                    prog.update(
-                        l1_task,
-                        description=f"[white]{new_desc:<{DEFAULT_N}}",
-                        refresh=True
+                    level_desc = f"{table_type.replace('_', ' ').title()} → {level.capitalize()}"
+                    level_task = prog.add_task(
+                        f"[white]{level_desc:<{DEFAULT_N}}",
+                        parent=table_task,
+                        total=1
                     )
-                    start_time = time.perf_counter()
-                    processed[level] = collapse_taxa(base_table, level, prog, l1_task)
-                    duration = time.perf_counter() - start_time
-                    if self.verbose:
-                        logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
-                    prog.update(l1_task, advance=1)
+                    try:
+                        start_time = time.perf_counter()
+                        processed[level] = collapse_taxa(base_table, level, prog, table_task)
+                        duration = time.perf_counter() - start_time
+                        if self.verbose:
+                            logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
+                    except Exception as e:
+                        logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
+                        processed[level] = None
+                    finally:
+                        prog.update(level_task, advance=1) # Update level task and remove
+                        prog.remove_task(level_task)
+                        prog.update(table_task, advance=1) # Update table task
                     
-                # Store processed tables and clean up
-                self.tables[table_type] = processed
-                prog.remove_task(l1_task)
-                prog.update(l0_task, advance=1)
+                self.tables[table_type] = processed # Store processed tables
+                prog.remove_task(table_task)        # Remove completed table task
+                prog.update(master_task, advance=1) # Update master task
     
     def _create_presence_absence(self) -> None:
         """Creates presence/absence versions of feature tables."""
@@ -919,38 +935,37 @@ class _TableProcessor(_ProcessingMixin):
                
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
-            main_desc = "Converting to Presence/Absence..."
-            main_task = prog.add_task(
-                f"{main_desc:<{DEFAULT_N}}",
-                total=1  
-            )
-            child_desc = "Collapsing Presence Absence"
-            child_task = prog.add_task(
-                f"[white]{child_desc:<{DEFAULT_N}}",
-                parent=main_task,
-                total=len(levels)
+            master_desc = "Converting to Presence/Absence..."
+            master_task = prog.add_task(
+                f"{master_desc:<{DEFAULT_N}}",
+                total=len(levels)  
             )
             raw_table = self.tables["raw"][self.mode]
             processed = {}
             
             for level in levels:
-                new_desc = f"Presence Absence → {level.capitalize()}"
-                prog.update(
-                    child_task,
-                    description=f"[white]{new_desc:<{DEFAULT_N}}",
-                    refresh=True
+                level_desc = f"Presence Absence → {level.capitalize()}"
+                level_task = prog.add_task(
+                    f"[white]{child_desc:<{DEFAULT_N}}",
+                    parent=master_task,
+                    total=1
                 )
-                start_time = time.perf_counter()
-                processed[level] = presence_absence(raw_table, level)
-                duration = time.perf_counter() - start_time
-                if self.verbose:
-                    logger.debug(f"Created PA for {level} in {duration:.2f}s")
-                prog.update(child_task, advance=1)
+                try:
+                    start_time = time.perf_counter()
+                    processed[level] = presence_absence(raw_table, level)
+                    duration = time.perf_counter() - start_time
+                    if self.verbose:
+                        logger.debug(f"Created Presence/Absence table for {level} in {duration:.2f}s")
+                except Exception as e:
+                    logger.error(f"Presence/Absence failed for {level}: {e}")
+                    processed[level] = None
+                finally:
+                    prog.update(level_task, advance=1) # Update level task and remove
+                    prog.remove_task(level_task)
+                    prog.update(master_task, advance=1) # Update master task
                 
-            # Store processed tables and clean up
+            # Store processed tables 
             self.tables["presence_absence"] = processed
-            prog.remove_task(child_task)
-            prog.update(main_task, advance=1)
 
     def _save_tables(self) -> None:
         """Saves processed tables to disk in BIOM format."""
@@ -1030,22 +1045,25 @@ class _AnalysisManager(_ProcessingMixin):
         self.output_dir = output_dir
         self.figure_output_dir = Path(output_dir) / 'figures'
         self.table_output_dir = Path(output_dir) / 'tables'
+        self.alpha_div_output_dir = self.table_output_dir / 'alpha_diversity'
+        self.beta_div_output_dir = self.table_output_dir / 'beta_diversity'
+        self.stats_output_dir = self.table_output_dir / 'stats'
+        self.alpha_div_fig_output_dir = self.figure_output_dir / 'alpha_diversity'
+        self.beta_div_fig_output_dir = self.figure_output_dir / 'beta_diversity'
+        self.stats_fig_output_dir = self.figure_output_dir / 'stats'
         self.ml_output_dir = Path(output_dir) / 'ml'
-        self.stats: Dict[str, Any] = {}
-        self.alpha_diversity: Dict[str, Any] = {}
-        self.ordination: Dict[str, Any] = {}
-        self.models: Dict[str, Any] = {}
-        self.figures: Dict[str, Any] = {}  # Initialize figures dictionary
+        self.stats: Dict[str, Any] = {} # Statistical tests
+        self.alpha_diversity: Dict[str, Any] = {} # Alpha diversity
+        self.ordination: Dict[str, Any] = {} # Beta diversity
+        self.models: Dict[str, Any] = {} # ML models
+        self.figures: Dict[str, Any] = {}  # Figures
         self.top_contaminated_features: List[Dict] = []
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
-        self.alpha_diversity_results: Dict[str, Dict[str, pd.DataFrame]] = {}
-        self.alpha_diversity_stats: Dict[str, Dict[str, pd.DataFrame]] = {}
-        self.alpha_correlations: Dict[str, Dict[str, Dict[str, pd.DataFrame]]] = {}  # NEW: Initialize correlations
 
         # Process in stages and clear intermediates
-        self._run_alpha_diversity_analysis()  # NEW: Run alpha diversity analysis
+        self._run_alpha_diversity_analysis()  
         self._run_statistical_tests()
         stats_copy = deepcopy(self.stats)
 
@@ -1062,7 +1080,7 @@ class _AnalysisManager(_ProcessingMixin):
         }
         self._run_ml_feature_selection(ml_tables)
         self._compare_top_features()
-        del ml_tables
+        del ml_tables # Free memory
 
         # Add FAPROTAX annotations only to top features
         if self.faprotax_enabled and self.top_contaminated_features:
@@ -1108,27 +1126,16 @@ class _AnalysisManager(_ProcessingMixin):
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
 
     def _run_alpha_diversity_analysis(self) -> None:
-        """Run alpha diversity analysis based on configuration settings."""
-        def _init_table_dicts(table_type):
-            if table_type not in self.alpha_diversity:
-                self.alpha_diversity[table_type] = {}
-            if "alpha_diversity" not in self.figures:
-                self.figures["alpha_diversity"] = {}
-            if table_type not in self.figures["alpha_diversity"]:
-                self.figures["alpha_diversity"][table_type] = {}
-        def _init_level_dicts(table_type, level):
-            if level not in self.alpha_diversity[table_type]:
-                self.alpha_diversity[table_type][level] = {}
-            if level not in self.figures["alpha_diversity"][table_type]:
-                self.figures["alpha_diversity"][table_type][level] = {}
-                
+        """Run alpha diversity analysis based on configuration settings."""      
         # Check if alpha diversity analysis is enabled
         alpha_cfg = self.cfg.get("alpha_diversity", {})
         if not alpha_cfg.get("enabled", False):
             logger.info("Alpha diversity analysis is disabled in configuration.")
             return
+
+        self.alpha_div_output_dir.mkdir(parents=True, exist_ok=True)
         
-        group_column = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
         generate_plots = alpha_cfg.get("generate_plots", True)
@@ -1146,10 +1153,6 @@ class _AnalysisManager(_ProcessingMixin):
         
         if not n:
             return
-        
-        # Initialize figures structures
-        self.figures["alpha_diversity"] = {}
-        self.figures["alpha_correlations"] = {}
 
         with get_progress_bar() as prog:
             master_desc = f"Running alpha diversity analysis for '{group_column}'..."
@@ -1166,41 +1169,48 @@ class _AnalysisManager(_ProcessingMixin):
                 table_cfg = enabled_table_types[table_type]
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
                 
-                _init_table_dicts(table_type)
-                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_desc = f"Table Type: {table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     f"[white]{table_desc:<{DEFAULT_N}}",
                     parent=master_task,
-                    total=len(levels) * len(enabled_levels),
+                    total=len(enabled_levels),
                     start_time=time.time()
                 )
                 for level in enabled_levels:
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
-                        
-                    _init_level_dicts(table_type, level)
-                    level_desc = f"Level: {level.capitalize()}"
+                    
+                    level_desc = f"Level: {level.title()}"
                     level_task = prog.add_task(
                         f"[white]{level_desc:<{DEFAULT_N}}",
                         parent=table_task,
-                        total=len(enabled_levels),
+                        total=1,
                         start_time=time.time()
                     )
-                    try:
+                    try: 
+                        _init_dict_level(self.alpha_diversity, table_type, level)  
                         # Convert to DataFrame and compute alpha diversity
                         df = table_to_df(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
                         # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        alpha_df.to_csv(self.alpha_div_output_dir / f'{table_type}.{level}.main.tsv', sep='\t', index=True)
                         if alpha_df.empty:
                             logger.error(f"Alpha diversity table empty for {table_type}/{level}")
                             continue
-                        # Save results to a file
-                        table_output_dir = Path(self.table_output_dir) / 'alpha_diversity' 
-                        table_output_dir.mkdir(parents=True, exist_ok=True)
-                        alpha_df.to_csv(table_output_dir / f'{table_type}.{level}.tsv', sep='\t', index=True)
-
+                        # Analyze relationship with group column
+                        stats_df = analyze_alpha_diversity(
+                            alpha_diversity_df=alpha_df,
+                            metadata=self.meta,
+                            group_column=group_column,
+                            parametric=parametric
+                        )
+                        self.alpha_diversity[table_type][level]['stats'] = stats_df
+                        stats_df.to_csv(
+                            self.table_output_dir / f'{table_type}.{level}.stats.{group_col}.tsv', 
+                            sep='\t', index=True
+                        )
                         # Run correlation analysis if enabled
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                             corr_results = analyze_alpha_correlations(
@@ -1210,29 +1220,19 @@ class _AnalysisManager(_ProcessingMixin):
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
                             self.alpha_diversity[table_type][level]['correlations'] = corr_results
-                            self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
-                            #df = pd.DataFrame.from_dict([corr_results], orient='index')
-                            #df.to_csv(table_output_dir / 'correlations.tsv', sep='\t', index=True)
-                            
-                        # Analyze relationship with group column
-                        stats_df = analyze_alpha_diversity(
-                            alpha_diversity_df=alpha_df,
-                            metadata=self.meta,
-                            group_column=group_column,
-                            parametric=parametric
-                        )
-                        self.alpha_diversity[table_type][level]['stats'] = stats_df
-                        stats_df.to_csv(table_output_dir / f'{table_type}.{level}.stats.tsv', sep='\t', index=True)
+                            pd.DataFrame.from_dict([corr_results], orient='index').to_csv(
+                                self.alpha_div_output_dir / f'{table_type}.{level}.correlations.{group_col}.tsv', 
+                                sep='\t', index=True
+                            )
                         
                         # Generate plots if enabled
                         if generate_plots:
-                            # Create directory for plots
-                            plot_dir = self.figure_output_dir / table_type / level / "alpha_diversity" 
-                            plot_dir.mkdir(parents=True, exist_ok=True)                           
-                            # Create boxplots for each metric
+                            _init_dict_level(self.figures, "alpha_diversity", table_type, level)  
+                            self.alpha_div_fig_output_dir.mkdir(parents=True, exist_ok=True)  
+                            
+                            # Boxplots
                             plot_cfg = alpha_cfg.get("plot", {})
                             for metric in metrics:
-                                # Get statistical results for this metric
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
                                 metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
@@ -1240,9 +1240,9 @@ class _AnalysisManager(_ProcessingMixin):
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
-                                    group_column=group_column,
+                                    group_column=group_col,
                                     metric=metric,
-                                    output_dir=plot_dir,
+                                    output_dir=self.alpha_div_fig_output_dir / table_type / level,
                                     show=False,
                                     verbose=self.verbose,
                                     add_points=plot_cfg.get("add_points", True),
@@ -1251,10 +1251,10 @@ class _AnalysisManager(_ProcessingMixin):
                                 )
                                 self.figures["alpha_diversity"][table_type][level][metric] = fig
                             
-                            # Create statistics summary plot
+                            # Statistics summary
                             stats_fig = create_alpha_diversity_stats_plot(
                                 stats_df=stats_df,
-                                output_dir=plot_dir,
+                                output_dir=self.alpha_div_fig_output_dir / table_type / level,
                                 verbose=self.verbose,
                                 effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
                             )
@@ -1262,68 +1262,40 @@ class _AnalysisManager(_ProcessingMixin):
                             
                             # Log significant results
                             sig = stats_df[stats_df['p_value'] < 0.05]
-                            if not sig.empty:
+                            if not sig.empty and self.verbose:
                                 logger.debug(
                                     f"Significant alpha diversity differences for "
                                     f"{table_type}/{level}:\n{sig.to_string()}"
                                 )
                                 
-                        if generate_plots and self.cfg["alpha_diversity"].get("correlation_analysis", True):
-                            corr_figures = plot_alpha_correlations(
-                                corr_results,
-                                output_dir=plot_dir,
-                                top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
-                            )
-                            self.figures["alpha_diversity"][table_type][level]["alpha_correlations"] = corr_figures
+                            if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                                corr_figures = plot_alpha_correlations(
+                                    corr_results,
+                                    output_dir=self.alpha_div_fig_output_dir / table_type / level,
+                                    top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
+                                )
+                                self.figures["alpha_diversity"][table_type][level]["correlations"] = corr_figures
                             
                     except Exception as e:
                         logger.error(f"Alpha diversity analysis failed for {table_type}/{level}: {e}")
                         self.alpha_diversity[table_type][level]['results'] = None
+                        self.alpha_diversity[table_type][level]['stats'] = None
                         
                     finally:
-                        # Always update progress even on failure
                         prog.update(level_task, advance=1)
+                        prog.remove_task(level_task)
                         prog.update(table_task, advance=1)
                         prog.update(master_task, advance=1)
-                    
-                    # Complete level task after all its methods
-                    #elapsed = time.time() - prog.tasks[level_task].start_time
-                    #prog.update(level_task, advance=len(enabled_levels), refresh=True, elapsed=elapsed)
-                    prog.remove_task(level_task)
                 
-                # Complete table task after all its levels
-                #elapsed = time.time() - prog.tasks[table_task].start_time
-                #prog.update(table_task, advance=len(levels) * len(enabled_levels), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
-            
-            # Complete master task
-            #elapsed = time.time() - prog.tasks[master_task].start_time
-            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
             
     def _run_statistical_tests(self) -> None:
         """Runs statistical tests on all tables and levels."""
-        def _init_table_dicts(table_type):
-            if table_type not in self.stats:
-                self.stats[table_type] = {}
-            if "stats" not in self.figures:
-                self.figures["stats"] = {}
-            if table_type not in self.figures["stats"]:
-                self.figures["stats"][table_type] = {}
-        def _init_level_dicts(table_type, level):
-            if level not in self.stats[table_type]:
-                self.stats[table_type][level] = {}
-            if level not in self.figures["stats"][table_type]:
-                self.figures["stats"][table_type][level] = {}
-        def _init_test_dicts(table_type, level, test):
-            if test not in self.stats[table_type][level]:
-                self.stats[table_type][level][test] = {}
-            if test not in self.figures["stats"][table_type][level]:
-                self.figures["stats"][table_type][level][test] = {}
-                
-        grp_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        grp_vals = self.cfg.get("group_values", [True, False])
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        group_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
-
+        self.stats_output_dir.mkdir(parents=True, exist_ok=True)
+        
         # Calculate total tests
         n = 0
         for table_type, levels in self.tables.items():
@@ -1332,7 +1304,7 @@ class _AnalysisManager(_ProcessingMixin):
             n += len(levels) * len(enabled_for_table_type)
 
         with get_progress_bar() as prog:
-            master_desc = f"Running statistical tests for '{grp_col}'..."
+            master_desc = f"Running statistical tests for '{group_col}'..."
             master_task = prog.add_task(
                 f"{master_desc:<{DEFAULT_N}}", 
                 total=n, # Total tasks
@@ -1342,7 +1314,6 @@ class _AnalysisManager(_ProcessingMixin):
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
                 
-                _init_table_dicts(table_type)
                 table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     f"{table_desc:<{DEFAULT_N}}",
@@ -1351,7 +1322,6 @@ class _AnalysisManager(_ProcessingMixin):
                     start_time=time.time()
                 )
                 for level, table in levels.items():
-                    _init_level_dicts(table_type, level)
                     level_desc = f"Level: {level.capitalize()}"
                     level_task = prog.add_task(
                         f"{level_desc:<{DEFAULT_N}}",
@@ -1361,14 +1331,13 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     # Align table/metadata once per level
                     table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
-                    table_output_dir = Path(self.table_output_dir) / 'stats' / table_type / level
-                    table_output_dir.mkdir(parents=True, exist_ok=True)
-                    
+                
                     for test_name in enabled_for_table_type:
                         if test_name not in san.TEST_CONFIG:
                             continue
                         cfg = san.TEST_CONFIG[test_name]
-                        _init_test_dicts(table_type, level, test_name)
+                        _init_dict_level(self.stats, table_type, level)    
+                        #_init_dict_level(self.figures, "stats", table_type, level)
                         test_desc = f"Test: {cfg['name']}"
                         test_task = prog.add_task(
                             test_desc,
@@ -1380,36 +1349,25 @@ class _AnalysisManager(_ProcessingMixin):
                             result = cfg["func"](
                                 table=table_aligned,
                                 metadata=meta_aligned,
-                                group_column=grp_col,
-                                group_column_values=grp_vals,
+                                group_column=group_col,
+                                group_column_values=group_vals,
                             )
                             self.stats[table_type][level][test_name] = result
-                            result.to_csv(table_output_dir / f'{test_name}.tsv', sep='\t', index=True)
+                            
+                            result.to_csv(self.stats_output_dir / f'{table_type}.{level}.{test_name}.tsv', sep='\t', index=True)
+                            
                         except Exception as e:
                             logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
                             self.stats[table_type][level][test_name] = None
+                            
                         finally:
-                            # Always update progress even on failure
-                            #elapsed = time.time() - prog.tasks[test_task].start_time
-                            prog.update(test_task, completed=1)#, elapsed=elapsed, refresh=True)
+                            prog.update(test_task, completed=1)
                             prog.remove_task(test_task)
                             prog.update(level_task, advance=1)
                             prog.update(table_task, advance=1)
                             prog.update(master_task, advance=1)
-                    
-                    # Complete level task after all its methods
-                    #elapsed = time.time() - prog.tasks[level_task].start_time
-                    #prog.update(level_task, completed=len(enabled_for_table_type), refresh=True, elapsed=elapsed)
                     prog.remove_task(level_task)
-                
-                # Complete table task after all its levels
-                #elapsed = time.time() - prog.tasks[table_task].start_time
-                #prog.update(table_task, completed=len(levels) * len(enabled_for_table_type), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
-            
-            # Complete master task
-            #elapsed = time.time() - prog.tasks[master_task].start_time
-            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         """Identifies top features from statistical results."""
@@ -1446,9 +1404,9 @@ class _AnalysisManager(_ProcessingMixin):
         self.figures["ordination"] = {tt: {} for tt in self.tables}
 
         with get_progress_bar() as prog:
-            l0_desc = "Running beta diversity analysis..."
-            l0_task = prog.add_task(
-                f"{l0_desc:<{DEFAULT_N}}", 
+            master_desc = "Running beta diversity analysis..."
+            master_task = prog.add_task(
+                f"{master_desc:<{DEFAULT_N}}", 
                 total=total_tasks
             )
             
@@ -1462,7 +1420,7 @@ class _AnalysisManager(_ProcessingMixin):
                     
                     for level, table in levels.items():
                         # Create output directory
-                        ordir = self.figure_output_dir / level / table_type
+                        ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
                         
                         for method in enabled_methods:
@@ -1481,9 +1439,11 @@ class _AnalysisManager(_ProcessingMixin):
                 # Process results as they complete
                 for future in as_completed(futures):
                     table_type, level, method, res, fig = future.result()
-                    self.ordination[table_type].setdefault(level, {})[method] = res
-                    self.figures["ordination"][table_type].setdefault(level, {})[method] = fig
-                    prog.advance(l0_task)
+                    _init_dict_level(self.ordination, table_type, level) 
+                    self.ordination[table_type][level][method] = res
+                    _init_dict_level(self.figures, "ordination", table_type, level) 
+                    self.figures["ordination"][table_type][level][method] = fig
+                    prog.advance(master_task)
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
@@ -1523,29 +1483,12 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
-        def _init_table_dicts(table_type):
-            if table_type not in self.models:
-                self.models[table_type] = {}
-            if "ml" not in self.figures:
-                self.figures["ml"] = {}
-            if table_type not in self.figures["ml"]:
-                self.figures["ml"][table_type] = {}
-        def _init_level_dicts(table_type, level):
-            if level not in self.models[table_type]:
-                self.models[table_type][level] = {}
-            if level not in self.figures["ml"][table_type]:
-                self.figures["ml"][table_type][level] = {}
-        def _init_method_dicts(table_type, level, method):
-            if method not in self.models[table_type][level]:
-                self.models[table_type][level][method] = {}
-            if method not in self.figures["ml"][table_type][level]:
-                self.figures["ml"][table_type][level][method] = {}
         # Check if ML feature selection is enabled
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection is disabled in configuration.")
             return
-    
+            
         # Get configuration parameters
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         methods = ml_cfg.get("methods", ["rfe"])
@@ -1563,22 +1506,18 @@ class _AnalysisManager(_ProcessingMixin):
         for table_type, levels in ml_tables.items():
             if table_type not in enabled_table_types:
                 continue
-                
             # Filter levels to only include enabled levels
             filtered_levels = {
                 level: table 
                 for level, table in levels.items() 
                 if level in enabled_levels
             }
-            
             if filtered_levels:
                 filtered_ml_tables[table_type] = filtered_levels
     
         # Calculate total tasks
-        n = sum(
-            len(levels) * len(methods)
-            for table_type, levels in filtered_ml_tables.items()
-        )
+        n = sum(len(levels) * len(methods)
+                for table_type, levels in filtered_ml_tables.items())
         
         if not n:
             logger.info("No ML tasks to run after filtering by table types and levels")
@@ -1592,7 +1531,6 @@ class _AnalysisManager(_ProcessingMixin):
                 start_time=time.time()
             )
             for table_type, levels in filtered_ml_tables.items():
-                _init_table_dicts(table_type)
                 table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     f"{table_desc:<{DEFAULT_N}}",
@@ -1601,7 +1539,6 @@ class _AnalysisManager(_ProcessingMixin):
                     start_time=time.time()
                 )
                 for level, table in levels.items():
-                    _init_level_dicts(table_type, level)
                     level_desc = f"Level: {level.capitalize()}"
                     level_task = prog.add_task(
                         f"{level_desc:<{DEFAULT_N}}",
@@ -1609,8 +1546,9 @@ class _AnalysisManager(_ProcessingMixin):
                         total=len(methods),
                         start_time=time.time()
                     )
+                    level_dir = self.ml_output_dir / table_type / level
+                    level_dir.mkdir(parents=True, exist_ok=True)
                     for method in methods:
-                        _init_method_dicts(table_type, level, method)
                         method_desc = f"Method: {method.upper()}"
                         method_task = prog.add_task(
                             f"{method_desc:<{DEFAULT_N}}",
@@ -1618,7 +1556,7 @@ class _AnalysisManager(_ProcessingMixin):
                             total=1,
                             start_time=time.time()
                         )
-                        
+                        _init_dict_level(self.models, table_type, level, method) 
                         try:
                             # Skip 'chi_squared' for 'clr_transformed' tables
                             if table_type == "clr_transformed" and method == "chi_squared":
@@ -1636,66 +1574,43 @@ class _AnalysisManager(_ProcessingMixin):
                                 y.index = y.index.astype(str).str.lower()
                                 idx = X.index.intersection(y.index)
                                 X, y = X.loc[idx], y.loc[idx]
-                                
-                                output_dir = Path(self.figure_output_dir).parent / "ml" / table_type / level 
-                                
+
                                 if method == "select_k_best":
-                                    model_result = catboost_feature_selection(
-                                        metadata=y,
-                                        features=X,
-                                        output_dir=output_dir,
-                                        group_col=group_col,
-                                        method=method,
-                                        n_top_features=n_top_features,
-                                        step_size=step_size,
-                                        use_permutation_importance=False,
-                                        thread_count=n_threads
-                                    )
+                                    use_permutation_importance=False
                                 else:
-                                    model_result = catboost_feature_selection(
-                                        metadata=y,
-                                        features=X,
-                                        output_dir=output_dir,
-                                        group_col=group_col,
-                                        method=method,
-                                        n_top_features=n_top_features,
-                                        step_size=step_size,
-                                        use_permutation_importance=permutation_importance,
-                                        thread_count=n_threads
-                                    )
-                                
+                                    use_permutation_importance=permutation_importance
+                                    
+                                model_result = catboost_feature_selection(
+                                    metadata=y,
+                                    features=X,
+                                    output_dir=level_dir,
+                                    group_col=group_col,
+                                    method=method,
+                                    n_top_features=n_top_features,
+                                    step_size=step_size,
+                                    use_permutation_importance=use_permutation_importance,
+                                    thread_count=n_threads
+                                )
+
                                 self.models[table_type][level][method] = model_result
-                                self.figures["ml"][table_type][level][method]['shap_summary_bar'] = model_result['shap_summary_bar']
-                                self.figures["ml"][table_type][level][method]['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
-                                self.figures["ml"][table_type][level][method]['shap_dependency'] = model_result['shap_dependency']
+                                _init_dict_level(self.figures, "ml", table_type, level, method) 
+                                figs_method = self.figures["ml"][table_type][level][method]
+                                figs_method['shap_summary_bar'] = model_result['shap_summary_bar']
+                                figs_method['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
+                                figs_method['shap_dependency'] = model_result['shap_dependency']
                                     
                         except Exception as e:
                             logger.error(f"Model training with '{method}' failed for {table_type}/{level}: {e}")
                             self.models[table_type][level][method] = None
                                 
                         finally:
-                            # Always update progress even on failure
-                            #now = time.time()
-                            #elapsed = now - prog.tasks[method_task].start_time
-                            prog.update(method_task, completed=1)#, elapsed=elapsed, refresh=True)
+                            prog.update(method_task, completed=1)
                             prog.remove_task(method_task)
                             prog.update(level_task, advance=1)
                             prog.update(table_task, advance=1)
                             prog.update(master_task, advance=1)
-                    
-                    # Complete level task after all its methods
-                    #elapsed = time.time() - prog.tasks[level_task].start_time
-                    #prog.update(level_task, completed=len(methods), refresh=True, elapsed=elapsed)
                     prog.remove_task(level_task)
-                
-                # Complete table task after all its levels
-                #elapsed = time.time() - prog.tasks[table_task].start_time
-                #prog.update(table_task, completed=len(levels) * len(methods), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
-            
-            # Complete master task
-            #elapsed = time.time() - prog.tasks[master_task].start_time
-            #prog.update(master_task, completed=n, refresh=True, elapsed=elapsed)
                         
     def _compare_top_features(self) -> None:
         """Compares top features from ML models with statistical results."""
