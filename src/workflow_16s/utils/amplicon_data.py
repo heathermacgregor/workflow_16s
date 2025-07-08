@@ -1578,7 +1578,7 @@ class _AnalysisManager(_ProcessingMixin):
                                         method=method,
                                         n_top_features=n_top_features,
                                         step_size=step_size,
-                                        permutation_importance=False,
+                                        use_permutation_importance=False,
                                         thread_count=n_threads
                                     )
                                 else:
@@ -1590,7 +1590,7 @@ class _AnalysisManager(_ProcessingMixin):
                                         method=method,
                                         n_top_features=n_top_features,
                                         step_size=step_size,
-                                        permutation_importance=permutation_importance,
+                                        use_permutation_importance=permutation_importance,
                                         thread_count=n_threads
                                     )
                                 
