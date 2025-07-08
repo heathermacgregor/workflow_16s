@@ -104,7 +104,7 @@ def plotly_show_and_save(
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convenience for optional INFO logging
-        log_ok = (lambda msg: logger.info(msg)) if verbose else (lambda *_: None)
+        log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
 
         static_exts = {"png", "jpg", "jpeg", "pdf", "svg", "eps"}
         for ext in static_exts.intersection(save_as):
