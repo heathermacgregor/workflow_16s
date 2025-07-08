@@ -107,8 +107,11 @@ def plotly_show_and_save(
         log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
 
         static_exts = {"png", "jpg", "jpeg", "pdf", "svg", "eps"}
+        for ext in list(static_exts) + ['html']:
+            output_path = output_path.removesuffix(f'.{ext}')
+          
         for ext in static_exts.intersection(save_as):
-            target = output_path.with_suffix(f".{ext}")
+            target = f"{output_path}.{ext}"
             try:
                 fig.write_image(
                     str(target),
