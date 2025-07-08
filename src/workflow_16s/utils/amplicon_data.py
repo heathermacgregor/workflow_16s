@@ -894,7 +894,7 @@ class _TableProcessor(_ProcessingMixin):
             )   
             
             for table_type in list(self.tables.keys()):
-                table_desc = table_type.replace('_', ' ').title()
+                table_desc = f"Table Type: {table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     f"[white]{table_desc:<{DEFAULT_N}}",
                     parent=master_task,
@@ -904,7 +904,7 @@ class _TableProcessor(_ProcessingMixin):
                 processed = {}
                 
                 for level in levels:
-                    level_desc = f"{table_type.replace('_', ' ').title()} → {level.capitalize()}"
+                    level_desc = f"Level: {level.title()}"
                     level_task = prog.add_task(
                         f"[white]{level_desc:<{DEFAULT_N}}",
                         parent=table_task,
@@ -944,9 +944,9 @@ class _TableProcessor(_ProcessingMixin):
             processed = {}
             
             for level in levels:
-                level_desc = f"Presence Absence → {level.capitalize()}"
+                level_desc = f"Level: {level.capitalize()}"
                 level_task = prog.add_task(
-                    f"[white]{child_desc:<{DEFAULT_N}}",
+                    f"[white]{level_desc:<{DEFAULT_N}}",
                     parent=master_task,
                     total=1
                 )
@@ -1322,7 +1322,7 @@ class _AnalysisManager(_ProcessingMixin):
                     start_time=time.time()
                 )
                 for level, table in levels.items():
-                    level_desc = f"Level: {level.capitalize()}"
+                    level_desc = f"Level: {level.title()}"
                     level_task = prog.add_task(
                         f"{level_desc:<{DEFAULT_N}}",
                         parent=table_task,
@@ -1539,7 +1539,7 @@ class _AnalysisManager(_ProcessingMixin):
                     start_time=time.time()
                 )
                 for level, table in levels.items():
-                    level_desc = f"Level: {level.capitalize()}"
+                    level_desc = f"Level: {level.title()}"
                     level_task = prog.add_task(
                         f"{level_desc:<{DEFAULT_N}}",
                         parent=table_task,
