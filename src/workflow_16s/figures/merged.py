@@ -508,6 +508,7 @@ def create_geographical_map(
     if output_dir:
         file_stem = f"sample_map.{color_col}"
         output_dir.mkdir(parents=True, exist_ok=True)
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose=True)
         _save_figure_and_legend(
             fig, colordict, color_col, output_dir, file_stem, show, verbose
         )
@@ -616,6 +617,7 @@ def create_ordination_plot(
         plot_dir = output_dir / ordination_type.lower()
         plot_dir.mkdir(parents=True, exist_ok=True)
         file_stem = f"{ordination_type.lower()}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose=True)
         _save_figure_and_legend(
             fig, colordict, color_col, plot_dir, file_stem, show, verbose
         )
@@ -1186,7 +1188,11 @@ def create_alpha_diversity_boxplot(
             template="plotly_white",
             showlegend=False
         )
-        fig = _apply_common_layout(fig, group_column, metric.replace('_', ' ').title(), f"{metric.replace('_', ' ').title()} by {group_column}")
+        fig = _apply_common_layout(
+            fig, group_column, 
+            metric.replace('_', ' ').title(), 
+            f"{metric.replace('_', ' ').title()} by '{group_column}'"
+        )
         # Add statistical annotations if requested
         if add_stat_annot and len(groups) > 1:
             try:
@@ -1224,7 +1230,7 @@ def create_alpha_diversity_boxplot(
                     yref="paper",
                     text=f"{test_name} p={p_val:.4f}",
                     showarrow=False,
-                    font=dict(size=12)
+                    font=dict(size=14)
                 )
             except Exception as e:
                 if verbose:
