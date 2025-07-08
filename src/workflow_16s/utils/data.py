@@ -728,7 +728,7 @@ def collapse_taxa(
             new_desc = f"Feature: {taxon}"
             if len(new_desc) > DEFAULT_N:
                 new_desc = f"{new_desc[:DEFAULT_N-3]}..."
-            progress.update(sub_task, description=)
+            progress.update(sub_task, description=new_desc)
             parts = taxon.split(';')
             truncated = ';'.join(
                 parts[:level_idx + 1]
