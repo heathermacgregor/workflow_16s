@@ -131,14 +131,14 @@ alpha_diversity:
         - 'genus'
         - 'family'
         
-  correlation_analysis: true
+  correlation_analysis: False #True
   max_categories: 20       # Max unique values for categorical variables
   min_group_size: 5        # Min samples per group for valid comparison
   top_columns: 20          # Number of top associations to show
     
 # Beta Diversity + Ordination
 ordination:
-  max_workers: 2  # Max concurrent ordination tasks
+  max_workers: 8  # Max concurrent ordination tasks
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
@@ -150,26 +150,26 @@ ordination:
     pca: False
     pcoa: True
     pcoa_metric: "jaccard"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   filtered:
     pca: False
     pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   normalized:
     pca: True
     pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   clr_transformed:
-    pca: True
+    pca: False #True
     pcoa: True
     pcoa_metric: "euclidean"
     tsne: True
-    umap: True
+    umap: False #True
 
 # Functional Prediction
 faprotax: True
@@ -184,8 +184,8 @@ figures:
     - "env_material"
     - "country"
   alpha_diversity:
-    add_points: true
-    add_stat_annot: true
+    add_points: True
+    add_stat_annot: True
     effect_size_threshold: 0.5
     height: 600
     width: 800
