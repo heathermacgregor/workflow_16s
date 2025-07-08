@@ -108,8 +108,8 @@ def plotly_show_and_save(
 
         static_exts = {"png", "jpg", "jpeg", "pdf", "svg", "eps"}
         for ext in list(static_exts) + ['html']:
-            output_path = output_path.removesuffix(f'.{ext}')
-          
+            output_path = str(output_path).removesuffix(f'.{ext}')
+        
         for ext in static_exts.intersection(save_as):
             target = f"{output_path}.{ext}"
             try:
@@ -129,7 +129,7 @@ def plotly_show_and_save(
                 )
         
         if 'html' in save_as:
-            target = output_path.with_suffix('.html')
+            target = f"{output_path}.{ext}"
             try:
                 fig.write_html(str(target), **write_kwargs)
                 log_ok(f"Saved figure to '{target}'.")
