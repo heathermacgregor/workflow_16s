@@ -163,25 +163,7 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
-        if (hasattr(amplicon_data, 'alpha_diversity_results') and 
-            amattr(amplicon_data, 'alpha_diversity_stats') and
-            amplicon_data.alpha_diversity_results and 
-            amplicon_data.alpha_diversity_stats):
-            
-            btns, tabs, pd = _alpha_diversity_to_nested_html(
-                alpha_diversity_results=amplicon_data.alpha_diversity_results,
-                alpha_diversity_stats=amplicon_data.alpha_diversity_stats,
-                project_dir=project_dir,
-                output_dir=output_dir,
-            )
-            
-            sections["alpha_diversity"] = {
-                "title": "Alpha Diversity",
-                "description": "Measures of within-sample diversity.",
-                "buttons": btns,
-                "tabs": tabs,
-                "plot_data": pd,
-            }
+        
         if sec_data["subsections"]:
             sections.append(sec_data)
 
@@ -857,11 +839,13 @@ def generate_html_report(
         table_js = import_js_as_str(tables_js_path)
     except Exception as e:
         logger.error(f"Error reading JavaScript file: {e}")
+        table_js = ""
     # CSS
     try:
         css_content = css_path.read_text(encoding='utf-8')
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
+        css_content = ""
     # HTML template
     try:
         html_template = html_template_path.read_text(encoding="utf-8")
@@ -885,5 +869,4 @@ def generate_html_report(
         plot_data_json=payload,
         table_js=table_js
     )
-    output_path.write_text(html, encoding="utf‑8")
-    
+    output_path.write_text(html, encoding="utf-8")
