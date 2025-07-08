@@ -1189,6 +1189,7 @@ def catboost_feature_selection(
         
     except Exception as e:
         logger.error(f"SHAP plot generation failed: {e}")
+        bar_fig, beeswarm_fig, dependency_figs = None, None, None
     
     # Return comprehensive results
     return {
