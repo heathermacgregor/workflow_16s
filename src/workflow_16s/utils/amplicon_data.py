@@ -1154,7 +1154,7 @@ class _AnalysisManager(_ProcessingMixin):
         with get_progress_bar() as prog:
             master_desc = f"Running alpha diversity analysis for '{group_column}'..."
             master_task = prog.add_task(
-                f"{master_desc:<{DEFAULT_N}}", 
+                f"[white]{master_desc:<{DEFAULT_N}}", 
                 total=n, # Total tasks
                 start_time=time.time()
             )
@@ -1169,7 +1169,7 @@ class _AnalysisManager(_ProcessingMixin):
                 _init_table_dicts(table_type)
                 table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
-                    f"{table_desc:<{DEFAULT_N}}",
+                    f"[white]{table_desc:<{DEFAULT_N}}",
                     parent=master_task,
                     total=len(levels) * len(enabled_levels),
                     start_time=time.time()
@@ -1182,7 +1182,7 @@ class _AnalysisManager(_ProcessingMixin):
                     _init_level_dicts(table_type, level)
                     level_desc = f"Level: {level.capitalize()}"
                     level_task = prog.add_task(
-                        f"{level_desc:<{DEFAULT_N}}",
+                        f"[white]{level_desc:<{DEFAULT_N}}",
                         parent=table_task,
                         total=len(enabled_levels),
                         start_time=time.time()
@@ -1613,7 +1613,7 @@ class _AnalysisManager(_ProcessingMixin):
                         _init_method_dicts(table_type, level, method)
                         method_desc = f"Method: {method.upper()}"
                         method_task = prog.add_task(
-                            method_desc,
+                            f"{method_desc:<{DEFAULT_N}}",
                             parent=level_task,
                             total=1,
                             start_time=time.time()
