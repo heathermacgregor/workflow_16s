@@ -1806,9 +1806,7 @@ class AmpliconData:
         self.top_pristine_features = am.top_pristine_features
         self.figures.update(am.figures)
         
-        self.alpha_diversity_results = am.alpha_diversity_results
-        self.alpha_diversity_stats = am.alpha_diversity_stats
-        self.alpha_correlations = am.alpha_correlations
+        self.alpha_diversity = am.alpha_diversity
 
         if verbose:
             logger.info("AmpliconData analysis finished.")
