@@ -1390,8 +1390,8 @@ class _AnalysisManager(_ProcessingMixin):
                             self.stats[table_type][level][test_name] = None
                         finally:
                             # Always update progress even on failure
-                            elapsed = time.time() - prog.tasks[test_task].start_time
-                            prog.update(test_task, completed=1, elapsed=elapsed, refresh=True)
+                            #elapsed = time.time() - prog.tasks[test_task].start_time
+                            prog.update(test_task, completed=1)#, elapsed=elapsed, refresh=True)
                             prog.remove_task(test_task)
                             prog.update(level_task, advance=1)
                             prog.update(table_task, advance=1)
@@ -1675,9 +1675,9 @@ class _AnalysisManager(_ProcessingMixin):
                                 
                         finally:
                             # Always update progress even on failure
-                            now = time.time()
-                            elapsed = now - prog.tasks[method_task].start_time
-                            prog.update(method_task, completed=1, elapsed=elapsed, refresh=True)
+                            #now = time.time()
+                            #elapsed = now - prog.tasks[method_task].start_time
+                            prog.update(method_task, completed=1)#, elapsed=elapsed, refresh=True)
                             prog.remove_task(method_task)
                             prog.update(level_task, advance=1)
                             prog.update(table_task, advance=1)
