@@ -129,7 +129,7 @@ def plotly_show_and_save(
                 )
         
         if 'html' in save_as:
-            target = f"{output_path}.{ext}"
+            target = f"{output_path}.html"
             try:
                 fig.write_html(str(target), **write_kwargs)
                 log_ok(f"Saved figure to '{target}'.")
