@@ -1115,9 +1115,9 @@ class _AnalysisManager(_ProcessingMixin):
             if table_type not in self.figures["alpha_diversity"]:
                 self.figures["alpha_diversity"][table_type] = {}
         def _init_level_dicts(table_type, level):
-            if level not in self.alpha_diversity["alpha_diversity"][table_type]:
+            if level not in self.alpha_diversity[table_type]:
                 self.alpha_diversity[table_type][level] = {}
-            if level not in self.figures[table_type]:
+            if level not in self.figures["alpha_diversity"][table_type]:
                 self.figures["alpha_diversity"][table_type][level] = {}
                 
         # Check if alpha diversity analysis is enabled
