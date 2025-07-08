@@ -149,6 +149,16 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
+        elif sec == 'violin':
+            btns, tabs, pd = _violin_to_nested_html(
+                figures[sec], id_counter, sec_data["id"]
+            )
+            plot_data.update(pd)
+            sec_data["subsections"].append({
+                "title": "Violin Plots",
+                "tabs_html": tabs,
+                "buttons_html": btns
+            })
         else:
             # Existing non-ordination sections
             flat: Dict[str, Any] = {}
@@ -567,6 +577,48 @@ def _shap_to_nested_html(
     return buttons_row, "".join(panes_html), plot_data
 
 
+def _violin_to_nested_html(
+    figures_dict: Dict[str, Any],
+    id_counter: Iterator[int],
+    prefix: str
+) -> Tuple[str, str, Dict]:
+    """Generate nested HTML structure for violin plots"""
+    buttons_html = []
+    tabs_html = []
+    plot_data = {}
+    cat_counter = itertools.count()
+    
+    for category, features in figures_dict.items():
+        if not features:
+            continue
+            
+        cat_idx = next(cat_counter)
+        cat_id = f"{prefix}-cat-{cat_idx}"
+        
+        # Create category button
+        buttons_html.append(
+            f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
+            f'data-tab="{cat_id}" '
+            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
+        )
+        
+        # Create feature tabs within category
+        feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
+            features, id_counter, cat_id
+        )
+        plot_data.update(feature_plot_data)
+        
+        tabs_html.append(
+            f'<div id="{cat_id}" class="tab-pane" '
+            f'style="display:{"block" if cat_idx==0 else "none"}">'
+            f'{feature_btns}'
+            f'{feature_tabs}'
+            f'</div>'
+        )
+    
+    return "\n".join(buttons_html), "\n".join(tabs_html), plot_data
+    
+
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     """
     Enhance DataFrame HTML with interactive features.
@@ -719,6 +771,7 @@ def _alpha_diversity_to_nested_html(
     
     return "".join(buttons), "".join(tabs), plot_data
     
+    
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -743,6 +796,8 @@ def generate_html_report(
     include_sections = include_sections or [
         k for k, v in amplicon_data.figures.items() if v
     ]
+    if 'violin' in amplicon_data.figures and 'violin' not in include_sections:
+        include_sections.append('violin')
     ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
 
     output_path = Path(output_path)
