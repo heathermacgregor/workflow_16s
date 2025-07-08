@@ -717,7 +717,7 @@ def collapse_taxa(
 
     # Create taxonomy mapping
     id_map = {}
-    sub_desc = target_level.capitalize()
+    sub_desc = "Feature:"
     sub_task = progress.add_task(
         f"[white]{sub_desc:<{DEFAULT_N}}",
         parent=task_id,
@@ -725,6 +725,7 @@ def collapse_taxa(
     )
     for taxon in table.ids(axis='observation').astype(str):
         try:
+            progress.update(sub_task, description=f"Feature: {taxon}")
             parts = taxon.split(';')
             truncated = ';'.join(
                 parts[:level_idx + 1]
