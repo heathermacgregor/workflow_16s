@@ -725,7 +725,7 @@ def collapse_taxa(
     )
     for taxon in table.ids(axis='observation').astype(str):
         try:
-            progress.update(sub_task, description=f"Feature: {taxon}")
+            progress.update(sub_task, description=f"Feature: {taxon}"[:DEFAULT_N])
             parts = taxon.split(';')
             truncated = ';'.join(
                 parts[:level_idx + 1]
