@@ -1425,7 +1425,7 @@ class _AnalysisManager(_ProcessingMixin):
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=df,  # Pass DataFrame
+                                table=table,  # Pass DataFrame
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
