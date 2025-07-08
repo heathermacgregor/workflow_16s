@@ -1620,7 +1620,7 @@ class _AnalysisManager(_ProcessingMixin):
                         # Update parent tasks
                         prog.advance(level_task)
                         prog.advance(table_task)
-                        pprog.advance(master_task)
+                        prog.advance(master_task)
                     
                     # Complete level task after all its methods
                     prog.update(
