@@ -1468,6 +1468,14 @@ class _AnalysisManager(_ProcessingMixin):
                 - Generated figures
         """
         try:
+            # Convert DataFrame back to BIOM Table if needed
+            if isinstance(table, pd.DataFrame):
+                table = Table(
+                    data=table.values.T,
+                    observation_ids=table.index.tolist(),
+                    sample_ids=table.columns.tolist(),
+                    table_id="feature_table"
+                )
             ordn = Ordination(self.cfg, ordir, verbose=False)
             # Run just this one method
             res, figs = ordn.run_tests(
