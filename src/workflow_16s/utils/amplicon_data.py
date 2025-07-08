@@ -1191,7 +1191,6 @@ class _AnalysisManager(_ProcessingMixin):
                                 max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
-                            print(corr_results)
                             self.alpha_correlations.setdefault(table_type, {})[level] = corr_results
                             #df = pd.DataFrame.from_dict([corr_results], orient='index')
                             #df.to_csv(table_output_dir / 'correlations.tsv', sep='\t', index=True)
