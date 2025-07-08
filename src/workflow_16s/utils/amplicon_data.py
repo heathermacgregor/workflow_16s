@@ -1291,7 +1291,7 @@ class _AnalysisManager(_ProcessingMixin):
                 
                 # Complete table task after all its levels
                 elapsed = time.time() - prog.tasks[table_task].start_time
-                prog.update(table_task, advance=completed=len(levels) * len(enabled_levels), refresh=True, elapsed=elapsed)
+                prog.update(table_task, advance=len(levels) * len(enabled_levels), refresh=True, elapsed=elapsed)
                 prog.remove_task(table_task)
             
             # Complete master task
