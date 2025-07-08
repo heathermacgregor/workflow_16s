@@ -1387,47 +1387,45 @@ class _AnalysisManager(_ProcessingMixin):
             )
 
     def _run_ordination(self) -> None:
-        """Runs ordination analyses on all tables and levels."""
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
+        default_ord_config = {"pca": False, "pcoa": False, "tsne": False, "umap": False}
+        
         # Calculate total tasks
         total_tasks = 0
         for table_type, levels in self.tables.items():
-            ord_config = self.cfg.get("ordination", {}).get(table_type, {})
+            ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
             enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
             total_tasks += len(levels) * len(enabled_methods)
         
         if not total_tasks:
             return
-
+    
         # Initialize structures
         self.ordination = {tt: {} for tt in self.tables}
         self.figures["ordination"] = {tt: {} for tt in self.tables}
-
+    
         with get_progress_bar() as prog:
             master_desc = "Running beta diversity analysis..."
-            master_task = prog.add_task(
-                f"{master_desc:<{DEFAULT_N}}", 
-                total=total_tasks
-            )
+            master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
             # Use thread pool with limited workers
-            max_workers = self.cfg.get("ordination", {}).get("max_workers", 1)
+            max_workers = min(4, os.cpu_count() // 2)  # Prevent over-subscription
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 for table_type, levels in self.tables.items():
-                    ord_config = self.cfg.get("ordination", {}).get(table_type, {})
+                    ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
-                        # Create output directory
+                        # Convert to DataFrame once per table/level
+                        df = table_to_df(table)
                         ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
                         
                         for method in enabled_methods:
-                            # Submit task to thread pool
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table,
+                                table=df,  # Pass DataFrame
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
@@ -1436,14 +1434,18 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             futures.append(future)
                 
-                # Process results as they complete
-                for future in as_completed(futures):
-                    table_type, level, method, res, fig = future.result()
-                    _init_dict_level(self.ordination, table_type, level) 
-                    self.ordination[table_type][level][method] = res
-                    _init_dict_level(self.figures, "ordination", table_type, level) 
-                    self.figures["ordination"][table_type][level][method] = fig
-                    prog.advance(master_task)
+                # Process results with timeout
+                for future in as_completed(futures, timeout=300):
+                    try:
+                        table_type, level, method, res, fig = future.result()
+                        _init_dict_level(self.ordination, table_type, level) 
+                        self.ordination[table_type][level][method] = res
+                        _init_dict_level(self.figures, "ordination", table_type, level) 
+                        self.figures["ordination"][table_type][level][method] = fig
+                    except TimeoutError:
+                        logger.error("Ordination task timed out after 5 minutes")
+                    finally:
+                        prog.advance(master_task)  # Update progress only in main thread
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
