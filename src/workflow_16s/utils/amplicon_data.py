@@ -1112,6 +1112,8 @@ class _AnalysisManager(_ProcessingMixin):
         def _init_table_dicts(table_type):
             if table_type not in self.alpha_diversity:
                 self.alpha_diversity[table_type] = {}
+            if "alpha_diversity" not in self.figures:
+                self.figures["alpha_diversity"] = {}
             if table_type not in self.figures["alpha_diversity"]:
                 self.figures["alpha_diversity"][table_type] = {}
         def _init_level_dicts(table_type, level):
@@ -1303,6 +1305,8 @@ class _AnalysisManager(_ProcessingMixin):
         def _init_table_dicts(table_type):
             if table_type not in self.stats:
                 self.stats[table_type] = {}
+            if "stats" not in self.figures:
+                self.figures["stats"] = {}
             if table_type not in self.figures["stats"]:
                 self.figures["stats"][table_type] = {}
         def _init_level_dicts(table_type, level):
@@ -1522,6 +1526,8 @@ class _AnalysisManager(_ProcessingMixin):
         def _init_table_dicts(table_type):
             if table_type not in self.models:
                 self.models[table_type] = {}
+            if "ml" not in self.figures:
+                self.figures["ml"] = {}
             if table_type not in self.figures["ml"]:
                 self.figures["ml"][table_type] = {}
         def _init_level_dicts(table_type, level):
