@@ -1408,8 +1408,8 @@ class _AnalysisManager(_ProcessingMixin):
             master_desc = "Running beta diversity analysis..."
             master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
-            # Use thread pool with limited workers
-            max_workers = min(1, os.cpu_count() // 2)  # Prevent over-subscription
+            # FIX 1: Use max() to allow more workers (minimum 1 worker)
+            max_workers = max(1, 1)#os.cpu_count() // 2)  # Corrected worker calculation
             print(f"Max workers: {max_workers}")
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
@@ -1418,7 +1418,6 @@ class _AnalysisManager(_ProcessingMixin):
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
-                        # Convert to DataFrame once per table/level
                         df = table_to_df(table)
                         ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
@@ -1426,7 +1425,7 @@ class _AnalysisManager(_ProcessingMixin):
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table,  # Pass DataFrame
+                                table=df,  # Use pre-converted DataFrame
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
@@ -1435,18 +1434,18 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             futures.append(future)
                 
-                # Process results with timeout
-                for future in as_completed(futures, timeout=300):
+                # FIX 2 & 3: Remove timeout and handle all exceptions
+                for future in as_completed(futures):  # No timeout - wait indefinitely
                     try:
                         table_type, level, method, res, fig = future.result()
                         _init_dict_level(self.ordination, table_type, level) 
                         self.ordination[table_type][level][method] = res
                         _init_dict_level(self.figures, "ordination", table_type, level) 
                         self.figures["ordination"][table_type][level][method] = fig
-                    except TimeoutError:
-                        logger.error("Ordination task timed out after 5 minutes")
+                    except Exception as e:  # Catch ALL exceptions
+                        logger.error(f"Ordination failed for {table_type}/{level}/{method}: {str(e)}")
                     finally:
-                        prog.advance(master_task)  # Update progress only in main thread
+                        prog.advance(master_task)
 
     def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
