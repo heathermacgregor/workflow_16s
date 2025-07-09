@@ -400,30 +400,77 @@ class Ordination:
         tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
         if not tests_to_run:
             return {}, {}
-
+    
         table, metadata = update_table_and_meta(table, metadata)
-        return self._run_without_progress(
-            table, metadata, symbol_col, transformation,
-            tests_to_run, trans_cfg, kwargs,
-        )
-
-    def _run_without_progress(
-        self, table, metadata, symbol_col, transformation, tests_to_run, 
-        trans_cfg, kwargs,
-    ):
         results, figures = {}, {}
+        
+        # Extract sample IDs from metadata
+        sample_ids = metadata.index.tolist()
+    
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
-                res, figs = self._run_ordination_method(
-                    cfg, table, metadata, symbol_col, transformation, 
-                    trans_cfg, kwargs
-                )
-                results[cfg["key"]] = res
-                figures[cfg["key"]] = figs
+                method_params = {}
+                if cfg["key"] == "pcoa":
+                    method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+                
+                # Add CPU limiting parameters
+                if cfg["key"] in ["tsne", "umap"]:
+                    cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
+                    method_params["n_jobs"] = cpu_limit
+        
+                # Run ordination method
+                ord_res = cfg["func"](table=table, **method_params)
+                
+                # Generate plots for each color column
+                figures[tname] = {}
+                pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+                
+                # Add sample IDs to the results for plotting
+                if cfg["key"] == "pca":
+                    # For PCA, add sample IDs to components
+                    ord_res["components"].index = sample_ids
+                elif cfg["key"] == "pcoa":
+                    # For PCoA, ensure sample IDs are set
+                    ord_res.samples.index = sample_ids
+                else:  # t-SNE or UMAP
+                    # For t-SNE/UMAP, set sample IDs as index
+                    ord_res.index = sample_ids
+                
+                for color_col in self.color_columns:
+                    if color_col not in metadata.columns:
+                        logger.warning(f"Color column '{color_col}' not found in metadata")
+                        continue
+        
+                    # Set up plot parameters based on method
+                    if cfg["key"] == "pca":
+                        pkwargs.update({
+                            "components": ord_res["components"],
+                            "proportion_explained": ord_res["exp_var_ratio"],
+                        })
+                    elif cfg["key"] == "pcoa":
+                        pkwargs.update({
+                            "components": ord_res.samples,
+                            "proportion_explained": ord_res.proportion_explained,
+                        })
+                    else:  # t-SNE or UMAP
+                        pkwargs["df"] = ord_res
+        
+                    fig, _ = cfg["plot_func"](
+                        metadata=metadata,
+                        color_col=color_col,
+                        symbol_col=symbol_col,
+                        transformation=transformation,
+                        output_dir=self.figure_output_dir,
+                        **pkwargs,
+                    )
+                    figures[tname][color_col] = fig
+                    
+                results[tname] = ord_res
             except Exception as e:
-                logger.error(f"Failed {tname} for {transformation}: {e}")
-                figures[cfg["key"]] = {}
+                logger.error(f"Ordination {tname} failed for {transformation}: {e}")
+                figures[tname] = {}
+        
         return results, figures
 
     def _run_ordination_method(
