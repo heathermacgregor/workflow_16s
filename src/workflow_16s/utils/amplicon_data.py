@@ -1409,7 +1409,8 @@ class _AnalysisManager(_ProcessingMixin):
             master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
             # Use thread pool with limited workers
-            max_workers = min(4, os.cpu_count() // 2)  # Prevent over-subscription
+            max_workers = min(1, os.cpu_count() // 2)  # Prevent over-subscription
+            print(f"Max workers: {max_workers}")
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 for table_type, levels in self.tables.items():
