@@ -329,7 +329,78 @@ def _section_html(sec: Dict) -> str:
     return f'<div class="section" id="{sec["id"]}">\n' \
            f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
 
-
+def _alpha_correlations_to_nested_html(
+    figures: Dict[str, Any],
+    id_counter: Iterator[int],
+    prefix: str,
+) -> Tuple[str, str, Dict]:
+    """
+    Generate nested HTML structure for alpha diversity correlations section.
+    
+    Creates 3-level tab hierarchy (table_type → level → variable).
+    
+    Args:
+        figures:    Nested dictionary of alpha correlation figures.
+        id_counter: Iterator for unique DOM IDs.
+        prefix:     HTML ID prefix for generated elements.
+    
+    Returns:
+        Tuple containing:
+            - HTML for section buttons
+            - HTML for tab panes
+            - Serialized plot data dictionary
+    """
+    buttons_html, panes_html, plot_data = [], [], {}
+    
+    for t_idx, (table_type, levels) in enumerate(figures.items()):
+        table_id = f"{prefix}-table-{next(id_counter)}"
+        is_active_table = t_idx == 0
+        
+        # Table type button
+        buttons_html.append(
+            f'<button class="table-button {"active" if is_active_table else ""}" '
+            f'data-table="{table_id}" '
+            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+        )
+        
+        # Build table pane
+        level_btns, level_panes = [], []
+        for l_idx, (level, variables) in enumerate(levels.items()):
+            level_id = f"{table_id}-level-{next(id_counter)}"
+            is_active_level = l_idx == 0 and is_active_table
+            
+            # Level button
+            level_btns.append(
+                f'<button class="level-button {"active" if is_active_level else ""}" '
+                f'data-level="{level_id}" '
+                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+            )
+            
+            # Build level pane with variables
+            var_btns, var_tabs, var_plot_data = _figs_to_html(
+                variables, id_counter, level_id
+            )
+            plot_data.update(var_plot_data)
+            
+            level_panes.append(
+                f'<div id="{level_id}" class="level-pane" '
+                f'style="display:{"block" if is_active_level else "none"};">'
+                f'<div class="tabs" data-label="variable">{var_btns}</div>'
+                f'{var_tabs}'
+                f'</div>'
+            )
+        
+        panes_html.append(
+            f'<div id="{table_id}" class="table-pane" '
+            f'style="display:{"block" if is_active_table else "none"};">'
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+            f'{"".join(level_panes)}'
+            f'</div>'
+        )
+    
+    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
+    return buttons_row, "".join(panes_html), plot_data
+    
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
