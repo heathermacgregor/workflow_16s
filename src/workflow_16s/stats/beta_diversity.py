@@ -119,11 +119,24 @@ def pcoa(
         raise ValueError("Distance matrix is not symmetric")
     distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
     
-    n_dimensions = n_dimensions or len(df)
-    n_dimensions = safe_component_limit(df, n_dimensions)
+    # CORRECTED: Proper component limit for PCoA (n_samples-1)
+    max_dims = len(df) - 1
+    n_dimensions = n_dimensions or max_dims
+    n_dimensions = min(n_dimensions, max_dims)
     
     pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
-    pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
+    
+    # CORRECTED: Use actual dimensions in result (accounts for negative eigenvalues)
+    actual_dims = pcoa_result.samples.shape[1]
+    new_axis_names = [f"PCo{i+1}" for i in range(actual_dims)]
+    
+    # Update names in all relevant attributes
+    pcoa_result.samples.columns = new_axis_names
+    
+    # CORRECTED: Update proportion explained to match new axis names
+    if hasattr(pcoa_result, 'proportion_explained'):
+        pcoa_result.proportion_explained.index = new_axis_names
+    
     return pcoa_result
     
 
