@@ -7,9 +7,11 @@ import warnings
 from typing import Any, Dict, Optional, Union
 
 # Third-Party
+import multiprocessing
 import numpy as np
 import pandas as pd
 from biom import Table
+from multiprocessing import get_context
 from scipy.spatial.distance import pdist, squareform
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
@@ -17,11 +19,6 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
-
-import multiprocessing
-from multiprocessing import get_context
-
-# ============================== CRITICAL FIX FOR UMAP =============================== #
 # Force thread-safe environment BEFORE importing UMAP
 os.environ['NUMBA_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
@@ -108,6 +105,7 @@ def pcoa(
     df = table_to_df(table)
     validate_min_samples(df, min_samples=2)
     
+    # Generate unique sample IDs
     sample_ids = handle_duplicate_ids(df.index.tolist())
     
     distance_array = pairwise_distances(df.values, metric=metric)
@@ -132,6 +130,7 @@ def pcoa(
     
     # Update names in all relevant attributes
     pcoa_result.samples.columns = new_axis_names
+    pcoa_result.samples.index = sample_ids  # Ensure unique IDs in index
     
     # CORRECTED: Update proportion explained to match new axis names
     if hasattr(pcoa_result, 'proportion_explained'):
@@ -151,12 +150,16 @@ def pca(
     
     n_components = safe_component_limit(df, n_components)
     
+    # Generate unique sample IDs
+    sample_ids = handle_duplicate_ids(df.index.tolist())
+    
     scaled_data = StandardScaler().fit_transform(df.values)
     pca_model = PCA(n_components=n_components)
     scores = pca_model.fit_transform(scaled_data)
     
     return {
-        'components': create_result_dataframe(scores, df.index, "PC", n_components),
+        # Use unique IDs for index
+        'components': create_result_dataframe(scores, sample_ids, "PC", n_components),
         'exp_var_ratio': pca_model.explained_variance_ratio_,
         'exp_var_cumul': np.cumsum(pca_model.explained_variance_ratio_),
         'loadings': pca_model.components_.T * np.sqrt(pca_model.explained_variance_)
@@ -179,21 +182,45 @@ def tsne(
     
     n_components = safe_component_limit(df, n_components)
     
+    # Generate unique sample IDs
+    sample_ids = handle_duplicate_ids(df.index.tolist())
+    
     tsne_model = TSNE(
         n_components=n_components,
         random_state=random_state,
         n_jobs=n_jobs
     )
     embeddings = tsne_model.fit_transform(df.values)
-    return create_result_dataframe(embeddings, df.index, "TSNE", n_components)
+    # Use unique IDs for index
+    return create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)
 
 
-import os
-import numpy as np
-from multiprocessing import get_context
-from umap import UMAP  # Ensure correct import: `from umap import UMAP`
+def umap(
+    table: Union[Dict, Table, pd.DataFrame],
+    n_components: int = DEFAULT_N_UMAP,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    n_jobs: int = DEFAULT_CPU_LIMIT
+) -> pd.DataFrame:
+    """Compute Uniform Manifold Approximation and Projection (UMAP)."""
+    df = table_to_df(table)
+    validate_min_samples(df, min_samples=2)
+    validate_component_count(n_components)
+    n_components = safe_component_limit(df, n_components)
+    
+    # Generate unique sample IDs
+    sample_ids = handle_duplicate_ids(df.index.tolist())
+    
+    # Execute in isolated process using top-level function
+    with get_context("spawn").Pool(1) as pool:
+        embeddings = pool.apply(
+            _run_umap_isolated,
+            (df.values, n_components, random_state)
+        )
+    
+    # Use unique IDs for index
+    return create_result_dataframe(embeddings, sample_ids, "UMAP", n_components)
 
-# Top-level helper function (required for pickling in "spawn" context)
+
 def _run_umap_isolated(
     data: np.ndarray,
     n_components: int,
@@ -208,24 +235,3 @@ def _run_umap_isolated(
         n_jobs=1  # Force single-threaded in worker
     )
     return reducer.fit_transform(data)
-
-def umap(
-    table: Union[Dict, Table, pd.DataFrame],
-    n_components: int = DEFAULT_N_UMAP,
-    random_state: int = DEFAULT_RANDOM_STATE,
-    n_jobs: int = DEFAULT_CPU_LIMIT
-) -> pd.DataFrame:
-    """Compute Uniform Manifold Approximation and Projection (UMAP)."""
-    df = table_to_df(table)
-    validate_min_samples(df, min_samples=2)
-    validate_component_count(n_components)
-    n_components = safe_component_limit(df, n_components)
-    
-    # Execute in isolated process using top-level function
-    with get_context("spawn").Pool(1) as pool:
-        embeddings = pool.apply(
-            _run_umap_isolated,
-            (df.values, n_components, random_state)
-        )
-    
-    return create_result_dataframe(embeddings, df.index, "UMAP", n_components)
