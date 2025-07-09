@@ -138,7 +138,7 @@ alpha_diversity:
     
 # Beta Diversity + Ordination
 ordination:
-  max_workers: 8  # Max concurrent ordination tasks
+  max_workers: 1  # Max concurrent ordination tasks
   cpu_limit: 1    # CPU cores per ordination method
   raw:
     pca: False 
