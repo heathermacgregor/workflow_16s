@@ -980,6 +980,7 @@ def _ordination_to_nested_html(
     
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data    
+    
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -1179,7 +1180,8 @@ def generate_html_report(
         tables_html=tables_html,
         sections_html=sections_html,
         plot_data_json=payload,
-        table_js=table_js
+        table_js=table_js,
+        css_content=css_content
     )
     output_path.write_text(html, encoding="utf-8")
     
