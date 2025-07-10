@@ -189,7 +189,8 @@ def _prepare_visualization_data(
     # Filter to common samples
     meta_filtered = meta_copy.loc[common_idx].copy()
     comp_filtered = comp_copy.loc[common_idx].copy()
-    
+    print(meta_filtered.index)
+    print(comp_filtered.index)
     # ======== CRITICAL FIX: PREVENT DUPLICATE COLUMNS ======== #
     # Remove existing color/symbol columns from components to prevent duplicates
     for col in [color_col, symbol_col]:
