@@ -98,6 +98,8 @@ def _prepare_visualization_data(
     # Create copies to avoid modifying originals
     comp_copy = components.copy()
     meta_copy = metadata.copy()
+    print(comp_copy.index)
+    print(meta_copy.index)
     
     # Standardize indices to lowercase strings with whitespace trimming
     comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
