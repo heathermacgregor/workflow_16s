@@ -1469,14 +1469,16 @@ class _AnalysisManager(_ProcessingMixin):
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
+                        print(type(table))
                         df = table_to_df(table)
+                        print(type(df))
                         ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
                         
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=df,  # Use pre-converted DataFrame
+                                table=table,  # Use pre-converted DataFrame
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
