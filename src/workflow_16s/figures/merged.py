@@ -103,6 +103,22 @@ def _prepare_visualization_data(
     print(type(meta_copy))
     print(comp_copy.index)
     print(meta_copy.index)
+
+    # NEW: Sample ID normalization function
+    def normalize_sample_id(s):
+        """Extract numeric part from sample IDs"""
+        s = str(s).strip().lower()
+        # Extract all digits from the string
+        digits = ''.join(filter(str.isdigit, s))
+        return digits if digits else s
+    
+    # Apply normalization to indices
+    comp_copy.index = comp_copy.index.map(normalize_sample_id)
+    if '#sampleid' in meta_copy.columns:
+        meta_copy['#sampleid'] = meta_copy['#sampleid'].map(normalize_sample_id)
+        meta_copy.index = meta_copy['#sampleid']
+    else:
+        meta_copy.index = meta_copy.index.map(normalize_sample_id)
     
     # Standardize indices to lowercase strings with whitespace trimming
     comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
