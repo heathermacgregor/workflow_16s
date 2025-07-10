@@ -400,74 +400,30 @@ class Ordination:
         tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
         if not tests_to_run:
             return {}, {}
-    
+
         table, metadata = update_table_and_meta(table, metadata)
+        return self._run_without_progress(
+            table, metadata, symbol_col, transformation,
+            tests_to_run, trans_cfg, kwargs,
+        )
+
+    def _run_without_progress(
+        self, table, metadata, symbol_col, transformation, tests_to_run, 
+        trans_cfg, kwargs,
+    ):
         results, figures = {}, {}
-        # Extract sample IDs from metadata
-        sample_ids = metadata.index.tolist()
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
-                method_params = {}
-                if cfg["key"] == "pcoa":
-                    method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
-                
-                # Add CPU limiting parameters
-                if cfg["key"] in ["tsne", "umap"]:
-                    cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
-                    method_params["n_jobs"] = cpu_limit
-        
-                # Run ordination method
-                ord_res = cfg["func"](table=table, **method_params)
-                # Generate plots for each color column
-                figures[tname] = {}
-                pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
-                
-                # Add sample IDs to the results for plotting
-                #if cfg["key"] == "pca":
-                    # For PCA, add sample IDs to components
-                #    ord_res["components"].index = sample_ids
-                #elif cfg["key"] == "pcoa":
-                    # For PCoA, ensure sample IDs are set
-                #    ord_res.samples.index = sample_ids
-                #else:  # t-SNE or UMAP
-                    # For t-SNE/UMAP, set sample IDs as index
-                #    ord_res.index = sample_ids
-                
-                for color_col in self.color_columns:
-                    if color_col not in metadata.columns:
-                        logger.warning(f"Color column '{color_col}' not found in metadata")
-                        continue
-        
-                    # Set up plot parameters based on method
-                    if cfg["key"] == "pca":
-                        pkwargs.update({
-                            "components": ord_res["components"],
-                            "proportion_explained": ord_res["exp_var_ratio"],
-                        })
-                    elif cfg["key"] == "pcoa":
-                        pkwargs.update({
-                            "components": ord_res.samples,
-                            "proportion_explained": ord_res.proportion_explained,
-                        })
-                    else:  # t-SNE or UMAP
-                        pkwargs["df"] = ord_res
-        
-                    fig, _ = cfg["plot_func"](
-                        metadata=metadata,
-                        color_col=color_col,
-                        symbol_col=symbol_col,
-                        transformation=transformation,
-                        output_dir=self.figure_output_dir,
-                        **pkwargs,
-                    )
-                    figures[tname][color_col] = fig
-                    
-                results[tname] = ord_res
+                res, figs = self._run_ordination_method(
+                    cfg, table, metadata, symbol_col, transformation, 
+                    trans_cfg, kwargs
+                )
+                results[cfg["key"]] = res
+                figures[cfg["key"]] = figs
             except Exception as e:
-                logger.error(f"Ordination {tname} failed for {transformation}: {e}")
-                figures[tname] = {}
-        
+                logger.error(f"Failed {tname} for {transformation}: {e}")
+                figures[cfg["key"]] = {}
         return results, figures
 
     def _run_ordination_method(
@@ -1280,6 +1236,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
                                 metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
+                                
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
@@ -1451,9 +1408,8 @@ class _AnalysisManager(_ProcessingMixin):
             master_desc = "Running beta diversity analysis..."
             master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
-            # FIX 1: Use max() to allow more workers (minimum 1 worker)
-            max_workers = max(1, 1)#os.cpu_count() // 2)  # Corrected worker calculation
-            print(f"Max workers: {max_workers}")
+            # Use thread pool with limited workers
+            max_workers = min(4, os.cpu_count() // 2)  # Prevent over-subscription
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 for table_type, levels in self.tables.items():
@@ -1461,38 +1417,37 @@ class _AnalysisManager(_ProcessingMixin):
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
+                        # Convert to DataFrame once per table/level
                         df = table_to_df(table)
                         ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
-                        print(self.meta.index)
+                        
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table, 
+                                table=table,  # Pass DataFrame
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
                                 method=method,
-                                ordir=ordir,
-                                sample_ids=df.index.tolist()  # Pass original sample IDs
+                                ordir=ordir
                             )
                             futures.append(future)
                 
-                # FIX 2 & 3: Remove timeout and handle all exceptions
-                for future in as_completed(futures):
+                # Process results with timeout
+                for future in as_completed(futures, timeout=300):
                     try:
                         table_type, level, method, res, fig = future.result()
-                        # Store results directly without modifying indices
                         _init_dict_level(self.ordination, table_type, level) 
                         self.ordination[table_type][level][method] = res
                         _init_dict_level(self.figures, "ordination", table_type, level) 
                         self.figures["ordination"][table_type][level][method] = fig
-                    except Exception as e:
-                        logger.error(f"Ordination failed: {str(e)}")
+                    except TimeoutError:
+                        logger.error("Ordination task timed out after 5 minutes")
                     finally:
-                        prog.advance(master_task)
+                        prog.advance(master_task)  # Update progress only in main thread
 
-    def _run_single_ordination(self, table, meta, table_type, level, method, ordir, sample_ids):
+    def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
         """
         Runs a single ordination method in isolation.
         
@@ -1514,6 +1469,7 @@ class _AnalysisManager(_ProcessingMixin):
         """
         try:
             ordn = Ordination(self.cfg, ordir, verbose=False)
+            # Run just this one method
             res, figs = ordn.run_tests(
                 table=table,
                 metadata=meta,
@@ -1522,10 +1478,10 @@ class _AnalysisManager(_ProcessingMixin):
                 enabled_tests=[method],
             )
             method_key = ordn.TEST_CONFIG[method]['key']
-            return table_type, level, method, res.get(method_key), figs.get(method_key), sample_ids
+            return table_type, level, method, res.get(method_key), figs.get(method_key)
         except Exception as e:
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
-            return table_type, level, method, None, None, None
+            return table_type, level, method, None, None
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
