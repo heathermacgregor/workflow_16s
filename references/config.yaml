@@ -176,7 +176,7 @@ faprotax: True
 
 # Figures
 figures:
-  map: True
+  map: False #True
   color_columns: 
     - "dataset_name"
     - "nuclear_contamination_status"
