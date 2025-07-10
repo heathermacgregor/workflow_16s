@@ -173,7 +173,11 @@ def tsne(
     n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
     """Compute t-Distributed Stochastic Neighbor Embedding (t-SNE)."""
+    print(type(table))
+    print(table.shape)
     df = table_to_df(table)
+    print(type(df))
+    print(df.shape)
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     
@@ -184,7 +188,8 @@ def tsne(
     
     # Generate unique sample IDs
     sample_ids = handle_duplicate_ids(df.index.tolist())
-    
+    print(type(sample_ids))
+    print(len(sample_ids))
     tsne_model = TSNE(
         n_components=n_components,
         random_state=random_state,
