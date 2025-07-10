@@ -203,13 +203,14 @@ def umap(
 ) -> pd.DataFrame:
     """Compute Uniform Manifold Approximation and Projection (UMAP)."""
     df = table_to_df(table)
+    print(type(df))
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
     n_components = safe_component_limit(df, n_components)
     
     # Generate unique sample IDs
     sample_ids = handle_duplicate_ids(df.index.tolist())
-    
+    print(type(sample_ids))
     # Execute in isolated process using top-level function
     with get_context("spawn").Pool(1) as pool:
         embeddings = pool.apply(
@@ -218,7 +219,9 @@ def umap(
         )
     
     # Use unique IDs for index
-    return create_result_dataframe(embeddings, sample_ids, "UMAP", n_components)
+    reults = create_result_dataframe(embeddings, sample_ids, "UMAP", n_components)
+    print(type(results))
+    return results
 
 
 def _run_umap_isolated(
