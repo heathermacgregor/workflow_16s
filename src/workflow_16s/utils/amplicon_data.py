@@ -1468,12 +1468,13 @@ class _AnalysisManager(_ProcessingMixin):
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table,  # Use pre-converted DataFrame
+                                table=table, 
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
                                 method=method,
-                                ordir=ordir
+                                ordir=ordir,
+                                sample_ids=df.index.tolist()  # Pass original sample IDs
                             )
                             futures.append(future)
                 
@@ -1491,7 +1492,7 @@ class _AnalysisManager(_ProcessingMixin):
                     finally:
                         prog.advance(master_task)
 
-    def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
+    def _run_single_ordination(self, table, meta, table_type, level, method, ordir, sample_ids):
         """
         Runs a single ordination method in isolation.
         
@@ -1521,10 +1522,10 @@ class _AnalysisManager(_ProcessingMixin):
                 enabled_tests=[method],
             )
             method_key = ordn.TEST_CONFIG[method]['key']
-            return table_type, level, method, res.get(method_key), figs.get(method_key)
+            return table_type, level, method, res.get(method_key), figs.get(method_key), sample_ids
         except Exception as e:
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
-            return table_type, level, method, None, None
+            return table_type, level, method, None, None, None
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
         """Runs machine learning feature selection with comprehensive parameter grid"""
