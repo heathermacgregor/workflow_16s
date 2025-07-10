@@ -199,7 +199,7 @@ def tsne(
     # Use unique IDs for index
     result = create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)
     print(type(result))
-    print(result.shape))
+    print(result.shape)
     return result
 
 
