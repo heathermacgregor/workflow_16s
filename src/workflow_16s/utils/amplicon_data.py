@@ -410,7 +410,6 @@ class Ordination:
         # Extract sample IDs from metadata
         sample_ids = metadata.index.tolist()
         print(type(sample_ids))
-        print(sample_ids.shape)
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
