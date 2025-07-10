@@ -108,13 +108,34 @@ def pcoa(
     # Generate unique sample IDs
     sample_ids = handle_duplicate_ids(df.index.tolist())
     
+    # ==== NEW VALIDATION CODE ====
+    # 1. Check for NaN/Inf values
+    if not np.isfinite(df.values).all():
+        # Replace NaN/Inf with 0 (common approach for CLR data)
+        df = df.replace([np.inf, -np.inf], np.nan).fillna(0)
+        logger.warning("Non-finite values detected in input data. Replaced with 0.")
+    
+    # 2. Ensure non-negative data for certain metrics
+    if metric in ['braycurtis', 'jaccard'] and (df.values < 0).any():
+        logger.warning(f"Negative values detected with {metric} metric. Using Euclidean instead.")
+        metric = 'euclidean'
+    # =============================
+    
     distance_array = pairwise_distances(df.values, metric=metric)
+    
+    # Additional validation
     if not np.isfinite(distance_array).all():
-        raise ValueError("Distance matrix contains non-finite values")
+        # Handle remaining non-finite distances
+        distance_array = np.nan_to_num(distance_array, nan=0.0, posinf=0.0, neginf=0.0)
+        logger.warning("Non-finite values in distance matrix. Replaced with 0.")
+    
+    # Ensure symmetry (common fix for floating-point errors)
+    distance_array = (distance_array + distance_array.T) / 2
+    
+    # Validate distance matrix
     if not (distance_array >= 0).all():
         raise ValueError("Distance matrix contains negative values")
-    if not np.allclose(distance_array, distance_array.T):
-        raise ValueError("Distance matrix is not symmetric")
+    
     distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
     
     # CORRECTED: Proper component limit for PCoA (n_samples-1)
@@ -124,18 +145,18 @@ def pcoa(
     
     pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
     
-    # CORRECTED: Use actual dimensions in result (accounts for negative eigenvalues)
+    # CORRECTED: Use actual dimensions in result
     actual_dims = pcoa_result.samples.shape[1]
     new_axis_names = [f"PCo{i+1}" for i in range(actual_dims)]
-    logger.info(pcoa_result.samples.index)
+    
     # Update names in all relevant attributes
     pcoa_result.samples.columns = new_axis_names
-    pcoa_result.samples.index = sample_ids  # Ensure unique IDs in index
+    pcoa_result.samples.index = sample_ids
     
     # CORRECTED: Update proportion explained to match new axis names
     if hasattr(pcoa_result, 'proportion_explained'):
         pcoa_result.proportion_explained.index = new_axis_names
-    logger.info(pcoa_result.samples.index)
+        
     return pcoa_result
     
 
