@@ -172,7 +172,7 @@ def tsne(
     random_state: int = DEFAULT_RANDOM_STATE,
     n_jobs: int = DEFAULT_CPU_LIMIT
 ) -> pd.DataFrame:
-    """Compute t-Distributed Stochastic Neighbor Embedding (t-SNE)."""=
+    """Compute t-Distributed Stochastic Neighbor Embedding (t-SNE)."""
     df = table_to_df(table)=
     validate_min_samples(df, min_samples=2)
     validate_component_count(n_components)
