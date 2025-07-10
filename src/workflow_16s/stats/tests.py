@@ -66,7 +66,6 @@ def alpha_diversity(
         DataFrame with alpha diversity values (samples x metrics).
     """
     df = table_to_df(table)
-    print(df.index)
     results = pd.DataFrame(index=df.index)
     
     # Precompute common statistics vectorially
