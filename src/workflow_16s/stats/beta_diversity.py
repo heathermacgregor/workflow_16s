@@ -156,10 +156,9 @@ def pca(
     scaled_data = StandardScaler().fit_transform(df.values)
     pca_model = PCA(n_components=n_components)
     scores = pca_model.fit_transform(scaled_data)
-    logger.info(scores.index)
-    logger.info(create_result_dataframe(scores, sample_ids, "PC", n_components).index)
+    
+    # Return scores as DataFrame with sample IDs as index
     return {
-        # Use unique IDs for index
         'components': create_result_dataframe(scores, sample_ids, "PC", n_components),
         'exp_var_ratio': pca_model.explained_variance_ratio_,
         'exp_var_cumul': np.cumsum(pca_model.explained_variance_ratio_),
