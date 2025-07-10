@@ -96,29 +96,8 @@ def _prepare_visualization_data(
         ValueError: If no common samples exist between datasets
     """
     # Create copies to avoid modifying originals
-    
     comp_copy = components.copy()
     meta_copy = metadata.copy()
-    print(type(comp_copy))
-    print(type(meta_copy))
-    print(comp_copy.index)
-    print(meta_copy.index)
-
-    # NEW: Sample ID normalization function
-    def normalize_sample_id(s):
-        """Extract numeric part from sample IDs"""
-        s = str(s).strip().lower()
-        # Extract all digits from the string
-        digits = ''.join(filter(str.isdigit, s))
-        return digits if digits else s
-    
-    # Apply normalization to indices
-    comp_copy.index = comp_copy.index.map(normalize_sample_id)
-    if '#sampleid' in meta_copy.columns:
-        meta_copy['#sampleid'] = meta_copy['#sampleid'].map(normalize_sample_id)
-        meta_copy.index = meta_copy['#sampleid']
-    else:
-        meta_copy.index = meta_copy.index.map(normalize_sample_id)
     
     # Standardize indices to lowercase strings with whitespace trimming
     comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
@@ -208,8 +187,7 @@ def _prepare_visualization_data(
     # Filter to common samples
     meta_filtered = meta_copy.loc[common_idx].copy()
     comp_filtered = comp_copy.loc[common_idx].copy()
-    print(meta_filtered.index)
-    print(comp_filtered.index)
+    
     # ======== CRITICAL FIX: PREVENT DUPLICATE COLUMNS ======== #
     # Remove existing color/symbol columns from components to prevent duplicates
     for col in [color_col, symbol_col]:
@@ -549,8 +527,7 @@ def create_ordination_plot(
     transformation: str = None,
     output_dir: Union[Path, None] = None,
     show: bool = False,
-    verbose: bool = False,
-    sample_ids: List[str] = None  # Receive original IDs
+    verbose: bool = False
 ) -> Tuple[go.Figure, Dict]:
     """
     Generate ordination plot (PCA/PCoA/MDS).
@@ -575,9 +552,7 @@ def create_ordination_plot(
     _validate_metadata(metadata, [color_col, symbol_col, '#sampleid'])
     if not isinstance(color_col, str):
         raise TypeError(f"color_col must be a string, got {type(color_col)}")
-    # Add sample IDs to components
-    if sample_ids:
-        components.index = sample_ids
+    
     # Prepare data
     data = _prepare_visualization_data(
         components, metadata, color_col, symbol_col, verbose=verbose
