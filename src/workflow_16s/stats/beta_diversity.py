@@ -127,7 +127,7 @@ def pcoa(
     # CORRECTED: Use actual dimensions in result (accounts for negative eigenvalues)
     actual_dims = pcoa_result.samples.shape[1]
     new_axis_names = [f"PCo{i+1}" for i in range(actual_dims)]
-    
+    logger.info(pcoa_result.samples.index)
     # Update names in all relevant attributes
     pcoa_result.samples.columns = new_axis_names
     pcoa_result.samples.index = sample_ids  # Ensure unique IDs in index
@@ -135,7 +135,7 @@ def pcoa(
     # CORRECTED: Update proportion explained to match new axis names
     if hasattr(pcoa_result, 'proportion_explained'):
         pcoa_result.proportion_explained.index = new_axis_names
-    
+    logger.info(pcoa_result.samples.index)
     return pcoa_result
     
 
@@ -156,7 +156,8 @@ def pca(
     scaled_data = StandardScaler().fit_transform(df.values)
     pca_model = PCA(n_components=n_components)
     scores = pca_model.fit_transform(scaled_data)
-    
+    logger.info(scores.index)
+    logger.info(create_result_dataframe(scores, sample_ids, "PC", n_components).index)
     return {
         # Use unique IDs for index
         'components': create_result_dataframe(scores, sample_ids, "PC", n_components),
