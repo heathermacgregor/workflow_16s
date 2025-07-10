@@ -1043,6 +1043,7 @@ def run_ordination(
     if method == 'pca':
         model = PCA(n_components=n_components, random_state=random_state)
         results = model.fit_transform(scaled)
+        print('results')
     elif method == 'pcoa':
         dm = calculate_distance_matrix(df)
         results = PCoA(dm).scores(scores_df).samples.values[:, :n_components]
@@ -1054,9 +1055,10 @@ def run_ordination(
         results = model.fit_transform(scaled)
     else:
         raise ValueError(f"Unknown method: {method}")
-    
-    return pd.DataFrame(
+    df = pd.DataFrame(
         results, 
         index=df.index, 
         columns=[f"{method.upper()}{i+1}" for i in range(n_components)]
     )
+    print('df')
+    return df
