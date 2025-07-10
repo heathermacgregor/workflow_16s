@@ -549,7 +549,8 @@ def create_ordination_plot(
     transformation: str = None,
     output_dir: Union[Path, None] = None,
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    sample_ids: List[str] = None  # Receive original IDs
 ) -> Tuple[go.Figure, Dict]:
     """
     Generate ordination plot (PCA/PCoA/MDS).
@@ -574,7 +575,9 @@ def create_ordination_plot(
     _validate_metadata(metadata, [color_col, symbol_col, '#sampleid'])
     if not isinstance(color_col, str):
         raise TypeError(f"color_col must be a string, got {type(color_col)}")
-    
+    # Add sample IDs to components
+    if sample_ids:
+        components.index = sample_ids
     # Prepare data
     data = _prepare_visualization_data(
         components, metadata, color_col, symbol_col, verbose=verbose
