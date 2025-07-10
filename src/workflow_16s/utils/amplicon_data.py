@@ -1482,15 +1482,16 @@ class _AnalysisManager(_ProcessingMixin):
                             futures.append(future)
                 
                 # FIX 2 & 3: Remove timeout and handle all exceptions
-                for future in as_completed(futures):  # No timeout - wait indefinitely
+                for future in as_completed(futures):
                     try:
                         table_type, level, method, res, fig = future.result()
+                        # Store results directly without modifying indices
                         _init_dict_level(self.ordination, table_type, level) 
                         self.ordination[table_type][level][method] = res
                         _init_dict_level(self.figures, "ordination", table_type, level) 
                         self.figures["ordination"][table_type][level][method] = fig
-                    except Exception as e:  # Catch ALL exceptions
-                        logger.error(f"Ordination failed for {table_type}/{level}/{method}: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Ordination failed: {str(e)}")
                     finally:
                         prog.advance(master_task)
 
