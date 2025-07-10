@@ -191,7 +191,7 @@ def tsne(
     )
     embeddings = tsne_model.fit_transform(df.values)
     # Use unique IDs for index
-    result = create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)=
+    result = create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)
     return result
 
 
