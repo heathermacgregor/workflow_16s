@@ -197,7 +197,10 @@ def tsne(
     )
     embeddings = tsne_model.fit_transform(df.values)
     # Use unique IDs for index
-    return create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)
+    result = create_result_dataframe(embeddings, sample_ids, "TSNE", n_components)
+    print(type(result))
+    print(result.shape))
+    return result
 
 
 def umap(
