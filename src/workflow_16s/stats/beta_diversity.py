@@ -183,7 +183,7 @@ def tsne(
     n_components = safe_component_limit(df, n_components)
     
     # Generate unique sample IDs
-    sample_ids = handle_duplicate_ids(df.index.tolist())=
+    sample_ids = handle_duplicate_ids(df.index.tolist())
     tsne_model = TSNE(
         n_components=n_components,
         random_state=random_state,
