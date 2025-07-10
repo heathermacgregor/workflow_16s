@@ -1516,7 +1516,6 @@ class _AnalysisManager(_ProcessingMixin):
         """
         try:
             ordn = Ordination(self.cfg, ordir, verbose=False)
-            # Run just this one method
             res, figs = ordn.run_tests(
                 table=table,
                 metadata=meta,
