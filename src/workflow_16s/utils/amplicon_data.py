@@ -424,15 +424,15 @@ class Ordination:
                 pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
                 
                 # Add sample IDs to the results for plotting
-                if cfg["key"] == "pca":
+                #if cfg["key"] == "pca":
                     # For PCA, add sample IDs to components
-                    ord_res["components"].index = sample_ids
-                elif cfg["key"] == "pcoa":
+                #    ord_res["components"].index = sample_ids
+                #elif cfg["key"] == "pcoa":
                     # For PCoA, ensure sample IDs are set
-                    ord_res.samples.index = sample_ids
-                else:  # t-SNE or UMAP
+                #    ord_res.samples.index = sample_ids
+                #else:  # t-SNE or UMAP
                     # For t-SNE/UMAP, set sample IDs as index
-                    ord_res.index = sample_ids
+                #    ord_res.index = sample_ids
                 
                 for color_col in self.color_columns:
                     if color_col not in metadata.columns:
@@ -1279,9 +1279,7 @@ class _AnalysisManager(_ProcessingMixin):
                             for metric in metrics:
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
-                                metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
-                                print(self.meta.index)
-                                print(self.meta)
+                                metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]=
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
@@ -1466,7 +1464,7 @@ class _AnalysisManager(_ProcessingMixin):
                         df = table_to_df(table)
                         ordir = self.figure_output_dir / 'ordination' / table_type / level 
                         ordir.mkdir(parents=True, exist_ok=True)
-                        
+                        print(self.meta.index)
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
