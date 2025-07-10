@@ -404,10 +404,13 @@ class Ordination:
         table, metadata = update_table_and_meta(table, metadata)
         results, figures = {}, {}
         print(type(table))
+        print(table.shape)
         print(type(metadata))
+        print(metadata.shape)
         # Extract sample IDs from metadata
         sample_ids = metadata.index.tolist()
         print(type(sample_ids))
+        print(sample_ids.shape)
         for tname in tests_to_run:
             cfg = self.TEST_CONFIG[tname]
             try:
@@ -431,14 +434,17 @@ class Ordination:
                 if cfg["key"] == "pca":
                     # For PCA, add sample IDs to components
                     print(type(ord_res["components"].samples))
+                    print(ord_res["components"].samples.shape)
                     ord_res["components"].index = sample_ids
                 elif cfg["key"] == "pcoa":
                     # For PCoA, ensure sample IDs are set
                     print(type(ord_res.samples))
+                    print(ord_res.samples.shape)
                     ord_res.samples.index = sample_ids
                 else:  # t-SNE or UMAP
                     # For t-SNE/UMAP, set sample IDs as index
                     print(type(ord_res))
+                    print(ord_res.shape)
                     ord_res.index = sample_ids
                 
                 for color_col in self.color_columns:
