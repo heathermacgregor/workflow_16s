@@ -96,6 +96,8 @@ def _prepare_visualization_data(
         ValueError: If no common samples exist between datasets
     """
     # Create copies to avoid modifying originals
+    print(type(comp_copy))
+    print(type(meta_copy))
     comp_copy = components.copy()
     meta_copy = metadata.copy()
     print(comp_copy.index)
