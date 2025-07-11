@@ -13,7 +13,7 @@ from biom import Table
 from scipy.spatial.distance import pdist, squareform
 from skbio.diversity import beta_diversity
 from skbio.stats.distance import DistanceMatrix
-from skbio.stats.ordination import pcoa as PCoA
+from skbio.stats.ordination import OrdinationResults, pcoa as PCoA
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
@@ -193,7 +193,7 @@ def pcoa(
     table: Union[Dict, Table, pd.DataFrame], 
     metric: str = DEFAULT_METRIC, 
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
-) -> PCoAResults:
+) -> OrdinationResults:
     """
     Robust PCoA with comprehensive validation.
     """
