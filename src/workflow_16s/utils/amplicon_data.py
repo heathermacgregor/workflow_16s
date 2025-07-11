@@ -460,6 +460,7 @@ class Ordination:
     
             ord_res = cfg["func"](table=table, **method_params)
         except Exception as e:
+            logger.error(f"Params: {method_params}")
             logger.error(f"Failed {cfg['key']} for {transformation}: {e}")
             return None, {}
 
