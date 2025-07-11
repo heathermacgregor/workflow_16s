@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from biom import Table
 from scipy.spatial.distance import pdist, squareform
+from skbio.diversity import beta_diversity
 from skbio.stats.distance import DistanceMatrix
 from skbio.stats.ordination import pcoa as PCoA
 from sklearn.decomposition import PCA
@@ -210,17 +211,41 @@ def pcoa(
     
     # Handle duplicate sample IDs
     sample_ids = handle_duplicate_ids(df.index.tolist())
-    
-    # Compute distance matrix
-    distance_array = pairwise_distances(df.values, metric=metric)
-    distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
-    
+
     # Determine safe number of dimensions
     n_dimensions = n_dimensions or len(df)
     n_dimensions = safe_component_limit(df, n_dimensions)
-    
-    # Perform PCoA
-    pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
+
+    try:
+        # Compute distance matrix
+        distance_array = pairwise_distances(df.values, metric=metric)
+        distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
+        # 2. Assert square shape
+        assert distance_matrix.shape[0] == distance_matrix.shape[1], \
+            f"Expected square matrix, got {distance_matrix.shape}"
+        
+        # 3. Assert no NaNs
+        assert not np.isnan(distance_matrix.data).any(), \
+            "Distance matrix contains NaNs!"
+        # Perform PCoA
+        pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
+        
+    except:
+        # Compute distance matrix
+        distance_matrix = beta_diversity(
+            metric=metric, 
+            counts=df.values,  # After zero-handling
+            ids=sample_ids
+        )
+        # 2. Assert square shape
+        assert distance_matrix.shape[0] == distance_matrix.shape[1], \
+            f"Expected square matrix, got {distance_matrix.shape}"
+        
+        # 3. Assert no NaNs
+        assert not np.isnan(distance_matrix.data).any(), \
+            "Distance matrix contains NaNs!"
+        # Perform PCoA
+        pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
     
     # Standardize component names
     pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
