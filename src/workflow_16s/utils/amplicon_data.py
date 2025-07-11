@@ -1818,7 +1818,7 @@ class AmpliconData:
         """
         Sets environment variables to limit CPU usage in parallel libraries.
         """
-        cpu_limit = self.cfg.get("cpu", {}).get("limit", 1)
+        cpu_limit = self.cfg.get("cpu", {}).get("limit", 4)
         
         # Set for common parallel libraries
         vars = [
