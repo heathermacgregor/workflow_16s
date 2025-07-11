@@ -91,10 +91,12 @@ class Section:
     def __init__(self, amplicon_data: AmpliconData, target_section: str):
         self.amplicon_data = amplicon_data
         self.section = self._get_section(target_section)
+        print(self.section)
         self.figures = self._get_figures(target_section)
+        print(self.figures)
         self.params = self._get_info(target_section)
+        print(self.params)
         self.results = self._get_section_data()
-        self._get_section_data()
         self._handle_section(target_section)
         self.figure_results = self._get_section_figures(target_section)
 
