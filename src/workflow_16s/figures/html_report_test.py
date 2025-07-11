@@ -32,12 +32,179 @@ html_template_path = script_dir / "template.html"
 
 # ===================================== CLASSES ====================================== #
 
-sections = {
-    "stats": {},
-    "alpha_diversity": {},
+level_titles = {
+    "table_type": "Table",
+    "level": "Taxonomic Level",
+    "test_name": "Test"
+}
+section_info = {
+    "stats": { #self.stats[table_type][level][test_name] = result
+        "title": "Statistical Testing",
+        "level_1": "table_type",
+        "level_2": "level",
+        "level_3": "test_name",
+    },
+    "alpha_diversity": { #self.alpha_diversity[table_type][level]['results'] = alpha_df
+                         #self.alpha_diversity[table_type][level]['stats'] = stats_df
+        "title": "Alpha Diversity",
+        "level_1": "table_type",
+        "level_2": "level"
+    },
     "ordination": {},
     "models": {}
 }
+cols_to_rename = {
+    'feature': 'Feature',
+    't_statistic': 'T-statistic',
+    'p_value': 'P-value', 
+    'mean_difference': 'Mean Difference',
+    'cohens_d': 'Cohen\'s D',
+    'u_statistic': 'U-statistic',
+    'median_difference': 'Median Difference',
+    'effect_size_r': 'Effect Size (r)',
+    'h_statistic': 'H-statistic',
+    'epsilon_squared': 'ε²',
+    'groups_tested': 'Groups Tested'
+}
+
+def rename_columns(df: pd.DataFrame, rename_map: dict = cols_to_rename) -> pd.DataFrame:
+    return df.rename(columns=rename_map)
+    
+class Section:
+    def __init__(self, amplicon_data: AmpliconData, selected_section: str):
+        self.amplicon_data = amplicon_data
+        self.section = self._get_section(selected_section)
+        self.figures = self._get_figures(selected_section)
+        self.params = self._get_info(selected_section)
+
+        self.results = self.get_section_data()
+        self._handle_section(selected_selection)
+    
+    def _get_section_data(self):
+        section = self.section
+        info = self.params
+        if not section or not info:
+            return None
+    
+        # Get ordered list of level keys like ['level_1', 'level_2', ...]
+        level_keys = sorted(
+            [key for key in info if key.startswith('level_')],
+            key=lambda x: int(x.split('_')[1])
+        )
+    
+        # Get the actual key names used in the data, e.g. ['table_type', 'level', 'test_name']
+        data_keys = [info[level_key] for level_key in level_keys]
+    
+        results = []
+    
+        def recursive_collect(d, depth=0, path={}):
+            if depth == len(data_keys):
+                results.append({
+                    **path,
+                    'result': d,
+                    'result_type': type(d).__name__
+                })
+                return
+    
+            current_data_key = data_keys[depth]
+            current_level_key = level_keys[depth]
+            current_title_key = f"{current_level_key}_title"
+    
+            title_name = level_titles.get(current_data_key, current_data_key)
+    
+            if not isinstance(d, dict):
+                return
+    
+            for k, v in d.items():
+                path_update = {
+                    current_level_key: k,
+                    f"{current_level_key}_title": title_name
+                }
+                recursive_collect(v, depth + 1, {**path, **path_update})
+    
+        recursive_collect(section)
+        return results
+
+        
+        
+    def _handle_section(self, selected_section: str):
+        #if selected_section != "stats" or not self.results:
+        #    return
+    
+        combined = []
+    
+        for item in self.results:
+            df = item.get("result")
+    
+            if isinstance(df, pd.DataFrame):
+                if selected_section == "stats":
+                    # Add summary stats
+                    n_sig = df["p_value"].lt(0.05).sum() if "p_value" in df.columns else 0
+                    df = df.copy()
+                    df["Significant Features"] = n_sig
+                    df["Total Features"] = len(df)
+    
+                # Add level metadata to each row
+                meta = {k: v for k, v in item.items() if k != "result" and k != "result_type"}
+                for col, val in meta.items():
+                    df[col] = val
+    
+                combined.append(df)
+    
+        # Combine into a single DataFrame
+        if combined:
+            self.results = rename_columns(pd.concat(combined, ignore_index=True))
+        else:
+            self.results = rename_columns(pd.DataFrame())  # fallback if no valid DataFrames
+
+    
+    def _get_section(self, selected_section: str):
+        """Get the section attribute from amplicon_data."""
+        return getattr(self.amplicon_data, selected_section, None)
+
+    def _get_figures(self, selected_section: str):
+        """Get the section attribute from amplicon_data.figures if it exists."""
+        if hasattr(self.amplicon_data, "figures"):
+            return getattr(self.amplicon_data.figures, selected_section, None)
+        return None
+        
+    def _get_info(self, selected_section: str):
+        if selected_section in section_info:
+            self.params = section_info[selected_section]
+
+    @classmethod
+    def create(cls, amplicon_data, selected_section: str):
+        if not hasattr(amplicon_data, selected_section):
+            return None
+        return cls(amplicon_data, selected_section)
+        
+
+
+def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
+    """
+    Create statistical test summary table.
+    
+    Args:
+        stats: Nested dictionary of statistical results.
+    
+    Returns:
+        DataFrame summarizing number of significant features per test/level.
+    """
+    summary = []
+    for table_type, tests in stats.items():
+        for test_name, levels in tests.items():
+            for level, df in levels.items():
+                n_sig = sum(df["p_value"] < 0.05) if "p_value" in df.columns else 0
+                summary.append({
+                    "Table Type": table_type,
+                    "Test": test_name,
+                    "Level": level,
+                    "Significant Features": n_sig,
+                    "Total Features": len(df)
+                })
+    
+    return pd.DataFrame(summary)
+
 
 def generate_html_report(
     amplicon_data: AmpliconData,
