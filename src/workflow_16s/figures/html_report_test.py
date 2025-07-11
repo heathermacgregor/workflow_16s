@@ -68,7 +68,17 @@ section_figure_info = {
         }
     },
     "ordination": {},
-    "models": {}
+    "ml": { #self.figures["ml"][table_type][level][method]
+        "title": "Machine Learning",
+        "level_1": "table_type",
+        "level_2": "level",
+        "level_3": "method",
+        "special_level_4": {
+            'shap_summary_bar': {"title": "SHAP Summary (Bar)"},
+            'shap_summary_beeswarm': {"title": "SHAP Summary (Beeswarm)"},
+            'shap_dependency': {"title": "SHAP Dependency"}
+        }
+    }
 }
 cols_to_rename = {
     'feature': 'Feature',
@@ -86,16 +96,17 @@ cols_to_rename = {
 
 def rename_columns(df: pd.DataFrame, rename_map: dict = cols_to_rename) -> pd.DataFrame:
     return df.rename(columns=rename_map)
-    
+debug_mode = True    
 class Section:
     def __init__(self, amplicon_data: AmpliconData, target_section: str):
         self.amplicon_data = amplicon_data
         self.section = self._get_section(target_section)
-        print(self.section)
         self.figures = self._get_figures(target_section)
-        print(self.figures)
         self.params = self._get_info(target_section)
-        print(self.params)
+        if debug_mode:
+            logger.info(f"Section: {self.section}")
+            logger.info(f"Figures: {self.figures}")
+            logger.info(f"Params: {self.params}")
         self.results = self._get_section_data()
         self._handle_section(target_section)
         self.figure_results = self._get_section_figures(target_section)
@@ -165,13 +176,15 @@ class Section:
     
         # Get ordered list of level keys like ['level_1', 'level_2', ...]
         level_keys = sorted(
-            [key for key in info if key.startswith('level_')],
+            [key for key in self.params if key.startswith('level_')],
             key=lambda x: int(x.split('_')[1])
         )
-        print(level_keys)
+        if debug_mode:
+            logger.info(f"Level Keys: {level_keys}")
         # Get the actual key names used in the data, e.g. ['table_type', 'level', 'test_name']
         data_keys = [self.params[level_key] for level_key in level_keys]
-        print(data_keys)
+        if debug_mode:
+            logger.info(f"Data Keys: {data_keys}")
         results = []
         def recursive_collect(d, depth=0, path={}):
             if depth == len(data_keys):
@@ -187,7 +200,8 @@ class Section:
             current_title_key = f"{current_level_key}_title"
     
             title_name = level_titles.get(current_data_key, current_data_key)
-            print(title_name)
+            if debug_mode:
+                logger.info(f"Title Name: {title_name}")
             if not isinstance(d, dict):
                 return
     
