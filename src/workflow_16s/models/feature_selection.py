@@ -30,6 +30,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from workflow_16s.figures.models import (
     plot_confusion_matrix, plot_precision_recall_curve, plot_roc_curve, plot_shap,
 )
+from workflow_16s.utils.progress import get_progress_bar
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -809,6 +810,8 @@ def grid_search(
     output_dir: Union[str, Path] = None,
     n_splits: int = 5,
     refit: str = 'mcc',
+    progress=None, 
+    task_id=None,
     verbose: int = 1,
     fixed_params: Optional[Dict] = None
 ) -> Tuple[CatBoostClassifier, Dict, float, Dict]:
@@ -826,6 +829,8 @@ def grid_search(
         refit:        Metric to optimize.
         verbose:      Verbosity level.
         fixed_params: Fixed model parameters.
+        progress:     Rich Progress instance for progress bar.
+        task_id:      Parent task ID for nested progress bars.
         
     Returns:
         Tuple of (best_model, best_params, best_score, test_scores).
@@ -845,6 +850,15 @@ def grid_search(
     # Create parameter combinations
     param_combinations = list(itertools.product(*param_grid.values()))
     total_combinations = len(param_combinations)
+    total_folds = total_combinations * n_splits
+    
+    # Setup progress bar
+    if progress is not None and task_id is None:
+        # Create parent task if not provided
+        task_id = progress.add_task(
+            description="[cyan]Grid Search...",
+            total=total_folds
+        )
     
     if verbose:
         logger.debug(
@@ -860,6 +874,7 @@ def grid_search(
         random_state=DEFAULT_RANDOM_STATE
     )
     
+    # Main grid search loop
     for i, params in enumerate(param_combinations, 1):
         # Combine grid parameters with fixed parameters
         current_params = dict(zip(param_grid.keys(), params))
@@ -880,7 +895,7 @@ def grid_search(
                 f"\n[{i}/{total_combinations}] Testing params: {current_params}"
             )
         
-        # Cross-validation
+        # Cross-validation loop
         for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train), 1):
             X_fold_train, X_fold_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
             y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
@@ -917,6 +932,14 @@ def grid_search(
                 fold_scores[metric_name].append(score_val)
             
             del model  # Clean up
+            
+            # Update progress bar after each fold
+            if progress is not None:
+                progress.update(
+                    task_id,
+                    advance=1,
+                    description=f"[cyan]Param {i}/{total_combinations} - Fold {fold}/{n_splits}"
+                )
         
         # Calculate mean CV scores
         cv_means = {f"mean_{k}": np.mean(v) for k, v in fold_scores.items()}
@@ -1049,6 +1072,8 @@ def catboost_feature_selection(
     n_top_features: int = 100,
     filter_col: Optional[str] = None,
     filter_val: Optional[str] = None,
+    progress=None, 
+    task_id=None,
     verbose: bool = False,
     param_grid: dict = DEFAULT_PARAM_GRID,
     **kwargs
