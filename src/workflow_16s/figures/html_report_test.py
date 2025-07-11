@@ -53,6 +53,23 @@ section_info = {
     "ordination": {},
     "models": {}
 }
+
+section_figure_info = {
+    "alpha_diversity": { #self.figures["alpha_diversity"][table_type][level][metric] = fig
+                         #self.figures["alpha_diversity"][table_type][level]["summary"] = stats_fig
+        "title": "Alpha Diversity",
+        "level_1": "table_type",
+        "level_2": "level",
+        "level_3": "metric",
+        "special_level_3": {
+            "summary": {
+                    "title": "Summary",
+                }
+        }
+    },
+    "ordination": {},
+    "models": {}
+}
 cols_to_rename = {
     'feature': 'Feature',
     't_statistic': 'T-statistic',
@@ -76,27 +93,84 @@ class Section:
         self.section = self._get_section(target_section)
         self.figures = self._get_figures(target_section)
         self.params = self._get_info(target_section)
-
         self.results = self._get_section_data()
+        self._get_section_data()
         self._handle_section(target_section)
+        self.figure_results = self._get_section_figures(target_section)
+
+    def _get_section_figures(self, target_section: str):
+        fig_info = section_figure_info.get(target_section, {})
+        figures = self.figures
+        if not figures or not fig_info:
+            return []
+
+        level_keys = sorted(
+            [key for key in fig_info if key.startswith("level_")],
+            key=lambda x: int(x.split("_")[1])
+        )
+        data_keys = [fig_info[level_key] for level_key in level_keys]
+        results = []
+
+        def recursive_collect(d, depth=0, path={}):
+            if depth == len(data_keys):
+                # At the final level, this is the figure dict
+                if isinstance(d, dict):
+                    for k, v in d.items():
+                        results.append({
+                            **path,
+                            data_keys[-1]: k,
+                            f"{level_keys[-1]}_title": level_titles.get(data_keys[-1], data_keys[-1]),
+                            "figure": v
+                        })
+                return
+
+            current_key = data_keys[depth]
+            current_level_key = level_keys[depth]
+            title_name = level_titles.get(current_key, current_key)
+
+            if not isinstance(d, dict):
+                return
+
+            for k, v in d.items():
+                path_update = {
+                    current_level_key: k,
+                    f"{current_level_key}_title": title_name
+                }
+                recursive_collect(v, depth + 1, {**path, **path_update})
+
+        recursive_collect(figures)
+
+        # Handle special figures (e.g., 'summary' under level_3)
+        special_figs = fig_info.get("special_level_3", {})
+        for key, meta in special_figs.items():
+            for path in self._enumerate_paths(figures, data_keys[:-1]):
+                subfig = self._get_nested_value(figures, path + [key])
+                if subfig:
+                    result = {f"level_{i+1}": path[i] for i in range(len(path))}
+                    for i in range(len(path)):
+                        data_key = data_keys[i]
+                        result[f"level_{i+1}_title"] = level_titles.get(data_key, data_key)
+                    result["level_3"] = key
+                    result["level_3_title"] = meta.get("title", key)
+                    result["figure"] = subfig
+                    results.append(result)
+
+        return results
     
     def _get_section_data(self):
-        section = self.section
-        info = self.params
-        if not section or not info:
-            return None
+        if not self.section or not self.params:
+            return
     
         # Get ordered list of level keys like ['level_1', 'level_2', ...]
         level_keys = sorted(
             [key for key in info if key.startswith('level_')],
             key=lambda x: int(x.split('_')[1])
         )
-    
+        print(level_keys)
         # Get the actual key names used in the data, e.g. ['table_type', 'level', 'test_name']
-        data_keys = [info[level_key] for level_key in level_keys]
-    
+        data_keys = [self.params[level_key] for level_key in level_keys]
+        print(data_keys)
         results = []
-    
         def recursive_collect(d, depth=0, path={}):
             if depth == len(data_keys):
                 results.append({
@@ -111,7 +185,7 @@ class Section:
             current_title_key = f"{current_level_key}_title"
     
             title_name = level_titles.get(current_data_key, current_data_key)
-    
+            print(title_name)
             if not isinstance(d, dict):
                 return
     
@@ -122,15 +196,10 @@ class Section:
                 }
                 recursive_collect(v, depth + 1, {**path, **path_update})
     
-        recursive_collect(section)
+        recursive_collect(self.section)
         return results
 
-        
-        
     def _handle_section(self, target_section: str):
-        #if target_section != "stats" or not self.results:
-        #    return
-    
         combined = []
     
         for item in self.results:
