@@ -20,8 +20,8 @@ from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 
 # Thread-safe UMAP import
-os.environ.setdefault('NUMBA_NUM_THREADS', '1')
-os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('NUMBA_NUM_THREADS', '4')
+os.environ.setdefault('OMP_NUM_THREADS', '4')
 from umap import UMAP
 
 # ================================ CONFIGURATION ====================================== #
@@ -37,7 +37,7 @@ DEFAULT_N_PCOA = None
 DEFAULT_N_TSNE = 3
 DEFAULT_N_UMAP = 3
 DEFAULT_RANDOM_STATE = 0
-DEFAULT_CPU_LIMIT = 1
+DEFAULT_CPU_LIMIT = 4
 
 # =============================== HELPER FUNCTIONS ==================================== #
 
@@ -160,33 +160,62 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
 NONNEGATIVE_METRICS = {'braycurtis', 'jaccard', 'aitchison', 'unweighted_unifrac', 'weighted_unifrac'}
 SKLEARN_METRICS = {'euclidean', 'cityblock', 'minkowski', 'cosine', 'correlation'}
 
+def validate_distance_matrix(dm: DistanceMatrix):
+    """Perform comprehensive validation of distance matrix"""
+    if not dm.is_symmetric():
+        # Make symmetric if nearly symmetric
+        if np.allclose(dm.data, dm.data.T, atol=1e-8):
+            dm_data = (dm.data + dm.data.T) / 2
+            dm = DistanceMatrix(dm_data, ids=dm.ids)
+        else:
+            raise ValueError("Distance matrix is not symmetric")
+            
+    if np.isnan(dm.data).any():
+        # Attempt to fix NaNs by replacing with column means
+        dm_data = dm.data.copy()
+        col_means = np.nanmean(dm_data, axis=0)
+        nan_indices = np.where(np.isnan(dm_data))
+        dm_data[nan_indices] = col_means[nan_indices[1]]
+        
+        if np.isnan(dm_data).any():
+            raise ValueError("Distance matrix contains NaNs that couldn't be imputed")
+        dm = DistanceMatrix(dm_data, ids=dm.ids)
+    
+    # Check for degeneracy (all zeros or constant values)
+    if np.all(dm.data == 0) or np.all(dm.data == dm.data[0,0]):
+        raise ValueError("Distance matrix is degenerate (all values identical)")
+    
+    return dm
+
 def distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
     metric: str = DEFAULT_METRIC
 ) -> DistanceMatrix:
-    """
-    Compute pairwise distance matrix with validation for negative values.
-    """
+    """Compute distance matrix with enhanced validation"""
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
-    sample_ids = handle_duplicate_ids(df.index.tolist())
+    sample_ids = df.index.tolist()
     data = df.values
     
-    # Validate data based on metric requirements
-    if metric in NONNEGATIVE_METRICS and np.any(data < 0):
-        raise ValueError(
-            f"Metric '{metric}' requires non-negative data. "
-            f"Negative values detected (min={np.min(data):.2f}). "
-            "Use pseudocounts or multiplicative replacement."
-        )
+    # Validate input data
+    if np.isnan(data).any():
+        raise ValueError("Input data contains NaN values")
+    
+    if np.isinf(data).any():
+        raise ValueError("Input data contains infinite values")
     
     # Special handling for compositional metrics
     if metric == 'aitchison':
         from skbio.diversity import beta_diversity
         return beta_diversity('aitchison', data, ids=sample_ids)
     
-    # General case for other metrics
+    # Compute distance matrix
     dist_array = pairwise_distances(data, metric=metric)
+    
+    # Ensure symmetry for metrics that should be symmetric
+    if metric in {'euclidean', 'braycurtis', 'jaccard'}:
+        dist_array = (dist_array + dist_array.T) / 2
+    
     return DistanceMatrix(dist_array, ids=sample_ids)
 
 def pcoa(
@@ -194,32 +223,24 @@ def pcoa(
     metric: str = DEFAULT_METRIC, 
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
 ) -> OrdinationResults:
-    """
-    Robust PCoA with comprehensive validation.
-    """
+    """Robust PCoA with enhanced distance matrix validation"""
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
     
-    # Determine component count
-    n_dimensions = n_dimensions or len(df)
-    n_dimensions = min(n_dimensions, len(df) - 1)  # Max possible for PCoA
-    
-    # Compute distance matrix with validation
+    # Compute and validate distance matrix
     dm = distance_matrix(table, metric=metric)
+    dm = validate_distance_matrix(dm)
     
-    # Critical checks before PCoA
-    if not dm.is_symmetric():
-        raise ValueError("Distance matrix must be symmetric")
-    if np.isnan(dm.data).any():
-        raise ValueError("Distance matrix contains NaN values")
+    # Determine safe component count
+    max_dims = min(len(df) - 1, dm.shape[0] - 1)
+    n_dimensions = min(n_dimensions, max_dims) if n_dimensions else max_dims
     
     # Perform PCoA
     pcoa_result = PCoA(dm, number_of_dimensions=n_dimensions)
     
-    # Standardize output names
-    n_components = pcoa_result.samples.shape[1]
-    pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_components)]
-    
+    # Standardize output
+    comp_names = [f"PCo{i+1}" for i in range(pcoa_result.samples.shape[1])]
+    pcoa_result.samples.columns = comp_names
     return pcoa_result
 
 def pca(
