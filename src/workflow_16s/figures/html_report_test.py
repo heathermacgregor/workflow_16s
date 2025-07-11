@@ -77,7 +77,7 @@ class Section:
         self.figures = self._get_figures(selected_section)
         self.params = self._get_info(selected_section)
 
-        self.results = self.get_section_data()
+        self.results = self._get_section_data()
         self._handle_section(selected_selection)
     
     def _get_section_data(self):
