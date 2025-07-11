@@ -810,8 +810,8 @@ def grid_search(
     output_dir: Union[str, Path] = None,
     n_splits: int = 5,
     refit: str = 'mcc',
-    progress=None, 
-    task_id=None,
+    progress: Any = None, 
+    task_id: Any = None,
     verbose: int = 1,
     fixed_params: Optional[Dict] = None
 ) -> Tuple[CatBoostClassifier, Dict, float, Dict]:
@@ -1072,8 +1072,8 @@ def catboost_feature_selection(
     n_top_features: int = 100,
     filter_col: Optional[str] = None,
     filter_val: Optional[str] = None,
-    progress=None, 
-    task_id=None,
+    progress: Any = None, 
+    task_id: Any = None,
     verbose: bool = False,
     param_grid: dict = DEFAULT_PARAM_GRID,
     **kwargs
