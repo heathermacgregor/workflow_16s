@@ -272,6 +272,12 @@ def plot_feature_importance(
     fig = _apply_common_layout(
         fig, 'Importance Score', 'Features', 'Feature Importances'
     )
+    
+    fig.update_layout(
+        'yaxis': {
+            'showticklabels': True
+        }
+    )
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
     if verbose:
         logger.info(f"Feature importance plot saved to: {output_path}")
@@ -321,6 +327,11 @@ def shap_summary_bar_plotly(
         margin=dict(l=150)
     )
     fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
+    fig.update_layout(
+        'yaxis': {
+            'showticklabels': True
+        }
+    )
     return fig
     
 
@@ -415,6 +426,11 @@ def shap_beeswarm_plotly(
     )
     fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
     fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
+    fig.update_layout(
+        'yaxis': {
+            'showticklabels': True
+        }
+    )
     return fig
     
 
