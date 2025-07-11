@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import uuid
+from collections import defaultdict
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
@@ -115,38 +116,41 @@ def rename_columns(df: pd.DataFrame, rename_map: dict = cols_to_rename) -> pd.Da
     
 debug_mode = True    
 
+
+
 class Section:
     def __init__(self, amplicon_data: AmpliconData, target_section: str):
         self.amplicon_data = amplicon_data
         self.section = self._get_section(target_section)
         self.figures = self._get_figures(target_section)
         self.params = self._get_info(target_section)
-        self.results = self._get_section_data()
-        self._handle_section(target_section)
-        self.figure_results = self._get_section_figures(target_section)
+
+        self.raw_results = self._extract_data(self.section, self.params)
+        self.results = self._process_data(target_section, self.raw_results)
+
+        self.figure_results = self._extract_data(self.figures, section_figure_info.get(target_section, {}), is_figure=True)
+
         if debug_mode:
             logger.info(f"Results: {self.results}")
             logger.info(f"Figures: {self.figure_results}")
 
-    def _get_section_figures(self, target_section: str):
-        fig_info = section_figure_info.get(target_section, {})
-        figures = self.figures
-        if not figures or not fig_info:
+    # ======================== Data Extraction ======================== #
+
+    def _extract_data(self, source, meta_info, is_figure=False):
+        if not source or not meta_info:
             return {}
-    
+
+        # Identify ordered level keys and data keys
         level_keys = sorted(
-            [key for key in fig_info if key.startswith("level_")],
+            [k for k in meta_info if k.startswith("level_")],
             key=lambda x: int(x.split("_")[1])
         )
-        logger.info(data_keys)
-        data_keys = [fig_info[level_key] for level_key in level_keys]
-        logger.info(data_keys)
-        results = {"main": []}
-    
-        def recursive_collect(d, depth=0, path={}):
+        data_keys = [meta_info[k] for k in level_keys]
+        results = defaultdict(list)
+
+        def recurse(d, depth=0, path={}):
             if depth == len(data_keys):
-                # Final level: collect regular figures
-                if isinstance(d, dict):
+                if is_figure and isinstance(d, dict):
                     for k, v in d.items():
                         results["main"].append({
                             **path,
@@ -154,161 +158,122 @@ class Section:
                             f"{level_keys[-1]}_title": level_titles.get(data_keys[-1], data_keys[-1]),
                             "figure": v
                         })
+                elif not is_figure:
+                    results["main"].append({
+                        **path,
+                        "result": d,
+                        "result_type": type(d).__name__
+                    })
                 return
-    
-            current_key = data_keys[depth]
-            current_level_key = level_keys[depth]
-            title_name = level_titles.get(current_key, current_key)
-    
+
+            key = data_keys[depth]
+            level = level_keys[depth]
+            title = level_titles.get(key, key)
+
+            if debug_mode:
+                logger.info(f"[extract_data] Extracting {'figures' if is_figure else 'data'}...")
+                logger.info(f"  Level keys: {level_keys}")
+                logger.info(f"  Data keys: {data_keys}")
+
+
             if not isinstance(d, dict):
                 return
-    
+
             for k, v in d.items():
-                path_update = {
-                    current_level_key: k,
-                    f"{current_level_key}_title": title_name
-                }
-                recursive_collect(v, depth + 1, {**path, **path_update})
-    
-        recursive_collect(figures)
-    
-        # Collect special figures
-        special_levels = {
-            key: val for key, val in fig_info.items() if key.startswith("special_level_")
-        }
-        logger.info(special_levels)
-    
-        for special in special_levels.values():
-            for fig_key, meta in special.items():
-                for path in self._enumerate_paths(figures, data_keys[:-1]):
-                    subfig = self._get_nested_value(figures, path + [fig_key])
-                    if subfig:
-                        result = {f"level_{i+1}": path[i] for i in range(len(path))}
+                recurse(v, depth + 1, {**path, level: k, f"{level}_title": title})
+
+        recurse(source)
+
+        # Handle any special levels (figures or data)
+        for spec_key, spec_map in meta_info.items():
+            if not spec_key.startswith("special_level_"):
+                continue
+
+            depth = int(spec_key.split("_")[-1])
+            for name, meta in spec_map.items():
+                for path in self._enumerate_paths(source, data_keys[:depth - 1]):
+                    value = self._get_nested_value(source, path + [name])
+                    if value:
+                        record = {f"level_{i+1}": path[i] for i in range(len(path))}
                         for i in range(len(path)):
-                            data_key = data_keys[i]
-                            result[f"level_{i+1}_title"] = level_titles.get(data_key, data_key)
-                        result[f"special_level_key"] = fig_key
-                        result[f"special_level_title"] = meta.get("title", fig_key)
-                        result["figure"] = subfig
-                        results.setdefault(fig_key, []).append(result)
-    
+                            record[f"level_{i+1}_title"] = level_titles.get(data_keys[i], data_keys[i])
+                        record["figure" if is_figure else "result"] = value
+                        record["result_type" if not is_figure else "figure_type"] = type(value).__name__
+                        record["special_level_key"] = name
+                        record["special_level_title"] = meta.get("title", name)
+                        results[name].append(record)
+        
         return results
 
-    
-    def _get_section_data(self):
-        if not self.section or not self.params:
-            return {"main": []}
-    
-        level_keys = sorted(
-            [key for key in self.params if key.startswith('level_')],
-            key=lambda x: int(x.split('_')[1])
-        )
-        data_keys = [self.params[level_key] for level_key in level_keys]
-    
-        results = {"main": []}
-    
-        def recursive_collect(d, depth=0, path={}):
-            if depth == len(data_keys):
-                # Collect regular terminal node
-                results["main"].append({
-                    **path,
-                    'result': d,
-                    'result_type': type(d).__name__
-                })
-                return
-    
-            current_data_key = data_keys[depth]
-            current_level_key = level_keys[depth]
-            title_name = level_titles.get(current_data_key, current_data_key)
-    
-            if not isinstance(d, dict):
-                return
-    
-            for k, v in d.items():
-                path_update = {
-                    current_level_key: k,
-                    f"{current_level_key}_title": title_name
-                }
-                recursive_collect(v, depth + 1, {**path, **path_update})
-    
-        recursive_collect(self.section)
-    
-        # === Handle special levels ===
-        special_levels = {
-            key: val for key, val in self.params.items() if key.startswith("special_level_")
-        }
-    
-        for special_key, mapping in special_levels.items():
-            special_depth = int(special_key.split("_")[-1])
-            for special_name, meta in mapping.items():
-                # Walk all paths down to special_depth - 1
-                for path in self._enumerate_paths(self.section, data_keys[:special_depth - 1]):
-                    subdata = self._get_nested_value(self.section, path + [special_name])
-                    if isinstance(subdata, (pd.DataFrame, dict, list)):
-                        result = {f"level_{i+1}": path[i] for i in range(len(path))}
-                        for i in range(len(path)):
-                            data_key = data_keys[i]
-                            result[f"level_{i+1}_title"] = level_titles.get(data_key, data_key)
-                        result[f"special_level_key"] = special_name
-                        result[f"special_level_title"] = meta.get("title", special_name)
-                        result["result"] = subdata
-                        result["result_type"] = type(subdata).__name__
-                        results.setdefault(special_name, []).append(result)
-    
-        return results
+    # ========================= Data Processing ======================== #
 
-
-    def _handle_section(self, target_section: str):
+    def _process_data(self, section_name, grouped_results):
         combined = {}
-        
-        # Gather all special levels (any depth) into a flat dict
-        special_keys = {}
-        for k, v in self.params.items():
-            if k.startswith("special_level_") and isinstance(v, dict):
-                special_keys.update(v)
-    
-        for item in self.results:
-            df = item.get("result")
-    
-            if isinstance(df, pd.DataFrame):
-                # Determine the key: use special level name if matched, otherwise 'main'
-                level_3 = item.get("level_3")
-                key = level_3 if level_3 in special_keys else "main"
-    
-                if target_section == "stats" and key == "main":
-                    # Add stats summary
-                    n_sig = df["p_value"].lt(0.05).sum() if "p_value" in df.columns else 0
-                    df = df.copy()
-                    df["Significant Features"] = n_sig
+        special_names = self._get_special_names(self.params)
+        if debug_mode:
+            logger.info(f"[process_data] Processing section '{section_name}'")
+            logger.info(f"  Result groups: {list(grouped_results.keys())}")
+
+        for group_name, items in grouped_results.items():
+            print(group_name)
+            dfs = []
+            for item in items:
+                print(item)
+                df = item.get("result")
+                if not isinstance(df, pd.DataFrame):
+                    continue
+
+                df = df.copy()
+                if section_name == "stats" and group_name == "main":
+                    df["Significant Features"] = df["p_value"].lt(0.05).sum() if "p_value" in df.columns else 0
                     df["Total Features"] = len(df)
-    
-                # Add metadata columns
-                meta = {k: v for k, v in item.items() if k not in {"result", "result_type"}}
-                for col, val in meta.items():
-                    df[col] = val
-    
-                combined.setdefault(key, []).append(df)
-    
-        # Final results dict: key -> DataFrame
-        self.results = {
-            k: rename_columns(pd.concat(dfs, ignore_index=True))
-            for k, dfs in combined.items()
-        }
 
+                for col, val in item.items():
+                    if col not in {"result", "result_type"}:
+                        df[col] = val
 
-    
-    def _get_section(self, target_section: str):
-        """Get the section attribute from amplicon_data."""
-        return getattr(self.amplicon_data, target_section, None)
+                dfs.append(df)
 
-    def _get_figures(self, target_section: str):
-        """Get the section attribute from amplicon_data.figures if it exists."""
-        if hasattr(self.amplicon_data, "figures"):
-            return getattr(self.amplicon_data.figures, target_section, None)
-        return None
-        
-    def _get_info(self, target_section: str) -> Dict:
-        return section_info.get(target_section, {})  # Return empty dict if missing
+            if dfs:
+                combined[group_name] = rename_columns(pd.concat(dfs, ignore_index=True))
+
+        return combined
+
+    # ========================== Helpers =========================== #
+
+    def _get_section(self, section_name: str):
+        return getattr(self.amplicon_data, section_name, None)
+
+    def _get_figures(self, section_name: str):
+        return getattr(getattr(self.amplicon_data, "figures", None), section_name, None)
+
+    def _get_info(self, section_name: str) -> dict:
+        return section_info.get(section_name, {})
+
+    def _get_special_names(self, params: dict) -> set:
+        names = set()
+        for key, val in params.items():
+            if key.startswith("special_level_") and isinstance(val, dict):
+                names.update(val.keys())
+        return names
+
+    def _enumerate_paths(self, nested_dict, keys) -> list:
+        """Get all valid paths down to depth = len(keys)."""
+        def walk(d, depth=0, path=[]):
+            if depth == len(keys) or not isinstance(d, dict):
+                return [path]
+            paths = []
+            for k in d:
+                paths.extend(walk(d[k], depth + 1, path + [k]))
+            return paths
+        return walk(nested_dict)
+
+    def _get_nested_value(self, d, keys):
+        for key in keys:
+            if not isinstance(d, dict):
+                return None
+            d = d.get(key)
+        return d
 
     @classmethod
     def create(cls, amplicon_data, target_section: str):
