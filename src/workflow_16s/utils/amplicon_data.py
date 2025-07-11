@@ -56,13 +56,6 @@ warnings.filterwarnings("ignore")
 
 # ================================= DEFAULT VALUES =================================== #
 
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
-ROW_W = 6
-COL_W = 5
-LABEL_W = 30
 DEFAULT_PROGRESS_TEXT_N = 65
 DEFAULT_N = DEFAULT_PROGRESS_TEXT_N
 DEFAULT_DATASET_COLUMN = "dataset_name"
@@ -93,9 +86,6 @@ def _init_dict_level(a, b, c=None, d=None, e=None):
 class _ProcessingMixin:
     """
     Provides reusable methods for processing steps with progress tracking and logging.
-    
-    Attributes:
-        verbose: Flag indicating whether to show detailed progress information.
     """
     
     def _run_processing_step(
@@ -108,22 +98,6 @@ class _ProcessingMixin:
         log_template: Optional[str] = None,
         log_action: Optional[str] = None,
     ) -> Dict[str, Table]:
-        """
-        Executes a processing function across multiple taxonomic levels with progress 
-        tracking.
-        
-        Args:
-            process_name:   Name of the process for progress display.
-            process_func:   Function to execute for each level.
-            levels:         List of taxonomic levels to process.
-            func_args:      Additional arguments for process_func.
-            get_source:     Function to retrieve input table for a level.
-            log_template:   Template string for logging (uses {level} placeholder).
-            log_action:     Action description for logging.
-        
-        Returns:
-            Dictionary of processed tables keyed by taxonomic level.
-        """
         processed: Dict[str, Table] = {}
 
         if getattr(self, "verbose", False):
@@ -132,7 +106,6 @@ class _ProcessingMixin:
                 start_time = time.perf_counter() 
                 processed[level] = process_func(get_source(level), level, *func_args)
                 duration = time.perf_counter() - start_time
-                # Only log if we have a template or action
                 if log_template or log_action:
                     self._log_level_action(level, log_template, log_action, duration)
         else:
@@ -154,7 +127,6 @@ class _ProcessingMixin:
                     )
                     processed[level] = process_func(get_source(level), level, *func_args)
                     duration = time.perf_counter() - start_time
-                    # Only log if we have a template or action
                     if log_template or log_action:
                         self._log_level_action(level, log_template, log_action, duration)
 
@@ -171,22 +143,12 @@ class _ProcessingMixin:
         action: Optional[str] = None,
         duration: Optional[float] = None,
     ) -> None:
-        """
-        Logs an action for a specific taxonomic level with timing information.
-        
-        Args:
-            level:     Taxonomic level being processed.
-            template:  String template with {level} placeholder.
-            action:    Action description.
-            duration:  Time taken for the action in seconds.
-        """
         message = ""
         if template:
             message = template.format(level=level)
         elif action:
             message = f"{level} {action}"
 
-        # Only append duration if we have a message to log
         if message and duration is not None:
             message += f" in {duration:.2f}s"
 
@@ -197,10 +159,6 @@ class _ProcessingMixin:
 class StatisticalAnalyzer:
     """
     Performs statistical tests on feature tables to identify significant differences.
-    
-    Attributes:
-        cfg:     Configuration dictionary.
-        verbose: Flag for verbose output.
     """
     
     TEST_CONFIG = {
@@ -235,13 +193,6 @@ class StatisticalAnalyzer:
     }
 
     def __init__(self, cfg: Dict, verbose: bool = False):
-        """
-        Initializes the StatisticalAnalyzer.
-        
-        Args:
-            cfg:     Configuration dictionary.
-            verbose: If True, enables verbose logging.
-        """
         self.cfg = cfg
         self.verbose = verbose
 
@@ -253,19 +204,6 @@ class StatisticalAnalyzer:
         group_column_values: List[Any],
         enabled_tests: List[str],
     ) -> Dict[str, Any]:
-        """
-        Runs enabled statistical tests on the feature table.
-        
-        Args:
-            table:         BIOM feature table.
-            metadata:      Sample metadata DataFrame.
-            group_column:  Column in metadata defining groups.
-            group_values:  Values to compare in group_column.
-            enabled_tests: List of test names to run.
-        
-        Returns:
-            Dictionary of test results keyed by test identifier.
-        """
         results: Dict[str, Any] = {}
         table, metadata = update_table_and_meta(table, metadata)
 
@@ -280,16 +218,6 @@ class StatisticalAnalyzer:
         return results
 
     def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
-        """
-        Extracts effect size from a test result row.
-        
-        Args:
-            test_name: Name of the statistical test.
-            row:       Series containing test results.
-        
-        Returns:
-            Effect size value or None if not found.
-        """
         if test_name not in self.TEST_CONFIG:
             return None
         cfg = self.TEST_CONFIG[test_name]
@@ -301,15 +229,7 @@ class StatisticalAnalyzer:
 
 class Ordination:
     """
-    Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and generates plots.
-    
-    Attributes:
-        cfg:               Configuration dictionary.
-        verbose:           Flag for verbose output.
-        figure_output_dir: Directory to save generated plots.
-        results:           Dictionary of ordination results.
-        figures:           Dictionary of generated figures.
-        color_columns:     List of metadata columns to use for coloring points.
+    Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures.
     """
     
     TEST_CONFIG = {
@@ -347,19 +267,9 @@ class Ordination:
         output_dir: Union[str, Path], 
         verbose: bool = False
     ):
-        """
-        Initializes the Ordination analyzer.
-        
-        Args:
-            cfg:        Configuration dictionary.
-            output_dir: Directory to save generated plots.
-            verbose:    If True, enables verbose logging.
-        """
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
-        self.results: Dict[str, Any] = {}
-        self.figures: Dict[str, Any] = {}
         self.color_columns = cfg["figures"].get(
             "color_columns",
             cfg["figures"].get(
@@ -380,22 +290,6 @@ class Ordination:
         enabled_tests: List[str],
         **kwargs,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Runs ordination methods and generates plots for multiple color columns.
-        
-        Args:
-            table:          BIOM feature table.
-            metadata:       Sample metadata DataFrame.
-            symbol_col:     Column in metadata for point symbols.
-            transformation: Data transformation method (e.g., 'normalized').
-            enabled_tests:  List of ordination methods to run.
-            **kwargs:       Additional keyword arguments for plotting.
-        
-        Returns:
-            Tuple containing:
-                - Dictionary of ordination results keyed by method
-                - Dictionary of figures keyed by method and color column
-        """
         trans_cfg = self.cfg.get("ordination", {}).get(transformation, {})
         tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
         if not tests_to_run:
@@ -430,30 +324,11 @@ class Ordination:
         self, cfg, table, metadata, symbol_col, transformation, trans_cfg, 
         kwargs
     ):
-        """
-        Executes a single ordination method and generates plots for all color 
-        columns.
-        
-        Args:
-            cfg:            Configuration for the ordination method.
-            table:          BIOM feature table.
-            metadata:       Sample metadata DataFrame.
-            symbol_col:     Column in metadata for point symbols.
-            transformation: Data transformation name.
-            trans_cfg:      Transformation-specific configuration.
-            kwargs:         Additional plotting arguments.
-        
-        Returns:
-            Tuple containing:
-                - Ordination result object
-                - Dictionary of figures keyed by color column
-        """
         try:
             method_params = {}
             if cfg["key"] == "pcoa":
                 method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
             
-            # Add CPU limiting parameters
             if cfg["key"] in ["tsne", "umap"]:
                 cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
                 method_params["n_jobs"] = cpu_limit
@@ -465,7 +340,6 @@ class Ordination:
             return None, {}
 
         try:
-            # Generate plots for each color column
             figures = {}
             pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
             
@@ -474,7 +348,6 @@ class Ordination:
                     logger.warning(f"Color column '{color_col}' not found in metadata")
                     continue
     
-                # Set up plot parameters based on method
                 if cfg["key"] == "pca":
                     pkwargs.update({
                         "components": ord_res["components"],
@@ -485,7 +358,7 @@ class Ordination:
                         "components": ord_res.samples,
                         "proportion_explained": ord_res.proportion_explained,
                     })
-                else:  # t-SNE or UMAP
+                else:
                     pkwargs["df"] = ord_res
     
                 fig, _ = cfg["plot_func"](
@@ -504,15 +377,9 @@ class Ordination:
             return ord_res, {}
 
 
-class Plotter:
+class MapPlotter:
     """
-    Generates various plots for microbiome data analysis.
-    
-    Attributes:
-        cfg:           Configuration dictionary.
-        output_dir:    Directory to save generated figures.
-        verbose:       Flag for verbose output.
-        color_columns: List of metadata columns to use for coloring points.
+    Generates sample map plots and stores them internally.
     """
     
     def __init__(
@@ -521,14 +388,6 @@ class Plotter:
         output_dir: Path, 
         verbose: bool = False
     ):
-        """
-        Initializes the Plotter.
-        
-        Args:
-            cfg:        Configuration dictionary.
-            output_dir: Directory to save generated figures.
-            verbose:    If True, enables verbose logging.
-        """
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
@@ -542,22 +401,13 @@ class Plotter:
                 "country",
             ],
         )
+        self.figures: Dict[str, Any] = {}
 
     def generate_sample_map(
         self, 
         metadata: pd.DataFrame, 
         **kwargs
     ) -> Dict[str, Any]:
-        """
-        Generates sample map plots for multiple metadata columns.
-        
-        Args:
-            metadata: Sample metadata DataFrame.
-            **kwargs: Additional keyword arguments for plotting.
-        
-        Returns:
-            Dictionary of generated figures keyed by metadata column name.
-        """
         valid_columns = [col for col in self.color_columns if col in metadata]
         missing = set(self.color_columns) - set(valid_columns)
         if missing and self.verbose:
@@ -570,7 +420,6 @@ class Plotter:
                 total=len(valid_columns)
             )
 
-            figs = {}
             for col in valid_columns:
                 l1_desc = f"Mapping {col}..."
                 l1_task = prog.add_task(
@@ -585,20 +434,16 @@ class Plotter:
                     color_col=col,
                     **kwargs,
                 )
-                figs[col] = fig
+                self.figures[col] = fig
                 prog.update(l1_task, completed=1)
                 prog.remove_task(l1_task)
                 prog.update(l0_task, advance=1)
-        return figs
+        return self.figures
 
 
 class TopFeaturesAnalyzer:
     """
     Identifies top differentially abundant features based on statistical results.
-    
-    Attributes:
-        cfg:     Configuration dictionary.
-        verbose: Flag for verbose output.
     """
     
     def __init__(
@@ -606,13 +451,6 @@ class TopFeaturesAnalyzer:
         cfg: Dict, 
         verbose: bool = False
     ):
-        """
-        Initializes the TopFeaturesAnalyzer.
-        
-        Args:
-            cfg:     Configuration dictionary.
-            verbose: If True, enables verbose logging.
-        """
         self.cfg = cfg
         self.verbose = verbose
 
@@ -621,22 +459,9 @@ class TopFeaturesAnalyzer:
         stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
         group_column: str,
     ) -> Tuple[List[Dict], List[Dict]]:
-        """
-        Identifies top contaminated and pristine features from statistical results.
-        
-        Args:
-            stats_results: Nested dictionary of statistical test results.
-            group_column:  Metadata column used for group comparisons.
-        
-        Returns:
-            Tuple containing:
-                - List of top contaminated features
-                - List of top pristine features
-        """
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         all_features = []
 
-        # Collect all significant features efficiently
         for table_type, tests in stats_results.items():
             for test_name, test_results in tests.items():
                 for level, df in test_results.items():
@@ -644,13 +469,11 @@ class TopFeaturesAnalyzer:
                     if sig_df.empty:
                         continue
 
-                    # Vectorized effect size calculation
                     sig_df["effect"] = sig_df.apply(
                         lambda row: san.get_effect_size(test_name, row), axis=1
                     )
                     sig_df = sig_df.dropna(subset=["effect"])
 
-                    # Collect features in a list
                     for _, row in sig_df.iterrows():
                         all_features.append({
                             "feature": row["feature"],
@@ -662,12 +485,11 @@ class TopFeaturesAnalyzer:
                             "effect_dir": "positive" if row["effect"] > 0 else "negative",
                         })
 
-        # Efficient sorting and filtering
         cont_feats = [f for f in all_features if f["effect"] > 0]
         pris_feats = [f for f in all_features if f["effect"] < 0]
 
         cont_feats.sort(key=lambda d: (-d["effect"], d["p_value"]))
-        pris_feats.sort(key=lambda d: (d["effect"], d["p_value"]))  # More negative is stronger
+        pris_feats.sort(key=lambda d: (d["effect"], d["p_value"]))
 
         return cont_feats[:100], pris_feats[:100]
 
@@ -675,15 +497,6 @@ class TopFeaturesAnalyzer:
 class _DataLoader(_ProcessingMixin):
     """
     Loads and processes microbiome data from BIOM files and metadata.
-    
-    Attributes:
-        cfg:         Configuration dictionary.
-        project_dir: Project directory structure.
-        mode:        Analysis mode ('asv' or 'genus').
-        existing_subsets: Existing QIIME output paths.
-        verbose:     Flag for verbose output.
-        meta:        Loaded metadata DataFrame.
-        table:       Loaded BIOM feature table.
     """
     
     MODE_CONFIG = {
@@ -699,40 +512,27 @@ class _DataLoader(_ProcessingMixin):
         existing_subsets: Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
-        """
-        Initializes the DataLoader and loads data.
-        
-        Args:
-            cfg:         Configuration dictionary.
-            project_dir: Project directory structure.
-            mode:        Analysis mode ('asv' or 'genus').
-            verbose:     If True, enables verbose logging.
-        """
         self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
         self._validate_mode()
         self._load_metadata()
         self._load_biom_table()
         self._filter_and_align()
 
-    # Public after run
     meta: pd.DataFrame
     table: Table
 
     def _validate_mode(self) -> None:
-        """Validates the analysis mode."""
         if self.mode not in self.MODE_CONFIG:
             raise ValueError(f"Invalid mode: {self.mode}")
 
     def _get_metadata_paths(self) -> List[Path]:
-        """Retrieves paths to BIOM feature tables."""
         metadata_paths = [paths["metadata"] 
                           for subset_id, paths in self.existing_subsets.items()]
         if self.verbose:
-            logger.info(f"Found {RED}{len(metadata_paths)}{RESET} metadata files")
+            logger.info(f"Found {len(metadata_paths)} metadata files")
         return metadata_paths
 
     def _get_metadata_paths_glob(self) -> List[Path]:
-        """Retrieves paths to metadata files."""
         paths: List[Path] = []
         for bi in self._get_biom_paths_glob():
             ds_dir = bi.parent if bi.is_file() else bi
@@ -741,11 +541,10 @@ class _DataLoader(_ProcessingMixin):
             if mp.exists():
                 paths.append(mp)
         if self.verbose:
-            logger.info(f"Found {RED}{len(paths)}{RESET} metadata files")
+            logger.info(f"Found {len(paths)} metadata files")
         return paths
 
     def _load_metadata(self) -> None:
-        """Loads and merges metadata from multiple files."""
         if self.existing_subsets != None:
             paths = self._get_metadata_paths()
         else:
@@ -755,12 +554,11 @@ class _DataLoader(_ProcessingMixin):
             duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
             logger.debug(
                 f"Found duplicate columns in metadata: {duplicated_columns}. "
-                "Keeping first occurrence and removing duplicates."
+                "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
 
     def _get_biom_paths(self) -> List[Path]:
-        """Retrieves paths to BIOM feature tables."""
         table_dir, _ = self.MODE_CONFIG[self.mode]
         biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
         if self.verbose:
@@ -768,7 +566,6 @@ class _DataLoader(_ProcessingMixin):
         return biom_paths
 
     def _get_biom_paths_glob(self) -> List[Path]:
-        """Retrieves paths to BIOM feature tables."""
         table_dir, _ = self.MODE_CONFIG[self.mode]
         if self.cfg["target_subfragment_mode"] != 'any' or self.mode != 'genus':
             pattern = "/".join([
@@ -788,7 +585,6 @@ class _DataLoader(_ProcessingMixin):
         return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
-        """Loads and merges BIOM feature tables."""
         if self.existing_subsets != None:
             biom_paths = self._get_biom_paths()
         else:
@@ -798,40 +594,20 @@ class _DataLoader(_ProcessingMixin):
         self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
     
     def _filter_and_align(self) -> None:
-        """Filters and aligns feature table with metadata."""
         orig_n = self.table.shape[1]
         self.table, self.meta = update_table_and_meta(self.table, self.meta, "#sampleid")
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
-            f"{'Loaded metadata:':<{LABEL_W}}"             
-            f"{self.meta.shape[0]:>{ROW_W}} "   
-            "samples × "
-            f"{self.meta.shape[1]:>{COL_W}} "  
-            "cols"
+            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples × {self.meta.shape[1]:>5} cols"
         )
         logger.info(
-            f"{'Loaded features:':<{LABEL_W}}"              
-            f"{self.table.shape[1]:>{ROW_W}} "   
-            "samples × "
-            f"{self.table.shape[0]:>{COL_W}} "  
-            f"{ftype}"
+            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples × {self.table.shape[0]:>5} {ftype}"
         )
 
 
 class _TableProcessor(_ProcessingMixin):
     """
-    Processes feature tables through various transformations and taxonomical 
-    collapses.
-    
-    Attributes:
-        cfg:               Configuration dictionary.
-        table:             Input BIOM feature table.
-        mode:              Analysis mode ('asv' or 'genus').
-        meta:              Sample metadata DataFrame.
-        figure_output_dir: Directory for output figures.
-        project_dir:       Project directory structure.
-        verbose:           Flag for verbose output.
-        tables:            Dictionary of processed tables.
+    Processes feature tables through various transformations and taxonomical collapses.
     """
     
     def __init__(
@@ -840,25 +616,13 @@ class _TableProcessor(_ProcessingMixin):
         table: Table,
         mode: str,
         meta: pd.DataFrame,
-        figure_output_dir: Path,
+        output_dir: Path,
         project_dir: Any,
         verbose: bool,
     ) -> None:
-        """
-        Initializes the TableProcessor and runs processing pipeline.
-        
-        Args:
-            cfg:               Configuration dictionary.
-            table:             Input BIOM feature table.
-            mode:              Analysis mode ('asv' or 'genus').
-            meta:              Sample metadata DataFrame.
-            figure_output_dir: Directory for output figures.
-            project_dir:       Project directory structure.
-            verbose:           If True, enables verbose logging.
-        """
         self.cfg, self.mode, self.verbose = cfg, mode, verbose
         self.meta = meta
-        self.figure_output_dir = figure_output_dir
+        self.output_dir = output_dir
         self.project_dir = project_dir
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
         self._apply_preprocessing()
@@ -867,11 +631,9 @@ class _TableProcessor(_ProcessingMixin):
         self._save_tables()
 
     def _apply_preprocessing(self) -> None:
-        """Applies filtering, normalization, and CLR transformation."""
         feat_cfg = self.cfg["features"]
         table = self.tables["raw"][self.mode]
 
-        # Pipeline processing to avoid intermediate copies
         if feat_cfg["filter"]:
             table = filter(table)
             self.tables.setdefault("filtered", {})[self.mode] = table
@@ -885,7 +647,6 @@ class _TableProcessor(_ProcessingMixin):
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
     def _collapse_taxa(self) -> None:
-        """Collapses feature tables to different taxonomic levels."""
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
             master_desc = "Collapsing taxonomy..."
@@ -921,16 +682,15 @@ class _TableProcessor(_ProcessingMixin):
                         logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
                         processed[level] = None
                     finally:
-                        prog.update(level_task, advance=1) # Update level task and remove
+                        prog.update(level_task, advance=1)
                         prog.remove_task(level_task)
-                        prog.update(table_task, advance=1) # Update table task
+                        prog.update(table_task, advance=1)
                     
-                self.tables[table_type] = processed # Store processed tables
-                prog.remove_task(table_task)        # Remove completed table task
-                prog.update(master_task, advance=1) # Update master task
+                self.tables[table_type] = processed
+                prog.remove_task(table_task)
+                prog.update(master_task, advance=1)
     
     def _create_presence_absence(self) -> None:
-        """Creates presence/absence versions of feature tables."""
         if not self.cfg["features"]["presence_absence"]:
             return
                
@@ -961,19 +721,16 @@ class _TableProcessor(_ProcessingMixin):
                     logger.error(f"Presence/Absence failed for {level}: {e}")
                     processed[level] = None
                 finally:
-                    prog.update(level_task, advance=1) # Update level task and remove
+                    prog.update(level_task, advance=1)
                     prog.remove_task(level_task)
-                    prog.update(master_task, advance=1) # Update master task
+                    prog.update(master_task, advance=1)
                 
-            # Store processed tables 
             self.tables["presence_absence"] = processed
 
     def _save_tables(self) -> None:
-        """Saves processed tables to disk in BIOM format."""
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
 
-        # Prepare all export tasks
         export_tasks = []
         for table_type, levels in self.tables.items():
             tdir = base / table_type
@@ -981,42 +738,20 @@ class _TableProcessor(_ProcessingMixin):
             for level, table in levels.items():
                 out = tdir / level / "feature-table.biom"
                 out.parent.mkdir(parents=True, exist_ok=True)
-                export_tasks.append((table, out, table_type, level))
+                export_tasks.append((table, out))
 
-        # Parallel export
         with ThreadPoolExecutor() as executor:
             futures = []
-            for table, out, table_type, level in export_tasks:
+            for table, out in export_tasks:
                 futures.append(executor.submit(export_h5py, table, out))
 
-            # Wait for completion
             for future in futures:
                 future.result()
 
 
 class _AnalysisManager(_ProcessingMixin):
     """
-    Manages the analysis pipeline including statistics, ordination, and 
-    machine learning.
-    
-    Attributes:
-        cfg:                         Configuration dictionary.
-        tables:                      Processed feature tables.
-        meta:                        Sample metadata DataFrame.
-        figure_output_dir:           Directory for output figures.
-        verbose:                     Flag for verbose output.
-        stats:                       Statistical test results.
-        ordination:                  Ordination analysis results.
-        models:                      Machine learning models.
-        figures:                     Generated figures.
-        top_contaminated_features:   Top features associated with 
-                                     contamination.
-        top_pristine_features:       Top features associated with 
-                                     pristine samples.
-        faprotax_enabled:            Flag indicating if FAPROTAX is 
-                                     enabled.
-        fdb:                         FAPROTAX database.
-        _faprotax_cache:             Cache for FAPROTAX annotations.
+    Manages the analysis pipeline including statistics, ordination, and machine learning.
     """
     
     def __init__(
@@ -1029,61 +764,35 @@ class _AnalysisManager(_ProcessingMixin):
         faprotax_enabled: bool = False,
         fdb: Optional[Dict] = None,
     ) -> None:
-        """
-        Initializes the AnalysisManager and runs the analysis pipeline.
-        
-        Args:
-            cfg:               Configuration dictionary.
-            tables:            Processed feature tables.
-            meta:              Sample metadata DataFrame.
-            figure_output_dir: Directory for output figures.
-            verbose:           If True, enables verbose logging.
-            faprotax_enabled:  If True, enables FAPROTAX functional 
-                               annotation.
-            fdb:               Loaded FAPROTAX database.
-        """
         self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
         self.output_dir = output_dir
-        self.figure_output_dir = Path(output_dir) / 'figures'
         self.table_output_dir = Path(output_dir) / 'tables'
-        self.alpha_div_output_dir = self.table_output_dir / 'alpha_diversity'
-        self.beta_div_output_dir = self.table_output_dir / 'beta_diversity'
-        self.stats_output_dir = self.table_output_dir / 'stats'
-        self.alpha_div_fig_output_dir = self.figure_output_dir / 'alpha_diversity'
-        self.beta_div_fig_output_dir = self.figure_output_dir / 'beta_diversity'
-        self.stats_fig_output_dir = self.figure_output_dir / 'stats'
-        self.ml_output_dir = Path(output_dir) / 'ml'
-        self.stats: Dict[str, Any] = {} # Statistical tests
-        self.alpha_diversity: Dict[str, Any] = {} # Alpha diversity
-        self.ordination: Dict[str, Any] = {} # Beta diversity
-        self.models: Dict[str, Any] = {} # ML models
-        self.figures: Dict[str, Any] = {}  # Figures
+        self.stats: Dict[str, Any] = {}
+        self.ordination: Dict[str, Any] = {}
+        self.models: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
         self.top_contaminated_features: List[Dict] = []
         self.top_pristine_features: List[Dict] = []
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
 
-        # Process in stages and clear intermediates
         self._run_alpha_diversity_analysis()  
         self._run_statistical_tests()
         stats_copy = deepcopy(self.stats)
 
         self._identify_top_features(stats_copy)
-        del stats_copy  # Free memory
+        del stats_copy
 
         self._run_ordination()
 
-        # Keep only necessary tables for ML
-        #ml_table_types = {"normalized", "clr_transformed"}
         ml_table_types = {"clr_transformed"}
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
         self._run_ml_feature_selection(ml_tables)
         self._compare_top_features()
-        del ml_tables # Free memory
+        del ml_tables
 
-        # Add FAPROTAX annotations only to top features
         if self.faprotax_enabled and self.top_contaminated_features:
             self._annotate_top_features()
 
@@ -1093,15 +802,6 @@ class _AnalysisManager(_ProcessingMixin):
         self, 
         taxon: str
     ) -> List[str]:
-        """
-        Retrieves FAPROTAX functions for a taxon, using cache if available.
-        
-        Args:
-            taxon: Taxonomic string to look up.
-        
-        Returns:
-            List of functional annotations.
-        """
         if taxon not in self._faprotax_cache:
             self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
                 taxon, self.fdb, include_references=False
@@ -1109,12 +809,10 @@ class _AnalysisManager(_ProcessingMixin):
         return self._faprotax_cache[taxon]
 
     def _annotate_top_features(self) -> None:
-        """Batch process annotations to minimize DB lookups"""
         all_taxa = {
             f["feature"] for f in self.top_contaminated_features + self.top_pristine_features
         }
 
-        # Batch lookup
         with ThreadPoolExecutor() as executor:
             results = list(executor.map(self._get_cached_faprotax, all_taxa))
 
@@ -1126,29 +824,22 @@ class _AnalysisManager(_ProcessingMixin):
         for feat in self.top_pristine_features:
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
 
-    def _run_alpha_diversity_analysis(self) -> None:
-        """Run alpha diversity analysis based on configuration settings."""      
-        # Check if alpha diversity analysis is enabled
+    def _run_alpha_diversity_analysis(self) -> None:      
         alpha_cfg = self.cfg.get("alpha_diversity", {})
         if not alpha_cfg.get("enabled", False):
-            logger.info("Alpha diversity analysis is disabled in configuration.")
+            logger.info("Alpha diversity analysis disabled.")
             return
-
-        self.alpha_div_output_dir.mkdir(parents=True, exist_ok=True)
         
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
         generate_plots = alpha_cfg.get("generate_plots", True)
         
-        # Calculate total tasks based on configuration
         n = 0
         enabled_table_types = alpha_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
-            # Check if this table type is enabled
             if not enabled_table_types.get(table_type, False):
                 continue
-            # Check if specific levels are specified, or use all
             enabled_levels = enabled_table_types[table_type].get("levels", list(levels.keys()))
             n += len(enabled_levels)
         
@@ -1159,11 +850,10 @@ class _AnalysisManager(_ProcessingMixin):
             master_desc = f"Running alpha diversity for '{group_col}'..."
             master_task = prog.add_task(
                 f"[white]{master_desc:<{DEFAULT_N}}", 
-                total=n, # Total tasks
+                total=n,
                 start_time=time.time()
             )
             for table_type, levels in self.tables.items():
-                # Skip table types not enabled in config
                 if not enabled_table_types.get(table_type, False):
                     continue
 
@@ -1191,16 +881,18 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     try: 
                         _init_dict_level(self.alpha_diversity, table_type, level)  
-                        # Convert to DataFrame and compute alpha diversity
                         df = table_to_df(levels[level])
                         alpha_df = alpha_diversity(df, metrics=metrics)
-                        # Store alpha diversity results
                         self.alpha_diversity[table_type][level]['results'] = alpha_df
-                        alpha_df.to_csv(self.alpha_div_output_dir / f'{table_type}.{level}.main.tsv', sep='\t', index=True)
-                        if alpha_df.empty:
-                            logger.error(f"Alpha diversity table empty for {table_type}/{level}")
-                            continue
-                        # Analyze relationship with group column
+                        
+                        # Create output directory for this analysis
+                        output_dir = self.output_dir / 'alpha_diversity' / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Save results
+                        alpha_df.to_csv(output_dir / 'alpha_diversity.tsv', sep='\t', index=True)
+                        
+                        # Run statistical analysis
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
                             metadata=self.meta,
@@ -1208,11 +900,8 @@ class _AnalysisManager(_ProcessingMixin):
                             parametric=parametric
                         )
                         self.alpha_diversity[table_type][level]['stats'] = stats_df
-                        stats_df.to_csv(
-                            self.table_output_dir / f'{table_type}.{level}.stats.{group_col}.tsv', 
-                            sep='\t', index=True
-                        )
-                        # Run correlation analysis if enabled
+                        stats_df.to_csv(output_dir / f'stats_{group_col}.tsv', sep='\t', index=True)
+                        
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                             corr_results = analyze_alpha_correlations(
                                 alpha_df,
@@ -1222,16 +911,13 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             self.alpha_diversity[table_type][level]['correlations'] = corr_results
                             pd.DataFrame.from_dict([corr_results], orient='index').to_csv(
-                                self.alpha_div_output_dir / f'{table_type}.{level}.correlations.{group_col}.tsv', 
+                                output_dir / f'correlations_{group_col}.tsv', 
                                 sep='\t', index=True
                             )
                         
-                        # Generate plots if enabled
                         if generate_plots:
-                            _init_dict_level(self.figures, "alpha_diversity", table_type, level)  
-                            self.alpha_div_fig_output_dir.mkdir(parents=True, exist_ok=True)  
+                            self.alpha_diversity[table_type][level]['figures'] = {}
                             
-                            # Boxplots
                             plot_cfg = alpha_cfg.get("plot", {})
                             for metric in metrics:
                                 if alpha_df[metric].isnull().all():
@@ -1243,44 +929,34 @@ class _AnalysisManager(_ProcessingMixin):
                                     metadata=self.meta,
                                     group_column=group_col,
                                     metric=metric,
-                                    output_dir=self.alpha_div_fig_output_dir / table_type / level,
+                                    output_dir=output_dir,
                                     show=False,
                                     verbose=self.verbose,
                                     add_points=plot_cfg.get("add_points", True),
                                     add_stat_annot=plot_cfg.get("add_stat_annot", True),
                                     test_type="parametric" if parametric else "nonparametric"
                                 )
-                                self.figures["alpha_diversity"][table_type][level][metric] = fig
+                                self.alpha_diversity[table_type][level]['figures'][metric] = fig
                             
-                            # Statistics summary
                             stats_fig = create_alpha_diversity_stats_plot(
                                 stats_df=stats_df,
-                                output_dir=self.alpha_div_fig_output_dir / table_type / level,
+                                output_dir=output_dir,
                                 verbose=self.verbose,
                                 effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
                             )
-                            self.figures["alpha_diversity"][table_type][level]["summary"] = stats_fig
+                            self.alpha_diversity[table_type][level]['figures']["summary"] = stats_fig
                             
-                            # Log significant results
-                            sig = stats_df[stats_df['p_value'] < 0.05]
-                            if not sig.empty and self.verbose:
-                                logger.debug(
-                                    f"Significant alpha diversity differences for "
-                                    f"{table_type}/{level}:\n{sig.to_string()}"
-                                )
-                                
                             if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                                 corr_figures = plot_alpha_correlations(
                                     corr_results,
-                                    output_dir=self.alpha_div_fig_output_dir / table_type / level,
+                                    output_dir=output_dir,
                                     top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
                                 )
-                                self.figures["alpha_diversity"][table_type][level]["correlations"] = corr_figures
+                                self.alpha_diversity[table_type][level]['figures']["correlations"] = corr_figures
                             
                     except Exception as e:
                         logger.error(f"Alpha diversity analysis failed for {table_type}/{level}: {e}")
-                        self.alpha_diversity[table_type][level]['results'] = None
-                        self.alpha_diversity[table_type][level]['stats'] = None
+                        self.alpha_diversity[table_type][level] = {'results': None, 'stats': None, 'figures': {}}
                         
                     finally:
                         prog.update(level_task, advance=1)
@@ -1291,13 +967,10 @@ class _AnalysisManager(_ProcessingMixin):
                 prog.remove_task(table_task)
             
     def _run_statistical_tests(self) -> None:
-        """Runs statistical tests on all tables and levels."""
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         group_vals = self.cfg.get("group_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
-        self.stats_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Calculate total tests
         n = 0
         for table_type, levels in self.tables.items():
             tests_config = self.cfg["stats"].get(table_type, {})
@@ -1308,7 +981,7 @@ class _AnalysisManager(_ProcessingMixin):
             master_desc = f"Running statistical tests for '{group_col}'..."
             master_task = prog.add_task(
                 f"{master_desc:<{DEFAULT_N}}", 
-                total=n, # Total tasks
+                total=n,
                 start_time=time.time()
             )
             for table_type, levels in self.tables.items():
@@ -1330,7 +1003,11 @@ class _AnalysisManager(_ProcessingMixin):
                         total=len(enabled_for_table_type),
                         start_time=time.time()
                     )
-                    # Align table/metadata once per level
+                    
+                    # Create output directory for this analysis
+                    output_dir = self.output_dir / 'stats' / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
                     table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
                 
                     for test_name in enabled_for_table_type:
@@ -1338,7 +1015,6 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
                         _init_dict_level(self.stats, table_type, level)    
-                        #_init_dict_level(self.figures, "stats", table_type, level)
                         test_desc = f"Test: {cfg['name']}"
                         test_task = prog.add_task(
                             test_desc,
@@ -1355,7 +1031,8 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             self.stats[table_type][level][test_name] = result
                             
-                            result.to_csv(self.stats_output_dir / f'{table_type}.{level}.{test_name}.tsv', sep='\t', index=True)
+                            # Save results to analysis directory
+                            result.to_csv(output_dir / f'{test_name}.tsv', sep='\t', index=True)
                             
                         except Exception as e:
                             logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
@@ -1371,27 +1048,19 @@ class _AnalysisManager(_ProcessingMixin):
                 prog.remove_task(table_task)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
-        """Identifies top features from statistical results."""
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
             stats_results, DEFAULT_GROUP_COLUMN
         )
 
         if self.verbose:
-            logger.info(
-                f"Found {len(self.top_contaminated_features)} " 
-                f"top contaminated features"
-            )
-            logger.info(
-                f"Found {len(self.top_pristine_features)} " 
-                f"top pristine features"
-            )
+            logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
+            logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
 
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
         default_ord_config = {"pca": False, "pcoa": False, "tsne": False, "umap": False}
         
-        # Calculate total tasks
         total_tasks = 0
         for table_type, levels in self.tables.items():
             ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
@@ -1401,17 +1070,13 @@ class _AnalysisManager(_ProcessingMixin):
         if not total_tasks:
             return
     
-        # Initialize structures
         self.ordination = {tt: {} for tt in self.tables}
-        self.figures["ordination"] = {tt: {} for tt in self.tables}
     
         with get_progress_bar() as prog:
             master_desc = "Running beta diversity analysis..."
             master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
-            # Use thread pool with limited workers
-            max_workers = min(2, os.cpu_count() // 2)  # Prevent over-subscription
-            print(max_workers)
+            max_workers = min(2, os.cpu_count() // 2)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 for table_type, levels in self.tables.items():
@@ -1419,59 +1084,40 @@ class _AnalysisManager(_ProcessingMixin):
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
-                        # Convert to DataFrame once per table/level
                         df = table_to_df(table)
-                        ordir = self.figure_output_dir / 'ordination' / table_type / level 
-                        ordir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Create output directory for this analysis
+                        output_dir = self.output_dir / 'ordination' / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
                         
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table,  # Pass DataFrame
+                                table=table,
                                 meta=self.meta,
                                 table_type=table_type,
                                 level=level,
                                 method=method,
-                                ordir=ordir
+                                output_dir=output_dir
                             )
                             futures.append(future)
                 
-                # Process results with timeout
                 for future in as_completed(futures, timeout=300):
                     try:
                         table_type, level, method, res, fig = future.result()
                         _init_dict_level(self.ordination, table_type, level) 
-                        self.ordination[table_type][level][method] = res
-                        _init_dict_level(self.figures, "ordination", table_type, level) 
-                        self.figures["ordination"][table_type][level][method] = fig
+                        self.ordination[table_type][level][method] = {
+                            'result': res,
+                            'figures': fig
+                        }
                     except TimeoutError:
                         logger.error("Ordination task timed out after 5 minutes")
                     finally:
-                        prog.advance(master_task)  # Update progress only in main thread
+                        prog.advance(master_task)
 
-    def _run_single_ordination(self, table, meta, table_type, level, method, ordir):
-        """
-        Runs a single ordination method in isolation.
-        
-        Args:
-            table:      Feature table to analyze.
-            meta:       Sample metadata DataFrame.
-            table_type: Type of feature table.
-            level:      Taxonomic level.
-            method:     Ordination method to run.
-            ordir:      Output directory for figures.
-        
-        Returns:
-            Tuple containing:
-                - Table type
-                - Taxonomic level
-                - Method name
-                - Ordination results
-                - Generated figures
-        """
+    def _run_single_ordination(self, table, meta, table_type, level, method, output_dir):
         try:
-            ordn = Ordination(self.cfg, ordir, verbose=False)
-            # Run just this one method
+            ordn = Ordination(self.cfg, output_dir, verbose=False)
             res, figs = ordn.run_tests(
                 table=table,
                 metadata=meta,
@@ -1486,14 +1132,11 @@ class _AnalysisManager(_ProcessingMixin):
             return table_type, level, method, None, None
 
     def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
-        """Runs machine learning feature selection with comprehensive parameter grid"""
-        # Check if ML feature selection is enabled
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
-            logger.info("ML feature selection is disabled in configuration.")
+            logger.info("ML feature selection disabled.")
             return
             
-        # Get configuration parameters
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         methods = ml_cfg.get("methods", ["rfe"])
         n_top_features = ml_cfg.get("num_features", 100)
@@ -1501,16 +1144,13 @@ class _AnalysisManager(_ProcessingMixin):
         permutation_importance = ml_cfg.get("permutation_importance", True)
         n_threads = ml_cfg.get("n_threads", 8)
         
-        # Get enabled table types and levels from config
         enabled_table_types = set(ml_cfg.get("table_types", ["clr_transformed"]))
         enabled_levels = set(ml_cfg.get("levels", ["genus"]))
         
-        # Filter ml_tables to only include enabled table types and levels
         filtered_ml_tables = {}
         for table_type, levels in ml_tables.items():
             if table_type not in enabled_table_types:
                 continue
-            # Filter levels to only include enabled levels
             filtered_levels = {
                 level: table 
                 for level, table in levels.items() 
@@ -1519,19 +1159,15 @@ class _AnalysisManager(_ProcessingMixin):
             if filtered_levels:
                 filtered_ml_tables[table_type] = filtered_levels
     
-        # Calculate total tasks
-        n = sum(len(levels) * len(methods)
-                for table_type, levels in filtered_ml_tables.items())
-        
+        n = sum(len(levels) * len(methods) for levels in filtered_ml_tables.values())
         if not n:
-            logger.info("No ML tasks to run after filtering by table types and levels")
             return
         
         with get_progress_bar() as prog:
             master_desc = "ML Feature Selection..."
             master_task = prog.add_task(
                 f"{master_desc:<{DEFAULT_N}}", 
-                total=n, # Total tasks
+                total=n,
                 start_time=time.time()
             )
             for table_type, levels in filtered_ml_tables.items():
@@ -1550,8 +1186,11 @@ class _AnalysisManager(_ProcessingMixin):
                         total=len(methods),
                         start_time=time.time()
                     )
-                    level_dir = self.ml_output_dir / table_type / level
-                    level_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Create output directory for this analysis
+                    output_dir = self.output_dir / 'ml' / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
                     for method in methods:
                         method_desc = f"Method: {method.upper()}"
                         method_task = prog.add_task(
@@ -1562,13 +1201,9 @@ class _AnalysisManager(_ProcessingMixin):
                         )
                         _init_dict_level(self.models, table_type, level, method) 
                         try:
-                            # Skip 'chi_squared' for 'clr_transformed' tables
                             if table_type == "clr_transformed" and method == "chi_squared":
                                 logger.warning(
-                                    "Skipping chi_squared feature selection for clr_transformed table. "
-                                    "Chi-squared test is not appropriate for CLR transformed data because "
-                                    "it requires non-negative values and CLR transformation produces values "
-                                    "with both positive and negative magnitudes."
+                                    "Skipping chi_squared feature selection for CLR data."
                                 )
                                 self.models[table_type][level][method] = None
                             else:
@@ -1579,15 +1214,12 @@ class _AnalysisManager(_ProcessingMixin):
                                 idx = X.index.intersection(y.index)
                                 X, y = X.loc[idx], y.loc[idx]
 
-                                if method == "select_k_best":
-                                    use_permutation_importance=False
-                                else:
-                                    use_permutation_importance=permutation_importance
+                                use_permutation_importance = False if method == "select_k_best" else permutation_importance
                                     
                                 model_result = catboost_feature_selection(
                                     metadata=y,
                                     features=X,
-                                    output_dir=level_dir,
+                                    output_dir=output_dir,
                                     group_col=group_col,
                                     method=method,
                                     n_top_features=n_top_features,
@@ -1598,15 +1230,17 @@ class _AnalysisManager(_ProcessingMixin):
                                     task_id=level_task,
                                 )
 
+                                # Store figures within model result
+                                model_result['figures'] = {
+                                    'shap_summary_bar': model_result.pop('shap_summary_bar'),
+                                    'shap_summary_beeswarm': model_result.pop('shap_summary_beeswarm'),
+                                    'shap_dependency': model_result.pop('shap_dependency')
+                                }
+                                
                                 self.models[table_type][level][method] = model_result
-                                _init_dict_level(self.figures, "ml", table_type, level, method) 
-                                figs_method = self.figures["ml"][table_type][level][method]
-                                figs_method['shap_summary_bar'] = model_result['shap_summary_bar']
-                                figs_method['shap_summary_beeswarm'] = model_result['shap_summary_beeswarm']
-                                figs_method['shap_dependency'] = model_result['shap_dependency']
                                     
                         except Exception as e:
-                            logger.error(f"Model training with '{method}' failed for {table_type}/{level}: {e}")
+                            logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
                             self.models[table_type][level][method] = None
                                 
                         finally:
@@ -1619,11 +1253,9 @@ class _AnalysisManager(_ProcessingMixin):
                 prog.remove_task(table_task)
                         
     def _compare_top_features(self) -> None:
-        """Compares top features from ML models with statistical results."""
         if not self.models:
             return
             
-        # Collect all statistically significant features
         stat_features = {}
         for table_type, tests in self.stats.items():
             for test_name, levels in tests.items():
@@ -1635,7 +1267,6 @@ class _AnalysisManager(_ProcessingMixin):
                             stat_features[key] = set()
                         stat_features[key].update(sig_df["feature"].tolist())
         
-        # Compare with model features
         for table_type, levels in self.models.items():
             for level, methods in levels.items():
                 key = (table_type, level)
@@ -1645,108 +1276,84 @@ class _AnalysisManager(_ProcessingMixin):
                     if model_result is None:
                         continue
                         
-                    # Get top features from model
                     model_set = set(model_result.get("top_features", []))
-                    
-                    # Calculate overlap
                     overlap = model_set & stat_set
                     jaccard = len(overlap) / len(model_set | stat_set) if (model_set or stat_set) else 0.0
                     
-                    # Log comparison results
                     logger.info(
                         f"Feature comparison ({table_type}/{level}/{method}): "
-                        f"Model features: {len(model_set)}, "
-                        f"Statistical features: {len(stat_set)}, "
                         f"Overlap: {len(overlap)} ({jaccard:.1%})"
                     )
                     
     def _generate_violin_plots(self, n=50):
-        """Generate violin plots for top features"""
-        if not hasattr(self, 'figures'):
-            self.figures = {}
-            
-        self.figures['violin'] = {'contaminated': {}, 'pristine': {}}
+        # Create output directory for violin plots
+        violin_output_dir = self.output_dir / 'violin_plots'
+        violin_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Process contaminated features
         for feat in self.top_contaminated_features[:n]:
             try:
                 table_type = feat['table_type']
                 level = feat['level']
                 feature_name = feat['feature']
                 
-                # Get the table for this feature
                 table = self.tables[table_type][level]
                 df = table_to_df(table)
                 
-                # Merge with metadata to get status column
                 merged_df = df.merge(
-                    self.meta[[DEFAULT_GROUP_COL]], 
+                    self.meta[[DEFAULT_GROUP_COLUMN]], 
                     left_index=True, 
                     right_index=True
                 )
                 
-                # Generate violin plot
-                output_dir = self.figure_output_dir / 'violin' / 'contaminated' / table_type / level
+                # Create specific output directory for this feature
+                feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
+                feature_output_dir.mkdir(parents=True, exist_ok=True)
+                
                 fig = violin_feature(
                     df=merged_df,
                     feature=feature_name,
-                    output_dir=output_dir,
-                    status_col=DEFAULT_GROUP_COL
+                    output_dir=feature_output_dir,
+                    status_col=DEFAULT_GROUP_COLUMN
                 )
-                self.figures['violin']['contaminated'][feature_name] = fig
+                feat['violin_figure'] = fig
             except Exception as e:
-                logger.error(f"Failed to generate violin plot for {feature_name}: {e}")
+                logger.error(f"Failed violin plot for {feature_name}: {e}")
+                feat['violin_figure'] = None
         
-        # Process pristine features
         for feat in self.top_pristine_features[:n]:
             try:
                 table_type = feat['table_type']
                 level = feat['level']
                 feature_name = feat['feature']
                 
-                # Get the table for this feature
                 table = self.tables[table_type][level]
                 df = table_to_df(table)
                 
-                # Merge with metadata to get status column
                 merged_df = df.merge(
-                    self.meta[[DEFAULT_GROUP_COL]], 
+                    self.meta[[DEFAULT_GROUP_COLUMN]], 
                     left_index=True, 
                     right_index=True
                 )
                 
-                # Generate violin plot
-                output_dir = self.figure_output_dir / 'violin' / 'pristine' / table_type / level
+                # Create specific output directory for this feature
+                feature_output_dir = violin_output_dir / 'pristine' / table_type / level
+                feature_output_dir.mkdir(parents=True, exist_ok=True)
+                
                 fig = violin_feature(
                     df=merged_df,
                     feature=feature_name,
-                    output_dir=output_dir,
-                    status_col=DEFAULT_GROUP_COL
+                    output_dir=feature_output_dir,
+                    status_col=DEFAULT_GROUP_COLUMN
                 )
-                self.figures['violin']['pristine'][feature_name] = fig
+                feat['violin_figure'] = fig
             except Exception as e:
-                logger.error(f"Failed to generate violin plot for {feature_name}: {e}")
+                logger.error(f"Failed violin plot for {feature_name}: {e}")
+                feat['violin_figure'] = None
+
 
 class AmpliconData:
     """
     Main class for orchestrating 16S amplicon data analysis pipeline.
-    
-    Attributes:
-        cfg:                       Configuration dictionary.
-        project_dir:               Project directory structure.
-        mode:                      Analysis mode ('asv' or 'genus').
-        verbose:                   Flag for verbose output.
-        fdb:                       FAPROTAX database if enabled.
-        meta:                      Sample metadata DataFrame.
-        table:                     Raw BIOM feature table.
-        figure_output_dir:         Directory for output figures.
-        tables:                    Processed feature tables.
-        figures:                   Generated figures.
-        stats:                     Statistical test results.
-        ordination:                Ordination analysis results.
-        models:                    Machine learning models.
-        top_contaminated_features: Top features associated with contamination.
-        top_pristine_features:     Top features associated with pristine samples.
     """
     
     def __init__(
@@ -1754,78 +1361,98 @@ class AmpliconData:
         cfg: Dict, 
         project_dir: Any, 
         mode: str = DEFAULT_MODE, 
-        existing_subsets: Dict[str, Dict[str, Path]] = None,
+        existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
         verbose: bool = False
     ):
-        """
-        Initializes and runs the amplicon data analysis pipeline.
+        self.cfg = cfg
+        self.project_dir = project_dir
+        self.mode = mode
+        self.existing_subsets = existing_subsets
+        self.verbose = verbose
         
-        Args:
-            cfg:         Configuration dictionary.
-            project_dir: Project directory structure.
-            mode:        Analysis mode ('asv' or 'genus').
-            verbose:     If True, enables verbose logging.
-        """
-        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
-        self.fdb = get_faprotax_parsed() if cfg.get("faprotax", False) else None
+        # Initialize result containers
+        self.maps: Optional[Dict[str, Any]] = None
+        self.tables: Dict[str, Any] = {}
+        self.stats: Dict[str, Any] = {}
+        self.ordination: Dict[str, Any] = {}
+        self.models: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
+        self.top_contaminated_features: List[Dict] = []
+        self.top_pristine_features: List[Dict] = []
+        
+        self._execute_pipeline()
 
-        # Apply CPU limiting for parallel libraries
+    def _execute_pipeline(self):
+        """Execute the analysis pipeline in sequence."""
         self._apply_cpu_limits()
+        self._load_data()
+        self._process_tables()
+        self._generate_sample_maps()
+        self._run_analysis()
         
-        data = _DataLoader(cfg, project_dir, mode, existing_subsets, verbose)
-        self.meta, self.table = data.meta, data.table
-
-        # Process
-        self.output_dir = Path(self.project_dir.final)
-        tp = _TableProcessor(
-            cfg, self.table, mode, self.meta, self.output_dir, 
-            project_dir, verbose
-        )
-        self.tables = tp.tables
-
-        # Figures
-        self.figures: Dict[str, Any] = {}
-        self.figure_output_dir = Path(self.project_dir.figures)
-        if cfg["figures"].get("map", False):
-            self.plotter = Plotter(cfg, self.figure_output_dir, verbose)
-            self.figures["map"] = self.plotter.generate_sample_map(self.meta)
-
-        # Analysis
-        am = _AnalysisManager(
-            cfg, self.tables, self.meta, self.output_dir,
-            verbose, cfg.get("faprotax", False), self.fdb,
-        )
-        self.stats = am.stats
-        self.ordination = am.ordination
-        self.models = am.models
-        self.top_contaminated_features = am.top_contaminated_features
-        self.top_pristine_features = am.top_pristine_features
-        self.figures.update(am.figures)
-        
-        self.alpha_diversity = am.alpha_diversity
-
-        if verbose:
+        if self.verbose:
             logger.info("AmpliconData analysis finished.")
-            logger.info(
-                f"Alpha diversity calculated for "
-                f"{len(self.alpha_diversity_results)} "
-                f"table types and "
-                f"{sum(len(levels) for levels in self.alpha_diversity_results.values())} "
-                f"levels"
-            )
-    
+
     def _apply_cpu_limits(self):
-        """
-        Sets environment variables to limit CPU usage in parallel libraries.
-        """
         cpu_limit = self.cfg.get("cpu", {}).get("limit", 4)
-        
-        # Set for common parallel libraries
-        vars = [
-            "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
-            "BLIS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS",
-            "NUMEXPR_NUM_THREADS"
-        ]
-        for var in vars:
+        for var in ["OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", 
+                    "MKL_NUM_THREADS", "BLIS_NUM_THREADS", 
+                    "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS",
+                    "NUMEXPR_NUM_THREADS"]:
             os.environ[var] = str(cpu_limit)
-        os.environ["MKL_DYNAMIC"] = "FALSE"  
+        os.environ["MKL_DYNAMIC"] = "FALSE"
+
+    def _load_data(self):
+        data_loader = _DataLoader(
+            self.cfg, 
+            self.project_dir, 
+            self.mode, 
+            self.existing_subsets,
+            self.verbose
+        )
+        self.meta = data_loader.meta
+        self.table = data_loader.table
+
+    def _process_tables(self):
+        processor = _TableProcessor(
+            self.cfg,
+            self.table,
+            self.mode,
+            self.meta,
+            Path(self.project_dir.final),
+            self.project_dir,
+            self.verbose
+        )
+        self.tables = processor.tables
+
+    def _generate_sample_maps(self):
+        if self.cfg["figures"].get("map", False):
+            # Create output directory for sample maps
+            maps_output_dir = Path(self.project_dir.final) / 'sample_maps'
+            maps_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            plotter = MapPlotter(
+                self.cfg, 
+                maps_output_dir,
+                self.verbose
+            )
+            self.maps = plotter.generate_sample_map(self.meta)
+
+    def _run_analysis(self):
+        analyzer = _AnalysisManager(
+            self.cfg,
+            self.tables,
+            self.meta,
+            Path(self.project_dir.final),
+            self.verbose,
+            self.cfg.get("faprotax", False),
+            get_faprotax_parsed() if self.cfg.get("faprotax", False) else None
+        )
+        
+        # Collect results
+        self.stats = analyzer.stats
+        self.ordination = analyzer.ordination
+        self.models = analyzer.models
+        self.alpha_diversity = analyzer.alpha_diversity
+        self.top_contaminated_features = analyzer.top_contaminated_features
+        self.top_pristine_features = analyzer.top_pristine_features
