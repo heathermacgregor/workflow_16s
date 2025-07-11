@@ -856,7 +856,7 @@ def grid_search(
     if progress is not None and task_id is None:
         # Create parent task if not provided
         task_id = progress.add_task(
-            description="[cyan]Grid Search...",
+            description="Grid Search...",
             total=total_folds
         )
     
@@ -938,7 +938,7 @@ def grid_search(
                 progress.update(
                     task_id,
                     advance=1,
-                    description=f"[cyan]Param {i}/{total_combinations} - Fold {fold}/{n_splits}"
+                    description=f"Param {i}/{total_combinations} - Fold {fold}/{n_splits}"
                 )
         
         # Calculate mean CV scores
@@ -1145,12 +1145,14 @@ def catboost_feature_selection(
     
     # Run grid search
     best_model, best_params, best_score, test_scores = grid_search(
-        X_train_selected, 
-        y_train, 
-        X_test_selected, 
-        y_test, 
-        param_grid, 
-        output_dir,
+        X_train=X_train_selected, 
+        y_train=y_train, 
+        X_test=X_test_selected, 
+        y_test=y_test, 
+        param_grid=param_grid, 
+        output_dir=output_dir,
+        progress=progress, 
+        task_id=task_id,
         fixed_params=fixed_params
     )
     
