@@ -156,99 +156,70 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
         return table
     raise ValueError("Unsupported input type: must be Table, dict or DataFrame")
 
+# Add these constants at the top of your file
+NONNEGATIVE_METRICS = {'braycurtis', 'jaccard', 'aitchison', 'unweighted_unifrac', 'weighted_unifrac'}
+SKLEARN_METRICS = {'euclidean', 'cityblock', 'minkowski', 'cosine', 'correlation'}
+
 def distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
     metric: str = DEFAULT_METRIC
-) -> np.ndarray:
+) -> DistanceMatrix:
     """
-    Compute pairwise distance matrix from feature abundance data.
-    
-    Args:
-        table: Input data in supported format (BIOM, dict, or DataFrame)
-        metric: Distance metric (default: 'braycurtis'). Valid options include:
-                'euclidean', 'jaccard', 'braycurtis', 'cityblock', etc.
-                
-    Returns:
-        Symmetric distance matrix of shape (n_samples, n_samples)
-        
-    Raises:
-        ValueError: If fewer than 2 samples are provided
+    Compute pairwise distance matrix with validation for negative values.
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
-    return pairwise_distances(df.values, metric=metric)
+    sample_ids = handle_duplicate_ids(df.index.tolist())
+    data = df.values
+    
+    # Validate data based on metric requirements
+    if metric in NONNEGATIVE_METRICS and np.any(data < 0):
+        raise ValueError(
+            f"Metric '{metric}' requires non-negative data. "
+            f"Negative values detected (min={np.min(data):.2f}). "
+            "Use pseudocounts or multiplicative replacement."
+        )
+    
+    # Special handling for compositional metrics
+    if metric == 'aitchison':
+        from skbio.diversity import beta_diversity
+        return beta_diversity('aitchison', data, ids=sample_ids)
+    
+    # General case for other metrics
+    dist_array = pairwise_distances(data, metric=metric)
+    return DistanceMatrix(dist_array, ids=sample_ids)
 
 def pcoa(
     table: Union[Dict, Table, pd.DataFrame], 
     metric: str = DEFAULT_METRIC, 
     n_dimensions: Optional[int] = DEFAULT_N_PCOA
-) -> PCoA:
+) -> PCoAResults:
     """
-    Perform Principal Coordinate Analysis (PCoA) on feature data.
-    
-    Also known as Metric Multidimensional Scaling (MDS). This method:
-    1. Computes a distance matrix using the specified metric
-    2. Performs eigenvalue decomposition on the distance matrix
-    3. Returns principal coordinates and variance explained
-    
-    Args:
-        table: Input data in supported format
-        metric: Distance metric (default: 'braycurtis')
-        n_dimensions: Number of principal coordinates to return. 
-                     If None, computes all possible components.
-                     
-    Returns:
-        skbio PCoA result object containing:
-        - samples: DataFrame of coordinates (n_samples × n_dimensions)
-        - proportion_explained: Variance explained per component
-        - eigenvalues: Component eigenvalues
-        
-    Raises:
-        ValueError: For insufficient samples or invalid component count
+    Robust PCoA with comprehensive validation.
     """
     df = table_to_dataframe(table)
     validate_min_samples(df, min_samples=2)
     
-    # Handle duplicate sample IDs
-    sample_ids = handle_duplicate_ids(df.index.tolist())
-
-    # Determine safe number of dimensions
+    # Determine component count
     n_dimensions = n_dimensions or len(df)
-    n_dimensions = safe_component_limit(df, n_dimensions)
-
-    try:
-        # Compute distance matrix
-        distance_array = pairwise_distances(df.values, metric=metric)
-        distance_matrix = DistanceMatrix(distance_array, ids=sample_ids)
-        # 2. Assert square shape
-        assert distance_matrix.shape[0] == distance_matrix.shape[1], \
-            f"Expected square matrix, got {distance_matrix.shape}"
-        
-        # 3. Assert no NaNs
-        assert not np.isnan(distance_matrix.data).any(), \
-            "Distance matrix contains NaNs!"
-        # Perform PCoA
-        pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
-        
-    except:
-        # Compute distance matrix
-        distance_matrix = beta_diversity(
-            metric=metric, 
-            counts=df.values,  # After zero-handling
-            ids=sample_ids
-        )
-        # 2. Assert square shape
-        assert distance_matrix.shape[0] == distance_matrix.shape[1], \
-            f"Expected square matrix, got {distance_matrix.shape}"
-        
-        # 3. Assert no NaNs
-        assert not np.isnan(distance_matrix.data).any(), \
-            "Distance matrix contains NaNs!"
-        # Perform PCoA
-        pcoa_result = PCoA(distance_matrix, number_of_dimensions=n_dimensions)
+    n_dimensions = min(n_dimensions, len(df) - 1)  # Max possible for PCoA
     
-    # Standardize component names
-    pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_dimensions)]
+    # Compute distance matrix with validation
+    dm = distance_matrix(table, metric=metric)
+    
+    # Critical checks before PCoA
+    if not dm.is_symmetric():
+        raise ValueError("Distance matrix must be symmetric")
+    if np.isnan(dm.data).any():
+        raise ValueError("Distance matrix contains NaN values")
+    
+    # Perform PCoA
+    pcoa_result = PCoA(dm, number_of_dimensions=n_dimensions)
+    
+    # Standardize output names
+    n_components = pcoa_result.samples.shape[1]
+    pcoa_result.samples.columns = [f"PCo{i+1}" for i in range(n_components)]
+    
     return pcoa_result
 
 def pca(
