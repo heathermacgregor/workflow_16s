@@ -33,10 +33,13 @@ html_template_path = script_dir / "template.html"
 # ===================================== CLASSES ====================================== #
 
 level_titles = {
-    "table_type": "Table",
     "level": "Taxonomic Level",
-    "test_name": "Test"
+    "method": "Method",
+    "metric": "Metric",
+    "table_type": "Table",
+    "test_name": "Test",
 }
+
 section_info = {
     "stats": { #self.stats[table_type][level][test_name] = result
         "title": "Statistical Testing",
@@ -48,10 +51,24 @@ section_info = {
                          #self.alpha_diversity[table_type][level]['stats'] = stats_df
         "title": "Alpha Diversity",
         "level_1": "table_type",
-        "level_2": "level"
+        "level_2": "level",
+        "special_level_3": {
+            "results": {"title": "Results"},
+            "stats": {"title": "Statistics Summary"}
+        }
     },
-    "ordination": {},
-    "models": {}
+    "ordination": {
+        "title": "Beta Diversity",
+        "level_1": "table_type",
+        "level_2": "level",
+        "level_3": "method"
+    },
+    "ml": {
+        "title": "Machine Learning",
+        "level_1": "table_type",
+        "level_2": "level",
+        "level_3": "method"
+    }
 }
 
 section_figure_info = {
@@ -255,7 +272,7 @@ class Section:
         
     def _get_info(self, target_section: str):
         if target_section in section_info:
-            self.params = section_info[target_section]
+            return section_info[target_section]
 
     @classmethod
     def create(cls, amplicon_data, target_section: str):
