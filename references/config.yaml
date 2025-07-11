@@ -138,8 +138,8 @@ alpha_diversity:
     
 # Beta Diversity + Ordination
 ordination:
-  max_workers: 1  # Max concurrent ordination tasks
-  cpu_limit: 1    # CPU cores per ordination method
+  max_workers: 2  # Max concurrent ordination tasks
+  cpu_limit: 8    # CPU cores per ordination method
   raw:
     pca: False 
     pcoa: False #True
@@ -202,11 +202,11 @@ ml:
     - 'clr_transformed'
     - 'normalized'
   levels:
-    - 'genus'
+    #- 'genus'
     #- 'family'
     #- 'order'
     #- 'class'
-    #- 'phylum'
+    - 'phylum'
   methods:
     - 'rfe'
     #- 'select_k_best'
