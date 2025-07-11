@@ -71,14 +71,14 @@ def rename_columns(df: pd.DataFrame, rename_map: dict = cols_to_rename) -> pd.Da
     return df.rename(columns=rename_map)
     
 class Section:
-    def __init__(self, amplicon_data: AmpliconData, selected_section: str):
+    def __init__(self, amplicon_data: AmpliconData, target_section: str):
         self.amplicon_data = amplicon_data
-        self.section = self._get_section(selected_section)
-        self.figures = self._get_figures(selected_section)
-        self.params = self._get_info(selected_section)
+        self.section = self._get_section(target_section)
+        self.figures = self._get_figures(target_section)
+        self.params = self._get_info(target_section)
 
         self.results = self._get_section_data()
-        self._handle_section(selected_selection)
+        self._handle_section(target_section)
     
     def _get_section_data(self):
         section = self.section
@@ -127,8 +127,8 @@ class Section:
 
         
         
-    def _handle_section(self, selected_section: str):
-        #if selected_section != "stats" or not self.results:
+    def _handle_section(self, target_section: str):
+        #if target_section != "stats" or not self.results:
         #    return
     
         combined = []
@@ -137,7 +137,7 @@ class Section:
             df = item.get("result")
     
             if isinstance(df, pd.DataFrame):
-                if selected_section == "stats":
+                if target_section == "stats":
                     # Add summary stats
                     n_sig = df["p_value"].lt(0.05).sum() if "p_value" in df.columns else 0
                     df = df.copy()
@@ -158,25 +158,25 @@ class Section:
             self.results = rename_columns(pd.DataFrame())  # fallback if no valid DataFrames
 
     
-    def _get_section(self, selected_section: str):
+    def _get_section(self, target_section: str):
         """Get the section attribute from amplicon_data."""
-        return getattr(self.amplicon_data, selected_section, None)
+        return getattr(self.amplicon_data, target_section, None)
 
-    def _get_figures(self, selected_section: str):
+    def _get_figures(self, target_section: str):
         """Get the section attribute from amplicon_data.figures if it exists."""
         if hasattr(self.amplicon_data, "figures"):
-            return getattr(self.amplicon_data.figures, selected_section, None)
+            return getattr(self.amplicon_data.figures, target_section, None)
         return None
         
-    def _get_info(self, selected_section: str):
-        if selected_section in section_info:
-            self.params = section_info[selected_section]
+    def _get_info(self, target_section: str):
+        if target_section in section_info:
+            self.params = section_info[target_section]
 
     @classmethod
-    def create(cls, amplicon_data, selected_section: str):
-        if not hasattr(amplicon_data, selected_section):
+    def create(cls, amplicon_data, target_section: str):
+        if not hasattr(amplicon_data, target_section):
             return None
-        return cls(amplicon_data, selected_section)
+        return cls(amplicon_data, target_section)
         
 
 
