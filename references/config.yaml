@@ -74,9 +74,9 @@ clean_fastq: True
 # ===================
 features:
   filter: True
-  normalize: True
-  clr_transform: True
-  presence_absence: True
+  normalize: False #True
+  clr_transform: False #True
+  presence_absence: False #True
 
 # Statistical Analyses
 stats:
@@ -159,16 +159,16 @@ ordination:
     tsne: False #True
     umap: False #True
   normalized:
-    pca: True
+    pca: False #True
     pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
     umap: False #True
   clr_transformed:
     pca: False #True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "euclidean"
-    tsne: True
+    tsne: False #True
     umap: False #True
 
 # Functional Prediction
@@ -195,9 +195,9 @@ violin_plots:
   n: 50  # Number of features to plot per category
 
 # Machine Learning
-run_ml: True
+run_ml: False #True
 ml:
-  enabled: True
+  enabled: False #True
   table_types:
     - 'clr_transformed'
     - 'normalized'
