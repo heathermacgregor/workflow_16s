@@ -33,6 +33,7 @@ html_template_path = script_dir / "template.html"
 # ===================================== CLASSES ====================================== #
 
 level_titles = {
+    "color_col": "Color",
     "level": "Taxonomic Level",
     "method": "Method",
     "metric": "Metric",
@@ -41,14 +42,13 @@ level_titles = {
 }
 
 section_info = {
-    "stats": { #self.stats[table_type][level][test_name] = result
+    "stats": { 
         "title": "Statistical Testing",
         "level_1": "table_type",
         "level_2": "level",
         "level_3": "test_name",
     },
-    "alpha_diversity": { #self.alpha_diversity[table_type][level]['results'] = alpha_df
-                         #self.alpha_diversity[table_type][level]['stats'] = stats_df
+    "alpha_diversity": { 
         "title": "Alpha Diversity",
         "level_1": "table_type",
         "level_2": "level",
@@ -72,20 +72,19 @@ section_info = {
 }
 
 section_figure_info = {
-    "alpha_diversity": { #self.figures["alpha_diversity"][table_type][level][metric] = fig
-                         #self.figures["alpha_diversity"][table_type][level]["summary"] = stats_fig
+    "alpha_diversity": { 
         "title": "Alpha Diversity",
         "level_1": "table_type",
         "level_2": "level",
         "level_3": "metric",
-        "special_level_3": {
-            "summary": {
-                    "title": "Summary",
-                }
-        }
+        "special_level_3": {"summary": {"title": "Summary",}}
     },
     "ordination": {},
-    "ml": { #self.figures["ml"][table_type][level][method]
+    "map": {
+        "title": "Sample Map",
+        "level_1": "color_col"
+    },
+    "ml": { 
         "title": "Machine Learning",
         "level_1": "table_type",
         "level_2": "level",
@@ -139,7 +138,9 @@ class Section:
             [key for key in fig_info if key.startswith("level_")],
             key=lambda x: int(x.split("_")[1])
         )
+        logger.info(data_keys)
         data_keys = [fig_info[level_key] for level_key in level_keys]
+        logger.info(data_keys)
         results = {"main": []}
     
         def recursive_collect(d, depth=0, path={}):
@@ -175,6 +176,7 @@ class Section:
         special_levels = {
             key: val for key, val in fig_info.items() if key.startswith("special_level_")
         }
+        logger.info(special_levels)
     
         for special in special_levels.values():
             for fig_key, meta in special.items():
@@ -195,23 +197,20 @@ class Section:
     
     def _get_section_data(self):
         if not self.section or not self.params:
-            return
+            return {"main": []}
     
-        # Get ordered list of level keys like ['level_1', 'level_2', ...]
         level_keys = sorted(
             [key for key in self.params if key.startswith('level_')],
             key=lambda x: int(x.split('_')[1])
         )
-        if debug_mode:
-            logger.info(f"Level Keys: {level_keys}")
-        # Get the actual key names used in the data, e.g. ['table_type', 'level', 'test_name']
         data_keys = [self.params[level_key] for level_key in level_keys]
-        if debug_mode:
-            logger.info(f"Data Keys: {data_keys}")
-        results = []
+    
+        results = {"main": []}
+    
         def recursive_collect(d, depth=0, path={}):
             if depth == len(data_keys):
-                results.append({
+                # Collect regular terminal node
+                results["main"].append({
                     **path,
                     'result': d,
                     'result_type': type(d).__name__
@@ -220,11 +219,8 @@ class Section:
     
             current_data_key = data_keys[depth]
             current_level_key = level_keys[depth]
-            current_title_key = f"{current_level_key}_title"
-    
             title_name = level_titles.get(current_data_key, current_data_key)
-            if debug_mode:
-                logger.info(f"Title Name: {title_name}")
+    
             if not isinstance(d, dict):
                 return
     
@@ -236,7 +232,31 @@ class Section:
                 recursive_collect(v, depth + 1, {**path, **path_update})
     
         recursive_collect(self.section)
+    
+        # === Handle special levels ===
+        special_levels = {
+            key: val for key, val in self.params.items() if key.startswith("special_level_")
+        }
+    
+        for special_key, mapping in special_levels.items():
+            special_depth = int(special_key.split("_")[-1])
+            for special_name, meta in mapping.items():
+                # Walk all paths down to special_depth - 1
+                for path in self._enumerate_paths(self.section, data_keys[:special_depth - 1]):
+                    subdata = self._get_nested_value(self.section, path + [special_name])
+                    if isinstance(subdata, (pd.DataFrame, dict, list)):
+                        result = {f"level_{i+1}": path[i] for i in range(len(path))}
+                        for i in range(len(path)):
+                            data_key = data_keys[i]
+                            result[f"level_{i+1}_title"] = level_titles.get(data_key, data_key)
+                        result[f"special_level_key"] = special_name
+                        result[f"special_level_title"] = meta.get("title", special_name)
+                        result["result"] = subdata
+                        result["result_type"] = type(subdata).__name__
+                        results.setdefault(special_name, []).append(result)
+    
         return results
+
 
     def _handle_section(self, target_section: str):
         combined = {}
