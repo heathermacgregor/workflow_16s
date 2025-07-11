@@ -297,10 +297,10 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
-    for section in ['stats', 'alpha_diversity']:
-        section_obj = Section(data, section)
-        logger.info(section_obj)
-        logger.info(section_obj.results)
+    #for section in ['stats', 'alpha_diversity']:
+    #    section_obj = Section(data, section)
+    #    logger.info(section_obj)
+    #    logger.info(section_obj.results)
         
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
