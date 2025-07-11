@@ -30,6 +30,7 @@ sys.path.append(parent_dir)
 from workflow_16s import ena
 from workflow_16s.config import get_config
 from workflow_16s.figures.html_report import generate_html_report
+from workflow_16s.figures.html_report_test import Section
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.qiime.workflows.execute_workflow import (
@@ -296,6 +297,11 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
+    for section in ['stats', 'alpha_diversity']:
+        section_obj = Section(data, section)
+        logger.info(section_obj)
+        logger.info(section_obj.results)
+        
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
         amplicon_data=data,
