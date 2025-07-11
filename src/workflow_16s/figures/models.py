@@ -323,7 +323,12 @@ def shap_summary_bar_plotly(
         margin=dict(l=150)
     )
     fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
-    fig.update_layout(yaxis=dict(showticklabels=True))
+    fig.update_layout(
+        width=1600,
+        title=dict(font=dict(size=20)),
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.5),
+        yaxis=dict(title=dict(font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
+    )
     return fig
     
 
@@ -418,7 +423,12 @@ def shap_beeswarm_plotly(
     )
     fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
     fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
-    fig.update_layout(yaxis=dict(showticklabels=True))
+    fig.update_layout(
+        width=1600,
+        title=dict(font=dict(size=20)),
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.5),
+        yaxis=dict(title=dict(font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
+    )
     return fig
     
 
