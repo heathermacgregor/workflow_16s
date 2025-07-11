@@ -120,30 +120,28 @@ class Section:
         self.section = self._get_section(target_section)
         self.figures = self._get_figures(target_section)
         self.params = self._get_info(target_section)
-        if debug_mode:
-            logger.info(f"Section: {self.section}")
-            logger.info(f"Figures: {self.figures}")
-            logger.info(f"Params: {self.params}")
         self.results = self._get_section_data()
         self._handle_section(target_section)
         self.figure_results = self._get_section_figures(target_section)
+        if debug_mode:
+            logger.info(f"Results: {self.results}")
+            logger.info(f"Figures: {self.figure_results}")
 
     def _get_section_figures(self, target_section: str):
         fig_info = section_figure_info.get(target_section, {})
         figures = self.figures
         if not figures or not fig_info:
             return []
-
+    
         level_keys = sorted(
             [key for key in fig_info if key.startswith("level_")],
             key=lambda x: int(x.split("_")[1])
         )
         data_keys = [fig_info[level_key] for level_key in level_keys]
         results = []
-
+    
         def recursive_collect(d, depth=0, path={}):
             if depth == len(data_keys):
-                # At the final level, this is the figure dict
                 if isinstance(d, dict):
                     for k, v in d.items():
                         results.append({
@@ -153,38 +151,44 @@ class Section:
                             "figure": v
                         })
                 return
-
+    
             current_key = data_keys[depth]
             current_level_key = level_keys[depth]
             title_name = level_titles.get(current_key, current_key)
-
+    
             if not isinstance(d, dict):
                 return
-
+    
             for k, v in d.items():
                 path_update = {
                     current_level_key: k,
                     f"{current_level_key}_title": title_name
                 }
                 recursive_collect(v, depth + 1, {**path, **path_update})
-
+    
         recursive_collect(figures)
-
-        # Handle special figures (e.g., 'summary' under level_3)
-        special_figs = fig_info.get("special_level_3", {})
-        for key, meta in special_figs.items():
-            for path in self._enumerate_paths(figures, data_keys[:-1]):
-                subfig = self._get_nested_value(figures, path + [key])
-                if subfig:
-                    result = {f"level_{i+1}": path[i] for i in range(len(path))}
-                    for i in range(len(path)):
-                        data_key = data_keys[i]
-                        result[f"level_{i+1}_title"] = level_titles.get(data_key, data_key)
-                    result["level_3"] = key
-                    result["level_3_title"] = meta.get("title", key)
-                    result["figure"] = subfig
-                    results.append(result)
-
+    
+        # Handle all "special_level_N"
+        for k, v in fig_info.items():
+            if k.startswith("special_level_"):
+                level_num = int(k.split("_")[-1])
+                specials = fig_info[k]
+    
+                # Determine the key path just before the special level
+                path_keys = data_keys[:level_num - 1]
+    
+                for special_key, meta in specials.items():
+                    for path in self._enumerate_paths(figures, path_keys):
+                        subfig = self._get_nested_value(figures, path + [special_key])
+                        if subfig:
+                            result = {f"level_{i+1}": path[i] for i in range(len(path))}
+                            for i in range(len(path)):
+                                result[f"level_{i+1}_title"] = level_titles.get(path_keys[i], path_keys[i])
+                            result[f"level_{level_num}"] = special_key
+                            result[f"level_{level_num}_title"] = meta.get("title", special_key)
+                            result["figure"] = subfig
+                            results.append(result)
+    
         return results
     
     def _get_section_data(self):
@@ -270,9 +274,8 @@ class Section:
             return getattr(self.amplicon_data.figures, target_section, None)
         return None
         
-    def _get_info(self, target_section: str):
-        if target_section in section_info:
-            return section_info[target_section]
+    def _get_info(self, target_section: str) -> Dict:
+        return section_info.get(target_section, {})  # Return empty dict if missing
 
     @classmethod
     def create(cls, amplicon_data, target_section: str):
