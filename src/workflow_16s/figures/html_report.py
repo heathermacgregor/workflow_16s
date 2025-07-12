@@ -114,3 +114,34 @@ class ReportGenerator:
         dest_path = dest_dir / source_path.name
         shutil.copy2(source_path, dest_path)
         return f"figures/{subdir}/{source_path.name}"
+
+    def _create_sample_maps_section(self) -> str:
+        """Creates the sample maps section."""
+        if not self.data.maps:
+            return ""
+    
+        content = ""
+        for col, fig_path in self.data.maps.items():
+            dest_path = self._copy_figure(fig_path, "sample_maps")
+            if not dest_path:
+                continue
+    
+            safe_col = html.escape(col)
+            content += f'''
+            <div class='subsection'>
+                <h3 class='subsection-title'>Sample Map: {safe_col}</h3>
+                <div class='figure-container'>
+                    <img src='{html.escape(dest_path)}' alt='Sample Map: {safe_col}' class='figure'>
+                </div>
+            </div>
+            '''
+    
+        return f'''
+        <div class='section'>
+            <h2 class='section-title collapsible' onclick='toggleSection(this)'>Sample Maps</h2>
+            <div class='section-content'>
+                {content}
+            </div>
+        </div>
+        ''' if content else ""
+
