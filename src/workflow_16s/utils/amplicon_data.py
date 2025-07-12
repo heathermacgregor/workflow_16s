@@ -6,7 +6,8 @@ import logging
 import os
 import time
 import warnings
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading  # Added for thread locking
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -53,6 +54,9 @@ from workflow_16s.utils.progress import get_progress_bar
 
 logger = logging.getLogger("workflow_16s")
 warnings.filterwarnings("ignore")
+
+# Global lock for UMAP operations to prevent thread conflicts
+umap_lock = threading.Lock()
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -329,11 +333,18 @@ class Ordination:
             if cfg["key"] == "pcoa":
                 method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
             
+            # Handle UMAP/TSNE thread safety
             if cfg["key"] in ["tsne", "umap"]:
-                cpu_limit = self.cfg.get("ordination", {}).get("cpu_limit", 1)
-                method_params["n_jobs"] = cpu_limit
-    
-            ord_res = cfg["func"](table=table, **method_params)
+                method_params["n_jobs"] = 1
+                # Use global lock to prevent NUMBA thread conflicts
+                with umap_lock:
+                    # Set NUMBA threads before importing/executing
+                    os.environ['NUMBA_NUM_THREADS'] = '1'
+                    import numba
+                    numba.config.NUMBA_NUM_THREADS = 1
+                    ord_res = cfg["func"](table=table, **method_params)
+            else:
+                ord_res = cfg["func"](table=table, **method_params)
         except Exception as e:
             logger.error(f"Params: {method_params}")
             logger.error(f"Failed {cfg['key']} for {transformation}: {e}")
@@ -1079,13 +1090,12 @@ class _AnalysisManager(_ProcessingMixin):
             max_workers = min(2, os.cpu_count() // 2)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
+                future_to_key = {}
                 for table_type, levels in self.tables.items():
                     ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
-                        df = table_to_df(table)
-                        
                         # Create output directory for this analysis
                         output_dir = self.output_dir / 'ordination' / table_type / level
                         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1101,19 +1111,50 @@ class _AnalysisManager(_ProcessingMixin):
                                 output_dir=output_dir
                             )
                             futures.append(future)
+                            future_to_key[future] = (table_type, level, method)
+            
+                completed_results = {}
+                errors = {}
+                try:
+                    for future in as_completed(futures, timeout=3600):  # 1 hour timeout
+                        key = future_to_key[future]
+                        try:
+                            result = future.result()
+                            completed_results[key] = result
+                        except Exception as e:
+                            errors[key] = str(e)
+                            logger.error(f"Ordination failed for {key}: {str(e)}")
+                        prog.update(master_task, advance=1)
+                except TimeoutError:
+                    logger.warning("Ordination timeout - proceeding with completed results")
                 
-                for future in as_completed(futures, timeout=1800):
-                    try:
-                        table_type, level, method, res, fig = future.result()
-                        _init_dict_level(self.ordination, table_type, level) 
-                        self.ordination[table_type][level][method] = {
-                            'result': res,
-                            'figures': fig
-                        }
-                    except TimeoutError:
-                        logger.error("Ordination task timed out after 30 minutes")
-                    finally:
-                        prog.advance(master_task)
+                # Process completed results
+                for key, result in completed_results.items():
+                    table_type, level, method = key
+                    _, _, _, res, figs = result
+                    _init_dict_level(self.ordination, table_type, level) 
+                    self.ordination[table_type][level][method] = {
+                        'result': res,
+                        'figures': figs
+                    }
+                
+                # Log summary
+                completed_count = len(completed_results)
+                error_count = len(errors)
+                timeout_count = len(futures) - completed_count - error_count
+                logger.info(
+                    f"Ordination completed: {completed_count} succeeded, "
+                    f"{error_count} failed, {timeout_count} timed out"
+                )
+                
+                # Save error report
+                if errors:
+                    error_file = self.output_dir / "ordination_errors.tsv"
+                    with open(error_file, "w") as f:
+                        f.write("TableType\tLevel\tMethod\tError\n")
+                        for (tt, lv, mt), err in errors.items():
+                            f.write(f"{tt}\t{lv}\t{mt}\t{err}\n")
+                    logger.info(f"Saved ordination errors to {error_file}")
 
     def _run_single_ordination(self, table, meta, table_type, level, method, output_dir):
         try:
@@ -1394,13 +1435,18 @@ class AmpliconData:
             logger.info("AmpliconData analysis finished.")
 
     def _apply_cpu_limits(self):
+        """Set environment variables to control thread usage across libraries"""
         cpu_limit = self.cfg.get("cpu", {}).get("limit", 4)
-        for var in ["OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", 
-                    "MKL_NUM_THREADS", "BLIS_NUM_THREADS", 
-                    "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS",
-                    "NUMEXPR_NUM_THREADS"]:
-            os.environ[var] = str(cpu_limit)
-        os.environ["MKL_DYNAMIC"] = "FALSE"
+        # Set consistent environment variables
+        os.environ['NUMBA_NUM_THREADS'] = str(cpu_limit)
+        os.environ['OMP_NUM_THREADS'] = str(cpu_limit)
+        os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_limit)
+        os.environ['MKL_NUM_THREADS'] = str(cpu_limit)
+        os.environ['VECLIB_MAXIMUM_THREADS'] = str(cpu_limit)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(cpu_limit)
+        os.environ['MKL_DYNAMIC'] = "FALSE"
+        if self.verbose:
+            logger.info(f"Set CPU thread limits to {cpu_limit} for all libraries")
 
     def _load_data(self):
         data_loader = _DataLoader(
