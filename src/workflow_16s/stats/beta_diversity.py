@@ -18,10 +18,6 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
-
-# Thread-safe UMAP import
-os.environ.setdefault('NUMBA_NUM_THREADS', '4')
-os.environ.setdefault('OMP_NUM_THREADS', '4')
 from umap import UMAP
 
 # ================================ CONFIGURATION ====================================== #
@@ -162,30 +158,53 @@ SKLEARN_METRICS = {'euclidean', 'cityblock', 'minkowski', 'cosine', 'correlation
 
 def validate_distance_matrix(dm: DistanceMatrix):
     """Perform comprehensive validation of distance matrix"""
-    if not dm.is_symmetric():
-        # Make symmetric if nearly symmetric
-        if np.allclose(dm.data, dm.data.T, atol=1e-8):
-            dm_data = (dm.data + dm.data.T) / 2
-            dm = DistanceMatrix(dm_data, ids=dm.ids)
-        else:
-            raise ValueError("Distance matrix is not symmetric")
-            
-    if np.isnan(dm.data).any():
-        # Attempt to fix NaNs by replacing with column means
-        dm_data = dm.data.copy()
-        col_means = np.nanmean(dm_data, axis=0)
-        nan_indices = np.where(np.isnan(dm_data))
-        dm_data[nan_indices] = col_means[nan_indices[1]]
+    dm_data = dm.data.copy()
+
+    # Step 1: Handle NaNs symmetrically
+    if np.isnan(dm_data).any():
+        # Check for all NaNs first
+        if np.isnan(dm_data).all():
+            raise ValueError("Distance matrix is all NaNs")
+        total_mean = np.nanmean(dm_data)  # Global mean of non-NaN values
         
+        # Ensure diagonal is 0 (set to 0 if NaN)
+        n = dm_data.shape[0]
+        for i in range(n):
+            if np.isnan(dm_data[i, i]):
+                dm_data[i, i] = 0.0
+        
+        # Symmetric imputation for off-diagonal elements
+        for i in range(n):
+            for j in range(i + 1, n):  # Only process upper triangle
+                if np.isnan(dm_data[i, j]) and not np.isnan(dm_data[j, i]):
+                    dm_data[i, j] = dm_data[j, i]  # Fill with symmetric value
+                elif not np.isnan(dm_data[i, j]) and np.isnan(dm_data[j, i]):
+                    dm_data[j, i] = dm_data[i, j]  # Fill with symmetric value
+                elif np.isnan(dm_data[i, j]) and np.isnan(dm_data[j, i]):
+                    # Both NaN: set to global mean
+                    dm_data[i, j] = total_mean
+                    dm_data[j, i] = total_mean
+        
+        # Verify no NaNs remain
         if np.isnan(dm_data).any():
             raise ValueError("Distance matrix contains NaNs that couldn't be imputed")
-        dm = DistanceMatrix(dm_data, ids=dm.ids)
     
-    # Check for degeneracy (all zeros or constant values)
-    if np.all(dm.data == 0) or np.all(dm.data == dm.data[0,0]):
-        raise ValueError("Distance matrix is degenerate (all values identical)")
+    # Step 2: Check symmetry and enforce if nearly symmetric
+    if not np.allclose(dm_data, dm_data.T, atol=1e-8):
+        raise ValueError("Distance matrix is not symmetric")
+    else:
+        # Make matrix exactly symmetric
+        dm_data = (dm_data + dm_data.T) / 2
     
-    return dm
+    # Step 3: Check for degeneracy (only for matrices larger than 1x1)
+    if dm_data.size > 1:
+        if np.allclose(dm_data, dm_data.flat[0]):  # Check if all values are nearly identical
+            raise ValueError("Distance matrix is degenerate (all values identical)")
+    
+    # Step 4: Ensure diagonal is exactly 0
+    np.fill_diagonal(dm_data, 0.0)
+    
+    return DistanceMatrix(dm_data, ids=dm.ids)
 
 def distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
