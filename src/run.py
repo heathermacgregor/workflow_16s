@@ -22,6 +22,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import pandas as pd
+import numba
+
+os.environ['NUMBA_NUM_THREADS'] = '8'  # Match your n_jobs setting
+numba.config.NUMBA_NUM_THREADS = 8
 
 # ================================== LOCAL IMPORTS =================================== #
 
