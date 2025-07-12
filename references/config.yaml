@@ -74,9 +74,9 @@ clean_fastq: True
 # ===================
 features:
   filter: True
-  normalize: False #True
-  clr_transform: False #True
-  presence_absence: False #True
+  normalize: True
+  clr_transform: True
+  presence_absence: True
 
 # Statistical Analyses
 stats:
