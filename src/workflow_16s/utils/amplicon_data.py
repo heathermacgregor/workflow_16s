@@ -1102,7 +1102,7 @@ class _AnalysisManager(_ProcessingMixin):
                             )
                             futures.append(future)
                 
-                for future in as_completed(futures, timeout=300):
+                for future in as_completed(futures, timeout=1800):
                     try:
                         table_type, level, method, res, fig = future.result()
                         _init_dict_level(self.ordination, table_type, level) 
@@ -1111,7 +1111,7 @@ class _AnalysisManager(_ProcessingMixin):
                             'figures': fig
                         }
                     except TimeoutError:
-                        logger.error("Ordination task timed out after 5 minutes")
+                        logger.error("Ordination task timed out after 30 minutes")
                     finally:
                         prog.advance(master_task)
 
