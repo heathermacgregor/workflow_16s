@@ -127,21 +127,78 @@ class ReportGenerator:
                 continue
     
             safe_col = html.escape(col)
-            content += f'''
+            content += f"""
             <div class='subsection'>
                 <h3 class='subsection-title'>Sample Map: {safe_col}</h3>
                 <div class='figure-container'>
                     <img src='{html.escape(dest_path)}' alt='Sample Map: {safe_col}' class='figure'>
                 </div>
             </div>
-            '''
+            """
     
-        return f'''
+        return f"""
         <div class='section'>
             <h2 class='section-title collapsible' onclick='toggleSection(this)'>Sample Maps</h2>
             <div class='section-content'>
                 {content}
             </div>
         </div>
-        ''' if content else ""
+        """ if content else """"""
 
+    def _create_alpha_diversity_section(self) -> str:
+        """Creates the alpha diversity section."""
+        if not self.data.alpha_diversity:
+            return ''
+    
+        content = ''
+        for table_type, levels in self.data.alpha_diversity.items():
+            for level, results in levels.items():
+                if not results.get('figures'):
+                    continue
+    
+                safe_table = html.escape(table_type)
+                safe_level = html.escape(level)
+                section_content = ''
+    
+                for metric, fig_path in results['figures'].items():
+                    if metric in ['summary', 'correlations']:
+                        continue
+                    dest_path = self._copy_figure(fig_path, f'alpha/{table_type}/{level}')
+                    if not dest_path:
+                        continue
+    
+                    safe_metric = html.escape(metric)
+                    section_content += f"""
+                    <div class='figure-container'>
+                        <img src='{html.escape(dest_path)}' alt='{safe_metric} diversity' class='figure'>
+                        <p class='figure-caption'>{safe_metric.replace('_', ' ').title()} Diversity</p>
+                    </div>
+                    """
+    
+                # Add summary figure
+                if 'summary' in results['figures']:
+                    fig_path = results['figures']['summary']
+                    dest_path = self._copy_figure(fig_path, f'alpha/{table_type}/{level}')
+                    if dest_path:
+                        section_content += f"""
+                        <div class='figure-container'>
+                            <img src='{html.escape(dest_path)}' alt='Diversity Summary' class='figure'>
+                            <p class='figure-caption'>Statistical Summary</p>
+                        </div>
+                        """
+    
+                content += f"""
+                <div class='subsection'>
+                    <h3 class='subsection-title'>{safe_table.replace('_', ' ').title()} - {safe_level.title()}</h3>
+                    {section_content}
+                </div>
+                """
+    
+        return f"""
+        <div class='section'>
+            <h2 class='section-title collapsible' onclick='toggleSection(this)'>Alpha Diversity</h2>
+            <div class='section-content'>
+                {content}
+            </div>
+        </div>
+        """ if content else ''
