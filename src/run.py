@@ -302,7 +302,7 @@ def downstream(cfg, logger) -> None:
     #    logger.info(section_obj)
     #    logger.info(section_obj.results)
         
-    report_path = Path(project_dir.final) / "analysis_report.html"
+    report_path = Path(project_dir.final) #/ "analysis_report.html"
     report_gen = ReportGenerator(data, Path(report_path))
     report_gen.generate_report()
     logger.info(f"HTML report generated at: {report_path}")
