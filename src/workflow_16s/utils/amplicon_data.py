@@ -425,7 +425,7 @@ class MapPlotter:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
         with get_progress_bar() as prog:
-            plot_desc = f"Plotting sample maps..."
+            plot_desc = f"Plotting sample maps"
             plot_task = prog.add_task(
                 f"[white]{plot_desc:<{DEFAULT_N}}", 
                 total=len(valid_columns)
@@ -433,7 +433,7 @@ class MapPlotter:
 
             for col in valid_columns:
                 new_desc = f"Plotting sample maps → {col}"
-                
+                prog.update(plot_task, description=f"[white]{new_desc:<{DEFAULT_N}}")
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
                     output_dir=self.output_dir,
@@ -441,7 +441,7 @@ class MapPlotter:
                     **kwargs,
                 )
                 self.figures[col] = fig
-                prog.update(plot_task, advance=1, description=f"[white]{new_desc:<{DEFAULT_N}}")
+                prog.update(plot_task, advance=1)
         return self.figures
 
 
@@ -653,14 +653,14 @@ class _TableProcessor(_ProcessingMixin):
     def _collapse_taxa(self) -> None:
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
-            master_desc = "Collapsing taxonomy..."
+            master_desc = "Collapsing taxonomy"
             master_task = prog.add_task(
                 f"[white]{master_desc:<{DEFAULT_N}}",
                 total=len(self.tables)
             )   
             
             for table_type in list(self.tables.keys()):
-                table_desc = f"Table Type: {table_type.replace('_', ' ').title()}"
+                table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = prog.add_task(
                     f"[white]{table_desc:<{DEFAULT_N}}",
                     parent=master_task,
@@ -670,12 +670,8 @@ class _TableProcessor(_ProcessingMixin):
                 processed = {}
                 
                 for level in levels:
-                    level_desc = f"Level: {level.title()}"
-                    level_task = prog.add_task(
-                        f"[white]{level_desc:<{DEFAULT_N}}",
-                        parent=table_task,
-                        total=1
-                    )
+                    level_desc = f"{table_type.replace('_', ' ').title()} → {level.title()}"
+                    prog.update(table_task, description=f"[white]{level_desc:<{DEFAULT_N}}")
                     try:
                         start_time = time.perf_counter()
                         processed[level] = collapse_taxa(base_table, level, prog, table_task)
@@ -686,8 +682,6 @@ class _TableProcessor(_ProcessingMixin):
                         logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
                         processed[level] = None
                     finally:
-                        prog.update(level_task, advance=1)
-                        prog.remove_task(level_task)
                         prog.update(table_task, advance=1)
                     
                 self.tables[table_type] = processed
@@ -700,7 +694,7 @@ class _TableProcessor(_ProcessingMixin):
                
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as prog:
-            master_desc = "Converting to Presence/Absence..."
+            master_desc = "Converting to Presence/Absence"
             master_task = prog.add_task(
                 f"{master_desc:<{DEFAULT_N}}",
                 total=len(levels)  
@@ -709,12 +703,8 @@ class _TableProcessor(_ProcessingMixin):
             processed = {}
             
             for level in levels:
-                level_desc = f"Level: {level.capitalize()}"
-                level_task = prog.add_task(
-                    f"[white]{level_desc:<{DEFAULT_N}}",
-                    parent=master_task,
-                    total=1
-                )
+                level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
+                prog.update(master_task, description=f"[white]{level_desc:<{DEFAULT_N}}")
                 try:
                     start_time = time.perf_counter()
                     processed[level] = presence_absence(raw_table, level)
@@ -725,8 +715,6 @@ class _TableProcessor(_ProcessingMixin):
                     logger.error(f"Presence/Absence failed for {level}: {e}")
                     processed[level] = None
                 finally:
-                    prog.update(level_task, advance=1)
-                    prog.remove_task(level_task)
                     prog.update(master_task, advance=1)
                 
             self.tables["presence_absence"] = processed
