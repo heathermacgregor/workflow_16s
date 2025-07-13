@@ -1235,7 +1235,11 @@ def create_alpha_diversity_boxplot(
             except Exception as e:
                 if verbose:
                     logger.error(f"Failed to add stats annotation: {e}")
-        
+        fig.update_layout(
+            title=dict(font=dict(size=20)),
+            xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=14), showticklabels=True),
+            yaxis=dict(title=dict(font=dict(size=18)))
+        )
         # Save plot
         output_path = output_dir / f"alpha_boxplot_{metric}.html"
         fig.write_html(str(output_path), include_plotlyjs="cdn")
@@ -1292,12 +1296,12 @@ def create_alpha_diversity_stats_plot(
         yaxis='y2',
         mode='markers+text',
         marker=dict(
-            size=12,
+            size=16,
             color=np.where(stats_df['meaningful_effect'], '#00CC96', '#AB63FA'),
             symbol=np.where(stats_df['effect_size'] > 0, 'triangle-up', 'triangle-down')
         ),
         text=stats_df['effect_size'].round(2),
-        #textposition='top center',
+        textfont=dict(size=10),  
         name='Effect Size'
     ))
     
@@ -1321,7 +1325,11 @@ def create_alpha_diversity_stats_plot(
         hovermode="x unified"
     )
     fig = _apply_common_layout(fig, "Diversity Metric", "-log10(p-value)", "Alpha Diversity Statistical Summary")
-    
+    fig.update_layout(
+        title=dict(font=dict(size=20)),
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=14), showticklabels=True),
+        yaxis=dict(title=dict(font=dict(size=18)))
+    )
     # Add significance thresholds
     fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="red")
     fig.add_hline(y=effect_size_threshold, line_dash="dot", line_color="green", yref="y2")
