@@ -357,7 +357,7 @@ def _create_base_scatter_plot(
         x=0.99, y=0.01,                    # bottom‑right corner
         xanchor="right", yanchor="bottom",
         showarrow=False,
-        font=dict(size=12, color="black"),
+        font=dict(size=18, color="black"),
         bgcolor="rgba(255,255,255,0.4)",
     )
     return fig
@@ -611,6 +611,13 @@ def create_ordination_plot(
     # Apply layout
     title = f'{ordination_type}: {transformation.title() if transformation else "Raw Data"}'
     fig = _apply_common_layout(fig, x_title, y_title, title)
+
+    fig.update_layout(
+        width=1600,
+        title=dict(font=dict(size=20)),
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0),
+        yaxis=dict(title=dict(font=dict(size=18)))
+    )
     
     # Save output
     if output_dir:
