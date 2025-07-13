@@ -216,4 +216,4 @@ ml:
   num_features: 500
   step_size: 100
   permutation_importance: True
-  n_threads: 32
+  n_threads: 8
