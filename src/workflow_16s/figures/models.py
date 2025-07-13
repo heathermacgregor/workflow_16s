@@ -573,16 +573,7 @@ def shap_dependency_plot(
         ))
     
     # Update layout
-    title_suffix = " with interaction" if auto_interaction else ""
-    fig.update_layout(
-        title=f'SHAP Dependency Plot: {feature}{title_suffix}',
-        xaxis_title=f'Feature Value: {feature}',
-        yaxis_title='SHAP Value',
-        showlegend=False,
-        height=500,
-        template='plotly_white'
-    )
-    =
+    title_suffix = " with interaction" if auto_interaction else ""    
     fig = _apply_common_layout(
         fig, 
         f'Feature Value: {feature}', 
