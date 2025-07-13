@@ -1152,7 +1152,7 @@ def catboost_feature_selection(
     }
     
     # Run grid search
-    best_model, best_params, best_score, test_scores, fig = grid_search(
+    best_model, best_params, best_score, test_scores, eval_fig = grid_search(
         X_train=X_train_selected, 
         y_train=y_train, 
         X_test=X_test_selected, 
@@ -1218,8 +1218,10 @@ def catboost_feature_selection(
             feature_vals, 
             feature_names, 
             n_features=n_top_features, 
+            interaction_feature='auto',
             output_dir=output_dir, 
-            verbose=False
+            show=False,
+            verbose=verbose
         )
         
     except Exception as e:
@@ -1233,7 +1235,7 @@ def catboost_feature_selection(
         'top_features': top_features,
         'best_params': best_params,
         'test_scores': test_scores,
-        'best_fig': fig,
+        'eval_plots': eval_fig,
         'shap_summary_bar': bar_fig,
         'shap_summary_beeswarm': beeswarm_fig,
         'shap_dependency': dependency_figs
