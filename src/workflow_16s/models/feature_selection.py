@@ -1015,7 +1015,7 @@ def grid_search(
         )
         fig = combine_figures_as_subplots(
             figures=[cm_fig, roc_fig, prc_fig],
-            figures_per_row:=3,
+            figures_per_row=3,
             show=False,
             output_path=None,
             verbose=False
