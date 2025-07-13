@@ -1,6 +1,7 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
+import math
 import logging
 import warnings
 from pathlib import Path
@@ -317,7 +318,6 @@ def plot_legend(
     fig.update_yaxes(
       showgrid=False, showticklabels=False, zeroline=False, mirror=True
     )
-    
     return fig
 
 
@@ -387,14 +387,8 @@ def attach_legend_to_figure(
         height=main_height_val,
         width=main_width_val + legend_width_val
     )
-    
     return combined_fig
 
-
-import math
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from typing import List
 
 def combine_figures_as_subplots(
     figures: List[go.Figure],
