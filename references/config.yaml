@@ -199,7 +199,7 @@ run_ml: True
 ml:
   enabled: True
   table_types:
-    #- 'clr_transformed'
+    - 'clr_transformed'
     - 'normalized'
   levels:
     - 'genus'
