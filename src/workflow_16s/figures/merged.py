@@ -624,10 +624,10 @@ def create_ordination_plot(
         plot_dir = output_dir / ordination_type.lower()
         plot_dir.mkdir(parents=True, exist_ok=True)
         file_stem = f"{ordination_type.lower()}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"
-        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose=True)
-        _save_figure_and_legend(
-            fig, colordict, color_col, plot_dir, file_stem, show, verbose
-        )
+        plotly_show_and_save(fig, show, plot_dir / file_stem, ['png', 'html'], verbose=True)
+        #_save_figure_and_legend(
+        #    fig, colordict, color_col, plot_dir, file_stem, show, verbose
+        #)
         
     return fig, colordict
 
@@ -741,6 +741,7 @@ def create_violin_plot(
     status_col: str = DEFAULT_SYMBOL_COL,
     output_dir: Union[Path, None] = None,
     sub_dir: str = 'violin',
+    xaxis_title: str = "Contamination Status",
     show: bool = False
 ) -> go.Figure:
     """
@@ -771,7 +772,7 @@ def create_violin_plot(
     
     fig.update_layout(
         template='heather',
-        xaxis_title="Contamination Status",
+        xaxis_title=status_col,
         yaxis_title=feature.replace('_', ' ').title()
     )
 
@@ -1343,10 +1344,7 @@ def create_alpha_diversity_stats_plot(
     fig.add_hline(y=-effect_size_threshold, line_dash="dot", line_color="green", yref="y2")
     
     # Improve text formatting
-    fig.update_traces(
-        texttemplate='%{text:.2e}',
-        #textposition='auto'
-    )
+    fig.update_traces(texttemplate='%{text:.2e}')
     
     # Save output
     if output_dir:
@@ -1441,8 +1439,8 @@ def plot_alpha_correlations(
         
         # Save output
         if output_dir:
-            output_dir = Path(output_dir) / 'alpha_diversity'
-            output_dir.mkdir(parents=True, exist_ok=True)
+            #output_dir = Path(output_dir) / 'alpha_diversity'
+            #output_dir.mkdir(parents=True, exist_ok=True)
             file_stem = "statistics"
             plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
                 
