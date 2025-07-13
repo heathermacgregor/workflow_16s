@@ -860,7 +860,12 @@ def grid_search(
             description="Grid Search...",
             total=total_folds
         )
-    
+    child_desc = f"Grid Search..."
+    child_task = prog.add_task(
+        f"[white]{child_desc:<{DEFAULT_N}}",
+        parent=task_id,
+        total=total_combinations
+    )
     if verbose:
         logger.debug(
             f"Starting grid search with {total_combinations} "
@@ -937,11 +942,11 @@ def grid_search(
             # Update progress bar after each fold
             if progress is not None:
                 progress.update(
-                    task_id,
+                    child_task,
                     advance=1,
                     description=f"Param {i}/{total_combinations} - Fold {fold}/{n_splits}"
                 )
-        
+        progress.update(task_id, advance=1)
         # Calculate mean CV scores
         cv_means = {f"mean_{k}": np.mean(v) for k, v in fold_scores.items()}
         cv_stds = {f"std_{k}": np.std(v) for k, v in fold_scores.items()}
