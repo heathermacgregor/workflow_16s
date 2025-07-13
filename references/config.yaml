@@ -108,13 +108,13 @@ alpha_diversity:
   metrics:  # Metrics to calculate
     - 'shannon'
     - 'observed_features'
-    - 'simpson'
-    - 'pielou_evenness'
+    #- 'simpson'
+    #- 'pielou_evenness'
     #- 'chao1'
     #- 'ace'
     #- 'gini_index'
     #- 'goods_coverage'
-    - 'heip_evenness' 
+    #- 'heip_evenness' 
     #- 'dominance'
   parametric: False  # Statistical test type
   generate_plots: True  # Enable/disable plot generation
@@ -122,13 +122,13 @@ alpha_diversity:
     raw:  # Table type
       enabled: True
       levels:  # Taxonomic levels
-        - 'genus'
+        #- 'genus'
         - 'family'
         - 'class'
     normalized:
       enabled: True
       levels: 
-        - 'genus'
+        #- 'genus'
         - 'family'
         
   correlation_analysis: False #True
@@ -139,10 +139,10 @@ alpha_diversity:
 # Beta Diversity + Ordination
 ordination:
   max_workers: 2  # Max concurrent ordination tasks
-  cpu_limit: 8    # CPU cores per ordination method
+  cpu_limit: 16    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
@@ -150,26 +150,26 @@ ordination:
     pca: False
     pcoa: True
     pcoa_metric: "jaccard"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   filtered:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   normalized:
     pca: True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
   clr_transformed:
-    pca: True
+    pca: False #True
     pcoa: True
     pcoa_metric: "euclidean"
-    tsne: True
-    umap: True
+    tsne: False #True
+    umap: False #True
 
 # Functional Prediction
 faprotax: True
@@ -199,21 +199,21 @@ run_ml: True
 ml:
   enabled: True
   table_types:
-    - 'clr_transformed'
+    #- 'clr_transformed'
     - 'normalized'
   levels:
     - 'genus'
-    - 'family'
-    - 'order'
-    - 'class'
-    - 'phylum'
+    #- 'family'
+    #- 'order'
+    #- 'class'
+    #- 'phylum'
   methods:
     - 'rfe'
-    - 'select_k_best'
-    - 'chi_squared'
-    - 'lasso'
-    - 'shap'
+    #- 'select_k_best'
+    #- 'chi_squared'
+    #- 'lasso'
+    #- 'shap'
   num_features: 500
   step_size: 100
   permutation_importance: True
-  n_threads: 16
+  n_threads: 32
