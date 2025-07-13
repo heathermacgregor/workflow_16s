@@ -5,7 +5,7 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-Party Imports
 import colorcet as cc
@@ -45,7 +45,7 @@ def plot_confusion_matrix(
     class_names: List[str] = ['Positive', 'Negative'],
     show: bool = False,
     verbose: bool = True
-) -> None:
+) -> Any:
     """
     Create an interactive confusion matrix plot using Plotly.
     
@@ -81,17 +81,7 @@ def plot_confusion_matrix(
         showscale=True
     )
     
-    # Add title and labels
-    fig.update_layout(
-        title_text='<b>Confusion Matrix</b>',
-        title_x=0.5,
-        xaxis_title='Predicted Label',
-        yaxis_title='Actual Label',
-        width=600,
-        height=600,
-        margin=dict(t=100, l=100),
-        font=dict(size=12)
-    )
+    fig.update_layout(title_x=0.5, font=dict(size=12))
     
     # Customize hover text
     fig.update_traces(
@@ -115,11 +105,20 @@ def plot_confusion_matrix(
         x0=0, y0=0, x1=1, y1=1,
         line=dict(color="black", width=2)
     )
-    
     fig = _apply_common_layout(fig, 'Predicted Label', 'Actual Label', '<b>Confusion Matrix</b>') 
+    # Update font sizes
+    fig.update_layout(
+        title=dict(font=dict(size=20)),
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0),
+        yaxis=dict(title=dict(font=dict(size=18)))
+    )
+    # Increase margins
+    fig.update_layout(margin=dict(t=120, l=100, b=100))
+    # Move x-axis title to bottom
+    fig.update_xaxes(side='bottom') 
+    
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
-    if verbose:
-        logger.info(f"Confusion matrix plot saved to: {output_path}")
+    return fig
 
         
 def plot_roc_curve(
@@ -163,20 +162,12 @@ def plot_roc_curve(
     
     # Update layout
     fig.update_layout(
-        title='Receiver Operating Characteristic',
-        xaxis_title='False Positive Rate',
-        yaxis_title='True Positive Rate',
         xaxis=dict(range=[0, 1], constrain='domain'),
         yaxis=dict(range=[0, 1.05], scaleanchor='x', scaleratio=1),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        template='plotly_white',
-        width=700,
-        height=600
     )
     fig = _apply_common_layout(fig, 'False Positive Rate', 'True Positive Rate', 'Receiver Operating Characteristic') 
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
-    if verbose:
-        logger.info(f"ROC curve plot saved to: {output_path}")
     return fig
     
 
@@ -213,23 +204,16 @@ def plot_precision_recall_curve(
     
     # Update layout
     fig.update_layout(
-        title='Precision-Recall Curve',
-        xaxis_title='Recall',
-        yaxis_title='Precision',
         xaxis=dict(range=[0, 1], constrain='domain'),
         yaxis=dict(range=[0, 1.05]),
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        template='plotly_white',
-        width=700,
-        height=600
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     fig = _apply_common_layout(fig, 'Recall', 'Precision', 'Precision-Recall Curve')
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
-    if verbose:
-        logger.info(f"Precision-Recall curve plot saved to: {output_path}")
     return fig
 
 
+# TODO: Remove if unused
 def plot_feature_importance(
     feature_importances: pd.Series,
     output_path: Union[str, Path],
@@ -280,7 +264,7 @@ def plot_feature_importance(
     return fig
     
 
-def shap_summary_bar_plotly(
+def shap_summary_bar(
     shap_values: np.array, 
     feature_names: List, 
     max_display: int = 20
@@ -314,14 +298,7 @@ def shap_summary_bar_plotly(
     ))
     
     # Update layout
-    fig.update_layout(
-        title='SHAP Summary Bar Plot',
-        xaxis_title='Mean |SHAP Value|',
-        yaxis_title='Features',
-        showlegend=False,
-        height=600,
-        margin=dict(l=150)
-    )
+    fig.update_layout(showlegend=False, margin=dict(l=150))
     fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
     fig.update_layout(
         width=1600,
@@ -332,7 +309,7 @@ def shap_summary_bar_plotly(
     return fig
     
 
-def shap_beeswarm_plotly(
+def shap_beeswarm(
     shap_values: np.array, 
     feature_values: np.array, 
     feature_names: List, 
@@ -408,85 +385,172 @@ def shap_beeswarm_plotly(
     )
     
     # Update layout
-    fig.update_layout(
-        title='SHAP Beeswarm Plot',
-        xaxis_title='SHAP Value',
-        yaxis=dict(
-            tickvals=list(range(len(top_features))),
-            ticktext=top_features,
-            title='Features'
-        ),
-        height=600,
-        hovermode='closest',
-        margin=dict(l=150),
-        plot_bgcolor='white'
-    )
+    fig.update_layout(hovermode='closest')
     fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
     fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
     fig.update_layout(
         width=1600,
         title=dict(font=dict(size=20)),
         xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.5),
-        yaxis=dict(title=dict(font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
+        yaxis=dict(
+            title=dict(font=dict(size=18)), 
+            tickfont=dict(size=14), 
+            showticklabels=True,
+            tickvals=list(range(len(top_features))),
+            ticktext=top_features,
+            automargin=True
+        )
     )
     return fig
     
 
-def shap_dependency_plot_plotly(
+def shap_dependency_plot(
     shap_values: np.array, 
     feature_values: np.array, 
-    feature_names: List, 
+    feature_names: List[str], 
     feature: str, 
-    max_points: int = 1000
+    max_points: int = 1000,
+    interaction_feature: Optional[Union[str, None]] = None
 ) -> go.Figure:
     """
-    Create a SHAP dependency plot for a single feature.
+    Create a SHAP dependency plot for a single feature with optional interaction coloring.
     
     Args:
-        shap_values:    SHAP values array.
-        feature_values: Feature values array.
-        feature_names:  List of feature names.
-        feature:        Feature to plot.
-        max_points:     Maximum points to show (downsample if exceeded).
+        shap_values:     SHAP values array.
+        feature_values:  Feature values array.
+        feature_names:   List of feature names.
+        feature:         Feature to plot.
+        max_points:      Maximum points to show (downsample if exceeded).
+        interaction_feature: Feature to use for coloring points (None, 'auto', or feature name).
     
     Returns:
         Dependency plot figure.
     """
-    # Find feature index
+    # Validate main feature
     if feature not in feature_names:
         raise ValueError(f"Feature '{feature}' not found in feature_names")
     idx = feature_names.index(feature)
     
-    # Get values
+    # Extract main feature data
     x = feature_values[:, idx]
     y = shap_values[:, idx]
     
-    # Downsample if too many points
+    # Prepare interaction feature data
+    color_data = None
+    color_title = None
+    auto_interaction = False
+    
+    # Handle interaction feature selection
+    if interaction_feature:
+        if interaction_feature == 'auto':
+            auto_interaction = True
+            # Find strongest interaction feature using variance explained
+            best_j = None
+            max_ss_between = -1
+            current_shap = y
+            
+            # Use sampling for large datasets
+            sample_size = min(10000, len(current_shap))
+            if len(current_shap) > sample_size:
+                sample_idx = np.random.choice(len(current_shap), sample_size, replace=False)
+                current_shap_sample = current_shap[sample_idx]
+                feature_values_sample = feature_values[sample_idx]
+            else:
+                current_shap_sample = current_shap
+                feature_values_sample = feature_values
+            
+            # Iterate through features to find best interaction
+            for j in range(len(feature_names)):
+                if j == idx: 
+                    continue
+                try:
+                    # Create bins for grouping
+                    bins = np.percentile(feature_values_sample[:, j], np.linspace(0, 100, 11))
+                    bins = np.unique(bins)
+                    if len(bins) < 2: 
+                        continue
+                    
+                    # Group data and calculate between-group variance
+                    groups = np.digitize(feature_values_sample[:, j], bins)
+                    ss_between = 0
+                    overall_mean = np.mean(current_shap_sample)
+                    
+                    for group_id in np.unique(groups):
+                        mask = groups == group_id
+                        group_data = current_shap_sample[mask]
+                        if len(group_data) == 0: 
+                            continue
+                        group_mean = np.mean(group_data)
+                        ss_between += len(group_data) * (group_mean - overall_mean)**2
+                    
+                    # Update best feature if variance is higher
+                    if ss_between > max_ss_between:
+                        max_ss_between = ss_between
+                        best_j = j
+                except:
+                    continue
+            
+            # Fallback if no valid feature found
+            if best_j is None:
+                for j in range(len(feature_names)):
+                    if j != idx:
+                        best_j = j
+                        break
+            color_title = feature_names[best_j]
+            color_data = feature_values[:, best_j]
+        else:
+            # Use specified interaction feature
+            if interaction_feature not in feature_names:
+                raise ValueError(f"Interaction feature '{interaction_feature}' not found")
+            color_title = interaction_feature
+            color_data = feature_values[:, feature_names.index(interaction_feature)]
+
+    # Downsample if needed
     if len(x) > max_points:
         indices = np.random.choice(len(x), max_points, replace=False)
         x = x[indices]
         y = y[indices]
-    
+        if color_data is not None:
+            color_data = color_data[indices]
+
     # Create figure
     fig = go.Figure()
+    
+    # Configure marker color based on interaction
+    marker_config = {
+        'size': 6,
+        'opacity': 0.6,
+        'showscale': True
+    }
+    hover_template = "<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}"
+    
+    if color_data is not None:
+        marker_config.update({
+            'color': color_data,
+            'colorscale': 'Viridis',
+            'colorbar': {'title': color_title}
+        })
+        hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"
+    else:
+        marker_config.update({
+            'color': y,
+            'colorscale': 'RdBu',
+            'colorbar': {'title': 'SHAP Value'}
+        })
+    
+    hover_template += "<extra></extra>"
     
     # Add scatter plot
     fig.add_trace(go.Scatter(
         x=x, 
         y=y, 
         mode='markers',
-        marker=dict(
-            size=6,
-            opacity=0.5,
-            color=y,
-            colorscale='RdBu',
-            colorbar=dict(title='SHAP Value'),
-        ),
+        marker=marker_config,
         name=feature,
-        hovertemplate="<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}<extra></extra>"
+        hovertemplate=hover_template
     ))
     
-    # Add trend line using LOWESS smoothing
+    # Add trend line
     try:
         from statsmodels.nonparametric.smoothers_lowess import lowess
         smoothed = lowess(y, x, frac=0.3, it=2)
@@ -498,7 +562,6 @@ def shap_dependency_plot_plotly(
             name='Trend'
         ))
     except ImportError:
-        # Fallback to rolling average if statsmodels not available
         df = pd.DataFrame({'x': x, 'y': y}).sort_values('x')
         df['rolling'] = df['y'].rolling(50, min_periods=1).mean()
         fig.add_trace(go.Scatter(
@@ -510,15 +573,22 @@ def shap_dependency_plot_plotly(
         ))
     
     # Update layout
+    title_suffix = " with interaction" if auto_interaction else ""
     fig.update_layout(
-        title=f'SHAP Dependency Plot: {feature}',
+        title=f'SHAP Dependency Plot: {feature}{title_suffix}',
         xaxis_title=f'Feature Value: {feature}',
         yaxis_title='SHAP Value',
         showlegend=False,
         height=500,
         template='plotly_white'
     )
-    fig = _apply_common_layout(fig, f'Feature Value: {feature}', 'SHAP Value', f'SHAP Dependency Plot: {feature}')
+    =
+    fig = _apply_common_layout(
+        fig, 
+        f'Feature Value: {feature}', 
+        'SHAP Value', 
+        f'SHAP Dependency Plot: {feature}{title_suffix}'
+    )
     return fig
 
 
@@ -528,6 +598,7 @@ def plot_shap(
     feature_names: list, 
     n_features: int = 20, 
     output_dir: Union[str, Path] = None,
+    interaction_feature: Optional[Union[str, None]] = 'auto',
     show: bool = False,
     verbose: bool = False
 ) -> Tuple[go.Figure, go.Figure, List[go.Figure]]:
@@ -546,7 +617,8 @@ def plot_shap(
     Returns:
         Tuple of bar_plot_fig, beeswarm_plot_fig, dependency_plot_figs.
     """
-    bar_fig = shap_summary_bar_plotly(
+    output_dir = Path(output_dir) / 'figs'
+    bar_fig = shap_summary_bar(
         shap_values, feature_names, n_features
     )
     plotly_show_and_save(
@@ -554,7 +626,7 @@ def plot_shap(
         output_dir / f"shap.summary.bar.{n_features}", 
         ['png', 'html'], verbose
     )
-    beeswarm_fig = shap_beeswarm_plotly(
+    beeswarm_fig = shap_beeswarm(
         shap_values, feature_values, feature_names, n_features
     )
     plotly_show_and_save(
@@ -570,8 +642,9 @@ def plot_shap(
         
         for feature in top_features:
             try:
-                dep_fig = shap_dependency_plot_plotly(
-                    shap_values, feature_values, feature_names, feature
+                dep_fig = shap_dependency_plot(
+                    shap_values, feature_values, feature_names, feature, 
+                    10000, interaction_feature='auto'
                 )
                 plotly_show_and_save(
                     dep_fig, show, output_dir / f"shap.dependency.{feature}", 
@@ -579,7 +652,5 @@ def plot_shap(
                 )
                 dependency_figs.append(dep_fig)
             except Exception as e:
-                print(
-                    f"Error creating dependency plot for {feature}: {str(e)}"
-                )
+                logger.error(f"Error creating dependency plot for {feature}: {str(e)}")
     return bar_fig, beeswarm_fig, dependency_figs
