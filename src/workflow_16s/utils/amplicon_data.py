@@ -425,19 +425,14 @@ class MapPlotter:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
         with get_progress_bar() as prog:
-            l0_desc = "Plotting sample maps..."
-            l0_task = prog.add_task(
-                f"[white]{l0_desc:<{DEFAULT_N}}", 
+            plot_desc = f"Plotting sample maps..."
+            plot_task = prog.add_task(
+                f"[white]{plot_desc:<{DEFAULT_N}}", 
                 total=len(valid_columns)
             )
 
             for col in valid_columns:
-                l1_desc = f"Mapping {col}..."
-                l1_task = prog.add_task(
-                    f"[white]{l1_desc:<{DEFAULT_N}}",
-                    parent=l0_task,
-                    total=1
-                )
+                new_desc = f"Plotting sample maps → {col}"
                 
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
@@ -446,9 +441,7 @@ class MapPlotter:
                     **kwargs,
                 )
                 self.figures[col] = fig
-                prog.update(l1_task, completed=1)
-                prog.remove_task(l1_task)
-                prog.update(l0_task, advance=1)
+                prog.update(plot_task, advance=1, description=f"[white]{new_desc:<{DEFAULT_N}}")
         return self.figures
 
 
