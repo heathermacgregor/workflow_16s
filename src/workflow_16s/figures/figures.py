@@ -389,3 +389,70 @@ def attach_legend_to_figure(
     )
     
     return combined_fig
+
+
+import math
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from typing import List
+
+def combine_figures_as_subplots(
+    figures: List[go.Figure],
+    figures_per_row: int = 2,
+    shared_xaxes: bool = False,
+    shared_yaxes: bool = False,
+    subplot_titles: List[str] = None,
+    vertical_spacing: float = 0.1,
+    horizontal_spacing: float = 0.05,
+    show: bool = False,
+    output_path: Union[str, Path] = None,
+    verbose: bool = False
+) -> go.Figure:
+    """
+    Combines multiple Plotly go.Figure objects into a subplot figure.
+
+    Parameters:
+        figures (List[go.Figure]): List of Plotly figures to combine.
+        figures_per_row (int): Number of figures per row.
+        shared_xaxes (bool): Share x-axis across subplots.
+        shared_yaxes (bool): Share y-axis across subplots.
+        subplot_titles (List[str]): Optional list of subplot titles.
+        vertical_spacing (float): Vertical spacing between subplots (0-1).
+        horizontal_spacing (float): Horizontal spacing between subplots (0-1).
+        width (int): Width of the combined figure.
+        height (int): Height of the combined figure.
+
+    Returns:
+        go.Figure: A single Plotly figure containing all input figures as subplots.
+    """
+    total_figs = len(figures)
+    cols = figures_per_row
+    rows = math.ceil(total_figs / cols)
+
+    if subplot_titles is None:
+        subplot_titles = [fig.layout.title.text if fig.layout.title.text else ""
+        for fig in figures]
+
+    fig = make_subplots(
+        rows=rows,
+        cols=cols,
+        shared_xaxes=shared_xaxes,
+        shared_yaxes=shared_yaxes,
+        subplot_titles=subplot_titles,
+        vertical_spacing=vertical_spacing,
+        horizontal_spacing=horizontal_spacing
+    )
+
+    for idx, subfig in enumerate(figures):
+        row = idx // cols + 1
+        col = idx % cols + 1
+        for trace in subfig.data:
+            fig.add_trace(trace, row=row, col=col)
+
+        # Optionally update axes titles (if present in original figures)
+        if 'xaxis' in subfig.layout and subfig.layout.xaxis.title.text:
+            fig.update_xaxes(title_text=subfig.layout.xaxis.title.text, row=row, col=col)
+        if 'yaxis' in subfig.layout and subfig.layout.yaxis.title.text:
+            fig.update_yaxes(title_text=subfig.layout.yaxis.title.text, row=row, col=col)
+    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    return fig
