@@ -99,23 +99,37 @@ def _prepare_sections(
     sections = []
     plot_data: Dict[str, Any] = {}
 
+    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
+    ordered_sections = [
+        'map',
+        'statistical_results',
+        'alpha_diversity',
+        'ordination',
+        'ml_results'
+    ]
+    
+    # Filter and sort sections based on defined order
+    include_sections = [sec for sec in ordered_sections if sec in include_sections]
+
     for sec in include_sections:
         if sec not in figures:
             continue
 
         sec_data = {
             "id": f"sec-{uuid.uuid4().hex}", 
-            "title": sec.title(), 
+            "title": sec.replace('_', ' ').title(), 
             "subsections": []
         }
 
+        # Rename ordination to Beta Diversity
         if sec == "ordination":
+            sec_data["title"] = "Beta Diversity"
             btns, tabs, pd = _ordination_to_nested_html(
                 figures[sec], id_counter, sec_data["id"]
             )
             plot_data.update(pd)
             sec_data["subsections"].append({
-                "title": "Ordination",
+                "title": "Beta Diversity",
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
@@ -144,17 +158,40 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
-        elif sec == "shap":
-            btns, tabs, pd = _shap_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "SHAP Interpretability",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        elif sec == 'violin':
+        
+        elif sec == "ml_results":
+            # ML Results section includes both model evaluation and SHAP
+            ml_subsections = []
+            
+            # Add model evaluation plots if available
+            if 'shap' in figures:
+                btns, tabs, pd = _shap_to_nested_html(
+                    figures['shap'], id_counter, sec_data["id"]
+                )
+                plot_data.update(pd)
+                ml_subsections.append({
+                    "title": "Model Evaluation",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
+            
+            # Add SHAP dependency plots
+            if 'shap' in figures:
+                shap_dependency_figs = _extract_shap_dependency(figures['shap'])
+                if shap_dependency_figs:
+                    tabs, btns, pd = _figs_to_html(
+                        shap_dependency_figs, id_counter, sec_data["id"] + "-dependency"
+                    )
+                    plot_data.update(pd)
+                    ml_subsections.append({
+                        "title": "SHAP Dependency Plots",
+                        "tabs_html": tabs,
+                        "buttons_html": btns
+                    })
+            
+            sec_data["subsections"] = ml_subsections
+        
+        elif sec == "violin":
             btns, tabs, pd = _violin_to_nested_html(
                 figures[sec], id_counter, sec_data["id"]
             )
@@ -164,24 +201,34 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
-        else:
-            flat: Dict[str, Any] = {}
-            _flatten(figures[sec], [], flat)
-            if flat:
-                tabs, btns, pd = _figs_to_html(
-                    flat, id_counter, sec_data["id"], row_label="color_col"
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "All",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
         
         if sec_data["subsections"]:
             sections.append(sec_data)
 
     return sections, plot_data
+
+def _extract_shap_dependency(shap_figures: Dict) -> Dict[str, Any]:
+    """Extract SHAP dependency plots from SHAP figures"""
+    dependency_figs = {}
+    
+    for table_type, levels in shap_figures.items():
+        for level, methods in levels.items():
+            for method, plots in methods.items():
+                if 'shap_dependency' in plots:
+                    # Handle both list and dict formats
+                    if isinstance(plots['shap_dependency'], list):
+                        for i, fig in enumerate(plots['shap_dependency']):
+                            key = f"{table_type} - {level} - {method} - Dependency {i+1}"
+                            dependency_figs[key] = fig
+                    elif isinstance(plots['shap_dependency'], dict):
+                        for name, fig in plots['shap_dependency'].items():
+                            key = f"{table_type} - {level} - {method} - {name}"
+                            dependency_figs[key] = fig
+                    else:
+                        key = f"{table_type} - {level} - {method} - Dependency"
+                        dependency_figs[key] = plots['shap_dependency']
+    
+    return dependency_figs
 
 def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
     for k, v in tree.items():
@@ -201,20 +248,22 @@ def _figs_to_html(
 ) -> Tuple[str, str, Dict]:
     tabs, btns, plot_data = [], [], {}
 
-    for title, fig in figs.items():
+    # Create dropdown for figure selection
+    dropdown_id = f"{prefix}-dropdown"
+    dropdown_html = f'<select id="{dropdown_id}" class="figure-dropdown" onchange="showSelectedFigure(this)">'
+    
+    for i, (title, fig) in enumerate(figs.items()):
         idx     = next(counter)
         tab_id  = f"{prefix}-tab-{idx}"
         plot_id = f"{prefix}-plot-{idx}"
-
-        btns.append(
-            f'<button class="tab-button {"active" if idx==0 else ""}" '
-            f'data-tab="{tab_id}" '
-            f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
-        )
-
+        
+        # Add option to dropdown
+        dropdown_html += f'<option value="{tab_id}" data-plot-id="{plot_id}" {"selected" if i==0 else ""}>{title}</option>'
+        
+        # Create tab container
         tabs.append(
             f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if idx==0 else "none"}" '
+            f'style="display:{"block" if i==0 else "none"}" '
             f'data-plot-id="{plot_id}">'
             f'<div id="container-{plot_id}" class="plot-container"></div></div>'
         )
@@ -252,6 +301,16 @@ def _figs_to_html(
                 "error": str(exc)
             }
             
+    dropdown_html += '</select>'
+    
+    # Add dropdown to buttons
+    btns.append(
+        f'<div class="figure-selector">'
+        f'<label for="{dropdown_id}">Select figure: </label>'
+        f'{dropdown_html}'
+        f'</div>'
+    )
+    
     buttons_html = "\n".join(btns)
     if row_label:
         buttons_html = (
@@ -512,8 +571,25 @@ def _shap_to_nested_html(
                     f'onclick="showMethod(\'{method_id}\')">{method}</button>'
                 )
                 
+                # Prepare plots dictionary
+                method_plots = {
+                    'Summary (Bar)': plots.get('shap_summary_bar'),
+                    'Summary (Beeswarm)': plots.get('shap_summary_beeswarm'),
+                }
+                
+                # Handle dependency plots
+                if 'shap_dependency' in plots:
+                    if isinstance(plots['shap_dependency'], list):
+                        for i, fig in enumerate(plots['shap_dependency']):
+                            method_plots[f'Dependency {i+1}'] = fig
+                    elif isinstance(plots['shap_dependency'], dict):
+                        for name, fig in plots['shap_dependency'].items():
+                            method_plots[name] = fig
+                    else:
+                        method_plots['Dependency'] = plots['shap_dependency']
+                
                 plot_btns, plot_tabs, pd = _figs_to_html(
-                    plots, id_counter, method_id
+                    method_plots, id_counter, method_id
                 )
                 plot_data.update(pd)
                 
@@ -740,11 +816,18 @@ def generate_html_report(
 ) -> None:
     figures_dict = _extract_figures(amplicon_data)
     
-    include_sections = include_sections or [
-        k for k, v in figures_dict.items() if v
+    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
+    ordered_sections = [
+        'map',
+        'statistical_results',
+        'alpha_diversity',
+        'ordination',  # Will be renamed to Beta Diversity
+        'ml_results',  # Will include SHAP and eval_plots
+        'violin'
     ]
-    if 'violin' in figures_dict and 'violin' not in include_sections:
-        include_sections.append('violin')
+    
+    # Filter sections to include only those with data
+    include_sections = [sec for sec in ordered_sections if sec in figures_dict or sec == 'statistical_results']
     
     ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     output_path = Path(output_path)
@@ -872,6 +955,26 @@ def generate_html_report(
     .tooltip:hover .tooltiptext {
         visibility: visible;
         opacity: 1;
+    }
+    
+    /* Dropdown styles */
+    .figure-selector {
+        margin: 15px 0;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+    }
+    .figure-selector label {
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    .figure-dropdown {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        font-size: 14px;
+        width: 300px;
     }
     """
     
