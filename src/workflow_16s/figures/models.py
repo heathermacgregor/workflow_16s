@@ -112,8 +112,6 @@ def plot_confusion_matrix(
         xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0),
         yaxis=dict(title=dict(font=dict(size=18)))
     )
-    # Increase margins
-    fig.update_layout(margin=dict(t=120, l=100, b=100))
     # Move x-axis title to bottom
     fig.update_xaxes(side='bottom') 
     
