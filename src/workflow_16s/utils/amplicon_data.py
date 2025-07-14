@@ -852,7 +852,7 @@ class _AnalysisManager(_ProcessingMixin):
                         continue
                     
                     level_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()})")
-                    prog.update(table_task, description=level_desc)
+                    progress.update(table_task, description=level_desc)
                     
                     try: 
                         alpha_df = alpha_diversity(table_to_df(levels[level]), metrics=metrics)
@@ -914,7 +914,7 @@ class _AnalysisManager(_ProcessingMixin):
                                 verbose=self.verbose,
                                 effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
                             )
-                            self.alpha_diversity[table_type][level]['figures']["summary"] = stats_fig
+                            self.alpha_diversity[table_type][level]['figures']['summary'] = stats_fig
                             
                             if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                                 corr_figures = plot_alpha_correlations(
@@ -922,7 +922,7 @@ class _AnalysisManager(_ProcessingMixin):
                                     output_dir=output_dir,
                                     top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
                                 )
-                                self.alpha_diversity[table_type][level]['figures']["correlations"] = corr_figures
+                                self.alpha_diversity[table_type][level]['figures']['correlations'] = corr_figures
                             
                     except Exception as e:
                         logger.error(f"Alpha diversity analysis failed for {table_type}/{level}: {e}")
@@ -958,7 +958,7 @@ class _AnalysisManager(_ProcessingMixin):
                     total=len(levels) * len(enabled_for_table_type)
                 )
                 for level, table in levels.items():
-                    level_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()})")
+                    level_desc = _format_task_desc(f"{table_desc} ({level.title()})")
                     prog.update(table_task, description=level_desc)
                     
                     # Create output directory for this analysis
@@ -972,7 +972,7 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
                         _init_dict_level(self.stats, table_type, level)    
-                        test_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()}) → {cfg['name']}")
+                        test_desc = _format_task_desc(f"{level_desc} → {cfg['name']}")
                         prog.update(table_task, description=level_desc)
                         try:
                             result = cfg["func"](
@@ -1021,9 +1021,9 @@ class _AnalysisManager(_ProcessingMixin):
     
         self.ordination = {tt: {} for tt in self.tables}
     
-        with get_progress_bar() as prog:
+        with get_progress_bar() as progress:
             master_desc = "Running beta diversity analysis"
-            master_task = prog.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
+            master_task = progress.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
             
             max_workers = min(2, os.cpu_count() // 2)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1062,7 +1062,7 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             errors[key] = str(e)
                             logger.error(f"Ordination failed for {key}: {str(e)}")
-                        prog.update(master_task, advance=1)
+                        progress.update(master_task, advance=1)
                 except TimeoutError:
                     logger.warning("Ordination timeout - proceeding with completed results")
                 
@@ -1150,7 +1150,7 @@ class _AnalysisManager(_ProcessingMixin):
                     total=len(levels) * len(methods)
                 )
                 for level, table in levels.items():
-                    level_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()})")
+                    level_desc = _format_task_desc(f"{table_desc} ({level.title()})")
                     prog.update(table_task, description=level_desc)
                     
                     # Create output directory for this analysis
@@ -1158,7 +1158,7 @@ class _AnalysisManager(_ProcessingMixin):
                     output_dir.mkdir(parents=True, exist_ok=True)
                     
                     for method in methods:
-                        method_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()}) → {method.upper()}")
+                        method_desc = _format_task_desc(f"{level_desc} → {method.upper()}")
                         prog.update(table_task, description=method_desc)
                         
                         _init_dict_level(self.models, table_type, level, method) 
