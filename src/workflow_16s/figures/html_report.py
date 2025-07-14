@@ -180,7 +180,7 @@ def _prepare_sections(
                 "buttons_html": btns
             })
         
-        elif sec == "alpha_diversity":  # NEW: Handle alpha diversity section
+        elif sec == "alpha_diversity":
             # Use nested tab structure for alpha diversity
             btns, tabs, pd = _alpha_diversity_to_nested_html(
                 figures[sec], id_counter, sec_data["id"]
@@ -691,7 +691,7 @@ def _format_ml_section(
     """
     
     # Prepare features table
-    features_html = _add_table_functionality(ml_features, 'ml-features-table')
+    features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
     
     return f"""
     <div class="ml-section">
@@ -950,6 +950,9 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     Returns:
         HTML string with table and interactive controls.
     """
+    if df is None or df.empty:
+        return "<p>No data available</p>"
+    
     # Generate base table HTML
     table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
     
@@ -1110,7 +1113,7 @@ def generate_html_report(
         amplicon_data.top_contaminated_features,
         amplicon_data.top_pristine_features
     )
-    ml_html = _format_ml_section(ml_metrics, ml_features)
+    ml_html = _format_ml_section(ml_metrics, ml_features) if ml_metrics is not None else "<p>No ML results available</p>"
     
     # Build tables section HTML
     tables_html = f"""
