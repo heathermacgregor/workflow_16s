@@ -1,926 +1,1424 @@
 # ===================================== IMPORTS ====================================== #
-import base64
-import itertools
-import json
+
+# Standard Library Imports
+import glob
 import logging
-import uuid
-from io import BytesIO
+import os
+import time
+import warnings
+import threading  # Added for thread locking
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import numpy as np
+# Third‑Party Imports
 import pandas as pd
-from matplotlib.figure import Figure
-from plotly.offline import get_plotlyjs_version
+from biom.table import Table
 
-from workflow_16s.utils.io import import_js_as_str
+# ================================== LOCAL IMPORTS =================================== #
 
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-logger = logging.getLogger('workflow_16s')
-script_dir = Path(__file__).parent  
-tables_js_path = script_dir / "tables.js"  
-css_path = script_dir / "style.css"  
-html_template_path = script_dir / "template.html"  
+from workflow_16s.figures.merged import (
+    mds as plot_mds,
+    pca as plot_pca,
+    pcoa as plot_pcoa,
+    create_alpha_diversity_boxplot, create_alpha_diversity_stats_plot,
+    plot_alpha_correlations, sample_map_categorical, violin_feature
+)
+from workflow_16s.function.faprotax import (
+    faprotax_functions_for_taxon, get_faprotax_parsed
+)
+from workflow_16s.models.feature_selection import (
+    catboost_feature_selection,
+)
+from workflow_16s.stats.beta_diversity import (
+    pcoa as calculate_pcoa,
+    pca as calculate_pca,
+    tsne as calculate_tsne,
+    umap as calculate_umap,
+)
+from workflow_16s.stats.tests import (
+    alpha_diversity, analyze_alpha_diversity, analyze_alpha_correlations,
+    fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
+)
+from workflow_16s.utils.data import (
+    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
+    update_table_and_meta, to_biom
+)
+from workflow_16s.utils.io import (
+    export_h5py, import_merged_metadata_tsv, import_merged_table_biom
+)
+from workflow_16s.utils.progress import get_progress_bar
+
+# ========================== INITIALISATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger("workflow_16s")
+warnings.filterwarnings("ignore")
+
+# Global lock for UMAP operations to prevent thread conflicts
+umap_lock = threading.Lock()
+
+# ================================= DEFAULT VALUES =================================== #
+
+DEFAULT_PROGRESS_TEXT_N = 65
+DEFAULT_N = 65
+DEFAULT_DATASET_COLUMN = "dataset_name"
+DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
+DEFAULT_SYMBOL_COL = DEFAULT_GROUP_COLUMN
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+DEFAULT_MODE = 'genus'
+DEFAULT_ALPHA_METRICS = [
+    'shannon', 'observed_features', 'simpson',
+    'pielou_evenness', 'chao1', 'ace', 
+    'gini_index', 'goods_coverage', 'heip_evenness', 
+    'dominance'       
+]
+PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 # ===================================== CLASSES ====================================== #
-class NumpySafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj) -> Any:  
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        return super().default(obj)
 
-# ================================== CORE HELPERS =================================== #
-def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
-    figures = {}
+def _format_task_desc(desc: str):
+    return f"[white]{str(desc):<{DEFAULT_N}}"
     
-    # Ordination figures
-    ordination_figures = {}
-    for table_type, levels in amplicon_data.ordination.items():
-        for level, methods in levels.items():
-            for method, data in methods.items():
-                if data and 'figures' in data and data['figures']:
-                    if table_type not in ordination_figures:
-                        ordination_figures[table_type] = {}
-                    if level not in ordination_figures[table_type]:
-                        ordination_figures[table_type][level] = {}
-                    # Store figures directly under method key
-                    ordination_figures[table_type][level][method] = data['figures']
-    figures['ordination'] = ordination_figures
 
-    # Alpha diversity figures
-    alpha_figures = {}
-    for table_type, levels in amplicon_data.alpha_diversity.items():
-        for level, data in levels.items():
-            if 'figures' in data and data['figures']:
-                if table_type not in alpha_figures:
-                    alpha_figures[table_type] = {}
-                alpha_figures[table_type][level] = data['figures']
-    figures['alpha_diversity'] = alpha_figures
+def _init_dict_level(a, b, c=None, d=None, e=None):
+    if b not in a:
+        a[b] = {}
+    if c and c not in a[b]:
+        a[b][c] = {}
+    if d and d not in a[b][c]:
+        a[b][c][d] = {}
+    if e and e not in a[b][c][d]:
+        a[b][c][d][e] = {}
+        
 
-    # Sample maps
-    if amplicon_data.maps:
-        figures['map'] = amplicon_data.maps
-
-    # SHAP figures
-    shap_figures = {}
-    for table_type, levels in amplicon_data.models.items():
-        for level, methods in levels.items():
-            for method, model_result in methods.items():
-                if model_result and 'figures' in model_result:
-                    if table_type not in shap_figures:
-                        shap_figures[table_type] = {}
-                    if level not in shap_figures[table_type]:
-                        shap_figures[table_type][level] = {}
-                    shap_figures[table_type][level][method] = model_result['figures']
-    figures['shap'] = shap_figures
-
-    # Violin plots
-    violin_figures = {'contaminated': {}, 'pristine': {}}
-    for feat in amplicon_data.top_contaminated_features:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
-    for feat in amplicon_data.top_pristine_features:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['pristine'][feat['feature']] = feat['violin_figure']
-    figures['violin'] = violin_figures
-
-    return figures
-
-def _prepare_sections(
-    figures: Dict,
-    include_sections: List[str],
-    id_counter: Iterator[int],
-) -> Tuple[List[Dict], Dict]:
-    sections = []
-    plot_data: Dict[str, Any] = {}
-
-    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
-    ordered_sections = [
-        'map',
-        'statistical_results',
-        'alpha_diversity',
-        'ordination',
-        'ml_results',
-        'violin'
-    ]
+class _ProcessingMixin:
+    """
+    Provides reusable methods for processing steps with progress tracking and logging.
+    """
     
-    # Filter and sort sections based on defined order
-    include_sections = [sec for sec in ordered_sections if sec in include_sections]
+    def _run_processing_step(
+        self,
+        process_name: str,
+        process_func: Callable,
+        levels: List[str],
+        func_args: tuple,
+        get_source: Callable[[str], Table],
+        log_template: Optional[str] = None,
+        log_action: Optional[str] = None,
+    ) -> Dict[str, Table]:
+        processed: Dict[str, Table] = {}
 
-    for sec in include_sections:
-        if sec not in figures:
-            continue
-
-        sec_data = {
-            "id": f"sec-{uuid.uuid4().hex}", 
-            "title": sec.replace('_', ' ').title(), 
-            "subsections": []
-        }
-
-        # Rename ordination to Beta Diversity
-        if sec == "ordination":
-            sec_data["title"] = "Beta Diversity"
-            btns, tabs, pd = _ordination_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Beta Diversity",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        
-        elif sec == "alpha_diversity":
-            btns, tabs, pd = _alpha_diversity_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Alpha Diversity",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        
-        elif sec == "map":
-            flat: Dict[str, Any] = {}
-            _flatten(figures[sec], [], flat)
-            if flat:
-                tabs, btns, pd = _figs_to_html(
-                    flat, id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Sample Maps",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-        
-        elif sec == "ml_results":
-            # ML Results section includes both model evaluation and SHAP
-            ml_subsections = []
-            
-            # Add model evaluation plots if available
-            if 'shap' in figures:
-                btns, tabs, pd = _shap_to_nested_html(
-                    figures['shap'], id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                ml_subsections.append({
-                    "title": "Model Evaluation",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            
-            # Add SHAP dependency plots
-            if 'shap' in figures:
-                shap_dependency_figs = _extract_shap_dependency(figures['shap'])
-                if shap_dependency_figs:
-                    tabs, btns, pd = _figs_to_html(
-                        shap_dependency_figs, id_counter, sec_data["id"] + "-dependency"
-                    )
-                    plot_data.update(pd)
-                    ml_subsections.append({
-                        "title": "SHAP Dependency Plots",
-                        "tabs_html": tabs,
-                        "buttons_html": btns
-                    })
-            
-            sec_data["subsections"] = ml_subsections
-        
-        elif sec == "violin":
-            btns, tabs, pd = _violin_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Violin Plots",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        
-        if sec_data["subsections"]:
-            sections.append(sec_data)
-
-    return sections, plot_data
-
-def _extract_shap_dependency(shap_figures: Dict) -> Dict[str, Any]:
-    """Extract SHAP dependency plots from SHAP figures"""
-    dependency_figs = {}
-    
-    for table_type, levels in shap_figures.items():
-        for level, methods in levels.items():
-            for method, plots in methods.items():
-                if 'shap_dependency' in plots:
-                    # Handle both list and dict formats
-                    if isinstance(plots['shap_dependency'], list):
-                        for i, fig in enumerate(plots['shap_dependency']):
-                            key = f"{table_type} - {level} - {method} - Dependency {i+1}"
-                            dependency_figs[key] = fig
-                    elif isinstance(plots['shap_dependency'], dict):
-                        for name, fig in plots['shap_dependency'].items():
-                            key = f"{table_type} - {level} - {method} - {name}"
-                            dependency_figs[key] = fig
-                    else:
-                        key = f"{table_type} - {level} - {method} - Dependency"
-                        dependency_figs[key] = plots['shap_dependency']
-    
-    return dependency_figs
-
-def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
-    for k, v in tree.items():
-        new_keys = keys + [k]
-        if isinstance(v, dict):
-            _flatten(v, new_keys, out)
+        if getattr(self, "verbose", False):
+            logger.info(f"{process_name}")
+            for level in levels:
+                start_time = time.perf_counter() 
+                processed[level] = process_func(get_source(level), level, *func_args)
+                duration = time.perf_counter() - start_time
+                if log_template or log_action:
+                    self._log_level_action(level, log_template, log_action, duration)
         else:
-            out[" - ".join(new_keys)] = v
+            with get_progress_bar() as progress:
+                parent_desc = f"{process_name}"
+                parent_task = progress.add_task(_format_task_desc(parent_desc), total=len(levels))
+                
+                for level in levels:
+                    level_desc = f"{parent_desc} ({level})"
+                    progress.update(parent_task, description=_format_task_desc(level_desc))
+                    
+                    start_time = time.perf_counter()  
+                    processed[level] = process_func(get_source(level), level, *func_args)
+                    duration = time.perf_counter() - start_time
+                    if log_template or log_action:
+                        self._log_level_action(level, log_template, log_action, duration)
 
-def _figs_to_html(
-    figs: Dict[str, Any], 
-    counter: Iterator[int], 
-    prefix: str, 
-    *, 
-    square: bool = False,
-    row_label: Optional[str] = None
-) -> Tuple[str, str, Dict]:
-    tabs, btns, plot_data = [], [], {}
+                    progress.update(parent_task, advance=1)
+            progress.update(parent_task, description=_format_task_desc(parent_desc))
+        return processed
 
-    for i, (title, fig) in enumerate(figs.items()):
-        idx     = next(counter)
-        tab_id  = f"{prefix}-tab-{idx}"
-        plot_id = f"{prefix}-plot-{idx}"
+    def _log_level_action(
+        self,
+        level: str,
+        template: Optional[str] = None,
+        action: Optional[str] = None,
+        duration: Optional[float] = None,
+    ) -> None:
+        message = ""
+        if template:
+            message = template.format(level=level)
+        elif action:
+            message = f"{level} {action}"
 
-        btns.append(
-            f'<button class="tab-button {"active" if i==0 else ""}" '
-            f'data-tab="{tab_id}" '
-            f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
+        if message and duration is not None:
+            message += f" in {duration:.2f}s"
+
+        if message:
+            logger.debug(message)
+
+
+class StatisticalAnalyzer:
+    """
+    Performs statistical tests on feature tables to identify significant differences.
+    """
+    
+    TEST_CONFIG = {
+        "fisher": {
+            "key": "fisher",
+            "func": fisher_exact_bonferroni,
+            "name": "Fisher exact (Bonferroni)",
+            "effect_col": "proportion_diff",
+            "alt_effect_col": "odds_ratio",
+        },
+        "ttest": {
+            "key": "ttest",
+            "func": ttest,
+            "name": "Student t‑test",
+            "effect_col": "mean_difference",
+            "alt_effect_col": "cohens_d",
+        },
+        "mwu_bonferroni": {
+            "key": "mwub",
+            "func": mwu_bonferroni,
+            "name": "Mann–Whitney U (Bonferroni)",
+            "effect_col": "effect_size_r",
+            "alt_effect_col": "median_difference",
+        },
+        "kruskal_bonferroni": {
+            "key": "kwb",
+            "func": kruskal_bonferroni,
+            "name": "Kruskal–Wallis (Bonferroni)",
+            "effect_col": "epsilon_squared",
+            "alt_effect_col": None,
+        },
+    }
+
+    def __init__(self, cfg: Dict, verbose: bool = False):
+        self.cfg = cfg
+        self.verbose = verbose
+
+    def run_tests(
+        self,
+        table: Table,
+        metadata: pd.DataFrame,
+        group_column: str,
+        group_column_values: List[Any],
+        enabled_tests: List[str],
+    ) -> Dict[str, Any]:
+        results: Dict[str, Any] = {}
+        table, metadata = update_table_and_meta(table, metadata)
+
+        for test_name in enabled_tests:
+            if test_name not in self.TEST_CONFIG:
+                continue
+            cfg = self.TEST_CONFIG[test_name]
+            if self.verbose:
+                logger.info(f"Running {cfg['name']}...")
+            results[cfg["key"]] = cfg["func"](table, metadata, group_column, 
+                                              group_column_values)
+        return results
+
+    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
+        if test_name not in self.TEST_CONFIG:
+            return None
+        cfg = self.TEST_CONFIG[test_name]
+        for col in (cfg["effect_col"], cfg["alt_effect_col"]):
+            if col and col in row:
+                return row[col]
+        return None
+
+
+class Ordination:
+    """
+    Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures.
+    """
+    
+    TEST_CONFIG = {
+        "pca": {
+            "key": "pca", 
+            "func": calculate_pca, 
+            "plot_func": plot_pca, 
+            "name": "PCA"
+        },
+        "pcoa": {
+            "key": "pcoa", 
+            "func": calculate_pcoa, 
+            "plot_func": plot_pcoa, 
+            "name": "PCoA"
+        },
+        "tsne": {
+            "key": "tsne",
+            "func": calculate_tsne,
+            "plot_func": plot_mds,
+            "name": "t‑SNE",
+            "plot_kwargs": {"mode": "TSNE"},
+        },
+        "umap": {
+            "key": "umap",
+            "func": calculate_umap,
+            "plot_func": plot_mds,
+            "name": "UMAP",
+            "plot_kwargs": {"mode": "UMAP"},
+        },
+    }
+
+    def __init__(
+        self, 
+        cfg: Dict, 
+        output_dir: Union[str, Path], 
+        verbose: bool = False
+    ):
+        self.cfg = cfg
+        self.verbose = verbose
+        self.figure_output_dir = Path(output_dir)
+        self.color_columns = cfg["figures"].get(
+            "color_columns",
+            cfg["figures"].get(
+                "map_columns",
+                [
+                    DEFAULT_DATASET_COLUMN, DEFAULT_GROUP_COLUMN,
+                    "env_feature", "env_material", "country"
+                ],
+            ),
         )
 
-        tabs.append(
-            f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if i==0 else "none"}" '
-            f'data-plot-id="{plot_id}">'
-            f'<div id="container-{plot_id}" class="plot-container"></div></div>'
+    def run_tests(
+        self,
+        table: Table,
+        metadata: pd.DataFrame,
+        symbol_col: str,
+        transformation: str,
+        enabled_tests: List[str],
+        **kwargs,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        trans_cfg = self.cfg.get("ordination", {}).get(transformation, {})
+        tests_to_run = [t for t in enabled_tests if t in self.TEST_CONFIG]
+        if not tests_to_run:
+            return {}, {}
+
+        table, metadata = update_table_and_meta(table, metadata)
+        return self._run_without_progress(
+            table, metadata, symbol_col, transformation,
+            tests_to_run, trans_cfg, kwargs,
         )
+
+    def _run_without_progress(
+        self, table, metadata, symbol_col, transformation, tests_to_run, 
+        trans_cfg, kwargs,
+    ):
+        results, figures = {}, {}
+        for tname in tests_to_run:
+            cfg = self.TEST_CONFIG[tname]
+            try:
+                res, figs = self._run_ordination_method(
+                    cfg, table, metadata, symbol_col, transformation, 
+                    trans_cfg, kwargs
+                )
+                results[cfg["key"]] = res
+                figures[cfg["key"]] = figs
+            except Exception as e:
+                logger.error(f"Failed {tname} for {transformation}: {e}")
+                figures[cfg["key"]] = {}
+        return results, figures
+
+    def _run_ordination_method(
+        self, cfg, table, metadata, symbol_col, transformation, trans_cfg, 
+        kwargs
+    ):
+        try:
+            method_params = {}
+            if cfg["key"] == "pcoa":
+                method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+            
+            # Handle UMAP/TSNE thread safety
+            if cfg["key"] in ["tsne", "umap"]:
+                method_params["n_jobs"] = 1
+                # Use global lock to prevent NUMBA thread conflicts
+                with umap_lock:
+                    # Set NUMBA threads before importing/executing
+                    os.environ['NUMBA_NUM_THREADS'] = '1'
+                    import numba
+                    numba.config.NUMBA_NUM_THREADS = 1
+                    ord_res = cfg["func"](table=table, **method_params)
+            else:
+                ord_res = cfg["func"](table=table, **method_params)
+        except Exception as e:
+            logger.error(f"Params: {method_params}")
+            logger.error(f"Failed {cfg['key']} for {transformation}: {e}")
+            return None, {}
 
         try:
-            if fig is None:
-                raise ValueError("Figure object is None")
-                
-            if hasattr(fig, "to_plotly_json"):
-                pj = fig.to_plotly_json()
-                pj.setdefault("layout", {})["showlegend"] = False
-                plot_data[plot_id] = {
-                    "type": "plotly",
-                    "data": pj["data"],
-                    "layout": pj["layout"],
-                    "square": square
-                }
-            elif isinstance(fig, Figure):
-                buf = BytesIO()
-                fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
-                buf.seek(0)
-                plot_data[plot_id] = {
-                    "type": "image",
-                    "data": base64.b64encode(buf.read()).decode()
-                }
-            else:
-                plot_data[plot_id] = {
-                    "type": "error",
-                    "error": f"Unsupported figure type {type(fig)}"
-                }
-        except Exception as exc:
-            logger.exception("Serializing figure failed")
-            plot_data[plot_id] = {
-                "type": "error", 
-                "error": str(exc)
-            }
+            figures = {}
+            pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
             
-    buttons_html = "\n".join(btns)
-    if row_label:
-        buttons_html = (
-            f'<div class="tabs" data-label="{row_label}">'
-            f'{buttons_html}</div>'
-        )
-    else:
-        buttons_html = f'<div class="tabs">{buttons_html}</div>'
-        
-    return "\n".join(tabs), buttons_html, plot_data
-
-def _section_html(sec: Dict) -> str:
-    sub_html = "\n".join(
-        f'<div class="subsection">\n'
-        f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tab-content">\n'          
-        f'    <div class="tabs">{sub["buttons_html"]}</div>\n'
-        f'    {sub["tabs_html"]}\n'
-        f'  </div>\n'                             
-        f'</div>'
-        for sub in sec["subsections"]
-    )
-    return f'<div class="section" id="{sec["id"]}">\n' \
-           f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
-
-def _prepare_features_table(
-    features: List[Dict], 
-    max_features: int,
-    category: str
-) -> pd.DataFrame:
-    if not features:
-        return pd.DataFrame({"Message": [f"No significant {category} features found"]})
-    
-    df = pd.DataFrame(features[:max_features])
-    df = df.rename(columns={
-        "feature": "Feature",
-        "level": "Taxonomic Level",
-        "test": "Test",
-        "effect": "Effect Size",
-        "p_value": "P-value",
-        "effect_dir": "Direction"
-    })
-    
-    if "faprotax_functions" in df.columns:
-        df["Functions"] = df["faprotax_functions"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) else ""
-        )
-    
-    df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
-    
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
-               "P-value", "Direction", "Functions"]]
-
-def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
-    summary = []
-    for table_type, tests in stats.items():
-        for test_name, levels in tests.items():
-            for level, df in levels.items():
-                if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
-                    n_sig = sum(df["p_value"] < 0.05)
-                else:
-                    n_sig = 0
-                summary.append({
-                    "Table Type": table_type,
-                    "Test": test_name,
-                    "Level": level,
-                    "Significant Features": n_sig,
-                    "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
-                })
-    
-    return pd.DataFrame(summary)
-
-def _prepare_ml_summary(
-    models: Dict, 
-    top_contaminated: List[Dict], 
-    top_pristine: List[Dict]
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-    if not models:
-        return None, None
-
-    metrics_summary = []
-    features_summary = []
-    
-    for table_type, levels in models.items():
-        for level, methods in levels.items():
-            for method, result in methods.items():
-                if not result:
+            for color_col in self.color_columns:
+                if color_col not in metadata.columns:
+                    logger.warning(f"Color column '{color_col}' not found in metadata")
                     continue
-                
-                test_scores = result.get("test_scores", {})
-                metrics = {
-                    "Table Type": table_type,
-                    "Level": level,
-                    "Method": method,
-                    "Top Features": len(result.get("top_features", [])),
-                    "Accuracy": f"{test_scores.get('accuracy', 0):.4f}",
-                    "F1 Score": f"{test_scores.get('f1', 0):.4f}",
-                    "MCC": f"{test_scores.get('mcc', 0):.4f}",
-                    "ROC AUC": f"{test_scores.get('roc_auc', 0):.4f}",
-                    "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
-                }
-                metrics_summary.append(metrics)
-                
-                feat_imp = result.get("feature_importances", {})
-                top_features = result.get("top_features", [])[:10]
-                for i, feat in enumerate(top_features, 1):
-                    importance = feat_imp.get(feat, 0)
-                    features_summary.append({
-                        "Table Type": table_type,
-                        "Level": level,
-                        "Method": method,
-                        "Rank": i,
-                        "Feature": feat,
-                        "Importance": f"{importance:.4f}"
+    
+                if cfg["key"] == "pca":
+                    pkwargs.update({
+                        "components": ord_res["components"],
+                        "proportion_explained": ord_res["exp_var_ratio"],
                     })
+                elif cfg["key"] == "pcoa":
+                    pkwargs.update({
+                        "components": ord_res.samples,
+                        "proportion_explained": ord_res.proportion_explained,
+                    })
+                else:
+                    pkwargs["df"] = ord_res
     
-    metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
-    features_df = pd.DataFrame(features_summary) if features_summary else None
-    
-    return metrics_df, features_df
+                fig, _ = cfg["plot_func"](
+                    metadata=metadata,
+                    color_col=color_col,
+                    symbol_col=symbol_col,
+                    transformation=transformation,
+                    output_dir=self.figure_output_dir,
+                    **pkwargs,
+                )
+                figures[color_col] = fig
+            return ord_res, figures
 
-def _format_ml_section(
-    ml_metrics: pd.DataFrame, 
-    ml_features: pd.DataFrame
-) -> str:
-    if ml_metrics is None or ml_metrics.empty:
-        return "<p>No ML results available</p>"
-    
-    ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
-    
-    tooltip_map = {
-        "MCC": "Balanced classifier metric (-1 to 1) that considers all confusion matrix values...",
-        "ROC AUC": "Probability that random positive ranks higher than random negative...",
-        "F1 Score": "Balance between precision and recall...",
-        "PR AUC": "Positive-class focused metric for imbalanced data..."
-    }
-    ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
-    
-    enhanced_metrics = f"""
-    <div class="table-container" id="container-ml-metrics-table">
-        {ml_metrics_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
-                <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
-                <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
-            </div>
-        </div>
-    </div>
+        except Exception as e:
+            logger.error(f"Failed {cfg['key']} plot for {transformation}: {e}")
+            return ord_res, {}
+
+
+class MapPlotter:
+    """
+    Generates sample map plots and stores them internally.
     """
     
-    features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
-    
-    return f"""
-    <div class="ml-section">
-        <h3>Model Performance</h3>
-        {enhanced_metrics}
-        
-        <h3>Top Features</h3>
-        {features_html}
-    </div>
-    """
-
-def _shap_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for table_type, levels in figures.items():
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_first_table = not buttons_html
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+    def __init__(
+        self, 
+        cfg: Dict, 
+        output_dir: Path, 
+        verbose: bool = False
+    ):
+        self.cfg = cfg
+        self.output_dir = output_dir
+        self.verbose = verbose
+        self.color_columns = cfg["figures"].get(
+            "map_columns",
+            [
+                DEFAULT_DATASET_COLUMN,
+                DEFAULT_GROUP_COLUMN,
+                "env_feature",
+                "env_material",
+                "country",
+            ],
         )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            method_btns, method_panes = [], []
-            for m_idx, (method, plots) in enumerate(methods.items()):
-                method_id = f"{level_id}-method-{next(id_counter)}"
+        self.figures: Dict[str, Any] = {}
+
+    def generate_sample_map(
+        self, 
+        metadata: pd.DataFrame, 
+        **kwargs
+    ) -> Dict[str, Any]:
+        valid_columns = [col for col in self.color_columns if col in metadata]
+        missing = set(self.color_columns) - set(valid_columns)
+        if missing and self.verbose:
+            logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
+
+        with get_progress_bar() as progress:
+            plot_desc = f"Plotting sample maps"
+            plot_task = progress.add_task(_format_task_desc(plot_desc), total=len(valid_columns))
+
+            for col in valid_columns:
+                col_desc = f"Plotting sample maps → {col}"
+                progress.update(plot_task, description=_format_task_desc(col_desc))
                 
-                method_btns.append(
-                    f'<button class="method-button {"active" if m_idx == 0 else ""}" '
-                    f'data-method="{method_id}" '
-                    f'onclick="showMethod(\'{method_id}\')">{method}</button>'
+                fig, _ = sample_map_categorical(
+                    metadata=metadata,
+                    output_dir=self.output_dir,
+                    color_col=col,
+                    **kwargs,
+                )
+                self.figures[col] = fig
+                
+                progress.update(plot_task, advance=1)
+            progress.update(plot_task, description=plot_desc)
+        return self.figures
+
+
+class TopFeaturesAnalyzer:
+    """
+    Identifies top differentially abundant features based on statistical results.
+    """
+    
+    def __init__(
+        self, 
+        cfg: Dict, 
+        verbose: bool = False
+    ):
+        self.cfg = cfg
+        self.verbose = verbose
+
+    def analyze(
+        self,
+        stats_results: Dict[str, Dict[str, Dict[str, pd.DataFrame]]],
+        group_column: str,
+    ) -> Tuple[List[Dict], List[Dict]]:
+        san = StatisticalAnalyzer(self.cfg, self.verbose)
+        all_features = []
+
+        for table_type, tests in stats_results.items():
+            for test_name, test_results in tests.items():
+                for level, df in test_results.items():
+                    sig_df = df[df["p_value"] < 0.05].copy()
+                    if sig_df.empty:
+                        continue
+
+                    sig_df["effect"] = sig_df.apply(
+                        lambda row: san.get_effect_size(test_name, row), axis=1
+                    )
+                    sig_df = sig_df.dropna(subset=["effect"])
+
+                    for _, row in sig_df.iterrows():
+                        all_features.append({
+                            "feature": row["feature"],
+                            "level": level,
+                            "table_type": table_type,
+                            "test": test_name,
+                            "effect": row["effect"],
+                            "p_value": row["p_value"],
+                            "effect_dir": "positive" if row["effect"] > 0 else "negative",
+                        })
+
+        cont_feats = [f for f in all_features if f["effect"] > 0]
+        pris_feats = [f for f in all_features if f["effect"] < 0]
+
+        cont_feats.sort(key=lambda d: (-d["effect"], d["p_value"]))
+        pris_feats.sort(key=lambda d: (d["effect"], d["p_value"]))
+
+        return cont_feats[:100], pris_feats[:100]
+
+
+class _DataLoader(_ProcessingMixin):
+    """
+    Loads and processes microbiome data from BIOM files and metadata.
+    """
+    
+    MODE_CONFIG = {
+        "asv": ("table", "asv"), 
+        "genus": ("table_6", "l6")
+    }
+
+    def __init__(
+        self, 
+        cfg: Dict, 
+        project_dir: Any, 
+        mode: str, 
+        existing_subsets: Dict[str, Dict[str, Path]] = None,
+        verbose: bool = False
+    ):
+        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
+        self._validate_mode()
+        self._load_metadata()
+        self._load_biom_table()
+        self._filter_and_align()
+
+    meta: pd.DataFrame
+    table: Table
+
+    def _validate_mode(self) -> None:
+        if self.mode not in self.MODE_CONFIG:
+            raise ValueError(f"Invalid mode: {self.mode}")
+
+    def _get_metadata_paths(self) -> List[Path]:
+        metadata_paths = [paths["metadata"] 
+                          for subset_id, paths in self.existing_subsets.items()]
+        if self.verbose:
+            logger.info(f"Found {len(metadata_paths)} metadata files")
+        return metadata_paths
+
+    def _get_metadata_paths_glob(self) -> List[Path]:
+        paths: List[Path] = []
+        for bi in self._get_biom_paths_glob():
+            ds_dir = bi.parent if bi.is_file() else bi
+            tail = ds_dir.parts[-6:-1]
+            mp = Path(self.project_dir.metadata_per_dataset).joinpath(*tail, "sample-metadata.tsv")
+            if mp.exists():
+                paths.append(mp)
+        if self.verbose:
+            logger.info(f"Found {len(paths)} metadata files")
+        return paths
+
+    def _load_metadata(self) -> None:
+        if self.existing_subsets != None:
+            paths = self._get_metadata_paths()
+        else:
+            paths = self._get_metadata_paths_glob()
+        self.meta = import_merged_metadata_tsv(paths, None, self.verbose)
+        if self.meta.columns.duplicated().any():
+            duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
+            logger.debug(
+                f"Found duplicate columns in metadata: {duplicated_columns}. "
+                "Removing duplicates."
+            )
+            self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
+
+    def _get_biom_paths(self) -> List[Path]:
+        table_dir, _ = self.MODE_CONFIG[self.mode]
+        biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
+        if self.verbose:
+            logger.info(f"Found {len(biom_paths)} feature tables")
+        return biom_paths
+
+    def _get_biom_paths_glob(self) -> List[Path]:
+        table_dir, _ = self.MODE_CONFIG[self.mode]
+        if self.cfg["target_subfragment_mode"] != 'any' or self.mode != 'genus':
+            pattern = "/".join([
+                "*", "*", "*", self.cfg["target_subfragment_mode"], 
+                "FWD_*_REV_*", table_dir, "feature-table.biom",
+            ])
+        else:
+            pattern = "/".join([
+                "*", "*", "*", "*", 
+                "FWD_*_REV_*", table_dir, "feature-table.biom",
+            ])
+        globbed = glob.glob(str(Path(
+            self.project_dir.qiime_data_per_dataset
+        ) / pattern), recursive=True)
+        if self.verbose:
+            logger.info(f"Found {len(globbed)} feature tables")
+        return [Path(p) for p in globbed]
+
+    def _load_biom_table(self) -> None:
+        if self.existing_subsets != None:
+            biom_paths = self._get_biom_paths()
+        else:
+            biom_paths = self._get_biom_paths_glob()
+        if not biom_paths:
+            raise FileNotFoundError("No BIOM files found")
+        self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
+    
+    def _filter_and_align(self) -> None:
+        orig_n = self.table.shape[1]
+        self.table, self.meta = update_table_and_meta(self.table, self.meta, "#sampleid")
+        ftype = "genera" if self.mode == "genus" else "ASVs"
+        logger.info(
+            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples × {self.meta.shape[1]:>5} cols"
+        )
+        logger.info(
+            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples × {self.table.shape[0]:>5} {ftype}"
+        )
+
+
+class _TableProcessor(_ProcessingMixin):
+    """
+    Processes feature tables through various transformations and taxonomical collapses.
+    """
+    
+    def __init__(
+        self,
+        cfg: Dict,
+        table: Table,
+        mode: str,
+        meta: pd.DataFrame,
+        output_dir: Path,
+        project_dir: Any,
+        verbose: bool,
+    ) -> None:
+        self.cfg, self.mode, self.verbose = cfg, mode, verbose
+        self.meta = meta
+        self.output_dir = output_dir
+        self.project_dir = project_dir
+        self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
+        self._apply_preprocessing()
+        self._collapse_taxa()
+        self._create_presence_absence()
+        self._save_tables()
+
+    def _apply_preprocessing(self) -> None:
+        feat_cfg = self.cfg["features"]
+        table = self.tables["raw"][self.mode]
+
+        if feat_cfg["filter"]:
+            table = filter(table)
+            self.tables.setdefault("filtered", {})[self.mode] = table
+
+        if feat_cfg["normalize"]:
+            table = normalize(table, axis=1)
+            self.tables.setdefault("normalized", {})[self.mode] = table
+
+        if feat_cfg["clr_transform"]:
+            table = clr(table)
+            self.tables.setdefault("clr_transformed", {})[self.mode] = table
+
+    def _collapse_taxa(self) -> None:
+        levels = ["phylum", "class", "order", "family", "genus"]
+        with get_progress_bar() as progress:
+            ct_desc = "Collapsing taxonomy"
+            ct_task = progress.add_task(
+                _format_task_desc(ct_desc),
+                total=len(self.tables)*len(levels)
+            )   
+            
+            for table_type in list(self.tables.keys()):
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=ct_task,
+                    total=len(levels)
                 )
                 
-                # Prepare plots dictionary
-                method_plots = {
-                    'Summary (Bar)': plots.get('shap_summary_bar'),
-                    'Summary (Beeswarm)': plots.get('shap_summary_beeswarm'),
-                }
+                base_table = self.tables[table_type][self.mode]
+                processed = {}
+                for level in levels:
+                    level_desc = f"{table_type.replace('_', ' ').title()} → {level.title()}"
+                    progress.update(table_task, description=f"[white]{level_desc:<{DEFAULT_N}}")
+                    try:
+                        start_time = time.perf_counter()
+                        processed[level] = collapse_taxa(base_table, level, progress, table_task)
+                        duration = time.perf_counter() - start_time
+                        if self.verbose:
+                            logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
+                    except Exception as e:
+                        logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
+                        processed[level] = None
+                    finally:
+                        progress.update(table_task, advance=1)
+                        progress.update(ct_task, advance=1)
+                    
+                self.tables[table_type] = processed
+                progress.remove_task(table_task)
+    
+    def _create_presence_absence(self) -> None:
+        if not self.cfg["features"]["presence_absence"]:
+            return
+               
+        levels = ["phylum", "class", "order", "family", "genus"]
+        with get_progress_bar() as progress:
+            pa_desc = "Converting to Presence/Absence"
+            pa_task = progress.add_task(
+                _format_task_desc(pa_desc),
+                total=len(levels)  
+            )
+            raw_table = self.tables["raw"][self.mode]
+            processed = {}
+            
+            for level in levels:
+                level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
+                progress.update(pa_task, description=_format_task_desc(level_desc))
+                try:
+                    start_time = time.perf_counter()
+                    processed[level] = presence_absence(raw_table, level)
+                    duration = time.perf_counter() - start_time
+                    if self.verbose:
+                        logger.debug(f"Created Presence/Absence table for {level} in {duration:.2f}s")
+                except Exception as e:
+                    logger.error(f"Presence/Absence failed for {level}: {e}")
+                    processed[level] = None
+                finally:
+                    progress.update(pa_task, advance=1)
                 
-                # Handle dependency plots
-                if 'shap_dependency' in plots:
-                    if isinstance(plots['shap_dependency'], list):
-                        for i, fig in enumerate(plots['shap_dependency']):
-                            method_plots[f'Dependency {i+1}'] = fig
-                    elif isinstance(plots['shap_dependency'], dict):
-                        for name, fig in plots['shap_dependency'].items():
-                            method_plots[name] = fig
-                    else:
-                        method_plots['Dependency'] = plots['shap_dependency']
+            self.tables["presence_absence"] = processed
+            progress.update(pa_task, description=_format_task_desc(pa_desc))
+            
+    def _save_tables(self) -> None:
+        base = Path(self.project_dir.data) / "merged" / "table"
+        base.mkdir(parents=True, exist_ok=True)
+
+        export_tasks = []
+        for table_type, levels in self.tables.items():
+            tdir = base / table_type
+            tdir.mkdir(parents=True, exist_ok=True)
+            for level, table in levels.items():
+                out = tdir / level / "feature-table.biom"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                export_tasks.append((table, out))
+
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for table, out in export_tasks:
+                futures.append(executor.submit(export_h5py, table, out))
+
+            for future in futures:
+                future.result()
+
+
+class _AnalysisManager(_ProcessingMixin):
+    """
+    Manages the analysis pipeline including statistics, ordination, and machine learning.
+    """
+    
+    def __init__(
+        self,
+        cfg: Dict,
+        tables: Dict[str, Dict[str, Table]],
+        meta: pd.DataFrame,
+        output_dir: Path,
+        verbose: bool,
+        faprotax_enabled: bool = False,
+        fdb: Optional[Dict] = None,
+    ) -> None:
+        self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
+        self.output_dir = output_dir
+        self.table_output_dir = Path(output_dir) / 'tables'
+        self.stats: Dict[str, Any] = {}
+        self.ordination: Dict[str, Any] = {}
+        self.models: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
+        self.top_contaminated_features: List[Dict] = []
+        self.top_pristine_features: List[Dict] = []
+        self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
+        self._faprotax_cache = {}
+
+        self._run_alpha_diversity_analysis()  
+        self._run_statistical_tests()
+        stats_copy = deepcopy(self.stats)
+
+        self._identify_top_features(stats_copy)
+        del stats_copy
+
+        self._run_ordination()
+
+        ml_table_types = {"clr_transformed"}
+        ml_tables = {
+            t: d for t, d in self.tables.items() if t in ml_table_types
+        }
+        self._run_ml_feature_selection(ml_tables)
+        self._compare_top_features()
+        del ml_tables
+
+        if self.faprotax_enabled and self.top_contaminated_features:
+            self._annotate_top_features()
+
+        self._generate_violin_plots(n=cfg.get("violin_plots", {}).get("n", 50))
+
+    def _get_cached_faprotax(
+        self, 
+        taxon: str
+    ) -> List[str]:
+        if taxon not in self._faprotax_cache:
+            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
+                taxon, self.fdb, include_references=False
+            )
+        return self._faprotax_cache[taxon]
+
+    def _annotate_top_features(self) -> None:
+        all_taxa = {
+            f["feature"] for f in self.top_contaminated_features + self.top_pristine_features
+        }
+
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(self._get_cached_faprotax, all_taxa))
+
+        taxon_map = dict(zip(all_taxa, results))
+
+        for feat in self.top_contaminated_features:
+            feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
+
+        for feat in self.top_pristine_features:
+            feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
+
+    def _run_alpha_diversity_analysis(self) -> None:      
+        alpha_cfg = self.cfg.get("alpha_diversity", {})
+        if not alpha_cfg.get("enabled", False):
+            logger.info("Alpha diversity analysis disabled.")
+            return
+        
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
+        parametric = alpha_cfg.get("parametric", False)
+        generate_plots = alpha_cfg.get("generate_plots", True)
+        
+        n = 0
+        enabled_table_types = alpha_cfg.get("tables", {})
+        for table_type, levels in self.tables.items():
+            if not enabled_table_types.get(table_type, False):
+                continue
+            enabled_levels = enabled_table_types[table_type].get("levels", list(levels.keys()))
+            n += len(enabled_levels)
+        
+        if not n:
+            return
+
+        with get_progress_bar() as progress:
+            alpha_desc = f"Running alpha diversity for '{group_col}'"
+            alpha_task = progress.add_task(_format_task_desc(alpha_desc), total=n)
+            for table_type, levels in self.tables.items():
+                if not enabled_table_types.get(table_type, False):
+                    continue
+
+                table_cfg = enabled_table_types[table_type]
+                enabled_levels = table_cfg.get("levels", list(levels.keys()))
                 
-                plot_btns, plot_tabs, pd = _figs_to_html(
-                    method_plots, id_counter, method_id
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=alpha_task,
+                    total=len(enabled_levels)
                 )
-                plot_data.update(pd)
+                for level in enabled_levels:
+                    if level not in levels:
+                        logger.warning(f"Level '{level}' not found for table type '{table_type}'")
+                        continue
+                    
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
+                    
+                    try: 
+                        alpha_df = alpha_diversity(table_to_df(levels[level]), metrics=metrics)
+                        stats_df = analyze_alpha_diversity(
+                            alpha_diversity_df=alpha_df,
+                            metadata=self.meta,
+                            group_column=group_col,
+                            parametric=parametric
+                        )
+                        # Save results
+                        output_dir = self.output_dir / 'alpha_diversity' / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        alpha_df.to_csv(output_dir / 'alpha_diversity.tsv', sep='\t', index=True)
+                        stats_df.to_csv(output_dir / f'stats_{group_col}.tsv', sep='\t', index=True)
+                        
+                        _init_dict_level(self.alpha_diversity, table_type, level)  
+                        self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        self.alpha_diversity[table_type][level]['stats'] = stats_df
+                        
+                        if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                            corr_results = analyze_alpha_correlations(
+                                alpha_df,
+                                self.meta,
+                                max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
+                                min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
+                            )
+                            # Save results
+                            pd.DataFrame.from_dict([corr_results], orient='index').to_csv(
+                                output_dir / f'correlations_{group_col}.tsv', 
+                                sep='\t', index=True
+                            )
+                            self.alpha_diversity[table_type][level]['correlations'] = corr_results
+                        
+                        if generate_plots:
+                            self.alpha_diversity[table_type][level]['figures'] = {}
+                            plot_cfg = alpha_cfg.get("plot", {})
+                            for metric in metrics:
+                                if alpha_df[metric].isnull().all():
+                                    logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
+                                    
+                                #metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
+                                fig = create_alpha_diversity_boxplot(
+                                    alpha_df=alpha_df,
+                                    metadata=self.meta,
+                                    group_column=group_col,
+                                    metric=metric,
+                                    output_dir=output_dir,
+                                    show=False,
+                                    verbose=self.verbose,
+                                    add_points=plot_cfg.get("add_points", True),
+                                    add_stat_annot=plot_cfg.get("add_stat_annot", True),
+                                    test_type="parametric" if parametric else "nonparametric"
+                                )
+                                self.alpha_diversity[table_type][level]['figures'][metric] = fig
+                            
+                            stats_fig = create_alpha_diversity_stats_plot(
+                                stats_df=stats_df,
+                                output_dir=output_dir,
+                                verbose=self.verbose,
+                                effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
+                            )
+                            self.alpha_diversity[table_type][level]['figures']['summary'] = stats_fig
+                            
+                            if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                                corr_figures = plot_alpha_correlations(
+                                    corr_results,
+                                    output_dir=output_dir,
+                                    top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
+                                )
+                                self.alpha_diversity[table_type][level]['figures']['correlations'] = corr_figures
+                            
+                    except Exception as e:
+                        logger.error(f"Alpha diversity analysis failed for {table_type}/{level}: {e}")
+                        self.alpha_diversity[table_type][level] = {'results': None, 'stats': None, 'figures': {}}
+                        
+                    finally:
+                        progress.update(table_task, advance=1)
+                        progress.update(alpha_task, advance=1)
+                progress.remove_task(table_task)
+            
+    def _run_statistical_tests(self) -> None:
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        group_vals = self.cfg.get("group_values", [True, False])
+        san = StatisticalAnalyzer(self.cfg, self.verbose)
+        
+        n = 0
+        for table_type, levels in self.tables.items():
+            tests_config = self.cfg["stats"].get(table_type, {})
+            enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
+            n += len(levels) * len(enabled_for_table_type)
+
+        with get_progress_bar() as progress:
+            stats_desc = f"Running statistics for '{group_col}'"
+            stats_task = progress.add_task(_format_task_desc(stats_desc), total=n)
+            for table_type, levels in self.tables.items():
+                tests_config = self.cfg["stats"].get(table_type, {})
+                enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
                 
-                method_panes.append(
-                    f'<div id="{method_id}" class="method-pane" '
-                    f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'{plot_btns}'
-                    f'{plot_tabs}'
-                    f'</div>'
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=stats_task,
+                    total=len(levels) * len(enabled_for_table_type)
                 )
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if l_idx == 0 else "none"};">'
-                f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
-                f'{"".join(method_panes)}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_first_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = (
-        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    )
-    return buttons_row, "".join(panes_html), plot_data
+                for level, table in levels.items():
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
+                    
+                    # Create output directory 
+                    output_dir = self.output_dir / 'stats' / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                
+                    for test_name in enabled_for_table_type:
+                        if test_name not in san.TEST_CONFIG:
+                            continue
+                        cfg = san.TEST_CONFIG[test_name]
+                        _init_dict_level(self.stats, table_type, level)    
+                        test_desc = f"{level_desc} → {cfg['name']}"
+                        progress.update(table_task, description=_format_task_desc(test_desc))
+                        try:
+                            result = cfg["func"](
+                                table=table_aligned,
+                                metadata=meta_aligned,
+                                group_column=group_col,
+                                group_column_values=group_vals,
+                            )
+                            # Save results 
+                            result.to_csv(output_dir / f'{test_name}.tsv', sep='\t', index=True)
+                            self.stats[table_type][level][test_name] = result
+                            
+                        except Exception as e:
+                            logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
+                            self.stats[table_type][level][test_name] = None
+                            
+                        finally:
+                            progress.update(table_task, advance=1)
+                            progress.update(stats_task, advance=1)
+                progress.remove_task(table_task)
 
-def _violin_to_nested_html(
-    figures_dict: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str
-) -> Tuple[str, str, Dict]:
-    buttons_html = []
-    tabs_html = []
-    plot_data = {}
-    cat_counter = itertools.count()
-    
-    for category, features in figures_dict.items():
-        if not features:
-            continue
-            
-        cat_idx = next(cat_counter)
-        cat_id = f"{prefix}-cat-{cat_idx}"
-        
-        buttons_html.append(
-            f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
-            f'data-tab="{cat_id}" '
-            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
+    def _identify_top_features(self, stats_results: Dict) -> None:
+        tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
+        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
+            stats_results, DEFAULT_GROUP_COLUMN
         )
-        
-        feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
-            features, id_counter, cat_id
-        )
-        plot_data.update(feature_plot_data)
-        
-        tabs_html.append(
-            f'<div id="{cat_id}" class="tab-pane" '
-            f'style="display:{"block" if cat_idx==0 else "none"}">'
-            f'{feature_btns}'
-            f'{feature_tabs}'
-            f'</div>'
-        )
-    
-    return "\n".join(buttons_html), "\n".join(tabs_html), plot_data
 
-def _alpha_diversity_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
+        if self.verbose:
+            logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
+            logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
+
+    def _run_ordination(self) -> None:
+        KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
+        default_ord_config = {"pca": False, "pcoa": False, "tsne": False, "umap": False}
         
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
+        total_tasks = 0
+        for table_type, levels in self.tables.items():
+            ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
+            enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+            total_tasks += len(levels) * len(enabled_methods)
         
-        level_btns, level_panes = [], []
-        for l_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
+        if not total_tasks:
+            return
+    
+        self.ordination = {tt: {} for tt in self.tables}
+    
+        with get_progress_bar() as progress:
+            beta_desc = "Running beta diversity analysis"
+            beta_task = progress.add_task(_format_task_desc(beta_desc), total=total_tasks)
             
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
+            max_workers = min(2, os.cpu_count() // 2)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = []
+                future_to_key = {}
+                for table_type, levels in self.tables.items():
+                    ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
+                    enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+                    
+                    for level, table in levels.items():
+                        # Create output directory for this analysis
+                        output_dir = self.output_dir / 'ordination' / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        for method in enabled_methods:
+                            future = executor.submit(
+                                self._run_single_ordination,
+                                table=table,
+                                meta=self.meta,
+                                table_type=table_type,
+                                level=level,
+                                method=method,
+                                output_dir=output_dir
+                            )
+                            futures.append(future)
+                            future_to_key[future] = (table_type, level, method)
             
-            metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
-                metrics, id_counter, level_id
+                completed_results = {}
+                errors = {}
+                try:
+                    for future in as_completed(futures, timeout=3600):  # 1 hour timeout
+                        key = future_to_key[future]
+                        try:
+                            result = future.result()
+                            completed_results[key] = result
+                        except Exception as e:
+                            errors[key] = str(e)
+                            logger.error(f"Ordination failed for {key}: {str(e)}")
+                        progress.update(beta_task, advance=1)
+                except TimeoutError:
+                    logger.warning("Ordination timeout - proceeding with completed results")
+                
+                # Process completed results
+                for key, result in completed_results.items():
+                    table_type, level, method = key
+                    _, _, _, res, figs = result
+                    _init_dict_level(self.ordination, table_type, level) 
+                    self.ordination[table_type][level][method] = {'result': res, 'figures': figs}
+                
+                # Log summary
+                completed_count = len(completed_results)
+                error_count = len(errors)
+                timeout_count = len(futures) - completed_count - error_count
+                logger.debug(
+                    f"Ordination completed: {completed_count} succeeded, "
+                    f"{error_count} failed, {timeout_count} timed out"
+                )
+                
+                # Save error report
+                if errors:
+                    error_file = self.output_dir / "ordination_errors.tsv"
+                    with open(error_file, "w") as f:
+                        f.write("TableType\tLevel\tMethod\tError\n")
+                        for (tt, lv, mt), err in errors.items():
+                            f.write(f"{tt}\t{lv}\t{mt}\t{err}\n")
+                    logger.info(f"Saved ordination errors to {error_file}")
+
+    def _run_single_ordination(self, table, meta, table_type, level, method, output_dir):
+        try:
+            ordn = Ordination(self.cfg, output_dir, verbose=False)
+            res, figs = ordn.run_tests(
+                table=table,
+                metadata=meta,
+                symbol_col=DEFAULT_GROUP_COLUMN,
+                transformation=table_type,
+                enabled_tests=[method],
             )
-            plot_data.update(metric_plot_data)
+            method_key = ordn.TEST_CONFIG[method]['key']
+            return table_type, level, method, res.get(method_key), figs.get(method_key)
+        except Exception as e:
+            logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
+            return table_type, level, method, None, None
+
+    def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
+        ml_cfg = self.cfg.get("ml", {})
+        if not ml_cfg.get("enabled", False):
+            logger.info("ML feature selection disabled.")
+            return
             
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="metric">{metric_btns}</div>'
-                f'{metric_tabs}'
-                f'</div>'
-            )
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        methods = ml_cfg.get("methods", ["rfe"])
+        n_top_features = ml_cfg.get("num_features", 100)
+        step_size = ml_cfg.get("step_size", 100)
+        permutation_importance = ml_cfg.get("permutation_importance", True)
+        n_threads = ml_cfg.get("n_threads", 8)
         
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
+        enabled_table_types = set(ml_cfg.get("table_types", ["clr_transformed"]))
+        enabled_levels = set(ml_cfg.get("levels", ["genus"]))
+        
+        filtered_ml_tables = {}
+        for table_type, levels in ml_tables.items():
+            if table_type not in enabled_table_types:
+                continue
+            filtered_levels = {
+                level: table 
+                for level, table in levels.items() 
+                if level in enabled_levels
+            }
+            if filtered_levels:
+                filtered_ml_tables[table_type] = filtered_levels
     
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data
-    
-def _add_header_tooltips(
-    table_html: str, 
-    tooltip_map: Dict[str, str]
-) -> str:
-    for header, tooltip_text in tooltip_map.items():
-        tooltip_html = (
-            f'<span class="tooltip">{header}'
-            f'<span class="tooltiptext">{tooltip_text}</span>'
-            f'</span>'
-        )
-        table_html = table_html.replace(
-            f'<th>{header}</th>', 
-            f'<th>{tooltip_html}</th>'
-        )
-    return table_html
-    
-def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
-    if df is None or df.empty:
-        return "<p>No data available</p>"
-    
-    table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
-    
-    enhanced_html = f"""
-    <div class="table-container" id="container-{table_id}">
-        {table_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
-                <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('{table_id}', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class="pagination-buttons" id="pagination-{table_id}"></div>
-                <span class="pagination-indicator" id="indicator-{table_id}"></span>
-            </div>
-        </div>
-    </div>
+        n = sum(len(levels) * len(methods) for levels in filtered_ml_tables.values())
+        if not n:
+            return
+        
+        with get_progress_bar() as progress:
+            cb_desc = "Running CatBoost feature selection"
+            cb_task = progress.add_task(_format_task_desc(cb_desc), total=n)
+            for table_type, levels in filtered_ml_tables.items():
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=cb_task,
+                    total=len(levels) * len(methods)
+                )
+                for level, table in levels.items():
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
+                    
+                    # Create output directory 
+                    output_dir = self.output_dir / 'ml' / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    for method in methods:
+                        method_desc = f"{level_desc} → {method.upper()}"
+                        progress.update(table_task, description=_format_task_desc(method_desc))
+                        
+                        _init_dict_level(self.models, table_type, level, method) 
+                        try:
+                            if table_type == "clr_transformed" and method == "chi_squared":
+                                logger.warning(
+                                    "Skipping chi_squared feature selection for CLR data."
+                                )
+                                self.models[table_type][level][method] = None
+                            else:
+                                X = table_to_df(table)
+                                X.index = X.index.str.lower()
+                                y = self.meta.set_index("#sampleid")[[group_col]]
+                                y.index = y.index.astype(str).str.lower()
+                                idx = X.index.intersection(y.index)
+                                X, y = X.loc[idx], y.loc[idx]
+
+                                use_permutation_importance = False if method == "select_k_best" else permutation_importance
+                                    
+                                model_result = catboost_feature_selection(
+                                    metadata=y,
+                                    features=X,
+                                    output_dir=output_dir,
+                                    group_col=group_col,
+                                    method=method,
+                                    n_top_features=n_top_features,
+                                    step_size=step_size,
+                                    use_permutation_importance=use_permutation_importance,
+                                    thread_count=n_threads,
+                                    progress=progress, 
+                                    task_id=table_task,
+                                )
+
+                                # Store figures within model result
+                                model_result['figures'] = {
+                                    'eval_plots': model_result.pop('eval_plots'),
+                                    'shap_summary_bar': model_result.pop('shap_summary_bar'),
+                                    'shap_summary_beeswarm': model_result.pop('shap_summary_beeswarm'),
+                                    'shap_dependency': model_result.pop('shap_dependency')
+                                }
+                                self.models[table_type][level][method] = model_result
+                                    
+                        except Exception as e:
+                            logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
+                            self.models[table_type][level][method] = None
+                                
+                        finally:
+                            progress.update(table_task, advance=1)
+                            progress.update(cb_task, advance=1)
+                progress.remove_task(table_task)
+                        
+    def _compare_top_features(self) -> None:
+        if not self.models:
+            return
+            
+        stat_features = {}
+        for table_type, tests in self.stats.items():
+            for test_name, levels in tests.items():
+                for level, df in levels.items():
+                    key = (table_type, level)
+                    sig_df = df[df["p_value"] < 0.05]
+                    if not sig_df.empty:
+                        if key not in stat_features:
+                            stat_features[key] = set()
+                        stat_features[key].update(sig_df["feature"].tolist())
+        
+        for table_type, levels in self.models.items():
+            for level, methods in levels.items():
+                key = (table_type, level)
+                stat_set = stat_features.get(key, set())
+                
+                for method, model_result in methods.items():
+                    if model_result is None:
+                        continue
+                        
+                    model_set = set(model_result.get("top_features", []))
+                    overlap = model_set & stat_set
+                    jaccard = len(overlap) / len(model_set | stat_set) if (model_set or stat_set) else 0.0
+                    
+                    logger.info(
+                        f"Feature comparison ({table_type}/{level}/{method}): "
+                        f"Overlap: {len(overlap)} ({jaccard:.1%})"
+                    )
+                    
+    def _generate_violin_plots(self, n=50):
+        # Create output directory for violin plots
+        violin_output_dir = self.output_dir / 'violin_plots'
+        violin_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        for feat in self.top_contaminated_features[:n]:
+            try:
+                table_type = feat['table_type']
+                level = feat['level']
+                feature_name = feat['feature']
+                
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                
+                merged_df = df.merge(
+                    self.meta[[DEFAULT_GROUP_COLUMN]], 
+                    left_index=True, 
+                    right_index=True
+                )
+                
+                # Create specific output directory for this feature
+                feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
+                feature_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                fig = violin_feature(
+                    df=merged_df,
+                    feature=feature_name,
+                    output_dir=feature_output_dir,
+                    status_col=DEFAULT_GROUP_COLUMN
+                )
+                feat['violin_figure'] = fig
+            except Exception as e:
+                logger.error(f"Failed violin plot for {feature_name}: {e}")
+                feat['violin_figure'] = None
+        
+        for feat in self.top_pristine_features[:n]:
+            try:
+                table_type = feat['table_type']
+                level = feat['level']
+                feature_name = feat['feature']
+                
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                
+                merged_df = df.merge(
+                    self.meta[[DEFAULT_GROUP_COLUMN]], 
+                    left_index=True, 
+                    right_index=True
+                )
+                
+                # Create specific output directory for this feature
+                feature_output_dir = violin_output_dir / 'pristine' / table_type / level
+                feature_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                fig = violin_feature(
+                    df=merged_df,
+                    feature=feature_name,
+                    output_dir=feature_output_dir,
+                    status_col=DEFAULT_GROUP_COLUMN
+                )
+                feat['violin_figure'] = fig
+            except Exception as e:
+                logger.error(f"Failed violin plot for {feature_name}: {e}")
+                feat['violin_figure'] = None
+
+
+class AmpliconData:
     """
-    return enhanced_html
-    
-def _ordination_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            method_btns, method_tabs, method_plot_data = _figs_to_html(
-                methods, id_counter, level_id
-            )
-            plot_data.update(method_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="method">{method_btns}</div>'
-                f'{method_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data    
-    
-def generate_html_report(
-    amplicon_data: "AmpliconData",
-    output_path: Union[str, Path],
-    include_sections: Optional[List[str]] = None,
-    max_features: int = 20  
-) -> None:
-    figures_dict = _extract_figures(amplicon_data)
-    
-    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
-    ordered_sections = [
-        'map',
-        'statistical_results',
-        'alpha_diversity',
-        'ordination',  # Will be renamed to Beta Diversity
-        'ml_results',  # Will include SHAP and eval_plots
-        'violin'
-    ]
-    
-    # Filter sections to include only those with data
-    include_sections = [sec for sec in ordered_sections if sec in figures_dict or sec == 'statistical_results']
-    
-    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Top features tables
-    contam_df = _prepare_features_table(
-        amplicon_data.top_contaminated_features,
-        max_features,
-        "Contaminated"
-    )
-    pristine_df = _prepare_features_table(
-        amplicon_data.top_pristine_features,
-        max_features,
-        "Pristine"
-    )
-    
-    # Stats summary
-    stats_df = _prepare_stats_summary(
-        amplicon_data.stats
-    )
-    
-    # ML summary
-    ml_metrics, ml_features = _prepare_ml_summary(
-        amplicon_data.models,
-        amplicon_data.top_contaminated_features,
-        amplicon_data.top_pristine_features
-    )
-    ml_html = _format_ml_section(ml_metrics, ml_features) if ml_metrics is not None else "<p>No ML results available</p>"
-    
-    tables_html = f"""
-    <div class="subsection">
-        <h3>Top Features</h3>
-        <h4>Contaminated-Associated Features</h4>
-        {_add_table_functionality(contam_df, 'contam-table')}
-        
-        <h4>Pristine-Associated Features</h4>
-        {_add_table_functionality(pristine_df, 'pristine-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Statistical Summary</h3>
-        {_add_table_functionality(stats_df, 'stats-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Machine Learning Results</h3>
-        {ml_html}
-    </div>
-    """
-
-    id_counter = itertools.count()
-    sections, plot_data = _prepare_sections(
-        figures_dict, include_sections, id_counter
-    )
-    sections_html = "\n".join(_section_html(s) for s in sections)
-
-    nav_items = [
-        ("Analysis Summary", "analysis-summary"),
-        *[(sec['title'], sec['id']) for sec in sections]
-    ]
-    
-    nav_html = """
-    <div class="toc">
-        <h2>Table of Contents</h2>
-        <ul>
-    """
-    for title, section_id in nav_items:
-        nav_html += f'<li><a href="#{section_id}">{title}</a></li>\n'
-    nav_html += "        </ul>\n    </div>"
-
-    try:
-        plotly_ver = get_plotlyjs_version()
-    except Exception:
-        plotly_ver = "3.0.1"
-    plotly_js_tag = (
-        f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
-    )
-
-    payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("</", "<\\/")
-
-    try:
-        table_js = import_js_as_str(tables_js_path)
-    except Exception as e:
-        logger.error(f"Error reading JavaScript file: {e}")
-        table_js = ""
-        
-    tooltip_css = """
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        cursor: help;
-        border-bottom: 1px dashed #3498db;
-    }
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 280px;
-        background-color: #222;
-        color: #fff;
-        text-align: left;
-        border-radius: 6px;
-        padding: 12px;
-        position: absolute;
-        z-index: 1000;
-        bottom: 125%;
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.3s;
-        font-size: 14px;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    .tooltip .tooltiptext::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: #222 transparent transparent transparent;
-    }
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
-    }
+    Main class for orchestrating 16S amplicon data analysis pipeline.
     """
     
-    try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css
-    except Exception as e:
-        logger.error(f"Error reading CSS file: {e}")
-        css_content = tooltip_css
+    def __init__(
+        self, 
+        cfg: Dict, 
+        project_dir: Any, 
+        mode: str = DEFAULT_MODE, 
+        existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
+        verbose: bool = False
+    ):
+        self.cfg = cfg
+        self.project_dir = project_dir
+        self.mode = mode
+        self.existing_subsets = existing_subsets
+        self.verbose = verbose
         
-    try:
-        html_template = html_template_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error(f"Error loading HTML template: {e}")
-        html_template = """<!DOCTYPE html>
-        <html>
-        <head><title>Error</title></head>
-        <body>Report generation failed: Missing template</body>
-        </html>"""
+        # Initialize result containers
+        self.maps: Optional[Dict[str, Any]] = None
+        self.tables: Dict[str, Any] = {}
+        self.stats: Dict[str, Any] = {}
+        self.ordination: Dict[str, Any] = {}
+        self.models: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
+        self.top_contaminated_features: List[Dict] = []
+        self.top_pristine_features: List[Dict] = []
+        
+        self._execute_pipeline()
 
-    html = html_template.format(
-        plotly_js_tag=plotly_js_tag,
-        generated_ts=ts,
-        section_list=", ".join(include_sections),
-        nav_html=nav_html,
-        tables_html=tables_html,
-        sections_html=sections_html,
-        plot_data_json=payload,
-        table_js=table_js,
-        css_content=css_content
-    )
-    output_path.write_text(html, encoding="utf-8")
+    def _execute_pipeline(self):
+        """Execute the analysis pipeline in sequence."""
+        self._apply_cpu_limits()
+        self._load_data()
+        self._process_tables()
+        self._generate_sample_maps()
+        self._run_analysis()
+        
+        if self.verbose:
+            logger.info("AmpliconData analysis finished.")
+
+    def _apply_cpu_limits(self):
+        """Set environment variables to control thread usage across libraries"""
+        cpu_limit = self.cfg.get("cpu", {}).get("limit", 4)
+        # Set consistent environment variables
+        os.environ['NUMBA_NUM_THREADS'] = str(cpu_limit)
+        os.environ['OMP_NUM_THREADS'] = str(cpu_limit)
+        os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_limit)
+        os.environ['MKL_NUM_THREADS'] = str(cpu_limit)
+        os.environ['VECLIB_MAXIMUM_THREADS'] = str(cpu_limit)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(cpu_limit)
+        os.environ['MKL_DYNAMIC'] = "FALSE"
+        if self.verbose:
+            logger.info(f"Set CPU thread limits to {cpu_limit} for all libraries")
+
+    def _load_data(self):
+        data_loader = _DataLoader(
+            self.cfg, 
+            self.project_dir, 
+            self.mode, 
+            self.existing_subsets,
+            self.verbose
+        )
+        self.meta = data_loader.meta
+        self.table = data_loader.table
+
+    def _process_tables(self):
+        processor = _TableProcessor(
+            self.cfg,
+            self.table,
+            self.mode,
+            self.meta,
+            Path(self.project_dir.final),
+            self.project_dir,
+            self.verbose
+        )
+        self.tables = processor.tables
+
+    def _generate_sample_maps(self):
+        if self.cfg["figures"].get("map", False):
+            # Create output directory for sample maps
+            maps_output_dir = Path(self.project_dir.final) / 'sample_maps'
+            maps_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            plotter = MapPlotter(
+                self.cfg, 
+                maps_output_dir,
+                self.verbose
+            )
+            self.maps = plotter.generate_sample_map(self.meta)
+
+    def _run_analysis(self):
+        analyzer = _AnalysisManager(
+            self.cfg,
+            self.tables,
+            self.meta,
+            Path(self.project_dir.final),
+            self.verbose,
+            self.cfg.get("faprotax", False),
+            get_faprotax_parsed() if self.cfg.get("faprotax", False) else None
+        )
+        
+        # Collect results
+        self.stats = analyzer.stats
+        self.ordination = analyzer.ordination
+        self.models = analyzer.models
+        self.alpha_diversity = analyzer.alpha_diversity
+        self.top_contaminated_features = analyzer.top_contaminated_features
+        self.top_pristine_features = analyzer.top_pristine_features
