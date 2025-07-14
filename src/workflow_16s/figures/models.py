@@ -276,7 +276,7 @@ def shap_summary_bar(
     shap_values: np.array,
     feature_names: List[str],
     max_display: int = 20
-) -> go.Figure:
+) -> Tuple[go.Figure, List[str]]:
     """
     Convert SHAP summary bar plot to a Plotly figure.
 
@@ -339,7 +339,7 @@ def shap_summary_bar(
         yaxis=dict(title=dict(text='Features', font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
     )
 
-    return fig
+    return fig, top_features_full 
     
 
 def shap_beeswarm(
@@ -650,7 +650,7 @@ def plot_shap(
         Tuple of bar_plot_fig, beeswarm_plot_fig, dependency_plot_figs.
     """
     output_dir = Path(output_dir) / 'figs'
-    bar_fig = shap_summary_bar(
+    bar_fig, top_full_features = shap_summary_bar(
         shap_values, feature_names, n_features
     )
     plotly_show_and_save(
@@ -669,14 +669,15 @@ def plot_shap(
     # Create dependency plots for top features
     dependency_figs = []
     if n_features > 0:
-        # Get top n features from bar plot data
-        top_features = bar_fig.data[0].y[:n_features]
-        
-        for feature in top_features:
+        for feature in top_full_features[:n_features]:
             try:
                 dep_fig = shap_dependency_plot(
-                    shap_values, feature_values, feature_names, feature, 
-                    10000, interaction_feature='auto'
+                    shap_values, 
+                    feature_values, 
+                    feature_names, 
+                    feature,  # Use full feature name here
+                    10000, 
+                    interaction_feature='auto'
                 )
                 plotly_show_and_save(
                     dep_fig, show, output_dir / f"shap.dependency.{feature}", 
