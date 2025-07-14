@@ -973,7 +973,7 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
                         _init_dict_level(self.stats, table_type, level)    
-                        test_desc = f"{level_desc} → {cfg['name']}")
+                        test_desc = f"{level_desc} → {cfg['name']}"
                         progress.update(table_task, description=_format_task_desc(test_desc))
                         try:
                             result = cfg["func"](
