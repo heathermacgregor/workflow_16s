@@ -273,55 +273,72 @@ def _simplify_label(taxon: str) -> str:
 
 
 def shap_summary_bar(
-    shap_values: np.array, 
-    feature_names: List, 
+    shap_values: np.array,
+    feature_names: List[str],
     max_display: int = 20
 ) -> go.Figure:
     """
     Convert SHAP summary bar plot to a Plotly figure.
-    
+
     Args:
         shap_values:   SHAP values array (n_samples, n_features).
-        feature_names: List of feature names.
+        feature_names: List of full feature names.
         max_display:   Maximum number of features to display.
-    
+
     Returns:
         Horizontal bar plot of mean absolute SHAP values.
     """
+
+    def _simplify_label(taxon: str) -> str:
+        parts = taxon.split(";")
+        last = parts[-1].strip().lower()
+        if last in {"__unclassified", "__uncultured", "__"}:
+            return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+        return parts[-1]
+
     # Compute mean absolute SHAP values for each feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    
+
     # Select top features
     top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
     top_features_full = [feature_names[i] for i in top_indices]
     top_values = mean_abs_shap[top_indices]
 
-    # Simplify labels to last part after splitting by ";"
-    top_features = [_simplify_label(f) for f in top_features_full]
-    
+    # Generate simplified labels and ensure uniqueness
+    simplified_labels = []
+    used_labels = set()
+    for f in top_features_full:
+        label = _simplify_label(f)
+        # Ensure uniqueness by appending a suffix if needed
+        base_label = label
+        suffix = 1
+        while label in used_labels:
+            label = f"{base_label}_{suffix}"
+            suffix += 1
+        simplified_labels.append(label)
+        used_labels.add(label)
+
     # Create horizontal bar plot
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=top_features,
+        y=simplified_labels,
         x=top_values,
         orientation='h',
         marker_color='#1e88e5',
-        hovertext=top_features_full,  # Optional: show full label on hover
+        hovertext=top_features_full,
         hoverinfo='text+x'
     ))
-    
-    # Update layout
-    fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
+
+    # Layout adjustments
     fig.update_layout(
-        autosize=True,
-        width=None, 
-        height=1100,
-        showlegend=False, 
-        margin=dict(l=100, r=50, t=50, b=50),
-        title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
-        yaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16), showticklabels=True)
+        showlegend=False,
+        margin=dict(l=300, r=50, t=50, b=50),
+        width=1600,
+        title=dict(text="SHAP Summary Bar Plot", font=dict(size=20)),
+        xaxis=dict(title=dict(text='Mean |SHAP Value|', font=dict(size=18))),
+        yaxis=dict(title=dict(text='Features', font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
     )
+
     return fig
     
 
