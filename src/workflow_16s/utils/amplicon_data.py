@@ -831,12 +831,8 @@ class _AnalysisManager(_ProcessingMixin):
             return
 
         with get_progress_bar() as progress:
-            master_desc = f"Running alpha diversity for '{group_col}'"
-            master_task = progress.add_task(
-                f"[white]{master_desc:<{DEFAULT_N}}", 
-                total=n,
-                start_time=time.time()
-            )
+            master_desc = _format_task_desc(f"Running alpha diversity for '{group_col}'")
+            master_task = progress.add_task(master_desc, total=n)
             for table_type, levels in self.tables.items():
                 if not enabled_table_types.get(table_type, False):
                     continue
@@ -844,47 +840,37 @@ class _AnalysisManager(_ProcessingMixin):
                 table_cfg = enabled_table_types[table_type]
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
                 
-                table_desc = f"Table Type: {table_type.replace('_', ' ').title()}"
+                table_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()}")
                 table_task = progress.add_task(
-                    f"[white]{table_desc:<{DEFAULT_N}}",
+                    table_desc,
                     parent=master_task,
-                    total=len(enabled_levels),
-                    start_time=time.time()
+                    total=len(enabled_levels)
                 )
                 for level in enabled_levels:
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
                     
-                    level_desc = f"Level: {level.title()}"
-                    level_task = progress.add_task(
-                        f"[white]{level_desc:<{DEFAULT_N}}",
-                        parent=table_task,
-                        total=1,
-                        start_time=time.time()
-                    )
+                    level_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()})")
+                    prog.update(table_task, description=level_desc)
+                    
                     try: 
-                        _init_dict_level(self.alpha_diversity, table_type, level)  
-                        df = table_to_df(levels[level])
-                        alpha_df = alpha_diversity(df, metrics=metrics)
-                        self.alpha_diversity[table_type][level]['results'] = alpha_df
-                        
-                        # Create output directory for this analysis
-                        output_dir = self.output_dir / 'alpha_diversity' / table_type / level
-                        output_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Save results
-                        alpha_df.to_csv(output_dir / 'alpha_diversity.tsv', sep='\t', index=True)
-                        
-                        # Run statistical analysis
+                        alpha_df = alpha_diversity(table_to_df(levels[level]), metrics=metrics)
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
                             metadata=self.meta,
                             group_column=group_col,
                             parametric=parametric
                         )
-                        self.alpha_diversity[table_type][level]['stats'] = stats_df
+                        # Save results
+                        output_dir = self.output_dir / 'alpha_diversity' / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        alpha_df.to_csv(output_dir / 'alpha_diversity.tsv', sep='\t', index=True)
                         stats_df.to_csv(output_dir / f'stats_{group_col}.tsv', sep='\t', index=True)
+                        
+                        _init_dict_level(self.alpha_diversity, table_type, level)  
+                        self.alpha_diversity[table_type][level]['results'] = alpha_df
+                        self.alpha_diversity[table_type][level]['stats'] = stats_df
                         
                         if self.cfg["alpha_diversity"].get("correlation_analysis", True):
                             corr_results = analyze_alpha_correlations(
@@ -893,21 +879,21 @@ class _AnalysisManager(_ProcessingMixin):
                                 max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
                                 min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
                             )
-                            self.alpha_diversity[table_type][level]['correlations'] = corr_results
+                            # Save results
                             pd.DataFrame.from_dict([corr_results], orient='index').to_csv(
                                 output_dir / f'correlations_{group_col}.tsv', 
                                 sep='\t', index=True
                             )
+                            self.alpha_diversity[table_type][level]['correlations'] = corr_results
                         
                         if generate_plots:
                             self.alpha_diversity[table_type][level]['figures'] = {}
-                            
                             plot_cfg = alpha_cfg.get("plot", {})
                             for metric in metrics:
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
-                                metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
-                                
+                                    
+                                #metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
@@ -943,11 +929,8 @@ class _AnalysisManager(_ProcessingMixin):
                         self.alpha_diversity[table_type][level] = {'results': None, 'stats': None, 'figures': {}}
                         
                     finally:
-                        progress.update(level_task, advance=1)
-                        progress.remove_task(level_task)
                         progress.update(table_task, advance=1)
                         progress.update(master_task, advance=1)
-                
                 progress.remove_task(table_task)
             
     def _run_statistical_tests(self) -> None:
@@ -1205,8 +1188,8 @@ class _AnalysisManager(_ProcessingMixin):
                                     step_size=step_size,
                                     use_permutation_importance=use_permutation_importance,
                                     thread_count=n_threads,
-                                    progress=prog, 
-                                    task_id=level_task,
+                                    progress=progress, 
+                                    task_id=table_task,
                                 )
 
                                 # Store figures within model result
