@@ -645,17 +645,17 @@ class _TableProcessor(_ProcessingMixin):
     def _collapse_taxa(self) -> None:
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as progress:
-            master_desc = "Collapsing taxonomy"
-            master_task = progress.add_task(
-                f"[white]{master_desc:<{DEFAULT_N}}",
-                total=len(self.tables)
+            ct_desc = "Collapsing taxonomy"
+            ct_task = progress.add_task(
+                _format_task_desc(ct_desc),
+                total=len(self.tables)*len(levels)
             )   
             
             for table_type in list(self.tables.keys()):
                 table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = progress.add_task(
-                    f"[white]{table_desc:<{DEFAULT_N}}",
-                    parent=master_task,
+                    _format_task_desc(table_desc),
+                    parent=ct_task,
                     total=len(levels)
                 )
                 
@@ -675,10 +675,10 @@ class _TableProcessor(_ProcessingMixin):
                         processed[level] = None
                     finally:
                         progress.update(table_task, advance=1)
+                        progress.update(ct_task, advance=1)
                     
                 self.tables[table_type] = processed
                 progress.remove_task(table_task)
-                progress.update(master_task, advance=1)
     
     def _create_presence_absence(self) -> None:
         if not self.cfg["features"]["presence_absence"]:
@@ -686,9 +686,9 @@ class _TableProcessor(_ProcessingMixin):
                
         levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as progress:
-            master_desc = "Converting to Presence/Absence"
-            master_task = progress.add_task(
-                f"{master_desc:<{DEFAULT_N}}",
+            pa_desc = "Converting to Presence/Absence"
+            pa_task = progress.add_task(
+                _format_task_desc(master_desc),
                 total=len(levels)  
             )
             raw_table = self.tables["raw"][self.mode]
@@ -696,7 +696,7 @@ class _TableProcessor(_ProcessingMixin):
             
             for level in levels:
                 level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
-                progress.update(master_task, description=f"[white]{level_desc:<{DEFAULT_N}}")
+                progress.update(pa_task, description=_format_task_desc(level_desc))
                 try:
                     start_time = time.perf_counter()
                     processed[level] = presence_absence(raw_table, level)
@@ -710,7 +710,8 @@ class _TableProcessor(_ProcessingMixin):
                     progress.update(master_task, advance=1)
                 
             self.tables["presence_absence"] = processed
-
+            progress.update(pa_task, description=_format_task_desc(pa_desc))
+            
     def _save_tables(self) -> None:
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
@@ -831,8 +832,8 @@ class _AnalysisManager(_ProcessingMixin):
             return
 
         with get_progress_bar() as progress:
-            master_desc = _format_task_desc(f"Running alpha diversity for '{group_col}'")
-            master_task = progress.add_task(master_desc, total=n)
+            alpha_desc = f"Running alpha diversity for '{group_col}'"
+            alpha_task = progress.add_task(_format_task_desc(master_desc), total=n)
             for table_type, levels in self.tables.items():
                 if not enabled_table_types.get(table_type, False):
                     continue
@@ -840,10 +841,10 @@ class _AnalysisManager(_ProcessingMixin):
                 table_cfg = enabled_table_types[table_type]
                 enabled_levels = table_cfg.get("levels", list(levels.keys()))
                 
-                table_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()}")
+                table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = progress.add_task(
-                    table_desc,
-                    parent=master_task,
+                    _format_task_desc(table_desc),
+                    parent=alpha_task,
                     total=len(enabled_levels)
                 )
                 for level in enabled_levels:
@@ -851,8 +852,8 @@ class _AnalysisManager(_ProcessingMixin):
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
                         continue
                     
-                    level_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()} ({level.title()})")
-                    progress.update(table_task, description=level_desc)
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
                     
                     try: 
                         alpha_df = alpha_diversity(table_to_df(levels[level]), metrics=metrics)
@@ -930,7 +931,7 @@ class _AnalysisManager(_ProcessingMixin):
                         
                     finally:
                         progress.update(table_task, advance=1)
-                        progress.update(master_task, advance=1)
+                        progress.update(alpha_task, advance=1)
                 progress.remove_task(table_task)
             
     def _run_statistical_tests(self) -> None:
@@ -944,24 +945,24 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
             n += len(levels) * len(enabled_for_table_type)
 
-        with get_progress_bar() as prog:
-            master_desc = _format_task_desc(f"Running statistics for '{group_col}'")
-            master_task = prog.add_task(master_desc, total=n)
+        with get_progress_bar() as progress:
+            stats_desc = f"Running statistics for '{group_col}'"
+            stats_task = prog.add_task(_format_task_desc(master_desc), total=n)
             for table_type, levels in self.tables.items():
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
                 
-                table_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()}")
-                table_task = prog.add_task(
-                    table_desc,
-                    parent=master_task,
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=stats_task,
                     total=len(levels) * len(enabled_for_table_type)
                 )
                 for level, table in levels.items():
-                    level_desc = _format_task_desc(f"{table_desc} ({level.title()})")
-                    prog.update(table_task, description=level_desc)
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
                     
-                    # Create output directory for this analysis
+                    # Create output directory 
                     output_dir = self.output_dir / 'stats' / table_type / level
                     output_dir.mkdir(parents=True, exist_ok=True)
                     
@@ -972,8 +973,8 @@ class _AnalysisManager(_ProcessingMixin):
                             continue
                         cfg = san.TEST_CONFIG[test_name]
                         _init_dict_level(self.stats, table_type, level)    
-                        test_desc = _format_task_desc(f"{level_desc} → {cfg['name']}")
-                        prog.update(table_task, description=level_desc)
+                        test_desc = f"{level_desc} → {cfg['name']}")
+                        progress.update(table_task, description=_format_task_desc(test_desc))
                         try:
                             result = cfg["func"](
                                 table=table_aligned,
@@ -981,20 +982,18 @@ class _AnalysisManager(_ProcessingMixin):
                                 group_column=group_col,
                                 group_column_values=group_vals,
                             )
-                            self.stats[table_type][level][test_name] = result
-                            
-                            # Save results to analysis directory
+                            # Save results 
                             result.to_csv(output_dir / f'{test_name}.tsv', sep='\t', index=True)
+                            self.stats[table_type][level][test_name] = result
                             
                         except Exception as e:
                             logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
                             self.stats[table_type][level][test_name] = None
                             
                         finally:
-                            prog.update(table_task, advance=1)
-                            prog.update(master_task, advance=1)
-                    prog.update(table_task, description=table_desc)
-                prog.remove_task(table_task)
+                            progress.update(table_task, advance=1)
+                            progress.update(stats_task, advance=1)
+                progress.remove_task(table_task)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
@@ -1139,27 +1138,27 @@ class _AnalysisManager(_ProcessingMixin):
         if not n:
             return
         
-        with get_progress_bar() as prog:
-            master_desc = _format_task_desc("Running CatBoost feature selection")
-            master_task = prog.add_task(master_desc, total=n)
+        with get_progress_bar() as progress:
+            cb_desc = _format_task_desc("Running CatBoost feature selection")
+            cb_task = progress.add_task(cb_desc, total=n)
             for table_type, levels in filtered_ml_tables.items():
                 table_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()}")
-                table_task = prog.add_task(
+                table_task = progress.add_task(
                     table_desc,
-                    parent=master_task,
+                    parent=cb_task,
                     total=len(levels) * len(methods)
                 )
                 for level, table in levels.items():
                     level_desc = _format_task_desc(f"{table_desc} ({level.title()})")
-                    prog.update(table_task, description=level_desc)
+                    progress.update(table_task, description=level_desc)
                     
-                    # Create output directory for this analysis
+                    # Create output directory 
                     output_dir = self.output_dir / 'ml' / table_type / level
                     output_dir.mkdir(parents=True, exist_ok=True)
                     
                     for method in methods:
                         method_desc = _format_task_desc(f"{level_desc} → {method.upper()}")
-                        prog.update(table_task, description=method_desc)
+                        progress.update(table_task, description=method_desc)
                         
                         _init_dict_level(self.models, table_type, level, method) 
                         try:
@@ -1206,10 +1205,9 @@ class _AnalysisManager(_ProcessingMixin):
                             self.models[table_type][level][method] = None
                                 
                         finally:
-                            prog.update(table_task, advance=1)
-                            prog.update(master_task, advance=1)
-                    prog.update(table_task, description=level_desc)
-                prog.remove_task(table_task)
+                            progress.update(table_task, advance=1)
+                            progress.update(cb_task, advance=1)
+                progress.remove_task(table_task)
                         
     def _compare_top_features(self) -> None:
         if not self.models:
