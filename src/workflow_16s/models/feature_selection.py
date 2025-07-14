@@ -39,7 +39,9 @@ warnings.filterwarnings("ignore")  # Hide all warnings
 logger = logging.getLogger('workflow_16s')
 
 # ================================= GLOBAL VARIABLES ================================= #
+
 DEFAULT_N = 65
+
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_TEST_SIZE = 0.3
 DEFAULT_RANDOM_STATE = 42
@@ -864,14 +866,13 @@ def grid_search(
     child_task = progress.add_task(
         f"[white]{child_desc:<{DEFAULT_N}}",
         parent=task_id,
-        total=total_combinations
+        total=total_folds
     )
-    if verbose:
-        logger.debug(
-            f"Starting grid search with {total_combinations} "
-            f"parameter combinations\n"
-            f"Using {n_splits}-fold cross-validation"
-        )
+    logger.debug(
+        f"Starting grid search with {total_combinations} "
+        f"parameter combinations\n"
+        f"Using {n_splits}-fold cross-validation"
+    )
     
     # Cross-validation setup
     cv = StratifiedKFold(
@@ -896,10 +897,9 @@ def grid_search(
             'pr_auc': []
         }
         
-        if verbose:
-            logger.debug(
-                f"\n[{i}/{total_combinations}] Testing params: {current_params}"
-            )
+        logger.debug(
+            f"\n[{i}/{total_combinations}] Testing params: {current_params}"
+        )
         
         # Cross-validation loop
         for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train), 1):
@@ -1017,7 +1017,7 @@ def grid_search(
             figures=[cm_fig, roc_fig, prc_fig],
             figures_per_row=3,
             show=False,
-            output_path=None,
+            output_path=str(output_dir / "best_eval.png"),
             verbose=False
         )
         
@@ -1030,19 +1030,15 @@ def grid_search(
     
     # Save results
     results_df = pd.DataFrame(results)
-    results_df.to_csv(
-        output_dir / "grid_search_results.csv", 
-        index=False
-    )
+    results_df.to_csv(output_dir / "grid_search_results.csv", index=False)
     
-    if verbose:
-        logger.debug("\nGrid search completed")
-        logger.debug(f"Best parameters: {best_params}")
-        logger.debug(f"Best CV {refit}: {best_score:.4f}")
-        if test_scores:
-            logger.debug("Test set performance:")
-            for metric, score in test_scores.items():
-                logger.debug(f"{metric}: {score:.4f}")
+    logger.debug("\nGrid search completed")
+    logger.debug(f"Best parameters: {best_params}")
+    logger.debug(f"Best CV {refit}: {best_score:.4f}")
+    if test_scores:
+        logger.debug("Test set performance:")
+        for metric, score in test_scores.items():
+            logger.debug(f"{metric}: {score:.4f}")
     
     return best_model, best_params, best_score, test_scores, fig
 
