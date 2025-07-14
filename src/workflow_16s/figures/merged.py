@@ -614,9 +614,9 @@ def create_ordination_plot(
 
     fig.update_layout(
         width=1600,
-        title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0),
-        yaxis=dict(title=dict(font=dict(size=18)))
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.0),
+        yaxis=dict(title=dict(font=dict(size=20)))
     )
     
     # Save output
@@ -1244,9 +1244,9 @@ def create_alpha_diversity_boxplot(
                 if verbose:
                     logger.error(f"Failed to add stats annotation: {e}")
         fig.update_layout(
-            title=dict(font=dict(size=20)),
-            xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=14), showticklabels=True),
-            yaxis=dict(title=dict(font=dict(size=18)))
+            title=dict(font=dict(size=24)),
+            xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=16), showticklabels=True),
+            yaxis=dict(title=dict(font=dict(size=20)))
         )
         # Save plot
         output_path = output_dir / f"alpha_boxplot_{metric}.html"
@@ -1334,9 +1334,9 @@ def create_alpha_diversity_stats_plot(
     )
     fig = _apply_common_layout(fig, "Diversity Metric", "-log10(p-value)", "Alpha Diversity Statistical Summary")
     fig.update_layout(
-        title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=14), showticklabels=True),
-        yaxis=dict(title=dict(font=dict(size=18)))
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.0, tickfont=dict(size=16), showticklabels=True),
+        yaxis=dict(title=dict(font=dict(size=20)))
     )
     # Add significance thresholds
     fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="red")
