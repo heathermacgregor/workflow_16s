@@ -49,7 +49,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                         ordination_figures[table_type] = {}
                     if level not in ordination_figures[table_type]:
                         ordination_figures[table_type][level] = {}
-                    # Fix: Use the method name as key instead of data['figures']
+                    # Store figures directly under method key
                     ordination_figures[table_type][level][method] = data['figures']
     figures['ordination'] = ordination_figures
 
@@ -106,7 +106,8 @@ def _prepare_sections(
         'statistical_results',
         'alpha_diversity',
         'ordination',
-        'ml_results'
+        'ml_results',
+        'violin'
     ]
     
     # Filter and sort sections based on defined order
@@ -255,14 +256,14 @@ def _figs_to_html(
         plot_id = f"{prefix}-plot-{idx}"
 
         btns.append(
-            f'<button class="tab-button {"active" if idx==0 else ""}" '
+            f'<button class="tab-button {"active" if i==0 else ""}" '
             f'data-tab="{tab_id}" '
             f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
         )
 
         tabs.append(
             f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if idx==0 else "none"}" '
+            f'style="display:{"block" if i==0 else "none"}" '
             f'data-plot-id="{plot_id}">'
             f'<div id="container-{plot_id}" class="plot-container"></div></div>'
         )
@@ -325,58 +326,6 @@ def _section_html(sec: Dict) -> str:
     return f'<div class="section" id="{sec["id"]}">\n' \
            f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
 
-def _alpha_correlations_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, variables) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            var_btns, var_tabs, var_plot_data = _figs_to_html(
-                variables, id_counter, level_id
-            )
-            plot_data.update(var_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="variable">{var_btns}</div>'
-                f'{var_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data
-    
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
