@@ -148,7 +148,7 @@ ordination:
     umap: False
   presence_absence:
     pca: False
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "jaccard"
     tsne: False #True
     umap: False #True
@@ -166,7 +166,7 @@ ordination:
     umap: False #True
   clr_transformed:
     pca: False #True
-    pcoa: True
+    pcoa: False #True
     pcoa_metric: "euclidean"
     tsne: False #True
     umap: False #True
