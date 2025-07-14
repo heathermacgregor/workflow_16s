@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore")  # Hide all warnings
 logger = logging.getLogger('workflow_16s')
 
 # ================================= GLOBAL VARIABLES ================================= #
-
+DEFAULT_N = 65
 DEFAULT_GROUP_COLUMN = "nuclear_contamination_status"
 DEFAULT_TEST_SIZE = 0.3
 DEFAULT_RANDOM_STATE = 42
