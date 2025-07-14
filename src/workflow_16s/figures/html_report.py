@@ -49,6 +49,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                         ordination_figures[table_type] = {}
                     if level not in ordination_figures[table_type]:
                         ordination_figures[table_type][level] = {}
+                    # Fix: Use the method name as key instead of data['figures']
                     ordination_figures[table_type][level][method] = data['figures']
     figures['ordination'] = ordination_figures
 
@@ -248,22 +249,20 @@ def _figs_to_html(
 ) -> Tuple[str, str, Dict]:
     tabs, btns, plot_data = [], [], {}
 
-    # Create dropdown for figure selection
-    dropdown_id = f"{prefix}-dropdown"
-    dropdown_html = f'<select id="{dropdown_id}" class="figure-dropdown" onchange="showSelectedFigure(this)">'
-    
     for i, (title, fig) in enumerate(figs.items()):
         idx     = next(counter)
         tab_id  = f"{prefix}-tab-{idx}"
         plot_id = f"{prefix}-plot-{idx}"
-        
-        # Add option to dropdown
-        dropdown_html += f'<option value="{tab_id}" data-plot-id="{plot_id}" {"selected" if i==0 else ""}>{title}</option>'
-        
-        # Create tab container
+
+        btns.append(
+            f'<button class="tab-button {"active" if idx==0 else ""}" '
+            f'data-tab="{tab_id}" '
+            f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
+        )
+
         tabs.append(
             f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if i==0 else "none"}" '
+            f'style="display:{"block" if idx==0 else "none"}" '
             f'data-plot-id="{plot_id}">'
             f'<div id="container-{plot_id}" class="plot-container"></div></div>'
         )
@@ -301,16 +300,6 @@ def _figs_to_html(
                 "error": str(exc)
             }
             
-    dropdown_html += '</select>'
-    
-    # Add dropdown to buttons
-    btns.append(
-        f'<div class="figure-selector">'
-        f'<label for="{dropdown_id}">Select figure: </label>'
-        f'{dropdown_html}'
-        f'</div>'
-    )
-    
     buttons_html = "\n".join(btns)
     if row_label:
         buttons_html = (
@@ -955,26 +944,6 @@ def generate_html_report(
     .tooltip:hover .tooltiptext {
         visibility: visible;
         opacity: 1;
-    }
-    
-    /* Dropdown styles */
-    .figure-selector {
-        margin: 15px 0;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border-radius: 5px;
-    }
-    .figure-selector label {
-        font-weight: bold;
-        margin-right: 10px;
-    }
-    .figure-dropdown {
-        padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background-color: white;
-        font-size: 14px;
-        width: 300px;
     }
     """
     
