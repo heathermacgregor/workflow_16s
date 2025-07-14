@@ -79,6 +79,7 @@ PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 def _format_task_desc(desc: str):
     return f"[white]{str(desc):<{DEFAULT_N}}"
+    
 
 def _init_dict_level(a, b, c=None, d=None, e=None):
     if b not in a:
@@ -89,6 +90,7 @@ def _init_dict_level(a, b, c=None, d=None, e=None):
         a[b][c][d] = {}
     if e and e not in a[b][c][d]:
         a[b][c][d][e] = {}
+        
 
 class _ProcessingMixin:
     """
@@ -117,12 +119,12 @@ class _ProcessingMixin:
                     self._log_level_action(level, log_template, log_action, duration)
         else:
             with get_progress_bar() as progress:
-                parent_desc = _format_task_desc(f"{process_name}")
-                parent_task = progress.add_task(parent_desc, total=len(levels))
+                parent_desc = f"{process_name}"
+                parent_task = progress.add_task(_format_task_desc(parent_desc), total=len(levels))
                 
                 for level in levels:
-                    level_desc = _format_task_desc(f"Processing {level} level")
-                    progress.update(parent_task, description=level_desc)
+                    level_desc = f"{parent_desc} ({level})"
+                    progress.update(parent_task, description=_format_task_desc(level_desc))
                     
                     start_time = time.perf_counter()  
                     processed[level] = process_func(get_source(level), level, *func_args)
@@ -131,7 +133,7 @@ class _ProcessingMixin:
                         self._log_level_action(level, log_template, log_action, duration)
 
                     progress.update(parent_task, advance=1)
-            progress.update(parent_task, description=parent_desc)
+            progress.update(parent_task, description=_format_task_desc(parent_desc))
         return processed
 
     def _log_level_action(
@@ -419,12 +421,12 @@ class MapPlotter:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
         with get_progress_bar() as progress:
-            plot_desc = _format_task_desc(f"Plotting sample maps")
-            plot_task = progress.add_task(plot_desc, total=len(valid_columns))
+            plot_desc = f"Plotting sample maps"
+            plot_task = progress.add_task(_format_task_desc(plot_desc), total=len(valid_columns))
 
             for col in valid_columns:
-                col_desc = _format_task_desc(f"Plotting sample maps → {col}")
-                progress.update(plot_task, description=col_desc)
+                col_desc = f"Plotting sample maps → {col}"
+                progress.update(plot_task, description=_format_task_desc(col_desc))
                 
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
@@ -1141,26 +1143,26 @@ class _AnalysisManager(_ProcessingMixin):
             return
         
         with get_progress_bar() as progress:
-            cb_desc = _format_task_desc("Running CatBoost feature selection")
-            cb_task = progress.add_task(cb_desc, total=n)
+            cb_desc = "Running CatBoost feature selection"
+            cb_task = progress.add_task(_format_task_desc(cb_desc), total=n)
             for table_type, levels in filtered_ml_tables.items():
-                table_desc = _format_task_desc(f"{table_type.replace('_', ' ').title()}")
+                table_desc = f"{table_type.replace('_', ' ').title()}"
                 table_task = progress.add_task(
-                    table_desc,
+                    _format_task_desc(table_desc),
                     parent=cb_task,
                     total=len(levels) * len(methods)
                 )
                 for level, table in levels.items():
-                    level_desc = _format_task_desc(f"{table_desc} ({level.title()})")
-                    progress.update(table_task, description=level_desc)
+                    level_desc = f"{table_desc} ({level.title()})"
+                    progress.update(table_task, description=_format_task_desc(level_desc))
                     
                     # Create output directory 
                     output_dir = self.output_dir / 'ml' / table_type / level
                     output_dir.mkdir(parents=True, exist_ok=True)
                     
                     for method in methods:
-                        method_desc = _format_task_desc(f"{level_desc} → {method.upper()}")
-                        progress.update(table_task, description=method_desc)
+                        method_desc = f"{level_desc} → {method.upper()}"
+                        progress.update(table_task, description=_format_task_desc(method_desc))
                         
                         _init_dict_level(self.models, table_type, level, method) 
                         try:
