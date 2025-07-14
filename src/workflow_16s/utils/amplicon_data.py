@@ -434,8 +434,8 @@ class MapPlotter:
                 )
                 self.figures[col] = fig
                 
-                prog.update(plot_task, advance=1)
-            prog.update(plot_task, description=plot_desc)
+                progress.update(plot_task, advance=1)
+            progress.update(plot_task, description=plot_desc)
         return self.figures
 
 
@@ -949,7 +949,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             stats_desc = f"Running statistics for '{group_col}'"
-            stats_task = prog.add_task(_format_task_desc(stats_desc), total=n)
+            stats_task = progress.add_task(_format_task_desc(stats_desc), total=n)
             for table_type, levels in self.tables.items():
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
