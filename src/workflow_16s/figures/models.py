@@ -262,7 +262,17 @@ def plot_feature_importance(
     if verbose:
         logger.info(f"Feature importance plot saved to: {output_path}")
     return fig
+
+
+def _simplify_label(taxon: str) -> str:
+    parts = taxon.split(";")
+    last = parts[-1].strip().lower()
     
+    if last in {"__unclassified", "__uncultured", "__"}:
+        # Return second-to-last + last (if available)
+        return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+    return parts[-1]
+
 
 def shap_summary_bar(
     shap_values: np.array, 
@@ -285,8 +295,11 @@ def shap_summary_bar(
     
     # Select top features
     top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
-    top_features = [feature_names[i] for i in top_indices]
+    top_features_full = [feature_names[i] for i in top_indices]
     top_values = mean_abs_shap[top_indices]
+
+    # Simplify labels to last part after splitting by ";"
+    top_features = [_simplify_label(f) for f in top_features_full]
     
     # Create horizontal bar plot
     fig = go.Figure()
@@ -294,17 +307,22 @@ def shap_summary_bar(
         y=top_features,
         x=top_values,
         orientation='h',
-        marker_color='#1e88e5'
+        marker_color='#1e88e5',
+        hovertext=top_features_full,  # Optional: show full label on hover
+        hoverinfo='text+x'
     ))
     
     # Update layout
-    fig.update_layout(showlegend=False, margin=dict(l=150))
     fig = _apply_common_layout(fig, 'Mean |SHAP Value|', 'Features', 'SHAP Summary Bar Plot')
     fig.update_layout(
-        width=1600,
-        title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.5),
-        yaxis=dict(title=dict(font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
+        autosize=True,
+        width=None, 
+        height=1100,
+        showlegend=False, 
+        margin=dict(l=100, r=50, t=50, b=50),
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
+        yaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16), showticklabels=True)
     )
     return fig
     
@@ -389,12 +407,14 @@ def shap_beeswarm(
     fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
     fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
     fig.update_layout(
-        width=1600,
-        title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.5),
+        autosize=True,
+        width=None, 
+        height=1100,
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
         yaxis=dict(
-            title=dict(font=dict(size=18)), 
-            tickfont=dict(size=14), 
+            title=dict(font=dict(size=20)), 
+            tickfont=dict(size=16), 
             showticklabels=True,
             tickvals=list(range(len(top_features))),
             ticktext=top_features,
@@ -528,14 +548,14 @@ def shap_dependency_plot(
         marker_config.update({
             'color': color_data,
             'colorscale': 'Viridis',
-            'colorbar': {'title': color_title}
+            'colorbar': {'title': {'text': color_title, 'side': 'right'}}
         })
         hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"
     else:
         marker_config.update({
             'color': y,
             'colorscale': 'RdBu',
-            'colorbar': {'title': 'SHAP Value'}
+            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right'}}
         })
     
     hover_template += "<extra></extra>"
@@ -579,6 +599,12 @@ def shap_dependency_plot(
         f'Feature Value: {feature}', 
         'SHAP Value', 
         f'SHAP Dependency Plot: {feature}{title_suffix}'
+    )
+    fig.update_layout(
+        height=1100,
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
+        yaxis=dict(title=dict(font=dict(size=20)))
     )
     return fig
 
