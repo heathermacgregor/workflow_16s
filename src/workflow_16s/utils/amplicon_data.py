@@ -418,13 +418,14 @@ class MapPlotter:
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
-        with get_progress_bar() as prog:
+        with get_progress_bar() as progress:
             plot_desc = _format_task_desc(f"Plotting sample maps")
-            plot_task = prog.add_task(plot_desc, total=len(valid_columns))
+            plot_task = progress.add_task(plot_desc, total=len(valid_columns))
 
             for col in valid_columns:
                 col_desc = _format_task_desc(f"Plotting sample maps → {col}")
-                prog.update(plot_task, description=col_desc)
+                progress.update(plot_task, description=col_desc)
+                
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
                     output_dir=self.output_dir,
@@ -432,6 +433,7 @@ class MapPlotter:
                     **kwargs,
                 )
                 self.figures[col] = fig
+                
                 prog.update(plot_task, advance=1)
             prog.update(plot_task, description=plot_desc)
         return self.figures
@@ -688,7 +690,7 @@ class _TableProcessor(_ProcessingMixin):
         with get_progress_bar() as progress:
             pa_desc = "Converting to Presence/Absence"
             pa_task = progress.add_task(
-                _format_task_desc(master_desc),
+                _format_task_desc(pa_desc),
                 total=len(levels)  
             )
             raw_table = self.tables["raw"][self.mode]
@@ -707,7 +709,7 @@ class _TableProcessor(_ProcessingMixin):
                     logger.error(f"Presence/Absence failed for {level}: {e}")
                     processed[level] = None
                 finally:
-                    progress.update(master_task, advance=1)
+                    progress.update(pa_task, advance=1)
                 
             self.tables["presence_absence"] = processed
             progress.update(pa_task, description=_format_task_desc(pa_desc))
@@ -833,7 +835,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             alpha_desc = f"Running alpha diversity for '{group_col}'"
-            alpha_task = progress.add_task(_format_task_desc(master_desc), total=n)
+            alpha_task = progress.add_task(_format_task_desc(alpha_desc), total=n)
             for table_type, levels in self.tables.items():
                 if not enabled_table_types.get(table_type, False):
                     continue
@@ -947,7 +949,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         with get_progress_bar() as progress:
             stats_desc = f"Running statistics for '{group_col}'"
-            stats_task = prog.add_task(_format_task_desc(master_desc), total=n)
+            stats_task = prog.add_task(_format_task_desc(stats_desc), total=n)
             for table_type, levels in self.tables.items():
                 tests_config = self.cfg["stats"].get(table_type, {})
                 enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
@@ -1021,8 +1023,8 @@ class _AnalysisManager(_ProcessingMixin):
         self.ordination = {tt: {} for tt in self.tables}
     
         with get_progress_bar() as progress:
-            master_desc = "Running beta diversity analysis"
-            master_task = progress.add_task(f"{master_desc:<{DEFAULT_N}}", total=total_tasks)
+            beta_desc = "Running beta diversity analysis"
+            beta_task = progress.add_task(_format_task_desc(beta_desc), total=total_tasks)
             
             max_workers = min(2, os.cpu_count() // 2)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1061,7 +1063,7 @@ class _AnalysisManager(_ProcessingMixin):
                         except Exception as e:
                             errors[key] = str(e)
                             logger.error(f"Ordination failed for {key}: {str(e)}")
-                        progress.update(master_task, advance=1)
+                        progress.update(beta_task, advance=1)
                 except TimeoutError:
                     logger.warning("Ordination timeout - proceeding with completed results")
                 
