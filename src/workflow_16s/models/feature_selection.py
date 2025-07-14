@@ -861,7 +861,7 @@ def grid_search(
             total=total_folds
         )
     child_desc = f"Grid Search..."
-    child_task = prog.add_task(
+    child_task = progress.add_task(
         f"[white]{child_desc:<{DEFAULT_N}}",
         parent=task_id,
         total=total_combinations
