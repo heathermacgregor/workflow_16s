@@ -219,7 +219,7 @@ class ML:
         levels = set()
         methods = set()
     
-        for table_type, levels_dict in figures.items():
+        for table_type, levels_dict in self.figures.items():
             for level, methods_dict in levels_dict.items():
                 for method, fig_types in methods_dict.items():
                     for fig_type, fig in fig_types.items():
