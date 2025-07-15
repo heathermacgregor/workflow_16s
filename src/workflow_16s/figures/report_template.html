@@ -222,7 +222,7 @@
                     {
                         {% for key, value in fig.items() %}
                         {% if key == 'figure' %}
-                        "{{ key }}": {{ value|safe }},
+                        "{{ key }}": {{ value|tojson }},
                         {% else %}
                         "{{ key }}": "{{ value }}",
                         {% endif %}
@@ -247,7 +247,7 @@
             {% for tab in section.tabs %}
             "{{ tab.type }}": [
                 {% for plot in tab.violin_plots %}
-                {{ plot.figure|safe }},
+                {{ plot.figure|tojson }},
                 {% endfor %}
             ],
             {% endfor %}
@@ -256,12 +256,15 @@
         };
     
         // Function to render Plotly figure
-        function renderPlotly(containerId, figureJson) {
+        function renderPlotly(containerId, figureData) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';  // Clear previous content
             
             try {
-                const figure = JSON.parse(figureJson);
+                // Handle both dict objects and JSON strings
+                const figure = typeof figureData === 'string' ? 
+                    JSON.parse(figureData) : figureData;
+                
                 Plotly.newPlot(container, figure.data, figure.layout, figure.config || {});
                 
                 // Make plot responsive
@@ -271,10 +274,14 @@
             } catch (error) {
                 container.innerHTML = `
                     <div class="alert alert-danger">
-                        Error rendering plot: ${error.message}
+                        <strong>Error rendering plot:</strong> ${error.message}
+                        ${typeof figureData === 'string' ? 
+                            `<br><small>Data: ${figureData.substring(0, 100)}...</small>` : 
+                            `<br><small>Data type: ${typeof figureData}</small>`}
                     </div>
                 `;
                 console.error('Plot rendering error:', error);
+                console.log('Figure data:', figureData);
             }
         }
     
