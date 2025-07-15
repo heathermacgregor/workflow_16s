@@ -214,100 +214,83 @@ class ML:
                     else:
                         logger.warning(f"No ML figures found for {table_type}/{level}/{method}")        
     def render_figures(self):
-        """
-        Generate an interactive HTML view with dropdowns for table_type, level, method.
-        """
-        divs = []
-        options_table_type = set()
-        options_level = set()
-        options_method = set()
-        figure_mapping = {}  # key: (table_type, level, method, fig_type), value: div_id
+        figure_json_map = {}
+        table_types = set()
+        levels = set()
+        methods = set()
     
-        for table_type, levels in self.figures.items():
-            for level, methods in levels.items():
-                for method, fig_types in methods.items():
+        for table_type, levels_dict in figures.items():
+            for level, methods_dict in levels_dict.items():
+                for method, fig_types in methods_dict.items():
                     for fig_type, fig in fig_types.items():
                         if fig_type == "shap_dependency":
-                            continue  # skip as per your condition
-                        div_id = str(uuid.uuid4()).replace("-", "")
-                        options_table_type.add(table_type)
-                        options_level.add(level)
-                        options_method.add(method)
-                        figure_mapping[(table_type, level, method, fig_type)] = div_id
-                        fig_html = pio.to_html(fig, include_plotlyjs=False, full_html=False, config={"responsive": True})
-                        divs.append(f'<div id="{div_id}" class="plot-div" style="display: none;">{fig_html}</div>')
+                            continue
+                        key = f"{table_type}|{level}|{method}|{fig_type}"
+                        figure_json_map[key] = fig.to_plotly_json()
+                        table_types.add(table_type)
+                        levels.add(level)
+                        methods.add(method)
     
-        # Build dropdowns
-        # Build figureMap entries first (outside the f-string)
-        figure_map_entries = ',\n        '.join([
-            f'"{t}|{l}|{m}|{f}": "{div_id}"'
-            for (t, l, m, f), div_id in figure_mapping.items()
-        ])
-        
-        # Now safely use the entries inside the f-string
+        # Convert figure_json_map to a JSON string
+        figure_json_str = json.dumps(figure_json_map, cls=NumpySafeJSONEncoder)
+    
         html = f"""
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
         <div>
             <label>Table Type:</label>
             <select id="table_type">
-                {''.join(f'<option value="{t}">{t}</option>' for t in sorted(options_table_type))}
+                {''.join(f'<option value="{t}">{t}</option>' for t in sorted(table_types))}
             </select>
-        
+    
             <label>Level:</label>
             <select id="level">
-                {''.join(f'<option value="{l}">{l}</option>' for l in sorted(options_level))}
+                {''.join(f'<option value="{l}">{l}</option>' for l in sorted(levels))}
             </select>
-        
+    
             <label>Method:</label>
             <select id="method">
-                {''.join(f'<option value="{m}">{m}</option>' for m in sorted(options_method))}
+                {''.join(f'<option value="{m}">{m}</option>' for m in sorted(methods))}
             </select>
-        
+    
             <label>Figure Type:</label>
             <select id="fig_type">
                 {''.join(f'<option value="{ft}">{ft}</option>' for ft in ["eval_plots", "shap_summary_bar", "shap_summary_beeswarm"])}
             </select>
         </div>
-        
-        <div id="figure-container">
-            {''.join(divs)}
-        </div>
-        
+    
+        <div id="plot-container" style="width:100%;height:600px;"></div>
+    
         <script>
-        const figureMap = {{
-            {figure_map_entries}
-        }};
-        
-        function updateFigure() {{
-            const t = document.getElementById("table_type").value;
-            const l = document.getElementById("level").value;
-            const m = document.getElementById("method").value;
-            const f = document.getElementById("fig_type").value;
-        
-            const key = `${{t}}|${{l}}|${{m}}|${{f}}`;
-            const selectedId = figureMap[key];
-        
-            // Hide all
-            document.querySelectorAll('.plot-div').forEach(el => el.style.display = 'none');
-        
-            // Show selected
-            if (selectedId) {{
-                document.getElementById(selectedId).style.display = 'block';
+            const figureData = {figure_json_str};
+    
+            function updateFigure() {{
+                const t = document.getElementById("table_type").value;
+                const l = document.getElementById("level").value;
+                const m = document.getElementById("method").value;
+                const f = document.getElementById("fig_type").value;
+    
+                const key = `${{t}}|${{l}}|${{m}}|${{f}}`;
+                const fig = figureData[key];
+    
+                if (fig) {{
+                    Plotly.newPlot('plot-container', fig.data, fig.layout || {{}});
+                }}
             }}
-        }}
-        
-        document.getElementById("table_type").addEventListener("change", updateFigure);
-        document.getElementById("level").addEventListener("change", updateFigure);
-        document.getElementById("method").addEventListener("change", updateFigure);
-        document.getElementById("fig_type").addEventListener("change", updateFigure);
-        
-        // Initial display
-        updateFigure();
+    
+            document.getElementById("table_type").addEventListener("change", updateFigure);
+            document.getElementById("level").addEventListener("change", updateFigure);
+            document.getElementById("method").addEventListener("change", updateFigure);
+            document.getElementById("fig_type").addEventListener("change", updateFigure);
+    
+            // Render default
+            updateFigure();
         </script>
         """
-
     
         return html
+
+
 class Section:
     def __init__(self, amplicon_data: AmpliconData):
         self.amplicon_data = amplicon_data
