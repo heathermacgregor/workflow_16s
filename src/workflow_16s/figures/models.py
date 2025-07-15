@@ -345,8 +345,9 @@ def shap_summary_bar(
     # Layout adjustments
     fig.update_layout(
         showlegend=False,
-        margin=dict(l=300, r=50, t=50, b=50),
-        width=1600,
+        autosize=True,
+        width=None, 
+        height=1100,
         title=dict(text="SHAP Summary Bar Plot", font=dict(size=20)),
         xaxis=dict(title=dict(text='Mean |SHAP Value|', font=dict(size=18))),
         yaxis=dict(title=dict(text='Features', font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
