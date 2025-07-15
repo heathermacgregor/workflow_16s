@@ -262,16 +262,45 @@ def plot_feature_importance(
     return fig
 
 
-def _simplify_label(taxon: str) -> str:
+def simplify_feature_name(taxon: str) -> str:
+    """
+    Simplify a feature name by selecting the most specific meaningful part.
+    
+    Args:
+        taxon: Full feature name (e.g., taxonomic path)
+    
+    Returns:
+        Simplified feature name
+    """
     parts = taxon.split(";")
     last = parts[-1].strip().lower()
-    
     if last in {"__unclassified", "__uncultured", "__"}:
-        # Return second-to-last + last (if available)
         return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
     return parts[-1]
 
-
+def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
+    """
+    Generate simplified labels while ensuring uniqueness.
+    
+    Args:
+        feature_names: List of full feature names
+        
+    Returns:
+        List of unique simplified labels
+    """
+    simplified_labels = []
+    used_labels = set()
+    for f in feature_names:
+        label = simplify_feature_name(f)
+        base_label = label
+        suffix = 1
+        while label in used_labels:
+            label = f"{base_label}_{suffix}"
+            suffix += 1
+        simplified_labels.append(label)
+        used_labels.add(label)
+    return simplified_labels
+    
 def shap_summary_bar(
     shap_values: np.array,
     feature_names: List[str],
@@ -289,12 +318,7 @@ def shap_summary_bar(
         Horizontal bar plot of mean absolute SHAP values.
     """
 
-    def _simplify_label(taxon: str) -> str:
-        parts = taxon.split(";")
-        last = parts[-1].strip().lower()
-        if last in {"__unclassified", "__uncultured", "__"}:
-            return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
-        return parts[-1]
+    
 
     # Compute mean absolute SHAP values for each feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
@@ -305,18 +329,7 @@ def shap_summary_bar(
     top_values = mean_abs_shap[top_indices]
 
     # Generate simplified labels and ensure uniqueness
-    simplified_labels = []
-    used_labels = set()
-    for f in top_features_full:
-        label = _simplify_label(f)
-        # Ensure uniqueness by appending a suffix if needed
-        base_label = label
-        suffix = 1
-        while label in used_labels:
-            label = f"{base_label}_{suffix}"
-            suffix += 1
-        simplified_labels.append(label)
-        used_labels.add(label)
+    simplified_labels = generate_unique_simplified_labels(top_features_full)
 
     # Create horizontal bar plot
     fig = go.Figure()
@@ -364,7 +377,8 @@ def shap_beeswarm(
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
     top_features = [feature_names[i] for i in top_indices]
-    
+    # Generate unique simplified labels for display
+    top_simplified_labels = generate_unique_simplified_labels(top_features)
     # Prepare figure
     fig = go.Figure()
     y_offset = 0.3  # Vertical spread for jitter
@@ -432,7 +446,7 @@ def shap_beeswarm(
             tickfont=dict(size=16), 
             showticklabels=True,
             tickvals=list(range(len(top_features))),
-            ticktext=top_features,
+            ticktext=top_simplified_labels,
             automargin=True
         )
     )
@@ -559,18 +573,18 @@ def shap_dependency_plot(
     }
     hover_template = "<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}"
     
+    # Simplify main feature name for display
+    feature_display = simplify_feature_name(feature)
+    
+    # Simplify interaction feature name if used
+    color_title_display = None
+    if color_title is not None:
+        color_title_display = simplify_feature_name(color_title)
+    
+    # Update marker configuration with simplified name
     if color_data is not None:
         marker_config.update({
-            'color': color_data,
-            'colorscale': 'Viridis',
-            'colorbar': {'title': {'text': color_title, 'side': 'right'}}
-        })
-        hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"
-    else:
-        marker_config.update({
-            'color': y,
-            'colorscale': 'RdBu',
-            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right'}}
+            'colorbar': {'title': {'text': color_title_display, 'side': 'right'}}
         })
     
     hover_template += "<extra></extra>"
@@ -607,13 +621,13 @@ def shap_dependency_plot(
             name='Trend'
         ))
     
-    # Update layout
+    # Update layout with simplified names
     title_suffix = " with interaction" if auto_interaction else ""    
     fig = _apply_common_layout(
         fig, 
-        f'Feature Value: {feature}', 
+        f'Feature Value: {feature_display}',  # Simplified name
         'SHAP Value', 
-        f'SHAP Dependency Plot: {feature}{title_suffix}'
+        f'SHAP Dependency Plot: {feature_display}{title_suffix}'  # Simplified name
     )
     fig.update_layout(
         height=1100,
