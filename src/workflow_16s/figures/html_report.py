@@ -1,1035 +1,1253 @@
-# ===================================== IMPORTS ====================================== #
 import base64
-import itertools
-import json
-import logging
-import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
-
-import numpy as np
+from typing import Dict, List, Optional
 import pandas as pd
-from matplotlib.figure import Figure
-from plotly.offline import get_plotlyjs_version
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from dominate import document
+from dominate.tags import *
+from dominate.util import raw
 
-from workflow_16s.utils.io import import_js_as_str
-
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-logger = logging.getLogger('workflow_16s')
-script_dir = Path(__file__).parent  
-tables_js_path = script_dir / "tables.js"  
-css_path = script_dir / "style.css"  
-html_template_path = script_dir / "template.html"  
-
-# ===================================== CLASSES ====================================== #
-class NumpySafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj) -> Any:  
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        return super().default(obj)
-
-# ================================== CORE HELPERS =================================== #
-def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
-    logger.info("Analyzing AmpliconData structure...")
-    logger.info(f"AmpliconData has ordination: {hasattr(amplicon_data, 'ordination')}")
-    logger.info(f"AmpliconData has alpha_diversity: {hasattr(amplicon_data, 'alpha_diversity')}")
-    logger.info(f"AmpliconData has models: {hasattr(amplicon_data, 'models')}")
-    logger.info(f"AmpliconData has maps: {hasattr(amplicon_data, 'maps')}")
-    logger.info(f"AmpliconData has top_contaminated_features: {hasattr(amplicon_data, 'top_contaminated_features')}")
-    logger.info(f"AmpliconData has top_pristine_features: {hasattr(amplicon_data, 'top_pristine_features')}")
-
-    figures = {}
-    
-    # Ordination figures
-    logger.info("Extracting ordination figures...")
-    ordination_figures = {}
-    if hasattr(amplicon_data, 'ordination'):
-        for table_type, levels in amplicon_data.ordination.items():
-            logger.info(f"  Processing table_type: {table_type}")
-            for level, methods in levels.items():
-                logger.info(f"    Processing level: {level}")
-                for method, data in methods.items():
-                    logger.info(f"      Processing method: {method}")
-                    if data and 'figures' in data and data['figures']:
-                        logger.info(f"        Found {len(data['figures'])} figures for {table_type}/{level}/{method}")
-                        if table_type not in ordination_figures:
-                            ordination_figures[table_type] = {}
-                        if level not in ordination_figures[table_type]:
-                            ordination_figures[table_type][level] = {}
-                        ordination_figures[table_type][level][method] = data['figures']
-                    else:
-                        logger.warning(f"        No figures found for {table_type}/{level}/{method}")
-    else:
-        logger.warning("No ordination data found in AmpliconData")
-    figures['ordination'] = ordination_figures
-
-    # Alpha diversity figures
-    logger.info("Extracting alpha diversity figures...")
-    alpha_figures = {}
-    if hasattr(amplicon_data, 'alpha_diversity'):
-        for table_type, levels in amplicon_data.alpha_diversity.items():
-            logger.info(f"  Processing table_type: {table_type}")
-            for level, data in levels.items():
-                logger.info(f"    Processing level: {level}")
-                if 'figures' in data and data['figures']:
-                    logger.info(f"      Found {len(data['figures'])} figures")
-                    if table_type not in alpha_figures:
-                        alpha_figures[table_type] = {}
-                    alpha_figures[table_type][level] = data['figures']
-                else:
-                    logger.warning(f"      No figures found for {table_type}/{level}")
-    else:
-        logger.warning("No alpha_diversity data found in AmpliconData")
-    figures['alpha_diversity'] = alpha_figures
-
-    # Sample maps
-    logger.info("Extracting sample maps...")
-    if hasattr(amplicon_data, 'maps') and amplicon_data.maps:
-        logger.info(f"  Found {len(amplicon_data.maps)} sample maps")
-        figures['map'] = amplicon_data.maps
-    else:
-        logger.warning("No sample maps found in AmpliconData")
-
-    # SHAP figures
-    logger.info("Extracting SHAP figures...")
-    shap_figures = {}
-    if hasattr(amplicon_data, 'models'):
-        for table_type, levels in amplicon_data.models.items():
-            logger.info(f"  Processing table_type: {table_type}")
-            for level, methods in levels.items():
-                logger.info(f"    Processing level: {level}")
-                for method, model_result in methods.items():
-                    logger.info(f"      Processing method: {method}")
-                    if model_result and 'figures' in model_result:
-                        logger.info(f"        Found figures: {list(model_result['figures'].keys())}")
-                        if table_type not in shap_figures:
-                            shap_figures[table_type] = {}
-                        if level not in shap_figures[table_type]:
-                            shap_figures[table_type][level] = {}
-                        shap_figures[table_type][level][method] = model_result['figures']
-                    else:
-                        logger.warning(f"        No figures found for {table_type}/{level}/{method}")
-    else:
-        logger.warning("No models data found in AmpliconData")
-    figures['shap'] = shap_figures
-
-    # Violin plots
-    logger.info("Extracting violin plots...")
-    violin_figures = {'contaminated': {}, 'pristine': {}}
-    if hasattr(amplicon_data, 'top_contaminated_features'):
-        logger.info(f"  Found {len(amplicon_data.top_contaminated_features)} contaminated features")
-        for feat in amplicon_data.top_contaminated_features:
-            if 'violin_figure' in feat and feat['violin_figure']:
-                logger.info(f"    Violin figure found for {feat['feature']}")
-                violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
-    if hasattr(amplicon_data, 'top_pristine_features'):
-        logger.info(f"  Found {len(amplicon_data.top_pristine_features)} pristine features")
-        for feat in amplicon_data.top_pristine_features:
-            if 'violin_figure' in feat and feat['violin_figure']:
-                logger.info(f"    Violin figure found for {feat['feature']}")
-                violin_figures['pristine'][feat['feature']] = feat['violin_figure']
-    figures['violin'] = violin_figures
-
-    # Log the final extracted figures structure
-    logger.info("Extracted figures summary:")
-    for section, data in figures.items():
-        if isinstance(data, dict):
-            logger.info(f"  {section}: {len(data)} items")
-            for key, subdata in data.items():
-                if isinstance(subdata, dict):
-                    logger.info(f"    {key}: {len(subdata)} sub-items")
-                else:
-                    logger.info(f"    {key}: {type(subdata)}")
-        else:
-            logger.info(f"  {section}: {type(data)}")
-    
-    return figures
-
-def _prepare_sections(
-    figures: Dict,
-    include_sections: List[str],
-    id_counter: Iterator[int],
-) -> Tuple[List[Dict], Dict]:
-    sections = []
-    plot_data: Dict[str, Any] = {}
-
-    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
-    ordered_sections = [
-        'map',
-        'statistical_results',
-        'alpha_diversity',
-        'ordination',
-        'ml_results',
-        'violin'
-    ]
-    
-    # Filter and sort sections based on defined order
-    include_sections = [sec for sec in ordered_sections if sec in include_sections]
-
-    for sec in include_sections:
-        if sec not in figures:
-            continue
-
-        sec_data = {
-            "id": f"sec-{uuid.uuid4().hex}", 
-            "title": sec.replace('_', ' ').title(), 
-            "subsections": []
-        }
-
-        # Rename ordination to Beta Diversity
-        if sec == "ordination":
-            sec_data["title"] = "Beta Diversity"
-            if figures[sec]:
-                btns, tabs, pd = _ordination_to_nested_html(
-                    figures[sec], id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Beta Diversity",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            else:
-                sec_data["subsections"].append({
-                    "title": "Beta Diversity",
-                    "tabs_html": "<div class='info-message'>No ordination figures available</div>",
-                    "buttons_html": ""
-                })
-        
-        elif sec == "alpha_diversity":
-            if figures[sec]:
-                btns, tabs, pd = _alpha_diversity_to_nested_html(
-                    figures[sec], id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Alpha Diversity",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            else:
-                sec_data["subsections"].append({
-                    "title": "Alpha Diversity",
-                    "tabs_html": "<div class='info-message'>No alpha diversity figures available</div>",
-                    "buttons_html": ""
-                })
-        
-        elif sec == "map":
-            flat: Dict[str, Any] = {}
-            _flatten(figures[sec], [], flat)
-            if flat:
-                tabs, btns, pd = _figs_to_html(
-                    flat, id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Sample Maps",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            else:
-                sec_data["subsections"].append({
-                    "title": "Sample Maps",
-                    "tabs_html": "<div class='info-message'>No sample maps available</div>",
-                    "buttons_html": ""
-                })
-        
-        elif sec == "ml_results":
-            # ML Results section includes both model evaluation and SHAP
-            ml_subsections = []
-            
-            # Add SHAP plots if available
-            if 'shap' in figures and figures['shap']:
-                btns, tabs, pd = _shap_to_nested_html(
-                    figures['shap'], id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                ml_subsections.append({
-                    "title": "Model Evaluation",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            
-            if not ml_subsections:
-                ml_subsections.append({
-                    "title": "Machine Learning Results",
-                    "tabs_html": "<div class='info-message'>No ML figures available</div>",
-                    "buttons_html": ""
-                })
-                
-            sec_data["subsections"] = ml_subsections
-        
-        elif sec == "violin":
-            # Only show section if we have at least one violin figure
-            has_violins = any(
-                len(figures['violin'][cat]) > 0 
-                for cat in ['contaminated', 'pristine']
-            )
-            
-            if has_violins:
-                btns, tabs, pd = _violin_to_nested_html(
-                    figures[sec], id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Violin Plots",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-            else:
-                sec_data["subsections"].append({
-                    "title": "Violin Plots",
-                    "tabs_html": "<div class='info-message'>No significant features found for violin plots</div>",
-                    "buttons_html": ""
-                })
-        
-        if sec_data["subsections"]:
-            sections.append(sec_data)
-
-    return sections, plot_data
-
-def _extract_shap_dependency(shap_figures: Dict) -> Dict[str, Any]:
-    """Extract SHAP dependency plots from SHAP figures"""
-    dependency_figs = {}
-    
-    for table_type, levels in shap_figures.items():
-        for level, methods in levels.items():
-            for method, plots in methods.items():
-                if 'shap_dependency' in plots:
-                    # Handle both list and dict formats
-                    if isinstance(plots['shap_dependency'], list):
-                        for i, fig in enumerate(plots['shap_dependency']):
-                            key = f"{table_type} - {level} - {method} - Dependency {i+1}"
-                            dependency_figs[key] = fig
-                    elif isinstance(plots['shap_dependency'], dict):
-                        for name, fig in plots['shap_dependency'].items():
-                            key = f"{table_type} - {level} - {method} - {name}"
-                            dependency_figs[key] = fig
-                    else:
-                        key = f"{table_type} - {level} - {method} - Dependency"
-                        dependency_figs[key] = plots['shap_dependency']
-    
-    return dependency_figs
-
-def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
-    for k, v in tree.items():
-        new_keys = keys + [k]
-        if isinstance(v, dict):
-            _flatten(v, new_keys, out)
-        else:
-            out[" - ".join(new_keys)] = v
-
-def _figs_to_html(
-    figs: Dict[str, Any], 
-    counter: Iterator[int], 
-    prefix: str, 
-    *, 
-    square: bool = False,
-    row_label: Optional[str] = None
-) -> Tuple[str, str, Dict]:
-    tabs, btns, plot_data = [], [], {}
-
-    for i, (title, fig) in enumerate(figs.items()):
-        idx     = next(counter)
-        tab_id  = f"{prefix}-tab-{idx}"
-        plot_id = f"{prefix}-plot-{idx}"
-
-        btns.append(
-            f'<button class="tab-button {"active" if i==0 else ""}" '
-            f'data-tab="{tab_id}" '
-            f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
-        )
-
-        tabs.append(
-            f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if i==0 else "none"}" '
-            f'data-plot-id="{plot_id}">'
-            f'<div id="container-{plot_id}" class="plot-container"></div></div>'
-        )
-
-        try:
-            if fig is None:
-                raise ValueError("Figure object is None")
-                
-            if hasattr(fig, "to_plotly_json"):
-                pj = fig.to_plotly_json()
-                # Ensure layout exists
-                if "layout" not in pj:
-                    pj["layout"] = {}
-                pj["layout"].update({
-                    "autosize": True,
-                    "width": 800,
-                    "height": 600,
-                    "showlegend": True
-                })
-                plot_data[plot_id] = {
-                    "type": "plotly",
-                    "data": pj["data"],
-                    "layout": pj["layout"],
-                    "square": square
-                }
-            elif isinstance(fig, Figure):
-                buf = BytesIO()
-                fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
-                buf.seek(0)
-                plot_data[plot_id] = {
-                    "type": "image",
-                    "data": base64.b64encode(buf.read()).decode()
-                }
-            else:
-                raise TypeError(f"Unsupported figure type {type(fig)}")
-                
-        except Exception as exc:
-            logger.exception(f"Serializing figure '{title}' failed")
-            plot_data[plot_id] = {
-                "type": "error", 
-                "error": str(exc)
-            }
-            
-    buttons_html = "\n".join(btns)
-    if row_label:
-        buttons_html = (
-            f'<div class="tabs" data-label="{row_label}">'
-            f'{buttons_html}</div>'
-        )
-    else:
-        buttons_html = f'<div class="tabs">{buttons_html}</div>'
-        
-    return "\n".join(tabs), buttons_html, plot_data
-
-def _section_html(sec: Dict) -> str:
-    sub_html = "\n".join(
-        f'<div class="subsection">\n'
-        f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tab-content">\n'          
-        f'    {sub["buttons_html"]}\n'
-        f'    {sub["tabs_html"]}\n'
-        f'  </div>\n'                             
-        f'</div>'
-        for sub in sec["subsections"]
-    )
-    return f'<div class="section" id="{sec["id"]}">\n' \
-           f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
-
-def _prepare_features_table(
-    features: List[Dict], 
-    max_features: int,
-    category: str
-) -> pd.DataFrame:
-    if not features:
-        return pd.DataFrame({
-            "Message": [f"No significant {category} features found"],
-            "Recommendation": ["Try relaxing p-value threshold or using different statistical tests"]
-        })
-    
-    df = pd.DataFrame(features[:max_features])
-    df = df.rename(columns={
-        "feature": "Feature",
-        "level": "Taxonomic Level",
-        "test": "Test",
-        "effect": "Effect Size",
-        "p_value": "P-value",
-        "effect_dir": "Direction"
-    })
-    
-    if "faprotax_functions" in df.columns:
-        df["Functions"] = df["faprotax_functions"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) else ""
-        )
-    
-    df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
-    
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
-               "P-value", "Direction", "Functions"]]
-
-def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
-    summary = []
-    for table_type, tests in stats.items():
-        for test_name, levels in tests.items():
-            for level, df in levels.items():
-                if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
-                    n_sig = sum(df["p_value"] < 0.05)
-                else:
-                    n_sig = 0
-                summary.append({
-                    "Table Type": table_type,
-                    "Test": test_name,
-                    "Level": level,
-                    "Significant Features": n_sig,
-                    "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
-                })
-    
-    return pd.DataFrame(summary)
-
-def _prepare_ml_summary(
-    models: Dict, 
-    top_contaminated: List[Dict], 
-    top_pristine: List[Dict]
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-    if not models:
-        return None, None
-
-    metrics_summary = []
-    features_summary = []
-    
-    for table_type, levels in models.items():
-        for level, methods in levels.items():
-            for method, result in methods.items():
-                if not result:
-                    continue
-                
-                test_scores = result.get("test_scores", {})
-                metrics = {
-                    "Table Type": table_type,
-                    "Level": level,
-                    "Method": method,
-                    "Top Features": len(result.get("top_features", [])),
-                    "Accuracy": f"{test_scores.get('accuracy', 0):.4f}",
-                    "F1 Score": f"{test_scores.get('f1', 0):.4f}",
-                    "MCC": f"{test_scores.get('mcc', 0):.4f}",
-                    "ROC AUC": f"{test_scores.get('roc_auc', 0):.4f}",
-                    "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
-                }
-                metrics_summary.append(metrics)
-                
-                feat_imp = result.get("feature_importances", {})
-                top_features = result.get("top_features", [])[:10]
-                for i, feat in enumerate(top_features, 1):
-                    importance = feat_imp.get(feat, 0)
-                    features_summary.append({
-                        "Table Type": table_type,
-                        "Level": level,
-                        "Method": method,
-                        "Rank": i,
-                        "Feature": feat,
-                        "Importance": f"{importance:.4f}"
-                    })
-    
-    metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
-    features_df = pd.DataFrame(features_summary) if features_summary else None
-    
-    return metrics_df, features_df
-
-def _format_ml_section(
-    ml_metrics: pd.DataFrame, 
-    ml_features: pd.DataFrame
-) -> str:
-    if ml_metrics is None or ml_metrics.empty:
-        return "<p>No ML results available</p>"
-    
-    ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
-    
-    tooltip_map = {
-        "MCC": "Balanced classifier metric (-1 to 1) that considers all confusion matrix values...",
-        "ROC AUC": "Probability that random positive ranks higher than random negative...",
-        "F1 Score": "Balance between precision and recall...",
-        "PR AUC": "Positive-class focused metric for imbalanced data..."
-    }
-    ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
-    
-    enhanced_metrics = f"""
-    <div class="table-container" id="container-ml-metrics-table">
-        {ml_metrics_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
-                <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
-                <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
-            </div>
-        </div>
-    </div>
+class AmpliconReportGenerator:
+    """
+    Generates an interactive HTML report from an AmpliconData object.
     """
     
-    features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
-    
-    return f"""
-    <div class="ml-section">
-        <h3>Model Performance</h3>
-        {enhanced_metrics}
+    def __init__(self, amplicon_data, output_path: str = "amplicon_report.html"):
+        """
+        Initialize the report generator.
         
-        <h3>Top Features</h3>
-        {features_html}
-    </div>
-    """
-
-def _shap_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for table_type, levels in figures.items():
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_first_table = not buttons_html
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
+        Args:
+            amplicon_data: The AmpliconData object containing analysis results
+            output_path: Path to save the HTML report
+        """
+        self.data = amplicon_data
+        self.output_path = Path(output_path)
+        self.figures = {}
         
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
+    def generate_report(self):
+        """Generate the complete HTML report."""
+        # Create document
+        doc = document(title='16S Amplicon Analysis Report')
+        
+        # Add CSS styling
+        with doc.head:
+            style("""
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                h1, h2, h3 {
+                    color: #2c3e50;
+                }
+                .section {
+                    margin-bottom: 30px;
+                    padding: 15px;
+                    background-color: #f9f9f9;
+                    border-radius: 5px;
+                }
+                .dropdown {
+                    margin-bottom: 15px;
+                }
+                select {
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #ddd;
+                    font-size: 16px;
+                }
+                .figure-container {
+                    margin: 20px 0;
+                    text-align: center;
+                }
+                .figure-title {
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+                .table-container {
+                    overflow-x: auto;
+                    margin: 20px 0;
+                }
+                table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin-bottom: 20px;
+                }
+                th, td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }
+                th {
+                    background-color: #f2f2f2;
+                }
+                tr:nth-child(even) {
+                    background-color: #f9f9f9;
+                }
+                .nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid #eee;
+                }
+                .nav a {
+                    padding: 8px 15px;
+                    background-color: #e0e0e0;
+                    border-radius: 4px;
+                    text-decoration: none;
+                    color: #333;
+                }
+                .nav a:hover {
+                    background-color: #d0d0d0;
+                }
+                .tab-content {
+                    display: none;
+                }
+                .tab-content.active {
+                    display: block;
+                }
+            """)
             
-            level_btns.append(
-                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            method_btns, method_panes = [], []
-            for m_idx, (method, plots) in enumerate(methods.items()):
-                method_id = f"{level_id}-method-{next(id_counter)}"
+            # JavaScript for interactivity
+            script("""
+                function showSection(sectionId) {
+                    // Hide all sections
+                    document.querySelectorAll('.tab-content').forEach(section => {
+                        section.classList.remove('active');
+                    });
+                    
+                    // Show selected section
+                    document.getElementById(sectionId).classList.add('active');
+                    
+                    // Update nav links
+                    document.querySelectorAll('.nav a').forEach(link => {
+                        if (link.getAttribute('onclick').includes(sectionId)) {
+                            link.style.backgroundColor = '#d0d0d0';
+                        } else {
+                            link.style.backgroundColor = '#e0e0e0';
+                        }
+                    });
+                }
                 
-                method_btns.append(
-                    f'<button class="method-button {"active" if m_idx == 0 else ""}" '
-                    f'data-method="{method_id}" '
-                    f'onclick="showMethod(\'{method_id}\')">{method}</button>'
+                function updateFigure(selectElement, figureContainerId) {
+                    const selectedValue = selectElement.value;
+                    const figures = JSON.parse(selectElement.getAttribute('data-figures'));
+                    
+                    // Hide all figures in this container
+                    document.querySelectorAll(`#${figureContainerId} .figure`).forEach(fig => {
+                        fig.style.display = 'none';
+                    });
+                    
+                    // Show selected figure
+                    const selectedFig = document.getElementById(`figure-${selectedValue}`);
+                    if (selectedFig) {
+                        selectedFig.style.display = 'block';
+                    }
+                }
+                
+                // Show first section by default
+                document.addEventListener('DOMContentLoaded', function() {
+                    showSection('overview');
+                });
+            """)
+        
+        # Navigation menu
+        with doc:
+            with div(cls="nav"):
+                a("Overview", onclick="showSection('overview')")
+                a("Sample Maps", onclick="showSection('maps')")
+                a("Alpha Diversity", onclick="showSection('alpha')")
+                a("Statistical Tests", onclick="showSection('stats')")
+                a("Ordination", onclick="showSection('ordination')")
+                a("Machine Learning", onclick="showSection('ml')")
+                a("Top Features", onclick="showSection('features')")
+            
+            # Overview section
+            with div(id="overview", cls="tab-content"):
+                self._add_overview_section()
+            
+            # Sample maps section
+            with div(id="maps", cls="tab-content"):
+                self._add_sample_maps_section()
+            
+            # Alpha diversity section
+            with div(id="alpha", cls="tab-content"):
+                self._add_alpha_diversity_section()
+            
+            # Statistical tests section
+            with div(id="stats", cls="tab-content"):
+                self._add_statistical_tests_section()
+            
+            # Ordination section
+            with div(id="ordination", cls="tab-content"):
+                self._add_ordination_section()
+            
+            # Machine learning section
+            with div(id="ml", cls="tab-content"):
+                self._add_ml_section()
+            
+            # Top features section
+            with div(id="features", cls="tab-content"):
+                self._add_top_features_section()
+        
+        # Save the report
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.output_path, 'w', encoding='utf-8') as f:
+            f.write(doc.render())
+            
+        print(f"Report generated at: {self.output_path}")
+    
+    def _add_overview_section(self):
+        """Add overview section to the report."""
+        h1("16S Amplicon Analysis Report")
+        hr()
+        
+        h2("Analysis Overview")
+        
+        # Basic info
+        with div(cls="section"):
+            h3("Dataset Information")
+            p(f"Analysis mode: {self.data.mode}")
+            p(f"Number of samples: {len(self.data.meta)}")
+            
+            if hasattr(self.data, 'table'):
+                p(f"Number of features: {self.data.table.shape[0]}")
+            
+            # Show metadata columns
+            with details():
+                summary("Metadata Columns")
+                ul([li(col) for col in self.data.meta.columns])
+        
+        # Analysis summary
+        with div(cls="section"):
+            h3("Analysis Summary")
+            
+            # Statistical tests
+            if self.data.stats:
+                p("Statistical tests performed:")
+                ul([li(f"{table_type} ({level}): {', '.join(tests.keys())}")
+                   for table_type, levels in self.data.stats.items()
+                   for level, tests in levels.items()])
+            
+            # Ordination methods
+            if self.data.ordination:
+                p("Ordination methods performed:")
+                ul([li(f"{table_type} ({level}): {', '.join(methods.keys())}")
+                   for table_type, levels in self.data.ordination.items()
+                   for level, methods in levels.items()])
+            
+            # Top features
+            if self.data.top_contaminated_features or self.data.top_pristine_features:
+                p("Significant features identified:")
+                ul([
+                    li(f"{len(self.data.top_contaminated_features)} features more abundant in contaminated samples"),
+                    li(f"{len(self.data.top_pristine_features)} features more abundant in pristine samples")
+                ])
+    
+    def _add_sample_maps_section(self):
+        """Add sample maps section to the report."""
+        h2("Sample Maps")
+        hr()
+        
+        if not self.data.maps:
+            p("No sample maps were generated in this analysis.")
+            return
+            
+        with div(cls="section"):
+            h3("Geographic Distribution of Samples")
+            
+            # Create dropdown for map selection
+            map_options = list(self.data.maps.keys())
+            with div(cls="dropdown"):
+                label("Select coloring variable:", for_="map-select")
+                select(
+                    id="map-select",
+                    onchange="updateFigure(this, 'map-figures')",
+                    *[option(col, value=col) for col in map_options],
+                    data_figures=map_options
                 )
-                
-                # Prepare plots dictionary - include ALL plot types
-                method_plots = {}
-                for plot_name, plot in plots.items():
-                    if plot is None:
-                        logger.error(f"Plot '{plot_name}' is None for {table_type}/{level}/{method}")
-                        continue
-                        
-                    # Handle nested dependency plots
-                    if plot_name == 'shap_dependency':
-                        if isinstance(plot, list):
-                            for i, fig in enumerate(plot):
-                                method_plots[f'Dependency {i+1}'] = fig
-                        elif isinstance(plot, dict):
-                            for name, fig in plot.items():
-                                method_plots[name] = fig
+            
+            # Container for map figures
+            with div(id="map-figures"):
+                for i, (col, fig) in enumerate(self.data.maps.items()):
+                    fig_div = div(
+                        id=f"figure-{col}",
+                        cls="figure",
+                        style="display: none;" if i > 0 else ""
+                    )
+                    with fig_div:
+                        if hasattr(fig, 'to_html'):
+                            raw(fig.to_html(full_html=False))
                         else:
-                            method_plots['Dependency'] = plot
-                    else:
-                        method_plots[plot_name] = plot
-                
-                plot_btns, plot_tabs, pd = _figs_to_html(
-                    method_plots, id_counter, method_id
-                )
-                plot_data.update(pd)
-                
-                method_panes.append(
-                    f'<div id="{method_id}" class="method-pane" '
-                    f'style="display:{"block" if m_idx == 0 else "none"};">'
-                    f'{plot_btns}'
-                    f'{plot_tabs}'
-                    f'</div>'
+                            p("Figure display not available")
+    
+    def _add_alpha_diversity_section(self):
+        """Add alpha diversity section to the report."""
+        h2("Alpha Diversity Analysis")
+        hr()
+        
+        if not self.data.alpha_diversity:
+            p("No alpha diversity analysis was performed.")
+            return
+            
+        with div(cls="section"):
+            h3("Alpha Diversity Results")
+            
+            # Create dropdowns for table type and level selection
+            table_types = list(self.data.alpha_diversity.keys())
+            
+            with div(cls="dropdown"):
+                label("Select table type:", for_="alpha-table-select")
+                select(
+                    id="alpha-table-select",
+                    onchange="updateAlphaLevelDropdown(this.value)",
+                    *[option(tt.replace('_', ' ').title(), value=tt) for tt in table_types]
                 )
             
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if l_idx == 0 else "none"};">'
-                f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
-                f'{"".join(method_panes)}'
-                f'</div>'
-            )
+            with div(cls="dropdown"):
+                label("Select taxonomic level:", for_="alpha-level-select")
+                select(
+                    id="alpha-level-select",
+                    onchange="updateAlphaFigures(this.value)",
+                )
+            
+            # Container for alpha diversity figures
+            with div(id="alpha-figures"):
+                pass
+            
+            # JavaScript for alpha diversity dropdowns
+            script("""
+                // Initialize level dropdown based on first table type
+                function initAlphaDropdowns() {
+                    const tableTypes = """ + str(table_types) + """;
+                    if (tableTypes.length > 0) {
+                        updateAlphaLevelDropdown(tableTypes[0]);
+                    }
+                }
+                
+                // Update level dropdown based on selected table type
+                function updateAlphaLevelDropdown(tableType) {
+                    const levels = """ + str({tt: list(levels.keys()) for tt, levels in self.data.alpha_diversity.items()}) + """[tableType] || [];
+                    const levelSelect = document.getElementById('alpha-level-select');
+                    
+                    // Clear existing options
+                    levelSelect.innerHTML = '';
+                    
+                    // Add new options
+                    levels.forEach(level => {
+                        const opt = document.createElement('option');
+                        opt.value = level;
+                        opt.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+                        levelSelect.appendChild(opt);
+                    });
+                    
+                    // Update figures
+                    if (levels.length > 0) {
+                        updateAlphaFigures(levels[0]);
+                    }
+                }
+                
+                // Update displayed figures based on selected level
+                function updateAlphaFigures(level) {
+                    const tableType = document.getElementById('alpha-table-select').value;
+                    const container = document.getElementById('alpha-figures');
+                    
+                    // Clear existing content
+                    container.innerHTML = '';
+                    
+                    // Get the alpha data for this combination
+                    const alphaData = """ + str({
+                        (tt, lvl): data 
+                        for tt, levels in self.data.alpha_diversity.items() 
+                        for lvl, data in levels.items()
+                    }) + """[[tableType, level]];
+                    
+                    if (!alphaData) return;
+                    
+                    // Add metric dropdown if we have multiple metrics
+                    if (alphaData.figures && Object.keys(alphaData.figures).length > 1) {
+                        const metrics = Object.keys(alphaData.figures).filter(k => k !== 'summary' && k !== 'correlations');
+                        if (metrics.length > 1) {
+                            const metricSelect = document.createElement('select');
+                            metricSelect.id = 'alpha-metric-select';
+                            metricSelect.onchange = function() {
+                                updateAlphaMetricFigures(this.value);
+                            };
+                            
+                            metrics.forEach(metric => {
+                                const opt = document.createElement('option');
+                                opt.value = metric;
+                                opt.textContent = metric.replace('_', ' ').replace(/(^|\s)\S/g, l => l.toUpperCase());
+                                metricSelect.appendChild(opt);
+                            });
+                            
+                            const label = document.createElement('label');
+                            label.htmlFor = 'alpha-metric-select';
+                            label.textContent = 'Select alpha metric:';
+                            
+                            const dropdown = document.createElement('div');
+                            dropdown.className = 'dropdown';
+                            dropdown.appendChild(label);
+                            dropdown.appendChild(metricSelect);
+                            container.appendChild(dropdown);
+                            
+                            // Add the first metric figure by default
+                            if (metrics.length > 0) {
+                                updateAlphaMetricFigures(metrics[0]);
+                            }
+                        }
+                    }
+                    
+                    // Add summary figure if available
+                    if (alphaData.figures && alphaData.figures.summary) {
+                        const summaryDiv = document.createElement('div');
+                        summaryDiv.className = 'figure-container';
+                        
+                        const title = document.createElement('div');
+                        title.className = 'figure-title';
+                        title.textContent = 'Alpha Diversity Statistical Summary';
+                        summaryDiv.appendChild(title);
+                        
+                        const figDiv = document.createElement('div');
+                        figDiv.innerHTML = """ + str({
+                            (tt, lvl): data['figures']['summary'].to_html(full_html=False) 
+                            if 'summary' in data.get('figures', {}) and hasattr(data['figures']['summary'], 'to_html')
+                            else "Figure not available"
+                            for tt, levels in self.data.alpha_diversity.items() 
+                            for lvl, data in levels.items()
+                        }) + """[[tableType, level]];
+                        summaryDiv.appendChild(figDiv);
+                        
+                        container.appendChild(summaryDiv);
+                    }
+                    
+                    // Add correlation figures if available
+                    if (alphaData.figures && alphaData.figures.correlations) {
+                        const corrDiv = document.createElement('div');
+                        corrDiv.className = 'figure-container';
+                        
+                        const title = document.createElement('div');
+                        title.className = 'figure-title';
+                        title.textContent = 'Alpha Diversity Correlations';
+                        corrDiv.appendChild(title);
+                        
+                        const figDiv = document.createElement('div');
+                        figDiv.innerHTML = """ + str({
+                            (tt, lvl): data['figures']['correlations'].to_html(full_html=False) 
+                            if 'correlations' in data.get('figures', {}) and hasattr(data['figures']['correlations'], 'to_html')
+                            else "Figure not available"
+                            for tt, levels in self.data.alpha_diversity.items() 
+                            for lvl, data in levels.items()
+                        }) + """[[tableType, level]];
+                        corrDiv.appendChild(figDiv);
+                        
+                        container.appendChild(corrDiv);
+                    }
+                }
+                
+                // Update metric-specific figures
+                function updateAlphaMetricFigures(metric) {
+                    const tableType = document.getElementById('alpha-table-select').value;
+                    const level = document.getElementById('alpha-level-select').value;
+                    const container = document.getElementById('alpha-figures');
+                    
+                    // Find or create metric figure container
+                    let metricContainer = document.getElementById('alpha-metric-figure');
+                    if (!metricContainer) {
+                        metricContainer = document.createElement('div');
+                        metricContainer.id = 'alpha-metric-figure';
+                        metricContainer.className = 'figure-container';
+                        container.appendChild(metricContainer);
+                    }
+                    
+                    // Clear existing content
+                    metricContainer.innerHTML = '';
+                    
+                    // Add title
+                    const title = document.createElement('div');
+                    title.className = 'figure-title';
+                    title.textContent = metric.replace('_', ' ').replace(/(^|\s)\S/g, l => l.toUpperCase()) + ' Diversity';
+                    metricContainer.appendChild(title);
+                    
+                    // Add figure
+                    const figDiv = document.createElement('div');
+                    figDiv.innerHTML = """ + str({
+                        (tt, lvl, m): data['figures'][m].to_html(full_html=False) 
+                        if m in data.get('figures', {}) and hasattr(data['figures'][m], 'to_html')
+                        else "Figure not available"
+                        for tt, levels in self.data.alpha_diversity.items() 
+                        for lvl, data in levels.items()
+                        for m in data.get('figures', {}).keys()
+                        if m not in ['summary', 'correlations']
+                    }) + """[[tableType, level, metric]];
+                    metricContainer.appendChild(figDiv);
+                }
+                
+                // Initialize on load
+                document.addEventListener('DOMContentLoaded', initAlphaDropdowns);
+            """)
+    
+    def _add_statistical_tests_section(self):
+        """Add statistical tests section to the report."""
+        h2("Statistical Test Results")
+        hr()
         
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_first_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
+        if not self.data.stats:
+            p("No statistical tests were performed.")
+            return
+            
+        with div(cls="section"):
+            h3("Differential Abundance Analysis")
+            
+            # Create dropdowns for table type and level selection
+            table_types = list(self.data.stats.keys())
+            
+            with div(cls="dropdown"):
+                label("Select table type:", for_="stats-table-select")
+                select(
+                    id="stats-table-select",
+                    onchange="updateStatsLevelDropdown(this.value)",
+                    *[option(tt.replace('_', ' ').title(), value=tt) for tt in table_types]
+                )
+            
+            with div(cls="dropdown"):
+                label("Select taxonomic level:", for_="stats-level-select")
+                select(
+                    id="stats-level-select",
+                    onchange="updateStatsTestDropdown(this.value)",
+                )
+            
+            with div(cls="dropdown"):
+                label("Select statistical test:", for_="stats-test-select")
+                select(
+                    id="stats-test-select",
+                    onchange="updateStatsResults(this.value)",
+                )
+            
+            # Container for stats results
+            with div(id="stats-results"):
+                pass
+            
+            # JavaScript for stats dropdowns
+            script("""
+                // Initialize dropdowns based on first table type
+                function initStatsDropdowns() {
+                    const tableTypes = """ + str(table_types) + """;
+                    if (tableTypes.length > 0) {
+                        updateStatsLevelDropdown(tableTypes[0]);
+                    }
+                }
+                
+                // Update level dropdown based on selected table type
+                function updateStatsLevelDropdown(tableType) {
+                    const levels = """ + str({tt: list(levels.keys()) for tt, levels in self.data.stats.items()}) + """[tableType] || [];
+                    const levelSelect = document.getElementById('stats-level-select');
+                    
+                    // Clear existing options
+                    levelSelect.innerHTML = '';
+                    
+                    // Add new options
+                    levels.forEach(level => {
+                        const opt = document.createElement('option');
+                        opt.value = level;
+                        opt.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+                        levelSelect.appendChild(opt);
+                    });
+                    
+                    // Update test dropdown
+                    if (levels.length > 0) {
+                        updateStatsTestDropdown(levels[0]);
+                    }
+                }
+                
+                // Update test dropdown based on selected level
+                function updateStatsTestDropdown(level) {
+                    const tableType = document.getElementById('stats-table-select').value;
+                    const tests = """ + str({
+                        (tt, lvl): list(tests.keys())
+                        for tt, levels in self.data.stats.items()
+                        for lvl, tests in levels.items()
+                    }) + """[[tableType, level]] || [];
+                    const testSelect = document.getElementById('stats-test-select');
+                    
+                    // Clear existing options
+                    testSelect.innerHTML = '';
+                    
+                    // Add new options
+                    tests.forEach(test => {
+                        const opt = document.createElement('option');
+                        opt.value = test;
+                        
+                        // Format test names for display
+                        let displayName = test;
+                        if (test === 'mwub') displayName = 'Mann-Whitney U (Bonferroni)';
+                        else if (test === 'kwb') displayName = 'Kruskal-Wallis (Bonferroni)';
+                        else if (test === 'fisher') displayName = 'Fisher Exact (Bonferroni)';
+                        else if (test === 'ttest') displayName = 'Student t-test';
+                        
+                        opt.textContent = displayName;
+                        testSelect.appendChild(opt);
+                    });
+                    
+                    // Update results
+                    if (tests.length > 0) {
+                        updateStatsResults(tests[0]);
+                    }
+                }
+                
+                // Update displayed results based on selected test
+                function updateStatsResults(test) {
+                    const tableType = document.getElementById('stats-table-select').value;
+                    const level = document.getElementById('stats-level-select').value;
+                    const container = document.getElementById('stats-results');
+                    
+                    // Clear existing content
+                    container.innerHTML = '';
+                    
+                    // Get the stats data for this combination
+                    const statsData = """ + str({
+                        (tt, lvl, t): data[t]
+                        for tt, levels in self.data.stats.items()
+                        for lvl, data in levels.items()
+                        for t in data.keys()
+                    }) + """[[tableType, level, test]];
+                    
+                    if (!statsData || !(statsData instanceof Object)) return;
+                    
+                    // Create summary stats
+                    const summaryDiv = document.createElement('div');
+                    summaryDiv.className = 'section';
+                    
+                    const sigCount = statsData[statsData['p_value'] < 0.05].shape[0];
+                    const totalCount = statsData.shape[0];
+                    
+                    const summaryTitle = document.createElement('h4');
+                    summaryTitle.textContent = 'Summary Statistics';
+                    summaryDiv.appendChild(summaryTitle);
+                    
+                    const summaryStats = document.createElement('p');
+                    summaryStats.innerHTML = `Significant features (p < 0.05): <strong>${sigCount} / ${totalCount}</strong> (${(sigCount/totalCount*100).toFixed(1)}%)`;
+                    summaryDiv.appendChild(summaryStats);
+                    
+                    container.appendChild(summaryDiv);
+                    
+                    // Create table of top features
+                    const tableDiv = document.createElement('div');
+                    tableDiv.className = 'section';
+                    
+                    const tableTitle = document.createElement('h4');
+                    tableTitle.textContent = 'Top Significant Features (p < 0.05)';
+                    tableDiv.appendChild(tableTitle);
+                    
+                    // Sort by p-value and get top 20
+                    const topFeatures = statsData[statsData['p_value'] < 0.05].sort_values('p_value').head(20);
+                    
+                    if (topFeatures.empty) {
+                        const noSig = document.createElement('p');
+                        noSig.textContent = 'No significant features found at p < 0.05';
+                        tableDiv.appendChild(noSig);
+                    } else {
+                        const tableContainer = document.createElement('div');
+                        tableContainer.className = 'table-container';
+                        
+                        // Convert DataFrame to HTML
+                        const tableHtml = """ + str({
+                            (tt, lvl, t): data[t].sort_values('p_value').head(20).to_html(
+                                classes='dataframe',
+                                border=0,
+                                float_format=lambda x: f'{x:.3e}' if isinstance(x, (int, float)) else str(x)
+                            )
+                            for tt, levels in self.data.stats.items()
+                            for lvl, data in levels.items()
+                            for t in data.keys()
+                        }) + """[[tableType, level, test]];
+                        
+                        tableContainer.innerHTML = tableHtml;
+                        tableDiv.appendChild(tableContainer);
+                    }
+                    
+                    container.appendChild(tableDiv);
+                }
+                
+                // Initialize on load
+                document.addEventListener('DOMContentLoaded', initStatsDropdowns);
+            """)
     
-    buttons_row = (
-        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    )
-    return buttons_row, "".join(panes_html), plot_data
-
-def _violin_to_nested_html(
-    figures_dict: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str
-) -> Tuple[str, str, Dict]:
-    buttons_html = []
-    tabs_html = []
-    plot_data = {}
-    cat_counter = itertools.count()
+    def _add_ordination_section(self):
+        """Add ordination section to the report."""
+        h2("Beta Diversity Ordination")
+        hr()
+        
+        if not self.data.ordination:
+            p("No ordination analyses were performed.")
+            return
+            
+        with div(cls="section"):
+            h3("Ordination Results")
+            
+            # Create dropdowns for table type and level selection
+            table_types = list(self.data.ordination.keys())
+            
+            with div(cls="dropdown"):
+                label("Select table type:", for_="ord-table-select")
+                select(
+                    id="ord-table-select",
+                    onchange="updateOrdLevelDropdown(this.value)",
+                    *[option(tt.replace('_', ' ').title(), value=tt) for tt in table_types]
+                )
+            
+            with div(cls="dropdown"):
+                label("Select taxonomic level:", for_="ord-level-select")
+                select(
+                    id="ord-level-select",
+                    onchange="updateOrdMethodDropdown(this.value)",
+                )
+            
+            with div(cls="dropdown"):
+                label("Select ordination method:", for_="ord-method-select")
+                select(
+                    id="ord-method-select",
+                    onchange="updateOrdColorDropdown(this.value)",
+                )
+            
+            with div(cls="dropdown"):
+                label("Select coloring variable:", for_="ord-color-select")
+                select(
+                    id="ord-color-select",
+                    onchange="updateOrdFigure()",
+                )
+            
+            # Container for ordination figures
+            with div(id="ord-figures"):
+                pass
+            
+            # JavaScript for ordination dropdowns
+            script("""
+                // Initialize dropdowns based on first table type
+                function initOrdDropdowns() {
+                    const tableTypes = """ + str(table_types) + """;
+                    if (tableTypes.length > 0) {
+                        updateOrdLevelDropdown(tableTypes[0]);
+                    }
+                }
+                
+                // Update level dropdown based on selected table type
+                function updateOrdLevelDropdown(tableType) {
+                    const levels = """ + str({tt: list(levels.keys()) for tt, levels in self.data.ordination.items()}) + """[tableType] || [];
+                    const levelSelect = document.getElementById('ord-level-select');
+                    
+                    // Clear existing options
+                    levelSelect.innerHTML = '';
+                    
+                    // Add new options
+                    levels.forEach(level => {
+                        const opt = document.createElement('option');
+                        opt.value = level;
+                        opt.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+                        levelSelect.appendChild(opt);
+                    });
+                    
+                    // Update method dropdown
+                    if (levels.length > 0) {
+                        updateOrdMethodDropdown(levels[0]);
+                    }
+                }
+                
+                // Update method dropdown based on selected level
+                function updateOrdMethodDropdown(level) {
+                    const tableType = document.getElementById('ord-table-select').value;
+                    const methods = """ + str({
+                        (tt, lvl): list(methods.keys())
+                        for tt, levels in self.data.ordination.items()
+                        for lvl, methods in levels.items()
+                    }) + """[[tableType, level]] || [];
+                    const methodSelect = document.getElementById('ord-method-select');
+                    
+                    // Clear existing options
+                    methodSelect.innerHTML = '';
+                    
+                    // Add new options
+                    methods.forEach(method => {
+                        const opt = document.createElement('option');
+                        opt.value = method;
+                        
+                        // Format method names for display
+                        let displayName = method;
+                        if (method === 'pca') displayName = 'PCA';
+                        else if (method === 'pcoa') displayName = 'PCoA';
+                        else if (method === 'tsne') displayName = 't-SNE';
+                        else if (method === 'umap') displayName = 'UMAP';
+                        
+                        opt.textContent = displayName;
+                        methodSelect.appendChild(opt);
+                    });
+                    
+                    // Update color dropdown
+                    if (methods.length > 0) {
+                        updateOrdColorDropdown(methods[0]);
+                    }
+                }
+                
+                // Update color dropdown based on selected method
+                function updateOrdColorDropdown(method) {
+                    const tableType = document.getElementById('ord-table-select').value;
+                    const level = document.getElementById('ord-level-select').value;
+                    const colorVars = """ + str({
+                        (tt, lvl, m): list(data['figures'].keys())
+                        for tt, levels in self.data.ordination.items()
+                        for lvl, data in levels.items()
+                        for m in data.keys()
+                        if 'figures' in data
+                    }) + """[[tableType, level, method]] || [];
+                    const colorSelect = document.getElementById('ord-color-select');
+                    
+                    // Clear existing options
+                    colorSelect.innerHTML = '';
+                    
+                    // Add new options
+                    colorVars.forEach(var => {
+                        const opt = document.createElement('option');
+                        opt.value = var;
+                        opt.textContent = var.replace('_', ' ').replace(/(^|\s)\S/g, l => l.toUpperCase());
+                        colorSelect.appendChild(opt);
+                    });
+                    
+                    // Update figure
+                    if (colorVars.length > 0) {
+                        updateOrdFigure();
+                    }
+                }
+                
+                // Update displayed figure
+                function updateOrdFigure() {
+                    const tableType = document.getElementById('ord-table-select').value;
+                    const level = document.getElementById('ord-level-select').value;
+                    const method = document.getElementById('ord-method-select').value;
+                    const colorVar = document.getElementById('ord-color-select').value;
+                    const container = document.getElementById('ord-figures');
+                    
+                    // Clear existing content
+                    container.innerHTML = '';
+                    
+                    // Get the figure for this combination
+                    const figureHtml = """ + str({
+                        (tt, lvl, m, c): data['figures'][c].to_html(full_html=False)
+                        if c in data.get('figures', {}) and hasattr(data['figures'][c], 'to_html')
+                        else "Figure not available"
+                        for tt, levels in self.data.ordination.items()
+                        for lvl, data in levels.items()
+                        for m in data.keys()
+                        for c in data.get('figures', {}).keys()
+                    }) + """[[tableType, level, method, colorVar]];
+                    
+                    if (!figureHtml) return;
+                    
+                    const figureContainer = document.createElement('div');
+                    figureContainer.className = 'figure-container';
+                    
+                    const title = document.createElement('div');
+                    title.className = 'figure-title';
+                    title.textContent = `${method.toUpperCase()} colored by ${colorVar.replace('_', ' ')}`;
+                    figureContainer.appendChild(title);
+                    
+                    const figDiv = document.createElement('div');
+                    figDiv.innerHTML = figureHtml;
+                    figureContainer.appendChild(figDiv);
+                    
+                    container.appendChild(figureContainer);
+                }
+                
+                // Initialize on load
+                document.addEventListener('DOMContentLoaded', initOrdDropdowns);
+            """)
     
-    for category, features in figures_dict.items():
+    def _add_ml_section(self):
+        """Add machine learning section to the report."""
+        h2("Machine Learning Feature Selection")
+        hr()
+        
+        if not self.data.models:
+            p("No machine learning analysis was performed.")
+            return
+            
+        with div(cls="section"):
+            h3("Feature Selection Results")
+            
+            # Create dropdowns for table type and level selection
+            table_types = list(self.data.models.keys())
+            
+            with div(cls="dropdown"):
+                label("Select table type:", for_="ml-table-select")
+                select(
+                    id="ml-table-select",
+                    onchange="updateMlLevelDropdown(this.value)",
+                    *[option(tt.replace('_', ' ').title(), value=tt) for tt in table_types]
+                )
+            
+            with div(cls="dropdown"):
+                label("Select taxonomic level:", for_="ml-level-select")
+                select(
+                    id="ml-level-select",
+                    onchange="updateMlMethodDropdown(this.value)",
+                )
+            
+            with div(cls="dropdown"):
+                label("Select feature selection method:", for_="ml-method-select")
+                select(
+                    id="ml-method-select",
+                    onchange="updateMlResults()",
+                )
+            
+            # Container for ML results
+            with div(id="ml-results"):
+                pass
+            
+            # JavaScript for ML dropdowns
+            script("""
+                // Initialize dropdowns based on first table type
+                function initMlDropdowns() {
+                    const tableTypes = """ + str(table_types) + """;
+                    if (tableTypes.length > 0) {
+                        updateMlLevelDropdown(tableTypes[0]);
+                    }
+                }
+                
+                // Update level dropdown based on selected table type
+                function updateMlLevelDropdown(tableType) {
+                    const levels = """ + str({tt: list(levels.keys()) for tt, levels in self.data.models.items()}) + """[tableType] || [];
+                    const levelSelect = document.getElementById('ml-level-select');
+                    
+                    // Clear existing options
+                    levelSelect.innerHTML = '';
+                    
+                    // Add new options
+                    levels.forEach(level => {
+                        const opt = document.createElement('option');
+                        opt.value = level;
+                        opt.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+                        levelSelect.appendChild(opt);
+                    });
+                    
+                    // Update method dropdown
+                    if (levels.length > 0) {
+                        updateMlMethodDropdown(levels[0]);
+                    }
+                }
+                
+                // Update method dropdown based on selected level
+                function updateMlMethodDropdown(level) {
+                    const tableType = document.getElementById('ml-table-select').value;
+                    const methods = """ + str({
+                        (tt, lvl): list(methods.keys())
+                        for tt, levels in self.data.models.items()
+                        for lvl, methods in levels.items()
+                    }) + """[[tableType, level]] || [];
+                    const methodSelect = document.getElementById('ml-method-select');
+                    
+                    // Clear existing options
+                    methodSelect.innerHTML = '';
+                    
+                    // Add new options
+                    methods.forEach(method => {
+                        const opt = document.createElement('option');
+                        opt.value = method;
+                        opt.textContent = method.replace('_', ' ').replace(/(^|\s)\S/g, l => l.toUpperCase());
+                        methodSelect.appendChild(opt);
+                    });
+                    
+                    // Update results
+                    if (methods.length > 0) {
+                        updateMlResults();
+                    }
+                }
+                
+                // Update displayed results
+                function updateMlResults() {
+                    const tableType = document.getElementById('ml-table-select').value;
+                    const level = document.getElementById('ml-level-select').value;
+                    const method = document.getElementById('ml-method-select').value;
+                    const container = document.getElementById('ml-results');
+                    
+                    // Clear existing content
+                    container.innerHTML = '';
+                    
+                    // Get the ML data for this combination
+                    const mlData = """ + str({
+                        (tt, lvl, m): data[m]
+                        for tt, levels in self.data.models.items()
+                        for lvl, data in levels.items()
+                        for m in data.keys()
+                    }) + """[[tableType, level, method]];
+                    
+                    if (!mlData) return;
+                    
+                    // Create evaluation metrics section
+                    const metricsDiv = document.createElement('div');
+                    metricsDiv.className = 'section';
+                    
+                    const metricsTitle = document.createElement('h4');
+                    metricsTitle.textContent = 'Model Evaluation Metrics';
+                    metricsDiv.appendChild(metricsTitle);
+                    
+                    // Add metrics table
+                    if (mlData.metrics) {
+                        const metricsTable = document.createElement('table');
+                        
+                        // Create header
+                        const thead = document.createElement('thead');
+                        const headerRow = document.createElement('tr');
+                        ['Metric', 'Value'].forEach(text => {
+                            const th = document.createElement('th');
+                            th.textContent = text;
+                            headerRow.appendChild(th);
+                        });
+                        thead.appendChild(headerRow);
+                        metricsTable.appendChild(thead);
+                        
+                        // Create body
+                        const tbody = document.createElement('tbody');
+                        Object.entries(mlData.metrics).forEach(([metric, value]) => {
+                            const row = document.createElement('tr');
+                            
+                            const metricCell = document.createElement('td');
+                            metricCell.textContent = metric.replace('_', ' ').replace(/(^|\s)\S/g, l => l.toUpperCase());
+                            row.appendChild(metricCell);
+                            
+                            const valueCell = document.createElement('td');
+                            valueCell.textContent = typeof value === 'number' ? value.toFixed(3) : value;
+                            row.appendChild(valueCell);
+                            
+                            tbody.appendChild(row);
+                        });
+                        metricsTable.appendChild(tbody);
+                        
+                        metricsDiv.appendChild(metricsTable);
+                    } else {
+                        const noMetrics = document.createElement('p');
+                        noMetrics.textContent = 'No evaluation metrics available';
+                        metricsDiv.appendChild(noMetrics);
+                    }
+                    
+                    container.appendChild(metricsDiv);
+                    
+                    // Add feature importance plot if available
+                    if (mlData.figures && mlData.figures.shap_summary_bar) {
+                        const shapDiv = document.createElement('div');
+                        shapDiv.className = 'section';
+                        
+                        const shapTitle = document.createElement('h4');
+                        shapTitle.textContent = 'Feature Importance (SHAP values)';
+                        shapDiv.appendChild(shapTitle);
+                        
+                        const figDiv = document.createElement('div');
+                        figDiv.className = 'figure-container';
+                        figDiv.innerHTML = """ + str({
+                            (tt, lvl, m): data[m]['figures']['shap_summary_bar'].to_html(full_html=False)
+                            if 'figures' in data[m] and 'shap_summary_bar' in data[m]['figures'] and hasattr(data[m]['figures']['shap_summary_bar'], 'to_html')
+                            else "Figure not available"
+                            for tt, levels in self.data.models.items()
+                            for lvl, data in levels.items()
+                            for m in data.keys()
+                        }) + """[[tableType, level, method]];
+                        shapDiv.appendChild(figDiv);
+                        
+                        container.appendChild(shapDiv);
+                    }
+                    
+                    // Add top features table
+                    const featuresDiv = document.createElement('div');
+                    featuresDiv.className = 'section';
+                    
+                    const featuresTitle = document.createElement('h4');
+                    featuresTitle.textContent = 'Top Selected Features';
+                    featuresDiv.appendChild(featuresTitle);
+                    
+                    if (mlData.top_features && mlData.top_features.length > 0) {
+                        const tableContainer = document.createElement('div');
+                        tableContainer.className = 'table-container';
+                        
+                        // Create table
+                        const featuresTable = document.createElement('table');
+                        
+                        // Create header
+                        const thead = document.createElement('thead');
+                        const headerRow = document.createElement('tr');
+                        ['Feature', 'Importance'].forEach(text => {
+                            const th = document.createElement('th');
+                            th.textContent = text;
+                            headerRow.appendChild(th);
+                        });
+                        thead.appendChild(headerRow);
+                        featuresTable.appendChild(thead);
+                        
+                        // Create body
+                        const tbody = document.createElement('tbody');
+                        mlData.top_features.forEach(feat => {
+                            const row = document.createElement('tr');
+                            
+                            const featCell = document.createElement('td');
+                            featCell.textContent = feat.feature || feat.name || 'N/A';
+                            row.appendChild(featCell);
+                            
+                            const impCell = document.createElement('td');
+                            impCell.textContent = typeof feat.importance === 'number' ? feat.importance.toFixed(4) : 'N/A';
+                            row.appendChild(impCell);
+                            
+                            tbody.appendChild(row);
+                        });
+                        featuresTable.appendChild(tbody);
+                        
+                        tableContainer.appendChild(featuresTable);
+                        featuresDiv.appendChild(tableContainer);
+                    } else {
+                        const noFeatures = document.createElement('p');
+                        noFeatures.textContent = 'No feature importance data available';
+                        featuresDiv.appendChild(noFeatures);
+                    }
+                    
+                    container.appendChild(featuresDiv);
+                }
+                
+                // Initialize on load
+                document.addEventListener('DOMContentLoaded', initMlDropdowns);
+            """)
+    
+    def _add_top_features_section(self):
+        """Add top features section to the report."""
+        h2("Top Differentially Abundant Features")
+        hr()
+        
+        if not (self.data.top_contaminated_features or self.data.top_pristine_features):
+            p("No significant features were identified.")
+            return
+            
+        with div(cls="section"):
+            h3("Feature Overview")
+            
+            # Summary stats
+            p(f"Found {len(self.data.top_contaminated_features)} features more abundant in contaminated samples")
+            p(f"Found {len(self.data.top_pristine_features)} features more abundant in pristine samples")
+            
+            # Tabs for contaminated vs pristine
+            with div(cls="nav"):
+                a("Contaminated", onclick="showTopFeaturesTab('contaminated')", style="background-color: #d0d0d0")
+                a("Pristine", onclick="showTopFeaturesTab('pristine')")
+            
+            # Contaminated features tab
+            with div(id="top-features-contaminated", cls="tab-content active"):
+                self._add_feature_table(self.data.top_contaminated_features, "contaminated")
+            
+            # Pristine features tab
+            with div(id="top-features-pristine", cls="tab-content"):
+                self._add_feature_table(self.data.top_pristine_features, "pristine")
+            
+            # JavaScript for tab switching
+            script("""
+                function showTopFeaturesTab(tabId) {
+                    // Hide all tabs
+                    document.querySelectorAll('#top-features-contaminated, #top-features-pristine').forEach(tab => {
+                        tab.classList.remove('active');
+                    });
+                    
+                    // Show selected tab
+                    document.getElementById(`top-features-${tabId}`).classList.add('active');
+                    
+                    // Update nav button styles
+                    document.querySelectorAll('.nav a').forEach(link => {
+                        if (link.getAttribute('onclick') === `showTopFeaturesTab('${tabId}')`) {
+                            link.style.backgroundColor = '#d0d0d0';
+                        } else {
+                            link.style.backgroundColor = '#e0e0e0';
+                        }
+                    });
+                }
+            """)
+    
+    def _add_feature_table(self, features: List[Dict], feature_type: str):
+        """Add a table of features with violin plots."""
         if not features:
-            continue
+            p(f"No {feature_type} features found.")
+            return
             
-        cat_idx = next(cat_counter)
-        cat_id = f"{prefix}-cat-{cat_idx}"
-        
-        buttons_html.append(
-            f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
-            f'data-tab="{cat_id}" '
-            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
-        )
-        
-        feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
-            features, id_counter, cat_id
-        )
-        plot_data.update(feature_plot_data)
-        
-        tabs_html.append(
-            f'<div id="{cat_id}" class="tab-pane" '
-            f'style="display:{"block" if cat_idx==0 else "none"}">'
-            f'{feature_btns}'
-            f'{feature_tabs}'
-            f'</div>'
-        )
+        # Create table
+        with div(cls="table-container"):
+            table(cls="dataframe", border="0"):
+                # Table header
+                with thead():
+                    with tr():
+                        th("Rank")
+                        th("Feature")
+                        th("Taxonomic Level")
+                        th("Table Type")
+                        th("Test")
+                        th("Effect Size")
+                        th("p-value")
+                        th("FAPROTAX Functions", style="width: 200px")
+                        th("Violin Plot")
+                
+                # Table body
+                with tbody():
+                    for i, feat in enumerate(features[:50], 1):  # Show top 50
+                        with tr():
+                            # Rank
+                            td(str(i))
+                            
+                            # Feature name
+                            td(feat.get('feature', 'N/A'))
+                            
+                            # Taxonomic level
+                            td(feat.get('level', 'N/A').capitalize())
+                            
+                            # Table type
+                            td(feat.get('table_type', 'N/A').replace('_', ' ').title())
+                            
+                            # Test
+                            td(self._format_test_name(feat.get('test', 'N/A')))
+                            
+                            # Effect size
+                            td(f"{feat.get('effect', 'N/A'):.3f}" if isinstance(feat.get('effect'), (int, float)) else 'N/A')
+                            
+                            # p-value
+                            td(f"{feat.get('p_value', 'N/A'):.3e}" if isinstance(feat.get('p_value'), (int, float)) else 'N/A')
+                            
+                            # FAPROTAX functions
+                            with td():
+                                if feat.get('faprotax_functions'):
+                                    with details():
+                                        summary(f"{len(feat['faprotax_functions'])} functions")
+                                        ul([li(func) for func in feat['faprotax_functions']])
+                                else:
+                                    span("N/A")
+                            
+                            # Violin plot
+                            with td():
+                                if feat.get('violin_figure'):
+                                    with details():
+                                        summary("View Plot")
+                                        with div(style="width: 400px; margin-top: 10px;"):
+                                            if hasattr(feat['violin_figure'], 'to_html'):
+                                                raw(feat['violin_figure'].to_html(full_html=False))
+                                            else:
+                                                p("Figure display not available")
+                                else:
+                                    span("N/A")
     
-    return "\n".join(buttons_html), "\n".join(tabs_html), plot_data
+    def _format_test_name(self, test: str) -> str:
+        """Format statistical test names for display."""
+        test_names = {
+            'mwub': 'Mann-Whitney U',
+            'kwb': 'Kruskal-Wallis',
+            'fisher': 'Fisher Exact',
+            'ttest': 't-test'
+        }
+        return test_names.get(test, test.capitalize())
 
-def _alpha_diversity_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
-                metrics, id_counter, level_id
-            )
-            plot_data.update(metric_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="metric">{metric_btns}</div>'
-                f'{metric_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data
-    
-def _add_header_tooltips(
-    table_html: str, 
-    tooltip_map: Dict[str, str]
-) -> str:
-    for header, tooltip_text in tooltip_map.items():
-        tooltip_html = (
-            f'<span class="tooltip">{header}'
-            f'<span class="tooltiptext">{tooltip_text}</span>'
-            f'</span>'
-        )
-        table_html = table_html.replace(
-            f'<th>{header}</th>', 
-            f'<th>{tooltip_html}</th>'
-        )
-    return table_html
-    
-def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
-    if df is None or df.empty:
-        return "<p>No data available</p>"
-    
-    table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
-    
-    enhanced_html = f"""
-    <div class="table-container" id="container-{table_id}">
-        {table_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
-                <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('{table_id}', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class="pagination-buttons" id="pagination-{table_id}"></div>
-                <span class="pagination-indicator" id="indicator-{table_id}"></span>
-            </div>
-        </div>
-    </div>
-    """
-    return enhanced_html
-    
-def _ordination_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            method_btns, method_tabs, method_plot_data = _figs_to_html(
-                methods, id_counter, level_id
-            )
-            plot_data.update(method_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="method">{method_btns}</div>'
-                f'{method_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data    
-    
-def generate_html_report(
-    amplicon_data: "AmpliconData",
-    output_path: Union[str, Path],
-    include_sections: Optional[List[str]] = None,
-    max_features: int = 20  
-) -> None:
-    figures_dict = _extract_figures(amplicon_data)
-    
-    # Define section order: Map, Statistical Results, Alpha Diversity, Beta Diversity, ML Results
-    ordered_sections = [
-        'map',
-        'statistical_results',
-        'alpha_diversity',
-        'ordination',  # Will be renamed to Beta Diversity
-        'ml_results',  # Will include SHAP and eval_plots
-        'violin'
-    ]
-    
-    # Filter sections to include only those with data
-    include_sections = [sec for sec in ordered_sections if sec in figures_dict or sec == 'statistical_results']
-    
-    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Top features tables
-    contam_df = _prepare_features_table(
-        amplicon_data.top_contaminated_features,
-        max_features,
-        "Contaminated"
-    )
-    pristine_df = _prepare_features_table(
-        amplicon_data.top_pristine_features,
-        max_features,
-        "Pristine"
-    )
-    
-    # Stats summary
-    stats_df = _prepare_stats_summary(
-        amplicon_data.stats
-    )
-    
-    # ML summary
-    ml_metrics, ml_features = _prepare_ml_summary(
-        amplicon_data.models,
-        amplicon_data.top_contaminated_features,
-        amplicon_data.top_pristine_features
-    )
-    ml_html = _format_ml_section(ml_metrics, ml_features) if ml_metrics is not None else "<p>No ML results available</p>"
-    
-    tables_html = f"""
-    <div class="subsection">
-        <h3>Top Features</h3>
-        <h4>Contaminated-Associated Features</h4>
-        {_add_table_functionality(contam_df, 'contam-table')}
-        
-        <h4>Pristine-Associated Features</h4>
-        {_add_table_functionality(pristine_df, 'pristine-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Statistical Summary</h3>
-        {_add_table_functionality(stats_df, 'stats-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Machine Learning Results</h3>
-        {ml_html}
-    </div>
-    """
-
-    id_counter = itertools.count()
-    sections, plot_data = _prepare_sections(
-        figures_dict, include_sections, id_counter
-    )
-    sections_html = "\n".join(_section_html(s) for s in sections)
-
-    nav_items = [
-        ("Analysis Summary", "analysis-summary"),
-        *[(sec['title'], sec['id']) for sec in sections]
-    ]
-    
-    nav_html = """
-    <div class="toc">
-        <h2>Table of Contents</h2>
-        <ul>
-    """
-    for title, section_id in nav_items:
-        nav_html += f'<li><a href="#{section_id}">{title}</a></li>\n'
-    nav_html += "        </ul>\n    </div>"
-
-    # Get Plotly version with fallback
-    try:
-        import plotly
-        plotly_ver = plotly.__version__
-        plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
-    except Exception:
-        plotly_ver = "2.24.1"  # Stable fallback version
-        plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
-
-    payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("</", "<\\/")
-
-    try:
-        table_js = import_js_as_str(tables_js_path)
-    except Exception as e:
-        logger.error(f"Error reading JavaScript file: {e}")
-        table_js = ""
-        
-    tooltip_css = """
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        cursor: help;
-        border-bottom: 1px dashed #3498db;
-    }
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 280px;
-        background-color: #222;
-        color: #fff;
-        text-align: left;
-        border-radius: 6px;
-        padding: 12px;
-        position: absolute;
-        z-index: 1000;
-        bottom: 125%;
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.3s;
-        font-size: 14px;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    .tooltip .tooltiptext::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: #222 transparent transparent transparent;
-    }
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
-    }
-    .info-message {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 20px;
-        margin: 20px 0;
-        text-align: center;
-        font-size: 16px;
-        color: #6c757d;
-    }
-    """
-    
-    try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css
-    except Exception as e:
-        logger.error(f"Error reading CSS file: {e}")
-        css_content = tooltip_css
-        
-    try:
-        html_template = html_template_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error(f"Error loading HTML template: {e}")
-        html_template = """<!DOCTYPE html>
-        <html>
-        <head><title>Error</title></head>
-        <body>Report generation failed: Missing template</body>
-        </html>"""
-
-    html = html_template.format(
-        plotly_js_tag=plotly_js_tag,
-        generated_ts=ts,
-        section_list=", ".join(include_sections),
-        nav_html=nav_html,
-        tables_html=tables_html,
-        sections_html=sections_html,
-        plot_data_json=payload,
-        table_js=table_js,
-        css_content=css_content
-    )
-    output_path.write_text(html, encoding="utf-8")
+# Example usage:
+# report = AmpliconReportGenerator(amplicon_data, "amplicon_report.html")
+# report.generate_report()
