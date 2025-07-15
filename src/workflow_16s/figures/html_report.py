@@ -36,10 +36,7 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # ================================== CORE HELPERS =================================== #
-# In html_report.py, modify the _extract_figures function:
-
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
-    # Log the overall structure of AmpliconData
     logger.info("Analyzing AmpliconData structure...")
     logger.info(f"AmpliconData has ordination: {hasattr(amplicon_data, 'ordination')}")
     logger.info(f"AmpliconData has alpha_diversity: {hasattr(amplicon_data, 'alpha_diversity')}")
@@ -50,7 +47,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     figures = {}
     
-    # Log and extract ordination figures
+    # Ordination figures
     logger.info("Extracting ordination figures...")
     ordination_figures = {}
     if hasattr(amplicon_data, 'ordination'):
@@ -73,7 +70,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
         logger.warning("No ordination data found in AmpliconData")
     figures['ordination'] = ordination_figures
 
-    # Log and extract alpha diversity figures
+    # Alpha diversity figures
     logger.info("Extracting alpha diversity figures...")
     alpha_figures = {}
     if hasattr(amplicon_data, 'alpha_diversity'):
@@ -92,7 +89,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
         logger.warning("No alpha_diversity data found in AmpliconData")
     figures['alpha_diversity'] = alpha_figures
 
-    # Log and extract sample maps
+    # Sample maps
     logger.info("Extracting sample maps...")
     if hasattr(amplicon_data, 'maps') and amplicon_data.maps:
         logger.info(f"  Found {len(amplicon_data.maps)} sample maps")
@@ -100,7 +97,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     else:
         logger.warning("No sample maps found in AmpliconData")
 
-    # Log and extract SHAP figures
+    # SHAP figures
     logger.info("Extracting SHAP figures...")
     shap_figures = {}
     if hasattr(amplicon_data, 'models'):
@@ -123,7 +120,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
         logger.warning("No models data found in AmpliconData")
     figures['shap'] = shap_figures
 
-    # Log and extract violin plots
+    # Violin plots
     logger.info("Extracting violin plots...")
     violin_figures = {'contaminated': {}, 'pristine': {}}
     if hasattr(amplicon_data, 'top_contaminated_features'):
