@@ -193,8 +193,12 @@ class MLFigures:
             
     def fetch_figures(self):
         for table_type, levels in self.amplicon_data.models.items():
+            print(table_type)
             for level, methods in levels.items():
+                print(level)
                 for method, data in methods.items():
+                    print(method)
+                    print(data)
                     if data and 'figures' in data and data['figures']:
                         print(data['figures'])
                         if table_type not in self.figures:
@@ -223,8 +227,8 @@ class Section:
         
         logger.info("Extracting ML figures...")
         self.figures['models'] = MLFigures(self.amplicon_data)
-        for attr, value in vars(self.figures).items():
-            print(f"{attr}: {value}")
+        #for attr, value in vars(self.figures).items():
+        #    print(f"{attr}: {value}")
         """
         # Sample maps
         logger.info("Extracting sample maps...")
