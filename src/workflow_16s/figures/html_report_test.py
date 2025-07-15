@@ -134,12 +134,10 @@ def check_dict(amplicon_data, attr_name):
     exists = hasattr(amplicon_data, attr_name)
     is_non_empty_dict = isinstance(val, dict) and bool(val)
     logger.info(f"AmpliconData has non-empty {attr_name}: {is_non_empty_dict} (exists: {exists})")
-    logger.info(type(getattr(amplicon_data, attr_name, None)))
-    logger.info(getattr(amplicon_data, attr_name, None))
     return is_non_empty_dict
 
 
-class OrdinationFigures:
+class Ordination:
     #self.ordination[table_type][level][method] = {'result': res, 'figures': figs}
     def __init__(self, amplicon_data: AmpliconData):
         self.amplicon_data = amplicon_data
@@ -162,7 +160,7 @@ class OrdinationFigures:
                     else:
                         logger.warning(f"No ordination figures found for {table_type}/{level}/{method}")
         
-class AlphaDivFigures:
+class AlphaDiv:
     #self.alpha_diversity[table_type][level]['figures'][metric] = fig
     #self.alpha_diversity[table_type][level]['figures']['summary'] = stats_fig
     #self.alpha_diversity[table_type][level]['figures']['correlations'] = corr_figures
@@ -184,7 +182,7 @@ class AlphaDivFigures:
                     else:
                         logger.warning(f"No alpha diversity figures found for {table_type}/{level}")        
 
-class MLFigures:        
+class ML:        
     #self.models[table_type][level][method] = model_result
     #model_result['figures']: 'eval_plots', 'shap_summary_bar', 'shap_summary_beeswarm', 'shap_dependency'
     def __init__(self, amplicon_data: AmpliconData):
@@ -192,6 +190,9 @@ class MLFigures:
         self.figures = {}
         if check_dict(self.amplicon_data, 'models'):
             self.fetch_figures()
+            self.html = self.render_figures()
+            with open("/usr2/people/macgregor/amplicon/test/figures_dropdown.html", "w") as f:
+                f.write(html)
         else:
             logger.warning("No ML data found in AmpliconData")
             
@@ -204,7 +205,6 @@ class MLFigures:
                     print(method)
                     print(data)
                     if data and 'figures' in data and data['figures']:
-                        print(data['figures'])
                         if table_type not in self.figures:
                             self.figures[table_type] = {}
                         if level not in self.figures[table_type]:
@@ -212,25 +212,116 @@ class MLFigures:
                         self.figures[table_type][level][method] = data['figures']
                     else:
                         logger.warning(f"No ML figures found for {table_type}/{level}/{method}")        
-
+    def render_figures(self):
+        """
+        Generate an interactive HTML view with dropdowns for table_type, level, method.
+        """
+        divs = []
+        options_table_type = set()
+        options_level = set()
+        options_method = set()
+        figure_mapping = {}  # key: (table_type, level, method, fig_type), value: div_id
+    
+        for table_type, levels in self.figures.items():
+            for level, methods in levels.items():
+                for method, fig_types in methods.items():
+                    for fig_type, fig in fig_types.items():
+                        if fig_type == "shap_dependency":
+                            continue  # skip as per your condition
+                        div_id = str(uuid.uuid4()).replace("-", "")
+                        options_table_type.add(table_type)
+                        options_level.add(level)
+                        options_method.add(method)
+                        figure_mapping[(table_type, level, method, fig_type)] = div_id
+                        fig_html = pio.to_html(fig, include_plotlyjs=False, full_html=False, config={"responsive": True})
+                        divs.append(f'<div id="{div_id}" class="plot-div" style="display: none;">{fig_html}</div>')
+    
+        # Build dropdowns
+        html = f"""
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <div>
+            <label>Table Type:</label>
+            <select id="table_type">
+                {''.join(f'<option value="{t}">{t}</option>' for t in sorted(options_table_type))}
+            </select>
+    
+            <label>Level:</label>
+            <select id="level">
+                {''.join(f'<option value="{l}">{l}</option>' for l in sorted(options_level))}
+            </select>
+    
+            <label>Method:</label>
+            <select id="method">
+                {''.join(f'<option value="{m}">{m}</option>' for m in sorted(options_method))}
+            </select>
+    
+            <label>Figure Type:</label>
+            <select id="fig_type">
+                {''.join(f'<option value="{ft}">{ft}</option>' for ft in ["eval_plots", "shap_summary_bar", "shap_summary_beeswarm"])}
+            </select>
+        </div>
+    
+        <div id="figure-container">
+            {''.join(divs)}
+        </div>
+    
+        <script>
+        const figureMap = {{
+    
+            {',\n        '.join(f'"{t}|{l}|{m}|{f}": "{div_id}"' for (t, l, m, f), div_id in figure_mapping.items())}
+        }};
+    
+        function updateFigure() {{
+            const t = document.getElementById("table_type").value;
+            const l = document.getElementById("level").value;
+            const m = document.getElementById("method").value;
+            const f = document.getElementById("fig_type").value;
+    
+            const key = `${{t}}|${{l}}|${{m}}|${{f}}`;
+            const selectedId = figureMap[key];
+    
+            // Hide all
+            document.querySelectorAll('.plot-div').forEach(el => el.style.display = 'none');
+    
+            // Show selected
+            if (selectedId) {{
+                document.getElementById(selectedId).style.display = 'block';
+            }}
+        }}
+    
+        document.getElementById("table_type").addEventListener("change", updateFigure);
+        document.getElementById("level").addEventListener("change", updateFigure);
+        document.getElementById("method").addEventListener("change", updateFigure);
+        document.getElementById("fig_type").addEventListener("change", updateFigure);
+    
+        // Initial display
+        updateFigure();
+        </script>
+        """
+    
+        return html
 class Section:
     def __init__(self, amplicon_data: AmpliconData):
         self.amplicon_data = amplicon_data
         self.figures = {}
         self._extract_figures()
+        self.figures['models']['eval_plots']
 
     def _extract_figures(self) -> Dict[str, Any]:
         logger.info("Analyzing AmpliconData structure...")
         # Ordination figures
         logger.info("Extracting ordination figures...")
-        self.figures['ordination'] = OrdinationFigures(self.amplicon_data)
+        beta = Ordination(self.amplicon_data)
+        self.figures['beta_diversity'] = ordination.figures
         
         # Alpha diversity figures
         logger.info("Extracting alpha diversity figures...")
-        self.figures['alpha_diversity'] = AlphaDivFigures(self.amplicon_data)
+        alpha = AlphaDiv(self.amplicon_data)
+        self.figures['alpha_diversity'] = alpha.figures
         
         logger.info("Extracting ML figures...")
-        self.figures['models'] = MLFigures(self.amplicon_data)
+        ML = ML(self.amplicon_data)
+        self.figures['models'] = ML.figures 
         #for attr, value in vars(self.figures).items():
         #    print(f"{attr}: {value}")
         """
