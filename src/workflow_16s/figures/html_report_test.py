@@ -266,10 +266,13 @@ class ML:
         </div>
     
         <script>
-        const figureMap = {{
-    
-            {',\n        '.join(f'"{t}|{l}|{m}|{f}": "{div_id}"' for (t, l, m, f), div_id in figure_mapping.items())}
-        }};
+        const figureMap = {
+            {'\n        '.join([
+                f'"{t}|{l}|{m}|{f}": "{div_id}"'
+                for (t, l, m, f), div_id in figure_mapping.items()
+            ])}
+        };
+
     
         function updateFigure() {{
             const t = document.getElementById("table_type").value;
