@@ -176,8 +176,7 @@ class AlphaDivFigures:
                 if data and 'figures' in data and data['figures']:
                     if table_type not in self.figures:
                         self.figures[table_type] = {}
-                    
-                    self.figures[table_type][level] = data['figures']
+                        self.figures[table_type][level] = data['figures']
                     else:
                         logger.warning(f"No alpha diversity figures found for {table_type}/{level}")        
 
