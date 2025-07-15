@@ -245,7 +245,7 @@ def _prepare_sections(
             # ML Results section includes both model evaluation and SHAP
             ml_subsections = []
             
-            # Add model evaluation plots if available
+            # Add SHAP plots if available
             if 'shap' in figures and figures['shap']:
                 btns, tabs, pd = _shap_to_nested_html(
                     figures['shap'], id_counter, sec_data["id"]
@@ -256,20 +256,6 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
-            
-            # Add SHAP dependency plots
-            if 'shap' in figures and figures['shap']:
-                shap_dependency_figs = _extract_shap_dependency(figures['shap'])
-                if shap_dependency_figs:
-                    tabs, btns, pd = _figs_to_html(
-                        shap_dependency_figs, id_counter, sec_data["id"] + "-dependency"
-                    )
-                    plot_data.update(pd)
-                    ml_subsections.append({
-                        "title": "SHAP Dependency Plots",
-                        "tabs_html": tabs,
-                        "buttons_html": btns
-                    })
             
             if not ml_subsections:
                 ml_subsections.append({
@@ -374,7 +360,7 @@ def _figs_to_html(
                 
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
-                # Ensure layout exists and set consistent sizing
+                # Ensure layout exists
                 if "layout" not in pj:
                     pj["layout"] = {}
                 pj["layout"].update({
@@ -398,10 +384,8 @@ def _figs_to_html(
                     "data": base64.b64encode(buf.read()).decode()
                 }
             else:
-                plot_data[plot_id] = {
-                    "type": "error",
-                    "error": f"Unsupported figure type {type(fig)}"
-                }
+                raise TypeError(f"Unsupported figure type {type(fig)}")
+                
         except Exception as exc:
             logger.exception(f"Serializing figure '{title}' failed")
             plot_data[plot_id] = {
@@ -620,22 +604,25 @@ def _shap_to_nested_html(
                     f'onclick="showMethod(\'{method_id}\')">{method}</button>'
                 )
                 
-                # Prepare plots dictionary
-                method_plots = {
-                    'Summary (Bar)': plots.get('shap_summary_bar'),
-                    'Summary (Beeswarm)': plots.get('shap_summary_beeswarm'),
-                }
-                
-                # Handle dependency plots
-                if 'shap_dependency' in plots:
-                    if isinstance(plots['shap_dependency'], list):
-                        for i, fig in enumerate(plots['shap_dependency']):
-                            method_plots[f'Dependency {i+1}'] = fig
-                    elif isinstance(plots['shap_dependency'], dict):
-                        for name, fig in plots['shap_dependency'].items():
-                            method_plots[name] = fig
+                # Prepare plots dictionary - include ALL plot types
+                method_plots = {}
+                for plot_name, plot in plots.items():
+                    if plot is None:
+                        logger.error(f"Plot '{plot_name}' is None for {table_type}/{level}/{method}")
+                        continue
+                        
+                    # Handle nested dependency plots
+                    if plot_name == 'shap_dependency':
+                        if isinstance(plot, list):
+                            for i, fig in enumerate(plot):
+                                method_plots[f'Dependency {i+1}'] = fig
+                        elif isinstance(plot, dict):
+                            for name, fig in plot.items():
+                                method_plots[name] = fig
+                        else:
+                            method_plots['Dependency'] = plot
                     else:
-                        method_plots['Dependency'] = plots['shap_dependency']
+                        method_plots[plot_name] = plot
                 
                 plot_btns, plot_tabs, pd = _figs_to_html(
                     method_plots, id_counter, method_id
