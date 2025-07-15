@@ -751,7 +751,7 @@ class _AnalysisManager(_ProcessingMixin):
     def __init__(
         self,
         cfg: Dict,
-        tables: Dict[str, Dict[str, Table]]],
+        tables: Dict[str, Dict[str, Table]],
         meta: pd.DataFrame,
         output_dir: Path,
         verbose: bool,
