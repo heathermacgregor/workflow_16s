@@ -31,6 +31,7 @@
             padding: 1rem;
             background-color: white;
             margin-bottom: 1rem;
+            min-height: 400px;
         }
         
         .nav-tabs .nav-link.active {
@@ -42,8 +43,21 @@
             padding: 1.5rem 0;
         }
         
-        .hidden {
-            display: none;
+        .dropdown-row {
+            background-color: #e9ecef;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .dimension-selector {
+            margin-bottom: 1rem;
+        }
+        
+        /* Make plots responsive */
+        .js-plotly-plot, .plotly {
+            width: 100% !important;
+            height: 100% !important;
         }
     </style>
 </head>
@@ -109,30 +123,27 @@
                 <p class="text-muted">{{ section.description }}</p>
             </div>
             
-            {% if 'dropdown' in section %}
-            <!-- Dropdown selector for plots -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <label for="{{ section.dropdown.id }}" class="form-label">Select visualization:</label>
-                    <select class="form-select" id="{{ section.dropdown.id }}">
-                        {% for option in section.dropdown.options %}
-                        <option value="{{ loop.index0 }}" 
-                                {% if option.name == section.dropdown.default %}selected{% endif %}>
-                            {{ option.name }}
+            {% if 'dropdowns' in section %}
+            <!-- Dimension selectors -->
+            <div class="dropdown-row row">
+                {% for dropdown in section.dropdowns %}
+                <div class="col-md-3 dimension-selector">
+                    <label for="{{ dropdown.id }}" class="form-label">{{ dropdown.label }}</label>
+                    <select class="form-select" id="{{ dropdown.id }}" data-section="{{ section.id }}">
+                        {% for option in dropdown.options %}
+                        <option value="{{ option }}" 
+                                {% if option == dropdown.default %}selected{% endif %}>
+                            {{ option }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
+                {% endfor %}
             </div>
             
             <!-- Plot container -->
-            <div class="plot-container">
-                {% for option in section.dropdown.options %}
-                <div id="plot-{{ section.id }}-{{ loop.index0 }}" 
-                     class="plot-content {% if loop.first %}active{% else %}hidden{% endif %}">
-                    {{ option.figure|safe }}
-                </div>
-                {% endfor %}
+            <div class="plot-container" id="{{ section.id }}-plot">
+                <!-- Plot will be inserted here dynamically -->
             </div>
             {% endif %}
             
@@ -175,19 +186,14 @@
                             <label for="violin-selector-{{ tab.type }}" class="form-label">Select feature:</label>
                             <select class="form-select mb-3" id="violin-selector-{{ tab.type }}">
                                 {% for plot in tab.violin_plots %}
-                                <option value="{{ loop.index0 }}">{{ plot.name }}</option>
+                                <option value="{{ loop.index0 }}">{{ plot.feature }} ({{ plot.level }})</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
                     
-                    <div class="plot-container">
-                        {% for plot in tab.violin_plots %}
-                        <div id="violin-{{ tab.type }}-{{ loop.index0 }}" 
-                             class="violin-content {% if loop.first %}active{% else %}hidden{% endif %}">
-                            {{ plot.figure|safe }}
-                        </div>
-                        {% endfor %}
+                    <div class="plot-container" id="violin-{{ tab.type }}-plot">
+                        {{ tab.violin_plots[0].figure|safe if tab.violin_plots }}
                     </div>
                     {% endif %}
                 </div>
@@ -206,70 +212,149 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Function to handle dropdown changes
-        function setupDropdownListeners() {
-            // Sample Maps
-            {% if report_data.has_maps %}
-            document.getElementById('map-selector').addEventListener('change', function() {
-                const selectedIndex = this.value;
-                document.querySelectorAll('#sample-maps .plot-content').forEach((div, index) => {
-                    div.classList.toggle('active', index == selectedIndex);
-                    div.classList.toggle('hidden', index != selectedIndex);
-                });
-            });
+        // Store all figures data
+        const figureData = {
+            {% for section in report_data.sections %}
+            {% if 'figures' in section %}
+            "{{ section.id }}": {
+                figures: [
+                    {% for fig in section.figures %}
+                    {
+                        {% for key, value in fig.items() %}
+                        "{{ key }}": `{{ value }}`,
+                        {% endfor %}
+                    },
+                    {% endfor %}
+                ],
+                dropdowns: [
+                    {% for dropdown in section.dropdowns %}
+                    "{{ dropdown.id }}",
+                    {% endfor %}
+                ]
+            },
             {% endif %}
+            {% endfor %}
+        };
+        
+        // Function to find matching figure
+        function findMatchingFigure(sectionId, selections) {
+            const sectionData = figureData[sectionId];
+            if (!sectionData) return null;
             
-            // Alpha Diversity
-            {% if report_data.has_alpha %}
-            document.getElementById('alpha-selector').addEventListener('change', function() {
-                const selectedIndex = this.value;
-                document.querySelectorAll('#alpha-diversity .plot-content').forEach((div, index) => {
-                    div.classList.toggle('active', index == selectedIndex);
-                    div.classList.toggle('hidden', index != selectedIndex);
-                });
-            });
-            {% endif %}
+            for (const fig of sectionData.figures) {
+                let match = true;
+                for (const dropdownId of sectionData.dropdowns) {
+                    const key = dropdownId.split('-').slice(1).join('_');
+                    if (fig[key] !== selections[dropdownId]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) return fig.figure;
+            }
+            return null;
+        }
+        
+        // Function to update plot based on selections
+        function updatePlot(sectionId) {
+            const sectionData = figureData[sectionId];
+            if (!sectionData) return;
             
-            // Ordination
-            {% if report_data.has_ordination %}
-            document.getElementById('ordination-selector').addEventListener('change', function() {
-                const selectedIndex = this.value;
-                document.querySelectorAll('#ordination .plot-content').forEach((div, index) => {
-                    div.classList.toggle('active', index == selectedIndex);
-                    div.classList.toggle('hidden', index != selectedIndex);
-                });
-            });
-            {% endif %}
+            // Get current selections
+            const selections = {};
+            for (const dropdownId of sectionData.dropdowns) {
+                const select = document.getElementById(dropdownId);
+                if (select) {
+                    selections[dropdownId] = select.value;
+                }
+            }
             
-            // Machine Learning
-            {% if report_data.has_ml %}
-            document.getElementById('ml-selector').addEventListener('change', function() {
-                const selectedIndex = this.value;
-                document.querySelectorAll('#machine-learning .plot-content').forEach((div, index) => {
-                    div.classList.toggle('active', index == selectedIndex);
-                    div.classList.toggle('hidden', index != selectedIndex);
-                });
-            });
-            {% endif %}
+            // Find matching figure
+            const figureHtml = findMatchingFigure(sectionId, selections);
+            const plotContainer = document.getElementById(`${sectionId}-plot`);
             
-            // Top Features Violin Plots
-            {% if report_data.has_top_features %}
+            if (figureHtml && plotContainer) {
+                plotContainer.innerHTML = figureHtml;
+                
+                // Re-initialize Plotly for responsive behavior
+                if (typeof Plotly !== 'undefined') {
+                    const plotElement = plotContainer.querySelector('.js-plotly-plot');
+                    if (plotElement) {
+                        Plotly.Plots.resize(plotElement);
+                    }
+                }
+            } else {
+                plotContainer.innerHTML = '<p>No visualization available for the selected options</p>';
+            }
+        }
+        
+        // Function to setup dropdown listeners for a section
+        function setupSectionDropdowns(sectionId) {
+            const sectionData = figureData[sectionId];
+            if (!sectionData) return;
+            
+            for (const dropdownId of sectionData.dropdowns) {
+                const select = document.getElementById(dropdownId);
+                if (select) {
+                    select.addEventListener('change', () => updatePlot(sectionId));
+                }
+            }
+            
+            // Initialize the plot
+            updatePlot(sectionId);
+        }
+        
+        // Function to setup violin plot selectors
+        function setupViolinSelectors() {
             document.querySelectorAll('[id^="violin-selector-"]').forEach(selector => {
                 selector.addEventListener('change', function() {
                     const tabType = this.id.replace('violin-selector-', '');
                     const selectedIndex = this.value;
+                    const plotContainer = document.getElementById(`violin-${tabType}-plot`);
                     
-                    document.querySelectorAll(`#${tabType} .violin-content`).forEach((div, index) => {
-                        div.classList.toggle('active', index == selectedIndex);
-                        div.classList.toggle('hidden', index != selectedIndex);
-                    });
+                    if (plotContainer) {
+                        const figures = {{ 
+                            {tab.type: tab.violin_plots 
+                             for section in report_data.sections if 'tabs' in section 
+                             for tab in section.tabs if tab.violin_plots}|tojson 
+                        }};
+                        
+                        if (figures[tabType] && figures[tabType][selectedIndex]) {
+                            plotContainer.innerHTML = figures[tabType][selectedIndex].figure;
+                        }
+                    }
                 });
             });
-            {% endif %}
         }
         
         // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', setupDropdownListeners);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup dropdown sections
+            {% for section in report_data.sections %}
+            {% if 'dropdowns' in section %}
+            setupSectionDropdowns("{{ section.id }}");
+            {% endif %}
+            {% endfor %}
+            
+            // Setup violin selectors
+            setupViolinSelectors();
+            
+            // Initialize all Plotly plots for responsiveness
+            if (typeof Plotly !== 'undefined') {
+                document.querySelectorAll('.js-plotly-plot').forEach(plotElement => {
+                    Plotly.Plots.resize(plotElement);
+                });
+            }
+            
+            // Handle window resize for responsive plots
+            window.addEventListener('resize', function() {
+                if (typeof Plotly !== 'undefined') {
+                    document.querySelectorAll('.js-plotly-plot').forEach(plotElement => {
+                        Plotly.Plots.resize(plotElement);
+                    });
+                }
+            });
+        });
     </script>
 </body>
 </html>
