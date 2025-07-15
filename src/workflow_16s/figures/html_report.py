@@ -506,16 +506,26 @@ def _shap_to_nested_html(
             for m_idx, (method, plots) in enumerate(methods.items()):
                 method_id = f"{level_id}-method-{next(id_counter)}"
                 
+                # Flatten any list values in the plots dictionary
+                flattened_plots = {}
+                for plot_type, fig in plots.items():
+                    if isinstance(fig, list):
+                        # Convert list to dictionary with generated keys
+                        for idx, sub_fig in enumerate(fig):
+                            flattened_plots[f"{plot_type} - Feature {idx}"] = sub_fig
+                    else:
+                        flattened_plots[plot_type] = fig
+                
+                plot_btns, plot_tabs, pd = _figs_to_html(
+                    flattened_plots, id_counter, method_id
+                )
+                plot_data.update(pd)
+                
                 method_btns.append(
                     f'<button class="method-button {"active" if m_idx == 0 else ""}" '
                     f'data-method="{method_id}" '
                     f'onclick="showMethod(\'{method_id}\')">{method}</button>'
                 )
-                
-                plot_btns, plot_tabs, pd = _figs_to_html(
-                    plots, id_counter, method_id
-                )
-                plot_data.update(pd)
                 
                 method_panes.append(
                     f'<div id="{method_id}" class="method-pane" '
