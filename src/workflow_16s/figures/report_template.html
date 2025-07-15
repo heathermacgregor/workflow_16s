@@ -221,7 +221,11 @@
                     {% for fig in section.figures %}
                     {
                         {% for key, value in fig.items() %}
-                        "{{ key }}": `{{ value }}`,
+                        {% if key == 'figure' %}
+                        "{{ key }}": {{ value|safe }},
+                        {% else %}
+                        "{{ key }}": "{{ value }}",
+                        {% endif %}
                         {% endfor %}
                     },
                     {% endfor %}
@@ -235,7 +239,45 @@
             {% endif %}
             {% endfor %}
         };
-        
+    
+        // Store violin figures separately
+        const violinFigures = {
+            {% for section in report_data.sections %}
+            {% if 'tabs' in section %}
+            {% for tab in section.tabs %}
+            "{{ tab.type }}": [
+                {% for plot in tab.violin_plots %}
+                {{ plot.figure|safe }},
+                {% endfor %}
+            ],
+            {% endfor %}
+            {% endif %}
+            {% endfor %}
+        };
+    
+        // Function to render Plotly figure
+        function renderPlotly(containerId, figureJson) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';  // Clear previous content
+            
+            try {
+                const figure = JSON.parse(figureJson);
+                Plotly.newPlot(container, figure.data, figure.layout, figure.config || {});
+                
+                // Make plot responsive
+                window.addEventListener('resize', function() {
+                    Plotly.Plots.resize(container);
+                });
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error rendering plot: ${error.message}
+                    </div>
+                `;
+                console.error('Plot rendering error:', error);
+            }
+        }
+    
         // Function to find matching figure
         function findMatchingFigure(sectionId, selections) {
             const sectionData = figureData[sectionId];
@@ -250,11 +292,11 @@
                         break;
                     }
                 }
-                if (match) return fig.figure;
+                if (match) return fig;
             }
             return null;
         }
-        
+    
         // Function to update plot based on selections
         function updatePlot(sectionId) {
             const sectionData = figureData[sectionId];
@@ -270,24 +312,16 @@
             }
             
             // Find matching figure
-            const figureHtml = findMatchingFigure(sectionId, selections);
             const plotContainer = document.getElementById(`${sectionId}-plot`);
+            const matchingFig = findMatchingFigure(sectionId, selections);
             
-            if (figureHtml && plotContainer) {
-                plotContainer.innerHTML = figureHtml;
-                
-                // Re-initialize Plotly for responsive behavior
-                if (typeof Plotly !== 'undefined') {
-                    const plotElement = plotContainer.querySelector('.js-plotly-plot');
-                    if (plotElement) {
-                        Plotly.Plots.resize(plotElement);
-                    }
-                }
+            if (matchingFig && matchingFig.figure) {
+                renderPlotly(`${sectionId}-plot`, matchingFig.figure);
             } else {
                 plotContainer.innerHTML = '<p>No visualization available for the selected options</p>';
             }
         }
-        
+    
         // Function to setup dropdown listeners for a section
         function setupSectionDropdowns(sectionId) {
             const sectionData = figureData[sectionId];
@@ -303,7 +337,7 @@
             // Initialize the plot
             updatePlot(sectionId);
         }
-        
+    
         // Function to setup violin plot selectors
         function setupViolinSelectors() {
             document.querySelectorAll('[id^="violin-selector-"]').forEach(selector => {
@@ -313,20 +347,15 @@
                     const plotContainer = document.getElementById(`violin-${tabType}-plot`);
                     
                     if (plotContainer) {
-                        const figures = {{ 
-                            {tab.type: tab.violin_plots 
-                             for section in report_data.sections if 'tabs' in section 
-                             for tab in section.tabs if tab.violin_plots}|tojson 
-                        }};
-                        
-                        if (figures[tabType] && figures[tabType][selectedIndex]) {
-                            plotContainer.innerHTML = figures[tabType][selectedIndex].figure;
+                        const figures = violinFigures[tabType];
+                        if (figures && figures[selectedIndex]) {
+                            renderPlotly(`violin-${tabType}-plot`, figures[selectedIndex]);
                         }
                     }
                 });
             });
         }
-        
+    
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Setup dropdown sections
@@ -339,20 +368,22 @@
             // Setup violin selectors
             setupViolinSelectors();
             
-            // Initialize all Plotly plots for responsiveness
-            if (typeof Plotly !== 'undefined') {
-                document.querySelectorAll('.js-plotly-plot').forEach(plotElement => {
-                    Plotly.Plots.resize(plotElement);
-                });
-            }
+            // Initialize violin plots with first option
+            document.querySelectorAll('[id^="violin-"]').forEach(container => {
+                if (container.innerHTML.trim() === '') {
+                    const tabType = container.id.replace('violin-', '').replace('-plot', '');
+                    const figures = violinFigures[tabType];
+                    if (figures && figures.length > 0) {
+                        renderPlotly(container.id, figures[0]);
+                    }
+                }
+            });
             
             // Handle window resize for responsive plots
             window.addEventListener('resize', function() {
-                if (typeof Plotly !== 'undefined') {
-                    document.querySelectorAll('.js-plotly-plot').forEach(plotElement => {
-                        Plotly.Plots.resize(plotElement);
-                    });
-                }
+                document.querySelectorAll('.js-plotly-plot').forEach(plotElement => {
+                    Plotly.Plots.resize(plotElement);
+                });
             });
         });
     </script>
