@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 from plotly.offline import get_plotlyjs_version
+import plotly.io as pio
 
 # ================================== LOCAL IMPORTS =================================== #
 
