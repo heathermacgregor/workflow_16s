@@ -217,7 +217,7 @@ def generate_html_report(amplicon_data, output_path):
         })
     
     # Load Jinja2 template
-    env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
+    env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))))
     template = env.get_template("report_template.html")
     
     # Render and save report
