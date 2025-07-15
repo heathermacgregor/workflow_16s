@@ -82,8 +82,9 @@ def generate_html_report(amplicon_data, output_path):
                         "table_type": table_type,
                         "level": level,
                         "metric": metric,
-                        "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                        "figure": fig.to_json()  # Store as JSON
                     })
+    
         
         # Create dropdown options
         dropdowns = [
@@ -253,12 +254,13 @@ def generate_html_report(amplicon_data, output_path):
                             margin=dict(l=50, r=50, t=60, b=50)
                         )
                         
+                        # Convert figure to JSON
                         ordination_options.append({
                             "table_type": table_type,
                             "level": level,
                             "method": method,
                             "color_col": color_col,
-                            "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                            "figure": fig.to_json()  # Store as JSON
                         })
         
         # Create dropdown options
@@ -326,12 +328,13 @@ def generate_html_report(amplicon_data, output_path):
                                     margin=dict(l=50, r=50, t=60, b=50)
                                 )
                                 
+                                # Convert figure to JSON
                                 ml_options.append({
                                     "table_type": table_type,
                                     "level": level,
                                     "method": method,
                                     "plot_type": plot_type,
-                                    "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                                    "figure": fig.to_json()  # Store as JSON
                                 })
         
         # Create dropdown options
