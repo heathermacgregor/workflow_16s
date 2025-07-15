@@ -1177,7 +1177,7 @@ class AmpliconReportGenerator:
             
         # Create table
         with div(cls="table-container"):
-            table(cls="dataframe", border="0"):
+            with table(cls="dataframe", border="0"):
                 # Table header
                 with thead():
                     with tr():
@@ -1211,28 +1211,40 @@ class AmpliconReportGenerator:
                             td(self._format_test_name(feat.get('test', 'N/A')))
                             
                             # Effect size
-                            td(f"{feat.get('effect', 'N/A'):.3f}" if isinstance(feat.get('effect'), (int, float)) else 'N/A')
+                            effect = feat.get('effect', 'N/A')
+                            if isinstance(effect, (int, float)):
+                                td(f"{effect:.3f}")
+                            else:
+                                td('N/A')
                             
                             # p-value
-                            td(f"{feat.get('p_value', 'N/A'):.3e}" if isinstance(feat.get('p_value'), (int, float)) else 'N/A')
+                            p_value = feat.get('p_value', 'N/A')
+                            if isinstance(p_value, (int, float)):
+                                td(f"{p_value:.3e}")
+                            else:
+                                td('N/A')
                             
                             # FAPROTAX functions
                             with td():
-                                if feat.get('faprotax_functions'):
+                                funcs = feat.get('faprotax_functions')
+                                if funcs:
                                     with details():
-                                        summary(f"{len(feat['faprotax_functions'])} functions")
-                                        ul([li(func) for func in feat['faprotax_functions']])
+                                        summary(f"{len(funcs)} functions")
+                                        with ul():
+                                            for func in funcs:
+                                                li(func)
                                 else:
                                     span("N/A")
                             
                             # Violin plot
                             with td():
-                                if feat.get('violin_figure'):
+                                fig = feat.get('violin_figure')
+                                if fig:
                                     with details():
                                         summary("View Plot")
                                         with div(style="width: 400px; margin-top: 10px;"):
-                                            if hasattr(feat['violin_figure'], 'to_html'):
-                                                raw(feat['violin_figure'].to_html(full_html=False))
+                                            if hasattr(fig, 'to_html'):
+                                                raw(fig.to_html(full_html=False))
                                             else:
                                                 p("Figure display not available")
                                 else:
