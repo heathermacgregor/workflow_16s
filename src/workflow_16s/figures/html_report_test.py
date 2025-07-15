@@ -327,8 +327,8 @@ class Section:
         self.figures['alpha_diversity'] = alpha.figures
         
         logger.info("Extracting ML figures...")
-        ML = ML(self.amplicon_data)
-        self.figures['models'] = ML.figures 
+        ml = ML(self.amplicon_data)
+        self.figures['models'] = ml.figures 
         #for attr, value in vars(self.figures).items():
         #    print(f"{attr}: {value}")
         """
