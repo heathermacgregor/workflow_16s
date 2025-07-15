@@ -33,6 +33,19 @@ html_template_path = script_dir / "template.html"
 
 # ===================================== CLASSES ====================================== #
 
+class NumpySafeJSONEncoder(json.JSONEncoder):
+    def default(self, obj) -> Any:  
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        return super().default(obj)
+
+
 level_titles = {
     "color_col": "Color",
     "level": "Taxonomic Level",
@@ -116,171 +129,144 @@ def rename_columns(df: pd.DataFrame, rename_map: dict = cols_to_rename) -> pd.Da
     
 debug_mode = True    
 
+def check_dict(amplicon_data, attr_name):
+    val = getattr(amplicon_data, attr_name, None)
+    exists = hasattr(amplicon_data, attr_name)
+    is_non_empty_dict = isinstance(val, dict) and bool(val)
+    logger.info(f"AmpliconData has non-empty {attr_name}: {is_non_empty_dict} (exists: {exists})")
 
+class OrdinationFigures:
+    #self.ordination[table_type][level][method] = {'result': res, 'figures': figs}
+    def __init__(self, amplicon_data: AmpliconData):
+        self.amplicon_data = amplicon_data
+        self.figures = {}
+        if check_dict(self.amplicon_data, 'ordination'):
+            self.fetch_figures()
+        else:
+            logger.warning("No ordination data found in AmpliconData")
+            
+    def fetch_figures(self):
+        for table_type, levels in self.amplicon_data.ordination.items():
+            for level, methods in levels.items():
+                for method, data in methods.items():
+                    if data and 'figures' in data and data['figures']:
+                        if table_type not in self.figures:
+                            self.figures[table_type] = {}
+                        if level not in self.figures[table_type]:
+                            self.figures[table_type][level] = {}
+                        self.figures[table_type][level][method] = data['figures']
+                    else:
+                        logger.warning(f"No ordination figures found for {table_type}/{level}/{method}")
+        
+class AlphaDivFigures:
+    #self.alpha_diversity[table_type][level]['figures'][metric] = fig
+    #self.alpha_diversity[table_type][level]['figures']['summary'] = stats_fig
+    #self.alpha_diversity[table_type][level]['figures']['correlations'] = corr_figures
+    def __init__(self, amplicon_data: AmpliconData):
+        self.amplicon_data = amplicon_data
+        self.figures = {}
+        if check_dict(self.amplicon_data, 'alpha_diversity'):
+            self.fetch_figures()
+        else:
+            logger.warning("No alpha diversity data found in AmpliconData")
+            
+    def fetch_figures(self):
+        for table_type, levels in self.amplicon_data.alpha_diversity.items():
+            for level, methods in levels.items():
+                for method, data in methods.items():
+                    if data and 'figures' in data and data['figures']:
+                        if table_type not in self.figures:
+                            self.figures[table_type] = {}
+                        if level not in self.figures[table_type]:
+                            self.figures[table_type][level] = {}
+                        self.figures[table_type][level][method] = data['figures']
+                    else:
+                        logger.warning(f"No alpha diversity figures found for {table_type}/{level}/{method}")        
+        
 
 class Section:
-    def __init__(self, amplicon_data: AmpliconData, target_section: str):
+    def __init__(self, amplicon_data: AmpliconData):
         self.amplicon_data = amplicon_data
-        self.section = self._get_section(target_section)
-        self.figures = self._get_figures(target_section)
-        self.params = self._get_info(target_section)
+        self._extract_figures()
 
-        self.raw_results = self._extract_data(self.section, self.params)
-        self.results = self._process_data(target_section, self.raw_results)
-
-        self.figure_results = self._extract_data(self.figures, section_figure_info.get(target_section, {}), is_figure=True)
-
-        if debug_mode:
-            logger.info(f"Results: {self.results}")
-            logger.info(f"Figures: {self.figure_results}")
-
-    # ======================== Data Extraction ======================== #
-
-    def _extract_data(self, source, meta_info, is_figure=False):
-        if not source or not meta_info:
-            return {}
-
-        # Identify ordered level keys and data keys
-        level_keys = sorted(
-            [k for k in meta_info if k.startswith("level_")],
-            key=lambda x: int(x.split("_")[1])
-        )
-        data_keys = [meta_info[k] for k in level_keys]
-        results = defaultdict(list)
-
-        def recurse(d, depth=0, path={}):
-            if depth == len(data_keys):
-                if is_figure and isinstance(d, dict):
-                    for k, v in d.items():
-                        results["main"].append({
-                            **path,
-                            data_keys[-1]: k,
-                            f"{level_keys[-1]}_title": level_titles.get(data_keys[-1], data_keys[-1]),
-                            "figure": v
-                        })
-                elif not is_figure:
-                    results["main"].append({
-                        **path,
-                        "result": d,
-                        "result_type": type(d).__name__
-                    })
-                return
-
-            key = data_keys[depth]
-            level = level_keys[depth]
-            title = level_titles.get(key, key)
-
-            if debug_mode:
-                logger.info(f"[extract_data] Extracting {'figures' if is_figure else 'data'}...")
-                logger.info(f"  Level keys: {level_keys}")
-                logger.info(f"  Data keys: {data_keys}")
-
-
-            if not isinstance(d, dict):
-                return
-
-            for k, v in d.items():
-                recurse(v, depth + 1, {**path, level: k, f"{level}_title": title})
-
-        recurse(source)
-
-        # Handle any special levels (figures or data)
-        for spec_key, spec_map in meta_info.items():
-            if not spec_key.startswith("special_level_"):
-                continue
-
-            depth = int(spec_key.split("_")[-1])
-            for name, meta in spec_map.items():
-                for path in self._enumerate_paths(source, data_keys[:depth - 1]):
-                    value = self._get_nested_value(source, path + [name])
-                    if value:
-                        record = {f"level_{i+1}": path[i] for i in range(len(path))}
-                        for i in range(len(path)):
-                            record[f"level_{i+1}_title"] = level_titles.get(data_keys[i], data_keys[i])
-                        record["figure" if is_figure else "result"] = value
-                        record["result_type" if not is_figure else "figure_type"] = type(value).__name__
-                        record["special_level_key"] = name
-                        record["special_level_title"] = meta.get("title", name)
-                        results[name].append(record)
+    def _extract_figures(self) -> Dict[str, Any]:
+        logger.info("Analyzing AmpliconData structure...")
+        figures = {}
         
-        return results
-
-    # ========================= Data Processing ======================== #
-
-    def _process_data(self, section_name, grouped_results):
-        combined = {}
-        special_names = self._get_special_names(self.params)
-        if debug_mode:
-            logger.info(f"[process_data] Processing section '{section_name}'")
-            logger.info(f"  Result groups: {list(grouped_results.keys())}")
-
-        for group_name, items in grouped_results.items():
-            print(group_name)
-            dfs = []
-            for item in items:
-                print(item)
-                df = item.get("result")
-                if not isinstance(df, pd.DataFrame):
-                    continue
-
-                df = df.copy()
-                if section_name == "stats" and group_name == "main":
-                    df["Significant Features"] = df["p_value"].lt(0.05).sum() if "p_value" in df.columns else 0
-                    df["Total Features"] = len(df)
-
-                for col, val in item.items():
-                    if col not in {"result", "result_type"}:
-                        df[col] = val
-
-                dfs.append(df)
-
-            if dfs:
-                combined[group_name] = rename_columns(pd.concat(dfs, ignore_index=True))
-
-        return combined
-
-    # ========================== Helpers =========================== #
-
-    def _get_section(self, section_name: str):
-        return getattr(self.amplicon_data, section_name, None)
-
-    def _get_figures(self, section_name: str):
-        return getattr(getattr(self.amplicon_data, "figures", None), section_name, None)
-
-    def _get_info(self, section_name: str) -> dict:
-        return section_info.get(section_name, {})
-
-    def _get_special_names(self, params: dict) -> set:
-        names = set()
-        for key, val in params.items():
-            if key.startswith("special_level_") and isinstance(val, dict):
-                names.update(val.keys())
-        return names
-
-    def _enumerate_paths(self, nested_dict, keys) -> list:
-        """Get all valid paths down to depth = len(keys)."""
-        def walk(d, depth=0, path=[]):
-            if depth == len(keys) or not isinstance(d, dict):
-                return [path]
-            paths = []
-            for k in d:
-                paths.extend(walk(d[k], depth + 1, path + [k]))
-            return paths
-        return walk(nested_dict)
-
-    def _get_nested_value(self, d, keys):
-        for key in keys:
-            if not isinstance(d, dict):
-                return None
-            d = d.get(key)
-        return d
-
-    @classmethod
-    def create(cls, amplicon_data, target_section: str):
-        if not hasattr(amplicon_data, target_section):
-            return None
-        return cls(amplicon_data, target_section)
+        # Ordination figures
+        logger.info("Extracting ordination figures...")
+        figures['ordination'] = OrdinationFigures(self.amplicon_data)
+        for attr, value in vars(figures['ordination']).items():
+            print(f"{attr}: {value}")
+        # Alpha diversity figures
+        logger.info("Extracting alpha diversity figures...")
+        figures['alpha_diversity'] = AlphaDivFigures(self.amplicon_data)
+        for attr, value in vars(figures['alpha_diversity']).items():
+            print(f"{attr}: {value}")
+        """
+        # Sample maps
+        logger.info("Extracting sample maps...")
+        if hasattr(amplicon_data, 'maps') and amplicon_data.maps:
+            logger.info(f"  Found {len(amplicon_data.maps)} sample maps")
+            figures['map'] = amplicon_data.maps
+        else:
+            logger.warning("No sample maps found in AmpliconData")
         
+        # SHAP figures
+        logger.info("Extracting SHAP figures...")
+        shap_figures = {}
+        if hasattr(amplicon_data, 'models'):
+            for table_type, levels in amplicon_data.models.items():
+                logger.info(f"  Processing table_type: {table_type}")
+                for level, methods in levels.items():
+                    logger.info(f"    Processing level: {level}")
+                    for method, model_result in methods.items():
+                        logger.info(f"      Processing method: {method}")
+                        if model_result and 'figures' in model_result:
+                            logger.info(f"        Found figures: {list(model_result['figures'].keys())}")
+                            if table_type not in shap_figures:
+                                shap_figures[table_type] = {}
+                            if level not in shap_figures[table_type]:
+                                shap_figures[table_type][level] = {}
+                            shap_figures[table_type][level][method] = model_result['figures']
+                        else:
+                            logger.warning(f"        No figures found for {table_type}/{level}/{method}")
+        else:
+            logger.warning("No models data found in AmpliconData")
+        figures['shap'] = shap_figures
+    
+        # Violin plots
+        logger.info("Extracting violin plots...")
+        violin_figures = {'contaminated': {}, 'pristine': {}}
+        if hasattr(amplicon_data, 'top_contaminated_features'):
+            logger.info(f"  Found {len(amplicon_data.top_contaminated_features)} contaminated features")
+            for feat in amplicon_data.top_contaminated_features:
+                if 'violin_figure' in feat and feat['violin_figure']:
+                    logger.info(f"    Violin figure found for {feat['feature']}")
+                    violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
+        if hasattr(amplicon_data, 'top_pristine_features'):
+            logger.info(f"  Found {len(amplicon_data.top_pristine_features)} pristine features")
+            for feat in amplicon_data.top_pristine_features:
+                if 'violin_figure' in feat and feat['violin_figure']:
+                    logger.info(f"    Violin figure found for {feat['feature']}")
+                    violin_figures['pristine'][feat['feature']] = feat['violin_figure']
+        figures['violin'] = violin_figures
+    
+        # Log the final extracted figures structure
+        logger.info("Extracted figures summary:")
+        for section, data in figures.items():
+            if isinstance(data, dict):
+                logger.info(f"  {section}: {len(data)} items")
+                for key, subdata in data.items():
+                    if isinstance(subdata, dict):
+                        logger.info(f"    {key}: {len(subdata)} sub-items")
+                    else:
+                        logger.info(f"    {key}: {type(subdata)}")
+            else:
+                logger.info(f"  {section}: {type(data)}")
+        
+        return figures
+        """
 
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
