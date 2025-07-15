@@ -441,15 +441,14 @@ def shap_beeswarm(
         width=None, 
         height=1100,
         title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=0.5, range=[min(x), max(x)], constrain='domain'),
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
         yaxis=dict(
             title=dict(font=dict(size=20)), 
             tickfont=dict(size=16), 
             showticklabels=True,
             tickvals=list(range(len(top_features))),
             ticktext=top_simplified_labels,
-            automargin=True,
-            range=[min(y), max(y)]
+            automargin=True
         )
     )
     return fig
@@ -634,8 +633,8 @@ def shap_dependency_plot(
     fig.update_layout(
         height=1100,
         title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=0.5, range=[min(x), max(x)], constrain='domain'),
-        yaxis=dict(title=dict(font=dict(size=20)), range=[min(y), max(y)])
+        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
+        yaxis=dict(title=dict(font=dict(size=20)))
     )
     return fig
 
