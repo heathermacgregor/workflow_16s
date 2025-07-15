@@ -2,7 +2,30 @@ import os
 import pandas as pd
 import plotly.graph_objects as go
 from jinja2 import Environment, FileSystemLoader
+import json
+import numpy as np
+import pandas as pd
+from plotly.utils import PlotlyJSONEncoder
 
+class NumpySafeJSONEncoder(PlotlyJSONEncoder):
+    """Custom JSON encoder that handles NumPy types and pandas Timestamps"""
+    def default(self, obj) -> Any:
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if pd.api.types.is_integer(obj):
+            return int(obj)
+        if pd.api.types.is_float(obj):
+            return float(obj)
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        return super().default(obj)
+        
 def generate_html_report(amplicon_data, output_path):
     """
     Generate an interactive HTML report for AmpliconData analysis
@@ -11,6 +34,8 @@ def generate_html_report(amplicon_data, output_path):
         amplicon_data: AmpliconData object containing analysis results
         output_path: Path to save the HTML report
     """
+    # Create JSON encoder instance
+    json_encoder = NumpySafeJSONEncoder()
     # Create report data structure
     report_data = {
         "sections": [],
@@ -36,7 +61,7 @@ def generate_html_report(amplicon_data, output_path):
             )
             map_options.append({
                 "name": color_col,
-                "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                "figure": fig.to_dict() 
             })
         
         report_data["sections"].append({
@@ -82,7 +107,7 @@ def generate_html_report(amplicon_data, output_path):
                         "table_type": table_type,
                         "level": level,
                         "metric": metric,
-                        "figure": fig.to_json()  # Store as JSON
+                        "figure": fig.to_dict()
                     })
     
         
@@ -177,7 +202,7 @@ def generate_html_report(amplicon_data, output_path):
                         "feature": feature['feature'],
                         "level": feature['level'],
                         "table_type": feature['table_type'],
-                        "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                        "figure": fig.to_dict()
                     })
             
             top_features_options.append({
@@ -211,7 +236,7 @@ def generate_html_report(amplicon_data, output_path):
                         "feature": feature['feature'],
                         "level": feature['level'],
                         "table_type": feature['table_type'],
-                        "figure": fig.to_html(full_html=False, include_plotlyjs=False)
+                        "figure": fig.to_dict()
                     })
             
             top_features_options.append({
@@ -260,7 +285,7 @@ def generate_html_report(amplicon_data, output_path):
                             "level": level,
                             "method": method,
                             "color_col": color_col,
-                            "figure": fig.to_json()  # Store as JSON
+                            "figure": fig.to_dict()
                         })
         
         # Create dropdown options
@@ -334,7 +359,7 @@ def generate_html_report(amplicon_data, output_path):
                                     "level": level,
                                     "method": method,
                                     "plot_type": plot_type,
-                                    "figure": fig.to_json()  # Store as JSON
+                                    "figure": fig.to_dict()  
                                 })
         
         # Create dropdown options
