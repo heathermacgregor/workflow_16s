@@ -2,7 +2,7 @@
 
 # Hardware
 cpu:
-  limit: 8  # Global CPU limit for all operations
+  limit: 16  # Global CPU limit for all operations
 
 # Important directory and file paths
 dataset_list: "./datasets.txt"
@@ -82,8 +82,8 @@ features:
 stats:
   raw:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True      # ✅ non-parametric alternative
-    kruskal_bonferroni: True
+    mwu_bonferroni: False #True      # ✅ non-parametric alternative
+    kruskal_bonferroni: False #True
   presence_absence:
     fisher: True              # ✅ ideal for binary data
     ttest: False              # ❌ designed for continuous data
@@ -91,20 +91,20 @@ stats:
     kruskal_bonferroni: False
   filtered:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True
-    kruskal_bonferroni: True
+    mwu_bonferroni: False #True
+    kruskal_bonferroni: False #True
   normalized:
-    ttest: True               # ✅ can be used after proper normalization
-    mwu_bonferroni: True      # ✅ still valuable for robustness
-    kruskal_bonferroni: True
+    ttest: False #True               # ✅ can be used after proper normalization
+    mwu_bonferroni: False #True      # ✅ still valuable for robustness
+    kruskal_bonferroni: False #True
   clr_transformed:
-    ttest: True               # ✅ CLR addresses compositionality
-    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
-    kruskal_bonferroni: True
+    ttest: False #True               # ✅ CLR addresses compositionality
+    mwu_bonferroni: False #True      # ✅ good alternative for non-normal distributions
+    kruskal_bonferroni: False #True
 
 # Alpha Diversity
 alpha_diversity:
-  enabled: True
+  enabled: False #True
   metrics:  # Metrics to calculate
     - 'shannon'
     - 'observed_features'
@@ -159,7 +159,7 @@ ordination:
     tsne: False #True
     umap: False #True
   normalized:
-    pca: True
+    pca: False #True
     pcoa: False #True
     pcoa_metric: "braycurtis"
     tsne: False #True
@@ -176,7 +176,7 @@ faprotax: True
 
 # Figures
 figures:
-  map: True
+  map: False #True
   color_columns: 
     - "dataset_name"
     - "nuclear_contamination_status"
@@ -191,7 +191,7 @@ figures:
     width: 800
     
 violin_plots: 
-  enabled: True
+  enabled: False #True
   n: 50  # Number of features to plot per category
 
 # Machine Learning
@@ -216,4 +216,4 @@ ml:
   num_features: 500
   step_size: 100
   permutation_importance: True
-  n_threads: 8
+  n_threads: 16
