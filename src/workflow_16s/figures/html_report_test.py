@@ -313,7 +313,7 @@ class Section:
         self.amplicon_data = amplicon_data
         self.figures = {}
         self._extract_figures()
-        self.figures['models']['eval_plots']
+        #self.figures['models']['eval_plots']
 
     def _extract_figures(self) -> Dict[str, Any]:
         logger.info("Analyzing AmpliconData structure...")
