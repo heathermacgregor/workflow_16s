@@ -318,7 +318,12 @@ def shap_summary_bar(
         Horizontal bar plot of mean absolute SHAP values.
     """
 
-    
+    def _simplify_label(taxon: str) -> str:
+        parts = taxon.split(";")
+        last = parts[-1].strip().lower()
+        if last in {"__unclassified", "__uncultured", "__"}:
+            return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+        return parts[-1]
 
     # Compute mean absolute SHAP values for each feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
@@ -329,7 +334,18 @@ def shap_summary_bar(
     top_values = mean_abs_shap[top_indices]
 
     # Generate simplified labels and ensure uniqueness
-    simplified_labels = generate_unique_simplified_labels(top_features_full)
+    simplified_labels = []
+    used_labels = set()
+    for f in top_features_full:
+        label = _simplify_label(f)
+        # Ensure uniqueness by appending a suffix if needed
+        base_label = label
+        suffix = 1
+        while label in used_labels:
+            label = f"{base_label}_{suffix}"
+            suffix += 1
+        simplified_labels.append(label)
+        used_labels.add(label)
 
     # Create horizontal bar plot
     fig = go.Figure()
@@ -345,9 +361,8 @@ def shap_summary_bar(
     # Layout adjustments
     fig.update_layout(
         showlegend=False,
-        autosize=True,
-        width=None, 
-        height=1100,
+        margin=dict(l=300, r=50, t=50, b=50),
+        width=1600,
         title=dict(text="SHAP Summary Bar Plot", font=dict(size=20)),
         xaxis=dict(title=dict(text='Mean |SHAP Value|', font=dict(size=18))),
         yaxis=dict(title=dict(text='Features', font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
@@ -378,8 +393,7 @@ def shap_beeswarm(
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
     top_features = [feature_names[i] for i in top_indices]
-    # Generate unique simplified labels for display
-    top_simplified_labels = generate_unique_simplified_labels(top_features)
+    
     # Prepare figure
     fig = go.Figure()
     y_offset = 0.3  # Vertical spread for jitter
@@ -432,23 +446,28 @@ def shap_beeswarm(
         line=dict(color='gray', width=1, dash='dash')
     )
     
-    # Update layout
-    fig.update_layout(hovermode='closest')
-    fig.update_yaxes(range=[-0.5, len(top_features) - 0.5])
-    fig = _apply_common_layout(fig, 'SHAP Value', 'Features', 'SHAP Beeswarm Plot')
+    # Calculate padding for x-axis
+    x_min = min(np.min(shap_values[:, top_indices]), 0)
+    x_max = max(np.max(shap_values[:, top_indices]), 0)
+    x_padding = 0.05 * (x_max - x_min)
+    
+    # Update layout with dynamic axis scaling
     fig.update_layout(
-        autosize=True,
-        width=None, 
+        hovermode='closest',
         height=1100,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
+        title=dict(text='SHAP Beeswarm Plot', font=dict(size=24)),
+        xaxis=dict(
+            title=dict(text='SHAP Value', font=dict(size=20)),
+            range=[x_min - x_padding, x_max + x_padding]
+        ),
         yaxis=dict(
-            title=dict(font=dict(size=20)), 
-            tickfont=dict(size=16), 
+            title=dict(text='Features', font=dict(size=20)),
+            tickfont=dict(size=16),
             showticklabels=True,
             tickvals=list(range(len(top_features))),
-            ticktext=top_simplified_labels,
-            automargin=True
+            ticktext=top_features,
+            automargin=True,
+            range=[-0.5, len(top_features) - 0.5]
         )
     )
     return fig
@@ -574,18 +593,18 @@ def shap_dependency_plot(
     }
     hover_template = "<b>Value</b>: %{x:.4f}<br><b>SHAP</b>: %{y:.4f}"
     
-    # Simplify main feature name for display
-    feature_display = simplify_feature_name(feature)
-    
-    # Simplify interaction feature name if used
-    color_title_display = None
-    if color_title is not None:
-        color_title_display = simplify_feature_name(color_title)
-    
-    # Update marker configuration with simplified name
     if color_data is not None:
         marker_config.update({
-            'colorbar': {'title': {'text': color_title_display, 'side': 'right'}}
+            'color': color_data,
+            'colorscale': 'Viridis',
+            'colorbar': {'title': {'text': color_title, 'side': 'right'}}
+        })
+        hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"
+    else:
+        marker_config.update({
+            'color': y,
+            'colorscale': 'RdBu',
+            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right'}}
         })
     
     hover_template += "<extra></extra>"
@@ -622,22 +641,25 @@ def shap_dependency_plot(
             name='Trend'
         ))
     
-    # Update layout with simplified names
+    # Calculate axis padding
+    x_padding = 0.05 * (x.max() - x.min())
+    y_padding = 0.05 * (y.max() - y.min())
+    
+    # Update layout with dynamic axis scaling
     title_suffix = " with interaction" if auto_interaction else ""    
-    fig = _apply_common_layout(
-        fig, 
-        f'Feature Value: {feature_display}',  # Simplified name
-        'SHAP Value', 
-        f'SHAP Dependency Plot: {feature_display}{title_suffix}'  # Simplified name
-    )
     fig.update_layout(
         height=1100,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), scaleanchor="y", scaleratio=1.5),
-        yaxis=dict(title=dict(font=dict(size=20)))
+        title=dict(text=f'SHAP Dependency Plot: {feature}{title_suffix}', font=dict(size=24)),
+        xaxis=dict(
+            title=dict(text=f'Feature Value: {feature}', font=dict(size=20)),
+            range=[x.min() - x_padding, x.max() + x_padding]
+        ),
+        yaxis=dict(
+            title=dict(text='SHAP Value', font=dict(size=20)),
+            range=[y.min() - y_padding, y.max() + y_padding]
+        )
     )
     return fig
-
 
 def plot_shap(
     shap_values: np.array, 
