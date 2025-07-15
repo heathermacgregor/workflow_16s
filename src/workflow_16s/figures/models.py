@@ -301,6 +301,29 @@ def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
         used_labels.add(label)
     return simplified_labels
     
+def simplify_feature_name(taxon: str) -> str:
+    """Simplify a feature name by selecting the most specific meaningful part."""
+    parts = taxon.split(";")
+    last = parts[-1].strip().lower()
+    if last in {"__unclassified", "__uncultured", "__"}:
+        return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+    return parts[-1]
+
+def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
+    """Generate simplified labels while ensuring uniqueness."""
+    simplified_labels = []
+    used_labels = set()
+    for f in feature_names:
+        label = simplify_feature_name(f)
+        base_label = label
+        suffix = 1
+        while label in used_labels:
+            label = f"{base_label}_{suffix}"
+            suffix += 1
+        simplified_labels.append(label)
+        used_labels.add(label)
+    return simplified_labels
+
 def shap_summary_bar(
     shap_values: np.array,
     feature_names: List[str],
@@ -317,14 +340,6 @@ def shap_summary_bar(
     Returns:
         Horizontal bar plot of mean absolute SHAP values.
     """
-
-    def _simplify_label(taxon: str) -> str:
-        parts = taxon.split(";")
-        last = parts[-1].strip().lower()
-        if last in {"__unclassified", "__uncultured", "__"}:
-            return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
-        return parts[-1]
-
     # Compute mean absolute SHAP values for each feature
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
 
@@ -334,18 +349,7 @@ def shap_summary_bar(
     top_values = mean_abs_shap[top_indices]
 
     # Generate simplified labels and ensure uniqueness
-    simplified_labels = []
-    used_labels = set()
-    for f in top_features_full:
-        label = _simplify_label(f)
-        # Ensure uniqueness by appending a suffix if needed
-        base_label = label
-        suffix = 1
-        while label in used_labels:
-            label = f"{base_label}_{suffix}"
-            suffix += 1
-        simplified_labels.append(label)
-        used_labels.add(label)
+    simplified_labels = generate_unique_simplified_labels(top_features_full)
 
     # Create horizontal bar plot
     fig = go.Figure()
@@ -392,7 +396,10 @@ def shap_beeswarm(
     # Compute mean absolute SHAP for feature ordering
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
-    top_features = [feature_names[i] for i in top_indices]
+    top_features_full = [feature_names[i] for i in top_indices]
+    
+    # Generate simplified labels and ensure uniqueness
+    simplified_labels = generate_unique_simplified_labels(top_features_full)
     
     # Prepare figure
     fig = go.Figure()
@@ -442,13 +449,14 @@ def shap_beeswarm(
     # Add zero line
     fig.add_shape(
         type='line',
-        x0=0, y0=-0.5, x1=0, y1=len(top_features) - 0.5,
+        x0=0, y0=-0.5, x1=0, y1=len(top_features_full) - 0.5,
         line=dict(color='gray', width=1, dash='dash')
     )
     
     # Calculate padding for x-axis
-    x_min = min(np.min(shap_values[:, top_indices]), 0)
-    x_max = max(np.max(shap_values[:, top_indices]), 0)
+    all_shap_vals = shap_values[:, top_indices]
+    x_min = min(np.min(all_shap_vals), 0)
+    x_max = max(np.max(all_shap_vals), 0)
     x_padding = 0.05 * (x_max - x_min)
     
     # Update layout with dynamic axis scaling
@@ -464,10 +472,10 @@ def shap_beeswarm(
             title=dict(text='Features', font=dict(size=20)),
             tickfont=dict(size=16),
             showticklabels=True,
-            tickvals=list(range(len(top_features))),
-            ticktext=top_features,
+            tickvals=list(range(len(top_features_full))),
+            ticktext=simplified_labels,  # Use simplified labels here
             automargin=True,
-            range=[-0.5, len(top_features) - 0.5]
+            range=[-0.5, len(top_features_full) - 0.5]
         )
     )
     return fig
@@ -500,6 +508,9 @@ def shap_dependency_plot(
         raise ValueError(f"Feature '{feature}' not found in feature_names")
     idx = feature_names.index(feature)
     
+    # Simplify feature name for display
+    feature_display = simplify_feature_name(feature)
+    
     # Extract main feature data
     x = feature_values[:, idx]
     y = shap_values[:, idx]
@@ -507,6 +518,7 @@ def shap_dependency_plot(
     # Prepare interaction feature data
     color_data = None
     color_title = None
+    color_title_display = None  # For simplified display name
     auto_interaction = False
     
     # Handle interaction feature selection
@@ -566,12 +578,14 @@ def shap_dependency_plot(
                         best_j = j
                         break
             color_title = feature_names[best_j]
+            color_title_display = simplify_feature_name(color_title)
             color_data = feature_values[:, best_j]
         else:
             # Use specified interaction feature
             if interaction_feature not in feature_names:
                 raise ValueError(f"Interaction feature '{interaction_feature}' not found")
             color_title = interaction_feature
+            color_title_display = simplify_feature_name(interaction_feature)
             color_data = feature_values[:, feature_names.index(interaction_feature)]
 
     # Downsample if needed
@@ -597,9 +611,9 @@ def shap_dependency_plot(
         marker_config.update({
             'color': color_data,
             'colorscale': 'Viridis',
-            'colorbar': {'title': {'text': color_title, 'side': 'right'}}
+            'colorbar': {'title': {'text': color_title_display, 'side': 'right'}}
         })
-        hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"
+        hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"  # Full name in hover
     else:
         marker_config.update({
             'color': y,
@@ -615,7 +629,7 @@ def shap_dependency_plot(
         y=y, 
         mode='markers',
         marker=marker_config,
-        name=feature,
+        name=feature_display,  # Use simplified name for legend
         hovertemplate=hover_template
     ))
     
@@ -649,9 +663,9 @@ def shap_dependency_plot(
     title_suffix = " with interaction" if auto_interaction else ""    
     fig.update_layout(
         height=1100,
-        title=dict(text=f'SHAP Dependency Plot: {feature}{title_suffix}', font=dict(size=24)),
+        title=dict(text=f'SHAP Dependency Plot: {feature_display}{title_suffix}', font=dict(size=24)),
         xaxis=dict(
-            title=dict(text=f'Feature Value: {feature}', font=dict(size=20)),
+            title=dict(text=f'Feature Value: {feature_display}', font=dict(size=20)),
             range=[x.min() - x_padding, x.max() + x_padding]
         ),
         yaxis=dict(
