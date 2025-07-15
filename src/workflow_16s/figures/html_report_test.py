@@ -237,6 +237,13 @@ class ML:
                         divs.append(f'<div id="{div_id}" class="plot-div" style="display: none;">{fig_html}</div>')
     
         # Build dropdowns
+        # Build figureMap entries first (outside the f-string)
+        figure_map_entries = ',\n        '.join([
+            f'"{t}|{l}|{m}|{f}": "{div_id}"'
+            for (t, l, m, f), div_id in figure_mapping.items()
+        ])
+        
+        # Now safely use the entries inside the f-string
         html = f"""
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <div>
@@ -244,63 +251,60 @@ class ML:
             <select id="table_type">
                 {''.join(f'<option value="{t}">{t}</option>' for t in sorted(options_table_type))}
             </select>
-    
+        
             <label>Level:</label>
             <select id="level">
                 {''.join(f'<option value="{l}">{l}</option>' for l in sorted(options_level))}
             </select>
-    
+        
             <label>Method:</label>
             <select id="method">
                 {''.join(f'<option value="{m}">{m}</option>' for m in sorted(options_method))}
             </select>
-    
+        
             <label>Figure Type:</label>
             <select id="fig_type">
                 {''.join(f'<option value="{ft}">{ft}</option>' for ft in ["eval_plots", "shap_summary_bar", "shap_summary_beeswarm"])}
             </select>
         </div>
-    
+        
         <div id="figure-container">
             {''.join(divs)}
         </div>
-    
+        
         <script>
-        const figureMap = {
-            {'\n        '.join([
-                f'"{t}|{l}|{m}|{f}": "{div_id}"'
-                for (t, l, m, f), div_id in figure_mapping.items()
-            ])}
-        };
-
-    
+        const figureMap = {{
+            {figure_map_entries}
+        }};
+        
         function updateFigure() {{
             const t = document.getElementById("table_type").value;
             const l = document.getElementById("level").value;
             const m = document.getElementById("method").value;
             const f = document.getElementById("fig_type").value;
-    
+        
             const key = `${{t}}|${{l}}|${{m}}|${{f}}`;
             const selectedId = figureMap[key];
-    
+        
             // Hide all
             document.querySelectorAll('.plot-div').forEach(el => el.style.display = 'none');
-    
+        
             // Show selected
             if (selectedId) {{
                 document.getElementById(selectedId).style.display = 'block';
             }}
         }}
-    
+        
         document.getElementById("table_type").addEventListener("change", updateFigure);
         document.getElementById("level").addEventListener("change", updateFigure);
         document.getElementById("method").addEventListener("change", updateFigure);
         document.getElementById("fig_type").addEventListener("change", updateFigure);
-    
+        
         // Initial display
         updateFigure();
         </script>
         """
+
     
         return html
 class Section:
