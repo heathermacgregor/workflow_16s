@@ -36,60 +36,123 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # ================================== CORE HELPERS =================================== #
+# In html_report.py, modify the _extract_figures function:
+
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
+    # Log the overall structure of AmpliconData
+    logger.info("Analyzing AmpliconData structure...")
+    logger.info(f"AmpliconData has ordination: {hasattr(amplicon_data, 'ordination')}")
+    logger.info(f"AmpliconData has alpha_diversity: {hasattr(amplicon_data, 'alpha_diversity')}")
+    logger.info(f"AmpliconData has models: {hasattr(amplicon_data, 'models')}")
+    logger.info(f"AmpliconData has maps: {hasattr(amplicon_data, 'maps')}")
+    logger.info(f"AmpliconData has top_contaminated_features: {hasattr(amplicon_data, 'top_contaminated_features')}")
+    logger.info(f"AmpliconData has top_pristine_features: {hasattr(amplicon_data, 'top_pristine_features')}")
+
     figures = {}
     
-    # Ordination figures
+    # Log and extract ordination figures
+    logger.info("Extracting ordination figures...")
     ordination_figures = {}
-    for table_type, levels in amplicon_data.ordination.items():
-        for level, methods in levels.items():
-            for method, data in methods.items():
-                if data and 'figures' in data and data['figures']:
-                    if table_type not in ordination_figures:
-                        ordination_figures[table_type] = {}
-                    if level not in ordination_figures[table_type]:
-                        ordination_figures[table_type][level] = {}
-                    # Store figures directly under method key
-                    ordination_figures[table_type][level][method] = data['figures']
+    if hasattr(amplicon_data, 'ordination'):
+        for table_type, levels in amplicon_data.ordination.items():
+            logger.info(f"  Processing table_type: {table_type}")
+            for level, methods in levels.items():
+                logger.info(f"    Processing level: {level}")
+                for method, data in methods.items():
+                    logger.info(f"      Processing method: {method}")
+                    if data and 'figures' in data and data['figures']:
+                        logger.info(f"        Found {len(data['figures'])} figures for {table_type}/{level}/{method}")
+                        if table_type not in ordination_figures:
+                            ordination_figures[table_type] = {}
+                        if level not in ordination_figures[table_type]:
+                            ordination_figures[table_type][level] = {}
+                        ordination_figures[table_type][level][method] = data['figures']
+                    else:
+                        logger.warning(f"        No figures found for {table_type}/{level}/{method}")
+    else:
+        logger.warning("No ordination data found in AmpliconData")
     figures['ordination'] = ordination_figures
 
-    # Alpha diversity figures
+    # Log and extract alpha diversity figures
+    logger.info("Extracting alpha diversity figures...")
     alpha_figures = {}
-    for table_type, levels in amplicon_data.alpha_diversity.items():
-        for level, data in levels.items():
-            if 'figures' in data and data['figures']:
-                if table_type not in alpha_figures:
-                    alpha_figures[table_type] = {}
-                alpha_figures[table_type][level] = data['figures']
+    if hasattr(amplicon_data, 'alpha_diversity'):
+        for table_type, levels in amplicon_data.alpha_diversity.items():
+            logger.info(f"  Processing table_type: {table_type}")
+            for level, data in levels.items():
+                logger.info(f"    Processing level: {level}")
+                if 'figures' in data and data['figures']:
+                    logger.info(f"      Found {len(data['figures'])} figures")
+                    if table_type not in alpha_figures:
+                        alpha_figures[table_type] = {}
+                    alpha_figures[table_type][level] = data['figures']
+                else:
+                    logger.warning(f"      No figures found for {table_type}/{level}")
+    else:
+        logger.warning("No alpha_diversity data found in AmpliconData")
     figures['alpha_diversity'] = alpha_figures
 
-    # Sample maps
-    if amplicon_data.maps:
+    # Log and extract sample maps
+    logger.info("Extracting sample maps...")
+    if hasattr(amplicon_data, 'maps') and amplicon_data.maps:
+        logger.info(f"  Found {len(amplicon_data.maps)} sample maps")
         figures['map'] = amplicon_data.maps
+    else:
+        logger.warning("No sample maps found in AmpliconData")
 
-    # SHAP figures
+    # Log and extract SHAP figures
+    logger.info("Extracting SHAP figures...")
     shap_figures = {}
-    for table_type, levels in amplicon_data.models.items():
-        for level, methods in levels.items():
-            for method, model_result in methods.items():
-                if model_result and 'figures' in model_result:
-                    if table_type not in shap_figures:
-                        shap_figures[table_type] = {}
-                    if level not in shap_figures[table_type]:
-                        shap_figures[table_type][level] = {}
-                    shap_figures[table_type][level][method] = model_result['figures']
+    if hasattr(amplicon_data, 'models'):
+        for table_type, levels in amplicon_data.models.items():
+            logger.info(f"  Processing table_type: {table_type}")
+            for level, methods in levels.items():
+                logger.info(f"    Processing level: {level}")
+                for method, model_result in methods.items():
+                    logger.info(f"      Processing method: {method}")
+                    if model_result and 'figures' in model_result:
+                        logger.info(f"        Found figures: {list(model_result['figures'].keys())}")
+                        if table_type not in shap_figures:
+                            shap_figures[table_type] = {}
+                        if level not in shap_figures[table_type]:
+                            shap_figures[table_type][level] = {}
+                        shap_figures[table_type][level][method] = model_result['figures']
+                    else:
+                        logger.warning(f"        No figures found for {table_type}/{level}/{method}")
+    else:
+        logger.warning("No models data found in AmpliconData")
     figures['shap'] = shap_figures
 
-    # Violin plots
+    # Log and extract violin plots
+    logger.info("Extracting violin plots...")
     violin_figures = {'contaminated': {}, 'pristine': {}}
-    for feat in amplicon_data.top_contaminated_features:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
-    for feat in amplicon_data.top_pristine_features:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['pristine'][feat['feature']] = feat['violin_figure']
+    if hasattr(amplicon_data, 'top_contaminated_features'):
+        logger.info(f"  Found {len(amplicon_data.top_contaminated_features)} contaminated features")
+        for feat in amplicon_data.top_contaminated_features:
+            if 'violin_figure' in feat and feat['violin_figure']:
+                logger.info(f"    Violin figure found for {feat['feature']}")
+                violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
+    if hasattr(amplicon_data, 'top_pristine_features'):
+        logger.info(f"  Found {len(amplicon_data.top_pristine_features)} pristine features")
+        for feat in amplicon_data.top_pristine_features:
+            if 'violin_figure' in feat and feat['violin_figure']:
+                logger.info(f"    Violin figure found for {feat['feature']}")
+                violin_figures['pristine'][feat['feature']] = feat['violin_figure']
     figures['violin'] = violin_figures
 
+    # Log the final extracted figures structure
+    logger.info("Extracted figures summary:")
+    for section, data in figures.items():
+        if isinstance(data, dict):
+            logger.info(f"  {section}: {len(data)} items")
+            for key, subdata in data.items():
+                if isinstance(subdata, dict):
+                    logger.info(f"    {key}: {len(subdata)} sub-items")
+                else:
+                    logger.info(f"    {key}: {type(subdata)}")
+        else:
+            logger.info(f"  {section}: {type(data)}")
+    
     return figures
 
 def _prepare_sections(
