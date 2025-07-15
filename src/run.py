@@ -33,7 +33,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from workflow_16s import ena
 from workflow_16s.config import get_config
-from workflow_16s.figures.html_report import AmpliconReportGenerator
+from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.figures.html_report_test import Section
 from workflow_16s.logger import setup_logging 
 from workflow_16s.metadata.per_dataset import SubsetDataset
@@ -304,12 +304,10 @@ def downstream(cfg, logger) -> None:
     Section(data)
         
     report_path = Path(project_dir.final) / "analysis_report.html"
-    report = AmpliconReportGenerator(data, report_path)
-    report.generate_report()
-    #generate_html_report(
-    #    amplicon_data=data,
-    #    output_path=report_path
-    #)
+    generate_html_report(
+        amplicon_data=data,
+        output_path=report_path
+    )
     logger.info(f"HTML report generated at: {report_path}")
     
 
