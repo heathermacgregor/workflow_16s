@@ -319,7 +319,7 @@ class Section:
         # Ordination figures
         logger.info("Extracting ordination figures...")
         beta = Ordination(self.amplicon_data)
-        self.figures['beta_diversity'] = ordination.figures
+        self.figures['beta_diversity'] = beta.figures
         
         # Alpha diversity figures
         logger.info("Extracting alpha diversity figures...")
