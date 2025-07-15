@@ -272,12 +272,16 @@ class ML:
                 const key = `${{t}}|${{l}}|${{m}}|${{f}}`;
                 const fig = figureData[key];
     
-                if (fig) {{
+                if (fig && Array.isArray(fig.data) && fig.data.length > 0) {{
+                    for (let trace of fig.data) {{
+                        if (!trace.type) trace.type = 'scatter';
+                        if (!trace.mode) trace.mode = 'markers';
+                    }}
                     const config = {{responsive: true}};
                     Plotly.react('plot-container', fig.data, fig.layout || {{}}, config);
                 }} else {{
                     Plotly.purge('plot-container');
-                    document.getElementById('plot-container').innerHTML = '<p>No figure available.</p>';
+                    document.getElementById('plot-container').innerHTML = '<p>No figure available or figure has no data.</p>';
                 }}
             }}
     
