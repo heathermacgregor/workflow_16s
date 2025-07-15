@@ -182,7 +182,30 @@ class AlphaDivFigures:
                         self.figures[table_type][level][method] = data['figures']
                     else:
                         logger.warning(f"No alpha diversity figures found for {table_type}/{level}/{method}")        
-        
+
+class MLFigures:        
+    #self.models[table_type][level][method] = model_result
+    #model_result['figures']: 'eval_plots', 'shap_summary_bar', 'shap_summary_beeswarm', 'shap_dependency'
+    def __init__(self, amplicon_data: AmpliconData):
+        self.amplicon_data = amplicon_data
+        self.figures = {}
+        if check_dict(self.amplicon_data, 'models'):
+            self.fetch_figures()
+        else:
+            logger.warning("No ML data found in AmpliconData")
+            
+    def fetch_figures(self):
+        for table_type, levels in self.amplicon_data.models.items():
+            for level, methods in levels.items():
+                for method, data in methods.items():
+                    if data and 'figures' in data and data['figures']:
+                        if table_type not in self.figures:
+                            self.figures[table_type] = {}
+                        if level not in self.figures[table_type]:
+                            self.figures[table_type][level] = {}
+                        self.figures[table_type][level][method] = data['figures']
+                    else:
+                        logger.warning(f"No alpha diversity figures found for {table_type}/{level}/{method}")        
 
 class Section:
     def __init__(self, amplicon_data: AmpliconData):
@@ -202,6 +225,10 @@ class Section:
         logger.info("Extracting alpha diversity figures...")
         figures['alpha_diversity'] = AlphaDivFigures(self.amplicon_data)
         for attr, value in vars(figures['alpha_diversity']).items():
+            print(f"{attr}: {value}")
+        logger.info("Extracting ML figures...")
+        figures['models'] = MLFigures(self.amplicon_data)
+        for attr, value in vars(figures['models']).items():
             print(f"{attr}: {value}")
         """
         # Sample maps
