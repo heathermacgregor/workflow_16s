@@ -193,7 +193,7 @@ class ML:
             self.fetch_figures()
             self.html = self.render_figures()
             with open("/usr2/people/macgregor/amplicon/test/figures_dropdown.html", "w") as f:
-                f.write(html)
+                f.write(self.html)
         else:
             logger.warning("No ML data found in AmpliconData")
             
