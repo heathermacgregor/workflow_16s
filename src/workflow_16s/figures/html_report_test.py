@@ -136,6 +136,7 @@ def check_dict(amplicon_data, attr_name):
     logger.info(f"AmpliconData has non-empty {attr_name}: {is_non_empty_dict} (exists: {exists})")
     logger.info(type(getattr(amplicon_data, attr_name, None)))
     logger.info(getattr(amplicon_data, attr_name, None))
+    return is_non_empty_dict
 
 
 class OrdinationFigures:
