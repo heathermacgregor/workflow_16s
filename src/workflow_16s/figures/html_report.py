@@ -186,26 +186,40 @@ def _prepare_sections(
         # Rename ordination to Beta Diversity
         if sec == "ordination":
             sec_data["title"] = "Beta Diversity"
-            btns, tabs, pd = _ordination_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Beta Diversity",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
+            if figures[sec]:
+                btns, tabs, pd = _ordination_to_nested_html(
+                    figures[sec], id_counter, sec_data["id"]
+                )
+                plot_data.update(pd)
+                sec_data["subsections"].append({
+                    "title": "Beta Diversity",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
+            else:
+                sec_data["subsections"].append({
+                    "title": "Beta Diversity",
+                    "tabs_html": "<div class='info-message'>No ordination figures available</div>",
+                    "buttons_html": ""
+                })
         
         elif sec == "alpha_diversity":
-            btns, tabs, pd = _alpha_diversity_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Alpha Diversity",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
+            if figures[sec]:
+                btns, tabs, pd = _alpha_diversity_to_nested_html(
+                    figures[sec], id_counter, sec_data["id"]
+                )
+                plot_data.update(pd)
+                sec_data["subsections"].append({
+                    "title": "Alpha Diversity",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
+            else:
+                sec_data["subsections"].append({
+                    "title": "Alpha Diversity",
+                    "tabs_html": "<div class='info-message'>No alpha diversity figures available</div>",
+                    "buttons_html": ""
+                })
         
         elif sec == "map":
             flat: Dict[str, Any] = {}
@@ -220,13 +234,19 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
+            else:
+                sec_data["subsections"].append({
+                    "title": "Sample Maps",
+                    "tabs_html": "<div class='info-message'>No sample maps available</div>",
+                    "buttons_html": ""
+                })
         
         elif sec == "ml_results":
             # ML Results section includes both model evaluation and SHAP
             ml_subsections = []
             
             # Add model evaluation plots if available
-            if 'shap' in figures:
+            if 'shap' in figures and figures['shap']:
                 btns, tabs, pd = _shap_to_nested_html(
                     figures['shap'], id_counter, sec_data["id"]
                 )
@@ -238,7 +258,7 @@ def _prepare_sections(
                 })
             
             # Add SHAP dependency plots
-            if 'shap' in figures:
+            if 'shap' in figures and figures['shap']:
                 shap_dependency_figs = _extract_shap_dependency(figures['shap'])
                 if shap_dependency_figs:
                     tabs, btns, pd = _figs_to_html(
@@ -251,18 +271,38 @@ def _prepare_sections(
                         "buttons_html": btns
                     })
             
+            if not ml_subsections:
+                ml_subsections.append({
+                    "title": "Machine Learning Results",
+                    "tabs_html": "<div class='info-message'>No ML figures available</div>",
+                    "buttons_html": ""
+                })
+                
             sec_data["subsections"] = ml_subsections
         
         elif sec == "violin":
-            btns, tabs, pd = _violin_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
+            # Only show section if we have at least one violin figure
+            has_violins = any(
+                len(figures['violin'][cat]) > 0 
+                for cat in ['contaminated', 'pristine']
             )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Violin Plots",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
+            
+            if has_violins:
+                btns, tabs, pd = _violin_to_nested_html(
+                    figures[sec], id_counter, sec_data["id"]
+                )
+                plot_data.update(pd)
+                sec_data["subsections"].append({
+                    "title": "Violin Plots",
+                    "tabs_html": tabs,
+                    "buttons_html": btns
+                })
+            else:
+                sec_data["subsections"].append({
+                    "title": "Violin Plots",
+                    "tabs_html": "<div class='info-message'>No significant features found for violin plots</div>",
+                    "buttons_html": ""
+                })
         
         if sec_data["subsections"]:
             sections.append(sec_data)
@@ -334,7 +374,15 @@ def _figs_to_html(
                 
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
-                pj.setdefault("layout", {})["showlegend"] = False
+                # Ensure layout exists and set consistent sizing
+                if "layout" not in pj:
+                    pj["layout"] = {}
+                pj["layout"].update({
+                    "autosize": True,
+                    "width": 800,
+                    "height": 600,
+                    "showlegend": True
+                })
                 plot_data[plot_id] = {
                     "type": "plotly",
                     "data": pj["data"],
@@ -355,7 +403,7 @@ def _figs_to_html(
                     "error": f"Unsupported figure type {type(fig)}"
                 }
         except Exception as exc:
-            logger.exception("Serializing figure failed")
+            logger.exception(f"Serializing figure '{title}' failed")
             plot_data[plot_id] = {
                 "type": "error", 
                 "error": str(exc)
@@ -377,7 +425,7 @@ def _section_html(sec: Dict) -> str:
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
         f'  <div class="tab-content">\n'          
-        f'    <div class="tabs">{sub["buttons_html"]}</div>\n'
+        f'    {sub["buttons_html"]}\n'
         f'    {sub["tabs_html"]}\n'
         f'  </div>\n'                             
         f'</div>'
@@ -392,7 +440,10 @@ def _prepare_features_table(
     category: str
 ) -> pd.DataFrame:
     if not features:
-        return pd.DataFrame({"Message": [f"No significant {category} features found"]})
+        return pd.DataFrame({
+            "Message": [f"No significant {category} features found"],
+            "Recommendation": ["Try relaxing p-value threshold or using different statistical tests"]
+        })
     
     df = pd.DataFrame(features[:max_features])
     df = df.rename(columns={
@@ -897,13 +948,14 @@ def generate_html_report(
         nav_html += f'<li><a href="#{section_id}">{title}</a></li>\n'
     nav_html += "        </ul>\n    </div>"
 
+    # Get Plotly version with fallback
     try:
-        plotly_ver = get_plotlyjs_version()
+        import plotly
+        plotly_ver = plotly.__version__
+        plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     except Exception:
-        plotly_ver = "3.0.1"
-    plotly_js_tag = (
-        f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
-    )
+        plotly_ver = "2.24.1"  # Stable fallback version
+        plotly_js_tag = f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
 
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")
@@ -953,6 +1005,16 @@ def generate_html_report(
     .tooltip:hover .tooltiptext {
         visibility: visible;
         opacity: 1;
+    }
+    .info-message {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: center;
+        font-size: 16px;
+        color: #6c757d;
     }
     """
     
