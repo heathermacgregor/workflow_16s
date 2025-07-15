@@ -465,6 +465,11 @@ class TopFeaturesAnalyzer:
         for table_type, tests in stats_results.items():
             for test_name, test_results in tests.items():
                 for level, df in test_results.items():
+                    if df is None or not isinstance(df, pd.DataFrame):
+                        continue
+                    if "p_value" not in df.columns:
+                        continue
+                        
                     sig_df = df[df["p_value"] < 0.05].copy()
                     if sig_df.empty:
                         continue
@@ -746,7 +751,7 @@ class _AnalysisManager(_ProcessingMixin):
     def __init__(
         self,
         cfg: Dict,
-        tables: Dict[str, Dict[str, Table]],
+        tables: Dict[str, Dict[str, Table]]],
         meta: pd.DataFrame,
         output_dir: Path,
         verbose: bool,
@@ -849,8 +854,7 @@ class _AnalysisManager(_ProcessingMixin):
                 table_task = progress.add_task(
                     _format_task_desc(table_desc),
                     parent=alpha_task,
-                    total=len(enabled_levels)
-                )
+                    total=len(enabled_levels))
                 for level in enabled_levels:
                     if level not in levels:
                         logger.warning(f"Level '{level}' not found for table type '{table_type}'")
@@ -960,8 +964,7 @@ class _AnalysisManager(_ProcessingMixin):
                 table_task = progress.add_task(
                     _format_task_desc(table_desc),
                     parent=stats_task,
-                    total=len(levels) * len(enabled_for_table_type)
-                )
+                    total=len(levels) * len(enabled_for_table_type))
                 for level, table in levels.items():
                     level_desc = f"{table_desc} ({level.title()})"
                     progress.update(table_task, description=_format_task_desc(level_desc))
@@ -990,6 +993,11 @@ class _AnalysisManager(_ProcessingMixin):
                             result.to_csv(output_dir / f'{test_name}.tsv', sep='\t', index=True)
                             self.stats[table_type][level][test_name] = result
                             
+                            # Log number of significant features
+                            if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
+                                n_sig = sum(result["p_value"] < 0.05)
+                                logger.info(f"Found {n_sig} significant features for {table_type}/{level}/{test_name}")
+                            
                         except Exception as e:
                             logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
                             self.stats[table_type][level][test_name] = None
@@ -1005,9 +1013,8 @@ class _AnalysisManager(_ProcessingMixin):
             stats_results, DEFAULT_GROUP_COLUMN
         )
 
-        if self.verbose:
-            logger.info(f"Found {len(self.top_contaminated_features)} top contaminated features")
-            logger.info(f"Found {len(self.top_pristine_features)} top pristine features")
+        logger.info(f"Identified {len(self.top_contaminated_features)} top contaminated features")
+        logger.info(f"Identified {len(self.top_pristine_features)} top pristine features")
 
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
@@ -1150,8 +1157,7 @@ class _AnalysisManager(_ProcessingMixin):
                 table_task = progress.add_task(
                     _format_task_desc(table_desc),
                     parent=cb_task,
-                    total=len(levels) * len(methods)
-                )
+                    total=len(levels) * len(methods))
                 for level, table in levels.items():
                     level_desc = f"{table_desc} ({level.title()})"
                     progress.update(table_task, description=_format_task_desc(level_desc))
@@ -1222,11 +1228,12 @@ class _AnalysisManager(_ProcessingMixin):
             for test_name, levels in tests.items():
                 for level, df in levels.items():
                     key = (table_type, level)
-                    sig_df = df[df["p_value"] < 0.05]
-                    if not sig_df.empty:
-                        if key not in stat_features:
-                            stat_features[key] = set()
-                        stat_features[key].update(sig_df["feature"].tolist())
+                    if df is not None and "p_value" in df.columns:
+                        sig_df = df[df["p_value"] < 0.05]
+                        if not sig_df.empty:
+                            if key not in stat_features:
+                                stat_features[key] = set()
+                            stat_features[key].update(sig_df["feature"].tolist())
         
         for table_type, levels in self.models.items():
             for level, methods in levels.items():
@@ -1251,65 +1258,79 @@ class _AnalysisManager(_ProcessingMixin):
         violin_output_dir = self.output_dir / 'violin_plots'
         violin_output_dir.mkdir(parents=True, exist_ok=True)
         
-        for feat in self.top_contaminated_features[:n]:
-            try:
-                table_type = feat['table_type']
-                level = feat['level']
-                feature_name = feat['feature']
-                
-                table = self.tables[table_type][level]
-                df = table_to_df(table)
-                
-                merged_df = df.merge(
-                    self.meta[[DEFAULT_GROUP_COLUMN]], 
-                    left_index=True, 
-                    right_index=True
-                )
-                
-                # Create specific output directory for this feature
-                feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
-                feature_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                fig = violin_feature(
-                    df=merged_df,
-                    feature=feature_name,
-                    output_dir=feature_output_dir,
-                    status_col=DEFAULT_GROUP_COLUMN
-                )
-                feat['violin_figure'] = fig
-            except Exception as e:
-                logger.error(f"Failed violin plot for {feature_name}: {e}")
-                feat['violin_figure'] = None
+        logger.info(f"Generating violin plots for top {n} features")
         
-        for feat in self.top_pristine_features[:n]:
-            try:
-                table_type = feat['table_type']
-                level = feat['level']
-                feature_name = feat['feature']
-                
-                table = self.tables[table_type][level]
-                df = table_to_df(table)
-                
-                merged_df = df.merge(
-                    self.meta[[DEFAULT_GROUP_COLUMN]], 
-                    left_index=True, 
-                    right_index=True
-                )
-                
-                # Create specific output directory for this feature
-                feature_output_dir = violin_output_dir / 'pristine' / table_type / level
-                feature_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                fig = violin_feature(
-                    df=merged_df,
-                    feature=feature_name,
-                    output_dir=feature_output_dir,
-                    status_col=DEFAULT_GROUP_COLUMN
-                )
-                feat['violin_figure'] = fig
-            except Exception as e:
-                logger.error(f"Failed violin plot for {feature_name}: {e}")
-                feat['violin_figure'] = None
+        # Contaminated features
+        if self.top_contaminated_features:
+            logger.info(f"Processing {min(n, len(self.top_contaminated_features))} contaminated features")
+            for i in range(min(n, len(self.top_contaminated_features))):
+                feat = self.top_contaminated_features[i]
+                try:
+                    table_type = feat['table_type']
+                    level = feat['level']
+                    feature_name = feat['feature']
+                    
+                    table = self.tables[table_type][level]
+                    df = table_to_df(table)
+                    
+                    merged_df = df.merge(
+                        self.meta[[DEFAULT_GROUP_COLUMN]], 
+                        left_index=True, 
+                        right_index=True
+                    )
+                    
+                    # Create specific output directory for this feature
+                    feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
+                    feature_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    fig = violin_feature(
+                        df=merged_df,
+                        feature=feature_name,
+                        output_dir=feature_output_dir,
+                        status_col=DEFAULT_GROUP_COLUMN
+                    )
+                    feat['violin_figure'] = fig
+                except Exception as e:
+                    logger.error(f"Failed violin plot for {feature_name}: {e}")
+                    feat['violin_figure'] = None
+        else:
+            logger.warning("No contaminated features for violin plots")
+        
+        # Pristine features
+        if self.top_pristine_features:
+            logger.info(f"Processing {min(n, len(self.top_pristine_features))} pristine features")
+            for i in range(min(n, len(self.top_pristine_features))):
+                feat = self.top_pristine_features[i]
+                try:
+                    table_type = feat['table_type']
+                    level = feat['level']
+                    feature_name = feat['feature']
+                    
+                    table = self.tables[table_type][level]
+                    df = table_to_df(table)
+                    
+                    merged_df = df.merge(
+                        self.meta[[DEFAULT_GROUP_COLUMN]], 
+                        left_index=True, 
+                        right_index=True
+                    )
+                    
+                    # Create specific output directory for this feature
+                    feature_output_dir = violin_output_dir / 'pristine' / table_type / level
+                    feature_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    fig = violin_feature(
+                        df=merged_df,
+                        feature=feature_name,
+                        output_dir=feature_output_dir,
+                        status_col=DEFAULT_GROUP_COLUMN
+                    )
+                    feat['violin_figure'] = fig
+                except Exception as e:
+                    logger.error(f"Failed violin plot for {feature_name}: {e}")
+                    feat['violin_figure'] = None
+        else:
+            logger.warning("No pristine features for violin plots")
 
 
 class AmpliconData:
