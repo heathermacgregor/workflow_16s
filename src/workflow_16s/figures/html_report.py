@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from plotly.utils import PlotlyJSONEncoder
-
+from typing import Any
 class NumpySafeJSONEncoder(PlotlyJSONEncoder):
     """Custom JSON encoder that handles NumPy types and pandas Timestamps"""
     def default(self, obj) -> Any:
@@ -107,7 +107,7 @@ def generate_html_report(amplicon_data, output_path):
                         "table_type": table_type,
                         "level": level,
                         "metric": metric,
-                        "figure": fig.to_dict()
+                        "figure": json_encoder.encode(fig.to_dict())
                     })
     
         
@@ -202,7 +202,7 @@ def generate_html_report(amplicon_data, output_path):
                         "feature": feature['feature'],
                         "level": feature['level'],
                         "table_type": feature['table_type'],
-                        "figure": fig.to_dict()
+                        "figure": json_encoder.encode(fig.to_dict())
                     })
             
             top_features_options.append({
@@ -236,7 +236,7 @@ def generate_html_report(amplicon_data, output_path):
                         "feature": feature['feature'],
                         "level": feature['level'],
                         "table_type": feature['table_type'],
-                        "figure": fig.to_dict()
+                        "figure": json_encoder.encode(fig.to_dict())
                     })
             
             top_features_options.append({
@@ -285,7 +285,7 @@ def generate_html_report(amplicon_data, output_path):
                             "level": level,
                             "method": method,
                             "color_col": color_col,
-                            "figure": fig.to_dict()
+                            "figure": json_encoder.encode(fig.to_dict())
                         })
         
         # Create dropdown options
@@ -359,7 +359,7 @@ def generate_html_report(amplicon_data, output_path):
                                     "level": level,
                                     "method": method,
                                     "plot_type": plot_type,
-                                    "figure": fig.to_dict()  
+                                    "figure": json_encoder.encode(fig.to_dict()) 
                                 })
         
         # Create dropdown options
