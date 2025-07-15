@@ -59,6 +59,11 @@
             width: 100% !important;
             height: 100% !important;
         }
+        
+        .alert-danger small {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -186,14 +191,14 @@
                             <label for="violin-selector-{{ tab.type }}" class="form-label">Select feature:</label>
                             <select class="form-select mb-3" id="violin-selector-{{ tab.type }}">
                                 {% for plot in tab.violin_plots %}
-                                <option value="{{ loop.index0 }}">{{ plot.feature }} ({{ plot.level }})</option>
+                                <option value="{{ plot.feature }}">{{ plot.feature }} ({{ plot.level }})</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
                     
                     <div class="plot-container" id="violin-{{ tab.type }}-plot">
-                        {{ tab.violin_plots[0].figure|safe if tab.violin_plots }}
+                        <!-- Violin plot will be inserted here dynamically -->
                     </div>
                     {% endif %}
                 </div>
@@ -222,7 +227,7 @@
                     {
                         {% for key, value in fig.items() %}
                         {% if key == 'figure' %}
-                        "{{ key }}": {{ value|tojson }},
+                        "{{ key }}": {{ value }},
                         {% else %}
                         "{{ key }}": "{{ value }}",
                         {% endif %}
@@ -239,32 +244,30 @@
             {% endif %}
             {% endfor %}
         };
-    
+
         // Store violin figures separately
         const violinFigures = {
             {% for section in report_data.sections %}
             {% if 'tabs' in section %}
             {% for tab in section.tabs %}
-            "{{ tab.type }}": [
+            "{{ tab.type }}": {
                 {% for plot in tab.violin_plots %}
-                {{ plot.figure|tojson }},
+                "{{ plot.feature }}": {{ plot.figure }},
                 {% endfor %}
-            ],
+            },
             {% endfor %}
             {% endif %}
             {% endfor %}
         };
-    
+
         // Function to render Plotly figure
-        function renderPlotly(containerId, figureData) {
+        function renderPlotly(containerId, figureJson) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';  // Clear previous content
             
             try {
-                // Handle both dict objects and JSON strings
-                const figure = typeof figureData === 'string' ? 
-                    JSON.parse(figureData) : figureData;
-                
+                // Parse the JSON string
+                const figure = JSON.parse(figureJson);
                 Plotly.newPlot(container, figure.data, figure.layout, figure.config || {});
                 
                 // Make plot responsive
@@ -275,16 +278,14 @@
                 container.innerHTML = `
                     <div class="alert alert-danger">
                         <strong>Error rendering plot:</strong> ${error.message}
-                        ${typeof figureData === 'string' ? 
-                            `<br><small>Data: ${figureData.substring(0, 100)}...</small>` : 
-                            `<br><small>Data type: ${typeof figureData}</small>`}
+                        <br><small>Data: ${figureJson.substring(0, 100)}...</small>
                     </div>
                 `;
                 console.error('Plot rendering error:', error);
-                console.log('Figure data:', figureData);
+                console.log('Figure JSON:', figureJson);
             }
         }
-    
+
         // Function to find matching figure
         function findMatchingFigure(sectionId, selections) {
             const sectionData = figureData[sectionId];
@@ -303,7 +304,7 @@
             }
             return null;
         }
-    
+
         // Function to update plot based on selections
         function updatePlot(sectionId) {
             const sectionData = figureData[sectionId];
@@ -328,7 +329,7 @@
                 plotContainer.innerHTML = '<p>No visualization available for the selected options</p>';
             }
         }
-    
+
         // Function to setup dropdown listeners for a section
         function setupSectionDropdowns(sectionId) {
             const sectionData = figureData[sectionId];
@@ -344,25 +345,25 @@
             // Initialize the plot
             updatePlot(sectionId);
         }
-    
+
         // Function to setup violin plot selectors
         function setupViolinSelectors() {
             document.querySelectorAll('[id^="violin-selector-"]').forEach(selector => {
                 selector.addEventListener('change', function() {
                     const tabType = this.id.replace('violin-selector-', '');
-                    const selectedIndex = this.value;
+                    const selectedFeature = this.value;
                     const plotContainer = document.getElementById(`violin-${tabType}-plot`);
                     
                     if (plotContainer) {
                         const figures = violinFigures[tabType];
-                        if (figures && figures[selectedIndex]) {
-                            renderPlotly(`violin-${tabType}-plot`, figures[selectedIndex]);
+                        if (figures && figures[selectedFeature]) {
+                            renderPlotly(`violin-${tabType}-plot`, figures[selectedFeature]);
                         }
                     }
                 });
             });
         }
-    
+
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Setup dropdown sections
@@ -380,8 +381,12 @@
                 if (container.innerHTML.trim() === '') {
                     const tabType = container.id.replace('violin-', '').replace('-plot', '');
                     const figures = violinFigures[tabType];
-                    if (figures && figures.length > 0) {
-                        renderPlotly(container.id, figures[0]);
+                    if (figures) {
+                        // Get the first feature name
+                        const firstFeature = Object.keys(figures)[0];
+                        if (firstFeature) {
+                            renderPlotly(container.id, figures[firstFeature]);
+                        }
                     }
                 }
             });
