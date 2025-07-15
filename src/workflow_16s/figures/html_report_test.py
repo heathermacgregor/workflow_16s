@@ -134,6 +134,7 @@ def check_dict(amplicon_data, attr_name):
     exists = hasattr(amplicon_data, attr_name)
     is_non_empty_dict = isinstance(val, dict) and bool(val)
     logger.info(f"AmpliconData has non-empty {attr_name}: {is_non_empty_dict} (exists: {exists})")
+    logger.info(type(amplicon_data.attr_name))
 
 class OrdinationFigures:
     #self.ordination[table_type][level][method] = {'result': res, 'figures': figs}
