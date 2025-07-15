@@ -231,7 +231,6 @@ class ML:
                         levels.add(level)
                         methods.add(method)
     
-        # Convert figure_json_map to a JSON string
         figure_json_str = json.dumps(figure_json_map, cls=NumpySafeJSONEncoder)
     
         html = f"""
@@ -274,7 +273,11 @@ class ML:
                 const fig = figureData[key];
     
                 if (fig) {{
-                    Plotly.newPlot('plot-container', fig.data, fig.layout || {{}});
+                    const config = {{responsive: true}};
+                    Plotly.react('plot-container', fig.data, fig.layout || {{}}, config);
+                }} else {{
+                    Plotly.purge('plot-container');
+                    document.getElementById('plot-container').innerHTML = '<p>No figure available.</p>';
                 }}
             }}
     
@@ -283,12 +286,12 @@ class ML:
             document.getElementById("method").addEventListener("change", updateFigure);
             document.getElementById("fig_type").addEventListener("change", updateFigure);
     
-            // Render default
             updateFigure();
         </script>
         """
     
         return html
+
 
 
 class Section:
