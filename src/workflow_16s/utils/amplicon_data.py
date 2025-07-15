@@ -349,6 +349,8 @@ class Ordination:
         try:
             figures = {}
             pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
+            pkwargs.setdefault("width", 800)
+            pkwargs.setdefault("height", 600)
             
             for color_col in self.color_columns:
                 if color_col not in metadata.columns:
@@ -376,7 +378,8 @@ class Ordination:
                     output_dir=self.figure_output_dir,
                     **pkwargs,
                 )
-                figures[color_col] = fig
+                if fig:  # Only add if figure was created
+                    figures[color_col] = fig
             return ord_res, figures
 
         except Exception as e:
@@ -751,7 +754,7 @@ class _AnalysisManager(_ProcessingMixin):
     def __init__(
         self,
         cfg: Dict,
-        tables: Dict[str, Dict[str, Table]],
+        tables: Dict[str, Dict[str, Table]]],
         meta: pd.DataFrame,
         output_dir: Path,
         verbose: bool,
@@ -997,6 +1000,13 @@ class _AnalysisManager(_ProcessingMixin):
                             if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
                                 n_sig = sum(result["p_value"] < 0.05)
                                 logger.info(f"Found {n_sig} significant features for {table_type}/{level}/{test_name}")
+                                
+                                # Add debug info for first 5 features if none are significant
+                                if n_sig == 0 and self.verbose:
+                                    logger.debug(f"Top 5 features by p-value ({test_name}):")
+                                    top_p = result.nsmallest(5, "p_value")[["feature", "p_value", cfg["effect_col"]]]
+                                    for _, row in top_p.iterrows():
+                                        logger.debug(f"  {row['feature']}: p={row['p_value']:.3e}, effect={row[cfg['effect_col']]:.3f}")
                             
                         except Exception as e:
                             logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
@@ -1008,6 +1018,10 @@ class _AnalysisManager(_ProcessingMixin):
                 progress.remove_task(table_task)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
+        if not stats_results:
+            logger.warning("No statistical results available for feature selection")
+            return [], []
+            
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(
             stats_results, DEFAULT_GROUP_COLUMN
@@ -1015,6 +1029,9 @@ class _AnalysisManager(_ProcessingMixin):
 
         logger.info(f"Identified {len(self.top_contaminated_features)} top contaminated features")
         logger.info(f"Identified {len(self.top_pristine_features)} top pristine features")
+        
+        if not self.top_contaminated_features and not self.top_pristine_features:
+            logger.warning("No significant features found in any statistical test. Top features tables and violin plots will be empty.")
 
     def _run_ordination(self) -> None:
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
@@ -1203,11 +1220,16 @@ class _AnalysisManager(_ProcessingMixin):
 
                                 # Store figures within model result
                                 model_result['figures'] = {
-                                    'eval_plots': model_result.pop('eval_plots'),
-                                    'shap_summary_bar': model_result.pop('shap_summary_bar'),
-                                    'shap_summary_beeswarm': model_result.pop('shap_summary_beeswarm'),
-                                    'shap_dependency': model_result.pop('shap_dependency')
+                                    'eval_plots': model_result.get('eval_plots'),
+                                    'shap_summary_bar': model_result.get('shap_summary_bar'),
+                                    'shap_summary_beeswarm': model_result.get('shap_summary_beeswarm'),
+                                    'shap_dependency': model_result.get('shap_dependency', {})
                                 }
+                                
+                                # Log if no figures were generated
+                                if not any(model_result['figures'].values()):
+                                    logger.warning(f"No figures generated for {table_type}/{level}/{method}")
+                                
                                 self.models[table_type][level][method] = model_result
                                     
                         except Exception as e:
