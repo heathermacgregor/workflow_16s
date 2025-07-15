@@ -172,16 +172,14 @@ class AlphaDivFigures:
             
     def fetch_figures(self):
         for table_type, levels in self.amplicon_data.alpha_diversity.items():
-            for level, methods in levels.items():
-                for method, data in methods.items():
-                    if data and 'figures' in data and data['figures']:
-                        if table_type not in self.figures:
-                            self.figures[table_type] = {}
-                        if level not in self.figures[table_type]:
-                            self.figures[table_type][level] = {}
-                        self.figures[table_type][level][method] = data['figures']
+            for level, data in levels.items():
+                if data and 'figures' in data and data['figures']:
+                    if table_type not in self.figures:
+                        self.figures[table_type] = {}
+                    
+                    self.figures[table_type][level] = data['figures']
                     else:
-                        logger.warning(f"No alpha diversity figures found for {table_type}/{level}/{method}")        
+                        logger.warning(f"No alpha diversity figures found for {table_type}/{level}")        
 
 class MLFigures:        
     #self.models[table_type][level][method] = model_result
@@ -199,36 +197,34 @@ class MLFigures:
             for level, methods in levels.items():
                 for method, data in methods.items():
                     if data and 'figures' in data and data['figures']:
+                        print(data['figures'])
                         if table_type not in self.figures:
                             self.figures[table_type] = {}
                         if level not in self.figures[table_type]:
                             self.figures[table_type][level] = {}
                         self.figures[table_type][level][method] = data['figures']
                     else:
-                        logger.warning(f"No alpha diversity figures found for {table_type}/{level}/{method}")        
+                        logger.warning(f"No ML figures found for {table_type}/{level}/{method}")        
 
 class Section:
     def __init__(self, amplicon_data: AmpliconData):
         self.amplicon_data = amplicon_data
+        self.figures = {}
         self._extract_figures()
 
     def _extract_figures(self) -> Dict[str, Any]:
         logger.info("Analyzing AmpliconData structure...")
-        figures = {}
-        
         # Ordination figures
         logger.info("Extracting ordination figures...")
-        figures['ordination'] = OrdinationFigures(self.amplicon_data)
-        for attr, value in vars(figures['ordination']).items():
-            print(f"{attr}: {value}")
+        self.figures['ordination'] = OrdinationFigures(self.amplicon_data)
+        
         # Alpha diversity figures
         logger.info("Extracting alpha diversity figures...")
-        figures['alpha_diversity'] = AlphaDivFigures(self.amplicon_data)
-        for attr, value in vars(figures['alpha_diversity']).items():
-            print(f"{attr}: {value}")
+        self.figures['alpha_diversity'] = AlphaDivFigures(self.amplicon_data)
+        
         logger.info("Extracting ML figures...")
-        figures['models'] = MLFigures(self.amplicon_data)
-        for attr, value in vars(figures['models']).items():
+        self.figures['models'] = MLFigures(self.amplicon_data)
+        for attr, value in vars(self.figures).items():
             print(f"{attr}: {value}")
         """
         # Sample maps
