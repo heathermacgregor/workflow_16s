@@ -790,20 +790,19 @@ def shap_heatmap(
     # Apply layout adjustments
     fig.update_layout(
         title="SHAP Feature Importance",
-        title_font_size=20,
+        title_font_size=24,
         xaxis_title="Features (clustered by similarity)",
         yaxis_title="Instances (clustered by similarity)",
         height=700,
         width=900,
         margin=dict(t=60, b=100, l=100, r=50),
-        xaxis=dict(tickangle=-45, tickfont=dict(size=12)),
+        xaxis=dict(tickangle=-45, tickfont=dict(size=16)),
         yaxis=dict(showticklabels=False)
     )
     
     return fig
 
 
-# SHAP Force Plot
 def shap_force_plot(
     base_value: float,
     shap_values: np.array,
@@ -813,7 +812,7 @@ def shap_force_plot(
     max_display: int = 12
 ) -> go.Figure:
     """
-    Create a force plot showing feature contributions for a single instance.
+    Create a waterfall-style force plot showing feature contributions for a single instance.
 
     Args:
         base_value:      Base value (expected model output).
@@ -824,7 +823,7 @@ def shap_force_plot(
         max_display:     Maximum number of features to display.
 
     Returns:
-        Force plot figure showing contribution breakdown.
+        Waterfall plot figure showing contribution breakdown.
     """
     # Select instance data
     instance_shap = shap_values[instance_index]
@@ -841,94 +840,145 @@ def shap_force_plot(
     top_shap = instance_shap[top_indices]
     top_values = instance_feature_values[top_indices]
     
-    # Generate simplified labels
-    simplified_labels = generate_unique_simplified_labels(top_features)
-    
     # Calculate "other" contribution
     other_contrib = instance_shap[other_idx].sum() if len(other_idx) > 0 else 0
+    
+    # Create cumulative values for waterfall
+    cumulative_values = [base_value]
+    current_value = base_value
+    for shap_val in top_shap:
+        current_value += shap_val
+        cumulative_values.append(current_value)
+    
+    if other_contrib != 0:
+        cumulative_values.append(current_value + other_contrib)
+    
+    # Prepare waterfall positions and labels
+    y_labels = ['Base Value'] + top_features
+    if other_contrib != 0:
+        y_labels += [f'Other ({len(other_idx)} features)']
+    y_labels += ['Prediction']
     
     # Create figure
     fig = go.Figure()
     
-    # Add base value
+    # Add base value marker
     fig.add_trace(go.Scatter(
-        x=[0, 0],
-        y=['Base Value', 'Prediction'],
+        x=[base_value],
+        y=['Base Value'],
         mode='markers',
-        marker=dict(size=20, color='#999999'),
+        marker=dict(size=18, color='#999999'),
         hoverinfo='text',
-        text=[f"<b>Base Value</b>: {base_value:.4f}", 
-              f"<b>Prediction</b>: {prediction:.4f}"]
+        text=f"<b>Base Value</b>: {base_value:.4f}"
     ))
     
-    # Add feature contributions
-    cumulative = base_value
-    for i, idx in enumerate(top_indices):
-        # Contribution line
-        fig.add_trace(go.Scatter(
-            x=[cumulative, cumulative + instance_shap[idx]],
-            y=[simplified_labels[i], simplified_labels[i]],
-            mode='lines+markers',
-            line=dict(width=8, color='#1e88e5' if instance_shap[idx] > 0 else '#ff0d57'),
-            marker=dict(size=12),
+    # Add feature contribution bars
+    for i in range(len(top_features)):
+        start_val = cumulative_values[i]
+        end_val = cumulative_values[i+1]
+        contribution = top_shap[i]
+        
+        fig.add_trace(go.Bar(
+            x=[contribution],
+            y=[top_features[i]],
+            base=[start_val],
+            orientation='h',
+            marker=dict(
+                color='#ff0d57' if contribution > 0 else '#1e88e5',
+                line=dict(width=0)
+            ),
             hoverinfo='text',
             text=(
-                f"<b>Feature</b>: {feature_names[idx]}<br>"
-                f"<b>Value</b>: {instance_feature_values[idx]:.4f}<br>"
-                f"<b>SHAP</b>: {instance_shap[idx]:.4f}<br>"
-                f"<b>Cumulative</b>: {cumulative + instance_shap[idx]:.4f}"
+                f"<b>Feature</b>: {top_features[i]}<br>"
+                f"<b>Value</b>: {top_values[i]:.4f}<br>"
+                f"<b>SHAP</b>: {contribution:.4f}<br>"
+                f"<b>Cumulative</b>: {end_val:.4f}"
             )
         ))
-        cumulative += instance_shap[idx]
     
-    # Add other contributions
+    # Add other contributions if needed
     if other_contrib != 0:
-        fig.add_trace(go.Scatter(
-            x=[cumulative, cumulative + other_contrib],
-            y=['Other Features', 'Other Features'],
-            mode='lines+markers',
-            line=dict(width=8, color='#999999'),
-            marker=dict(size=12),
+        start_val = cumulative_values[-2]
+        end_val = cumulative_values[-1]
+        
+        fig.add_trace(go.Bar(
+            x=[other_contrib],
+            y=[f'Other ({len(other_idx)} features)'],
+            base=[start_val],
+            orientation='h',
+            marker=dict(
+                color='#999999',
+                line=dict(width=0)
+            ),
             hoverinfo='text',
             text=f"<b>Sum of {len(other_idx)} other features</b>: {other_contrib:.4f}"
         ))
     
-    # Add final prediction marker
+    # Add prediction marker
     fig.add_trace(go.Scatter(
         x=[prediction],
         y=['Prediction'],
         mode='markers',
-        marker=dict(size=20, symbol='diamond', color='#000000'),
+        marker=dict(size=18, symbol='diamond', color='#000000'),
         hoverinfo='text',
         text=f"<b>Final Prediction</b>: {prediction:.4f}"
     ))
     
-    # Apply common layout
-    fig = _apply_common_layout(
-        fig,
-        "Model Output Value",
-        "Features",
-        "SHAP Force Plot"
-    )
+    # Add connector lines
+    for i in range(len(cumulative_values)-1):
+        fig.add_trace(go.Scatter(
+            x=[cumulative_values[i], cumulative_values[i+1]],
+            y=[y_labels[i], y_labels[i+1]],
+            mode='lines',
+            line=dict(color='#aaaaaa', width=1, dash='dot'),
+            hoverinfo='none',
+            showlegend=False
+        ))
     
     # Custom layout adjustments
     fig.update_layout(
-        height=1100,
+        title=dict(
+            text=f"SHAP Force Plot - Instance {instance_index}",
+            font=dict(size=24),
+        barmode='stack',
         showlegend=False,
         hovermode='closest',
-        title=dict(font=dict(size=24)),
+        height=600 + 40 * len(y_labels),  # Dynamic height based on features
+        width=900,
         xaxis=dict(
-            title=dict(font=dict(size=20)),
-            showgrid=True,
-            zeroline=False,
-            tickfont=dict(size=16)
-        ),
+            title=dict(text='Model Output Value', font=dict(size=20)),
         yaxis=dict(
-            title=dict(font=dict(size=20)),
-            tickfont=dict(size=16),
-            automargin=True
-        )
+            title=None,
+            categoryorder='array',
+            categoryarray=list(reversed(y_labels)),
+        margin=dict(l=150, r=50, t=80, b=80),
+        plot_bgcolor='white',
+        shapes=[
+            # Base value line
+            dict(
+                type='line',
+                x0=base_value,
+                x1=base_value,
+                y0=-1,
+                y1=len(y_labels),
+                line=dict(color='#999999', width=1, dash='dot')
+        ]
     )
+    
+    # Add annotations for cumulative values
+    for i, val in enumerate(cumulative_values):
+        fig.add_annotation(
+            x=val,
+            y=y_labels[i],
+            xref='x',
+            yref='y',
+            text=f"{val:.4f}",
+            showarrow=False,
+            xanchor='left' if val >= base_value else 'right',
+            yanchor='middle',
+            font=dict(size=12),
+            xshift=10 if val >= base_value else -10
+        )
     
     return fig
 
