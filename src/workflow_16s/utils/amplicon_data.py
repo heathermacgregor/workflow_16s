@@ -465,10 +465,9 @@ class TopFeaturesAnalyzer:
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         all_features = []
 
-        # FIXED: Corrected loop structure to match stats_results hierarchy
-        for table_type, levels in stats_results.items():  # First level: table types
-            for level, tests in levels.items():  # Second level: taxonomic levels
-                for test_name, df in tests.items():  # Third level: test names
+        for table_type, levels in stats_results.items():  # 1. Table Types
+            for level, tests in levels.items():           # 2. Taxonomic Levels
+                for test_name, df in tests.items():       # 3. Test Names
                     if df is None or not isinstance(df, pd.DataFrame):
                         continue
                     if "p_value" not in df.columns:
@@ -486,7 +485,7 @@ class TopFeaturesAnalyzer:
                     for _, row in sig_df.iterrows():
                         all_features.append({
                             "feature": row["feature"],
-                            "level": level,
+                            "level": level,  # The specific taxonomic level
                             "table_type": table_type,
                             "test": test_name,
                             "effect": row["effect"],
@@ -1060,7 +1059,6 @@ class _AnalysisManager(_ProcessingMixin):
                     enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
                     
                     for level, table in levels.items():
-                        # Create output directory for this analysis
                         output_dir = self.output_dir / 'ordination' / table_type / level
                         output_dir.mkdir(parents=True, exist_ok=True)
                         
@@ -1080,7 +1078,7 @@ class _AnalysisManager(_ProcessingMixin):
                 completed_results = {}
                 errors = {}
                 try:
-                    for future in as_completed(futures, timeout=3600):  # 1 hour timeout
+                    for future in as_completed(futures, timeout=2*3600):  # 2 hour timeout
                         key = future_to_key[future]
                         try:
                             result = future.result()
