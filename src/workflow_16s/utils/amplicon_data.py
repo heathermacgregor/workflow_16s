@@ -1298,20 +1298,27 @@ class _AnalysisManager(_ProcessingMixin):
                     level = feat['level']
                     feature_name = feat['feature']
                     
+                    # Get the table at the specific taxonomic level
                     table = self.tables[table_type][level]
                     df = table_to_df(table)
                     
-                    # Merge with all required metadata columns
-                    merged_df = df.merge(
+                    # Verify feature exists at this level
+                    if feature_name not in df.columns:
+                        logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
+                        continue
+                    
+                    # Merge with required metadata columns
+                    merged_df = df[[feature_name]].merge(
                         self.meta[available_columns], 
                         left_index=True, 
                         right_index=True
                     )
                     
-                    # Create specific output directory for this feature
+                    # Create output directory for this feature
                     feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
                     feature_output_dir.mkdir(parents=True, exist_ok=True)
                     
+                    # Generate violin plot
                     fig = violin_feature(
                         df=merged_df,
                         feature=feature_name,
@@ -1320,7 +1327,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     feat['violin_figure'] = fig
                 except Exception as e:
-                    logger.error(f"Failed violin plot for {feature_name}: {e}")
+                    logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
                     feat['violin_figure'] = None
         else:
             logger.warning("No contaminated features for violin plots")
@@ -1335,20 +1342,27 @@ class _AnalysisManager(_ProcessingMixin):
                     level = feat['level']
                     feature_name = feat['feature']
                     
+                    # Get the table at the specific taxonomic level
                     table = self.tables[table_type][level]
                     df = table_to_df(table)
                     
-                    # Merge with all required metadata columns
-                    merged_df = df.merge(
+                    # Verify feature exists at this level
+                    if feature_name not in df.columns:
+                        logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
+                        continue
+                    
+                    # Merge with required metadata columns
+                    merged_df = df[[feature_name]].merge(
                         self.meta[available_columns], 
                         left_index=True, 
                         right_index=True
                     )
                     
-                    # Create specific output directory for this feature
+                    # Create output directory for this feature
                     feature_output_dir = violin_output_dir / 'pristine' / table_type / level
                     feature_output_dir.mkdir(parents=True, exist_ok=True)
                     
+                    # Generate violin plot
                     fig = violin_feature(
                         df=merged_df,
                         feature=feature_name,
@@ -1357,7 +1371,7 @@ class _AnalysisManager(_ProcessingMixin):
                     )
                     feat['violin_figure'] = fig
                 except Exception as e:
-                    logger.error(f"Failed violin plot for {feature_name}: {e}")
+                    logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
                     feat['violin_figure'] = None
         else:
             logger.warning("No pristine features for violin plots")
