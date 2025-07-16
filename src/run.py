@@ -301,7 +301,7 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
-    Section(data)
+    #Section(data)
         
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
