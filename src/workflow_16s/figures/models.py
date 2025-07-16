@@ -108,9 +108,10 @@ def plot_confusion_matrix(
     fig = _apply_common_layout(fig, 'Predicted Label', 'Actual Label', '<b>Confusion Matrix</b>') 
     # Update font sizes
     fig.update_layout(
+        height=1100,
         title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0),
-        yaxis=dict(title=dict(font=dict(size=18)))
+        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, showticklabels=False, ticks=''),
+        yaxis=dict(title=dict(font=dict(size=18)), showticklabels=False, ticks='')
     )
     # Move x-axis title to bottom
     fig.update_xaxes(side='bottom') 
@@ -160,8 +161,9 @@ def plot_roc_curve(
     
     # Update layout
     fig.update_layout(
-        xaxis=dict(range=[0, 1], constrain='domain'),
-        yaxis=dict(range=[0, 1.05], scaleanchor='x', scaleratio=1),
+        height=1100,
+        xaxis=dict(range=[-0.05, 1.05], constrain='domain'),
+        yaxis=dict(range=[-0.05, 1.05], scaleanchor='x', scaleratio=1),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
     fig = _apply_common_layout(fig, 'False Positive Rate', 'True Positive Rate', 'Receiver Operating Characteristic') 
@@ -202,8 +204,9 @@ def plot_precision_recall_curve(
     
     # Update layout
     fig.update_layout(
-        xaxis=dict(range=[0, 1], constrain='domain'),
-        yaxis=dict(range=[0, 1.05]),
+        height=1100,
+        xaxis=dict(range=[-0.05, 1.05], constrain='domain'),
+        yaxis=dict(range=[-0.05, 1.05]),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     fig = _apply_common_layout(fig, 'Recall', 'Precision', 'Precision-Recall Curve')
@@ -362,14 +365,32 @@ def shap_summary_bar(
         hoverinfo='text+x'
     ))
 
+    fig = _apply_common_layout(
+        fig, 
+        'Mean |SHAP Value|', 
+        'Features', 
+        "SHAP Summary Bar Plot"
+    )
+
     # Layout adjustments
     fig.update_layout(
         showlegend=False,
-        margin=dict(l=300, r=50, t=50, b=50),
+        margin=dict(l=150, r=50, t=50, b=50),
         width=1600,
-        title=dict(text="SHAP Summary Bar Plot", font=dict(size=20)),
-        xaxis=dict(title=dict(text='Mean |SHAP Value|', font=dict(size=18))),
-        yaxis=dict(title=dict(text='Features', font=dict(size=18)), tickfont=dict(size=14), showticklabels=True)
+        title=dict(font=dict(size=24)),
+        xaxis=dict(
+            title=dict(font=dict(size=20)), 
+            scaleanchor="y", 
+            scaleratio=0.5
+        ),
+        yaxis=dict(
+            title=dict(
+                font=dict(size=20),
+                standoff=30 # Distance between title and ticks
+            ), 
+            tickfont=dict(size=16), 
+            showticklabels=True
+        )
     )
 
     return fig, top_features_full 
@@ -458,18 +479,27 @@ def shap_beeswarm(
     x_min = min(np.min(all_shap_vals), 0)
     x_max = max(np.max(all_shap_vals), 0)
     x_padding = 0.05 * (x_max - x_min)
+
+    fig = _apply_common_layout(
+        fig, 
+        'SHAP Value', 
+        'Features', 
+        'SHAP Beeswarm Plot'
+    )
     
     # Update layout with dynamic axis scaling
     fig.update_layout(
         hovermode='closest',
         height=1100,
-        title=dict(text='SHAP Beeswarm Plot', font=dict(size=24)),
+        title=dict(font=dict(size=24)),
         xaxis=dict(
-            title=dict(text='SHAP Value', font=dict(size=20)),
-            range=[x_min - x_padding, x_max + x_padding]
+            title=dict(font=dict(size=20)),
+            range=[x_min - x_padding, x_max + x_padding], 
+            scaleanchor="y", 
+            scaleratio=0.5
         ),
         yaxis=dict(
-            title=dict(text='Features', font=dict(size=20)),
+            title=dict(font=dict(size=20)),
             tickfont=dict(size=16),
             showticklabels=True,
             tickvals=list(range(len(top_features_full))),
@@ -661,15 +691,25 @@ def shap_dependency_plot(
     
     # Update layout with dynamic axis scaling
     title_suffix = " with interaction" if auto_interaction else ""    
+
+    fig = _apply_common_layout(
+        fig, 
+        f'Feature Value: {feature_display}', 
+        'SHAP Value', 
+        f'SHAP Dependency Plot: {feature_display}{title_suffix}'
+    )
+    
     fig.update_layout(
         height=1100,
-        title=dict(text=f'SHAP Dependency Plot: {feature_display}{title_suffix}', font=dict(size=24)),
+        title=dict(font=dict(size=24)),
         xaxis=dict(
-            title=dict(text=f'Feature Value: {feature_display}', font=dict(size=20)),
-            range=[x.min() - x_padding, x.max() + x_padding]
+            title=dict(font=dict(size=20)),
+            range=[x.min() - x_padding, x.max() + x_padding], 
+            scaleanchor="y", 
+            scaleratio=0.75
         ),
         yaxis=dict(
-            title=dict(text='SHAP Value', font=dict(size=20)),
+            title=dict(font=dict(size=20)),
             range=[y.min() - y_padding, y.max() + y_padding]
         )
     )
