@@ -433,7 +433,7 @@ def _prepare_ml_summary(
     return metrics_df, features_df, shap_reports
 
 def _format_shap_report(report: str) -> str:
-    """Convert SHAP report to HTML tables"""
+    """Convert SHAP report to styled HTML tables matching the report's theme"""
     sections = report.split("\n\n")
     html_output = []
     
@@ -464,8 +464,9 @@ def _format_shap_report(report: str) -> str:
             
             if table_data:
                 df = pd.DataFrame(table_data)
+                table_id = f"shap-top-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='shap-table'))
+                html_output.append(_add_table_functionality(df, table_id))
                 
         elif "Beeswarm interpretation" in header:
             # Beeswarm table
@@ -480,13 +481,14 @@ def _format_shap_report(report: str) -> str:
                         table_data.append({
                             "Feature": feature, 
                             "Interpretation": interpretation,
-                            "ρ": rho
+                            "Spearman's ρ": rho
                         })
             
             if table_data:
                 df = pd.DataFrame(table_data)
+                table_id = f"shap-beeswarm-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='shap-table'))
+                html_output.append(_add_table_functionality(df, table_id))
                 
         elif "Dependency" in header and "interpretations" in header:
             # Dependency plot table
@@ -501,13 +503,14 @@ def _format_shap_report(report: str) -> str:
                         table_data.append({
                             "Feature": feature, 
                             "Relationship": relationship,
-                            "ρ": rho
+                            "Spearman's ρ": rho
                         })
             
             if table_data:
                 df = pd.DataFrame(table_data)
+                table_id = f"shap-dependency-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='shap-table'))
+                html_output.append(_add_table_functionality(df, table_id))
                 
         elif "Interaction summaries" in header:
             # Interaction table
@@ -524,55 +527,25 @@ def _format_shap_report(report: str) -> str:
                         rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0]
                         table_data.append({
                             "Feature": feature,
-                            "Partner": partner,
-                            "Mean |Interaction SHAP|": score,
+                            "Partner Feature": partner,
+                            "Interaction Strength": score,
                             "Relationship": relationship,
-                            "ρ_feat": rho_feat,
-                            "ρ_partner": rho_partner
+                            "ρ (Feature)": rho_feat,
+                            "ρ (Partner)": rho_partner
                         })
             
             if table_data:
                 df = pd.DataFrame(table_data)
+                table_id = f"shap-interaction-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='shap-table'))
+                html_output.append(_add_table_functionality(df, table_id))
                 
         else:
             # Default formatting for other sections
             html_output.append(f'<h4>{header}</h4>')
             html_output.append(f'<div class="shap-report-content">{content}</div>')
     
-    # Add styling for tables
-    table_style = """
-    <style>
-    .shap-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 15px 0;
-        font-size: 0.9em;
-        background: #1a1a1a;
-        border-radius: 5px;
-        overflow: hidden;
-    }
-    .shap-table th {
-        background-color: #2c3e50;
-        color: #ecf0f1;
-        text-align: left;
-        padding: 12px 15px;
-    }
-    .shap-table td {
-        padding: 10px 15px;
-        border-bottom: 1px solid #34495e;
-    }
-    .shap-table tbody tr:nth-of-type(even) {
-        background-color: #222;
-    }
-    .shap-table tbody tr:last-of-type {
-        border-bottom: 2px solid #2c3e50;
-    }
-    </style>
-    """
-    
-    return table_style + "\n".join(html_output)
+    return "\n".join(html_output)
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
