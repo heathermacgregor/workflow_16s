@@ -350,6 +350,7 @@ def shap_summary_bar(
         autosize=True,
         showlegend=False,
         height=1100,
+        width=1600,
         title=dict(font=dict(size=24)),
         xaxis=dict(title=dict(font=dict(size=20))),
         yaxis=dict(
@@ -462,6 +463,7 @@ def shap_beeswarm(
         autosize=True,
         hovermode='closest',
         height=1100,
+        width=1600,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
@@ -686,6 +688,7 @@ def shap_dependency_plot(
     fig.update_layout(
         autosize=True,
         height=1100,
+        width=1600,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
@@ -784,7 +787,7 @@ def shap_heatmap(
     
     # Custom layout adjustments
     fig.update_layout(
-        height=800,
+        height=1100,
         xaxis=dict(tickfont=dict(size=14)),
         yaxis=dict(showticklabels=False),
         margin=dict(l=100, r=100, t=100, b=100)
@@ -903,7 +906,7 @@ def shap_force_plot(
     
     # Custom layout adjustments
     fig.update_layout(
-        height=700,
+        height=1100,
         showlegend=False,
         hovermode='closest',
         xaxis=dict(
@@ -946,7 +949,7 @@ def shap_waterfall_plot(
     # Select instance data
     instance_shap = shap_values[instance_index]
     instance_feature_values = feature_values[instance_index]
-    prediction = base_value + instance_shap.sum()
+    prediction = base_value + np.sum(instance_shap)
     
     # Sort features by absolute SHAP value
     sorted_indices = np.argsort(np.abs(instance_shap))[::-1]
@@ -954,7 +957,7 @@ def shap_waterfall_plot(
     other_idx = sorted_indices[max_display:]
     
     # Calculate other features contribution
-    other_contrib = instance_shap[other_idx].sum() if len(other_idx) > 0 else 0
+    other_contrib = np.sum(instance_shap[other_idx]) if len(other_idx) > 0 else 0.0
     
     # Prepare waterfall data
     cumulative = base_value
@@ -983,6 +986,36 @@ def shap_waterfall_plot(
     feature_labels = [simplify_feature_name(step[0]) for step in steps[:-1]]
     feature_labels.append(steps[-1][0])
     
+    # Prepare hover text safely
+    hover_text = []
+    for i, step in enumerate(steps):
+        # For features, try to get the value
+        feat_val = "N/A"
+        if step[0] in feature_names:
+            feat_idx = feature_names.index(step[0])
+            feat_val = f"{instance_feature_values[feat_idx]:.4f}"
+        elif step[0] == "Base Value" or step[0] == "Prediction":
+            feat_val = "N/A"
+        
+        # Format contribution safely
+        cont_str = f"{step[1]:+.4f}" if (i > 0 and i < len(steps)-1) else ""
+        
+        text = (
+            f"<b>{step[0]}</b><br>"
+            f"<b>Value</b>: {feat_val}<br>"
+            f"<b>Contribution</b>: {cont_str}<br>"
+            f"<b>Cumulative</b>: {step[2]:.4f}"
+        )
+        hover_text.append(text)
+    
+    # Format bar text safely
+    bar_text = []
+    for i, step in enumerate(steps):
+        if i > 0 and i < len(steps)-1:
+            bar_text.append(f"{step[1]:+.4f}")
+        else:
+            bar_text.append(f"{step[2]:.4f}")
+    
     # Create figure
     fig = go.Figure(go.Waterfall(
         name="",
@@ -990,21 +1023,14 @@ def shap_waterfall_plot(
         measure=["absolute"] + ["relative"] * (len(steps)-2) + ["total"],
         x=feature_labels,
         textposition="outside",
-        text=[f"{step[1]:+.4f}" if i > 0 and i < len(steps)-1 else f"{step[2]:.4f}" 
-              for i, step in enumerate(steps)],
+        text=bar_text,
         y=[step[1] for step in steps],
         connector={"line":{"color":"rgb(63, 63, 63)"}},
         increasing={"marker":{"color":"#1e88e5"}},
         decreasing={"marker":{"color":"#ff0d57"}},
         totals={"marker":{"color":"#000000"}},
         hoverinfo='text',
-        hovertext=[
-            f"<b>{step[0]}</b><br>"
-            f"<b>Value</b>: {instance_feature_values[feature_names.index(step[0])] if step[0] in feature_names else 'N/A'}<br>"
-            f"<b>Contribution</b>: {step[1]:+.4f if i>0 and i<len(steps)-1 else ''}<br>"
-            f"<b>Cumulative</b>: {step[2]:.4f}"
-            for i, step in enumerate(steps)
-        ]
+        hovertext=hover_text
     ))
     
     # Apply common layout
