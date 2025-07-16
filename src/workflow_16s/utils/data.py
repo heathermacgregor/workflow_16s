@@ -66,6 +66,31 @@ FEATURE_PATTERNS = {
 
 # ================================ TABLE CONVERSION ================================== #
 
+def table_to_df(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
+    """
+    Convert various table formats to samples × features DataFrame.
+    
+    Handles:
+    - Pandas DataFrame (returns unchanged)
+    - BIOM Table (transposes to samples × features)
+    - Dictionary (converts to DataFrame)
+    
+    Args:
+        table: Input table in various formats.
+        
+    Returns:
+        DataFrame in samples × features orientation.
+        
+    Raises:
+        TypeError: For unsupported input types
+    """
+    if isinstance(table, pd.DataFrame):  # samples × features
+        return table
+    if isinstance(table, Table):     # features × samples
+        return table.to_dataframe(dense=True).T
+    if isinstance(table, dict):          # samples × features
+        return pd.DataFrame(table)
+    raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
 def to_biom(
@@ -220,40 +245,33 @@ def merge_table_with_meta(
     return table
 
 
-# ========================== UPDATED UTILITY FUNCTIONS ========================== #
-# In workflow_16s/utils/data.py
-
-def update_table_and_meta(table: Table, metadata: pd.DataFrame, sample_id_col: str = "#SampleID") -> Tuple[Table, pd.DataFrame]:
-    """Align table and metadata by sample IDs, case-insensitive matching"""
-    # Normalize all sample IDs to lowercase
-    table_ids = [sid.lower() for sid in table.ids()]
-    metadata_ids = metadata[sample_id_col].str.lower().tolist()
+def update_table_and_meta(
+    table: Table,
+    meta: pd.DataFrame,
+    sample_col: str = DEFAULT_META_ID_COL
+) -> Tuple[Table, pd.DataFrame]:
+    """
+    Align BIOM table with metadata using sample IDs.
     
-    # Find common sample IDs (case-insensitive)
-    common_ids = set(table_ids) & set(metadata_ids)
+    Args:
+        table:         BIOM feature table.
+        metadata_df:   Sample metadata DataFrame.
+        sample_column: Metadata column containing sample IDs.
     
-    if not common_ids:
-        # Try without any normalization as last resort
-        common_ids = set(table.ids()) & set(metadata[sample_id_col])
-        if not common_ids:
-            raise ValueError("No common sample IDs found between table and metadata")
+    Returns:
+        Tuple of (filtered BIOM table, filtered metadata DataFrame)
     
-    # Filter table
-    table = table.filter(common_ids, axis='sample', inplace=False)
+    Raises:
+        ValueError: For duplicate lowercase sample IDs in BIOM table.
+    """
+    norm_meta = _normalize_metadata(meta, sample_col)
+    biom_mapping = _create_biom_id_mapping(table)
     
-    # Filter metadata
-    metadata = metadata[metadata[sample_id_col].str.lower().isin(common_ids)]
+    shared_ids = [sid for sid in norm_meta[sample_col] if sid in biom_mapping]
+    filtered_meta = norm_meta[norm_meta[sample_col].isin(shared_ids)]
+    original_ids = [biom_mapping[sid] for sid in filtered_meta[sample_col]]
     
-    return table, metadata
-
-def table_to_df(table: Table) -> pd.DataFrame:
-    """Convert BIOM table to DataFrame with lowercase sample IDs"""
-    df = pd.DataFrame(table.matrix_data.toarray().T,
-                      index=table.ids(),
-                      columns=table.ids(axis='observation'))
-    # Normalize sample IDs to lowercase
-    df.index = df.index.str.lower()
-    return df
+    return table.filter(original_ids, axis='sample', inplace=False), filtered_meta
 
 
 def _normalize_metadata(
@@ -664,30 +682,72 @@ def trim_and_merge_asvs(
     return merged_df, trimmed_seqs, obs_ids
 
 
-def collapse_taxa(table: Table, level: str, progress=None, task_id=None) -> Table:
+def collapse_taxa(
+    table: Union[pd.DataFrame, Table], 
+    target_level: str, 
+    progress=None, 
+    task_id=None,
+    verbose: bool = False
+) -> Table:
     """
-    Collapses features to a specified taxonomic level, truncating the taxonomy strings.
+    Collapse feature table to specified taxonomic level.
+    
+    Args:
+        table:        Input BIOM Table or DataFrame.
+        target_level: Taxonomic level to collapse to (phylum/class/order/family).
+        output_dir:   Directory to save collapsed table.
+        verbose:      Verbosity flag.
+    
+    Returns:
+        Collapsed BIOM Table.
+    
+    Raises:
+        ValueError: For invalid target_level.
     """
-    level_index = {"phylum": 1, "class": 2, "order": 3, "family": 4, "genus": 5}.get(level)
-    if level_index is None:
-        raise ValueError(f"Invalid taxonomic level: {level}")
+    
+    table = table.copy()
+    table = to_biom(table)
+        
+    if target_level not in levels:
+        raise ValueError(
+            f"Invalid `target_level`: {target_level}. "
+            f"Expected one of {list(levels.keys())}")
 
-    df = table_to_df(table)
-    
-    # Extract the appropriate taxonomic level from the full taxonomy strings
-    def truncate_taxonomy(tax_str):
-        parts = tax_str.split(';')
-        if len(parts) >= level_index:
-            return ';'.join(parts[:level_index])
-        return tax_str  # Return original if not enough levels
-    
-    df.index = df.index.map(truncate_taxonomy)
-    
-    # Group by the truncated taxonomy strings
-    collapsed_df = df.groupby(df.index).sum()
-    
-    # Convert back to BIOM table
-    return to_biom(collapsed_df)
+    level_idx = levels[target_level]
+
+    # Create taxonomy mapping
+    id_map = {}
+    sub_desc = "Feature:"
+    sub_task = progress.add_task(
+        f"[white]{sub_desc:<{DEFAULT_N}}",
+        parent=task_id,
+        total=len(table.ids(axis='observation').astype(str))
+    )
+    for taxon in table.ids(axis='observation').astype(str):
+        try:
+            new_desc = f"Feature: {taxon}"
+            if len(new_desc) > DEFAULT_N:
+                new_desc = f"{new_desc[:DEFAULT_N-3]}..."
+            progress.update(sub_task, description=new_desc)
+            parts = taxon.split(';')
+            truncated = ';'.join(
+                parts[:level_idx + 1]
+            ) if len(parts) >= level_idx + 1 else 'Unclassified'
+            id_map[taxon] = truncated
+        except Exception as e:
+            logger.error(f"Mapping failed for taxon {taxon}: {e!r}")
+        finally:
+            progress.update(sub_task, advance=1)
+
+    # Collapse table
+    collapsed_table = table.collapse(
+        lambda id, _: id_map.get(id, 'Unclassified'),
+        norm=False,
+        axis='observation',
+        include_collapsed_metadata=False
+    ).remove_empty()
+    progress.remove_task(sub_task)
+    return collapsed_table
   
 
 def presence_absence(
