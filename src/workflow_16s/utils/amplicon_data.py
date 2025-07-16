@@ -1026,8 +1026,8 @@ class _AnalysisManager(_ProcessingMixin):
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
         self.top_contaminated_features, self.top_pristine_features = tfa.analyze(stats_results, DEFAULT_GROUP_COLUMN)
 
-        logger.info(f"Identified {len(self.top_contaminated_features)} top contaminated features")
-        logger.info(f"Identified {len(self.top_pristine_features)} top pristine features")
+        logger.debug(f"Identified {len(self.top_contaminated_features)} top contaminated features")
+        logger.debug(f"Identified {len(self.top_pristine_features)} top pristine features")
         
         if not self.top_contaminated_features and not self.top_pristine_features:
             logger.warning("No significant features found in any statistical test. Top features tables and violin plots will be empty.")
@@ -1261,7 +1261,7 @@ class _AnalysisManager(_ProcessingMixin):
                     overlap = model_set & stat_set
                     jaccard = len(overlap) / len(model_set | stat_set) if (model_set or stat_set) else 0.0
                     
-                    logger.info(
+                    logger.debug(
                         f"Feature comparison ({table_type}/{level}/{method}): "
                         f"Overlap: {len(overlap)} ({jaccard:.1%})"
                     )
@@ -1290,7 +1290,7 @@ class _AnalysisManager(_ProcessingMixin):
         
         # Contaminated features
         if self.top_contaminated_features:
-            logger.info(f"Processing {min(n, len(self.top_contaminated_features))} contaminated features")
+            logger.debug(f"Processing {min(n, len(self.top_contaminated_features))} contaminated features")
             for i in range(min(n, len(self.top_contaminated_features))):
                 feat = self.top_contaminated_features[i]
                 try:
@@ -1334,7 +1334,7 @@ class _AnalysisManager(_ProcessingMixin):
         
         # Pristine features
         if self.top_pristine_features:
-            logger.info(f"Processing {min(n, len(self.top_pristine_features))} pristine features")
+            logger.debug(f"Processing {min(n, len(self.top_pristine_features))} pristine features")
             for i in range(min(n, len(self.top_pristine_features))):
                 feat = self.top_pristine_features[i]
                 try:
@@ -1429,8 +1429,7 @@ class AmpliconData:
         os.environ['VECLIB_MAXIMUM_THREADS'] = str(cpu_limit)
         os.environ['NUMEXPR_NUM_THREADS'] = str(cpu_limit)
         os.environ['MKL_DYNAMIC'] = "FALSE"
-        if self.verbose:
-            logger.info(f"Set CPU thread limits to {cpu_limit} for all libraries")
+        logger.debug(f"Set CPU thread limits to {cpu_limit} for all libraries")
 
     def _load_data(self):
         data_loader = _DataLoader(
