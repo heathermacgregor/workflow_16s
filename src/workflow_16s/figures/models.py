@@ -23,6 +23,7 @@ from matplotlib import (
 )
 from matplotlib.colors import LogNorm
 from plotly.subplots import make_subplots
+from scipy.cluster.hierarchy import linkage, leaves_list
 
 # ================================== LOCAL IMPORTS =================================== #
 
@@ -110,13 +111,11 @@ def plot_confusion_matrix(
     fig.update_layout(
         autosize=True,
         height=1100,
+        width=1200,
         title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20))),#, scaleanchor="y", scaleratio=1.0, showticklabels=False, ticks=''),
-        yaxis=dict(title=dict(font=dict(size=20)))#, showticklabels=False, ticks='')
-    )
-    # Move x-axis title to bottom
-    fig.update_xaxes(side='bottom') 
-    
+        xaxis=dict(title=dict(font=dict(size=20)), side='bottom'),
+        yaxis=dict(title=dict(font=dict(size=20)))
+    )    
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
     return fig
 
@@ -164,12 +163,17 @@ def plot_roc_curve(
     fig.update_layout(
         autosize=True,
         height=1100,
+        width=1000,
         title=dict(font=dict(size=24)),
-        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, constrain='domain'),
-        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, scaleanchor='x', scaleratio=1),
+        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
+        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
-    fig = _apply_common_layout(fig, 'False Positive Rate', 'True Positive Rate', 'Receiver Operating Characteristic') 
+    fig = _apply_common_layout(
+        fig, 
+        'False Positive Rate', 'True Positive Rate', 
+        'Receiver Operating Characteristic'
+    ) 
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
     return fig
     
@@ -209,8 +213,9 @@ def plot_precision_recall_curve(
     fig.update_layout(
         autosize=True,
         height=1100,
+        width=1000,
         title=dict(font=dict(size=24)),
-        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, constrain='domain'),
+        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
         yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
@@ -270,45 +275,7 @@ def plot_feature_importance(
     return fig
 
 
-def simplify_feature_name(taxon: str) -> str:
-    """
-    Simplify a feature name by selecting the most specific meaningful part.
-    
-    Args:
-        taxon: Full feature name (e.g., taxonomic path)
-    
-    Returns:
-        Simplified feature name
-    """
-    parts = taxon.split(";")
-    last = parts[-1].strip().lower()
-    if last in {"__unclassified", "__uncultured", "__"}:
-        return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
-    return parts[-1]
-
-def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
-    """
-    Generate simplified labels while ensuring uniqueness.
-    
-    Args:
-        feature_names: List of full feature names
-        
-    Returns:
-        List of unique simplified labels
-    """
-    simplified_labels = []
-    used_labels = set()
-    for f in feature_names:
-        label = simplify_feature_name(f)
-        base_label = label
-        suffix = 1
-        while label in used_labels:
-            label = f"{base_label}_{suffix}"
-            suffix += 1
-        simplified_labels.append(label)
-        used_labels.add(label)
-    return simplified_labels
-    
+# SHAP    
 def simplify_feature_name(taxon: str) -> str:
     """Simplify a feature name by selecting the most specific meaningful part."""
     parts = taxon.split(";")
@@ -316,6 +283,7 @@ def simplify_feature_name(taxon: str) -> str:
     if last in {"__unclassified", "__uncultured", "__"}:
         return ";".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
     return parts[-1]
+    
 
 def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
     """Generate simplified labels while ensuring uniqueness."""
@@ -331,6 +299,7 @@ def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
         simplified_labels.append(label)
         used_labels.add(label)
     return simplified_labels
+
 
 def shap_summary_bar(
     shap_values: np.array,
@@ -372,8 +341,7 @@ def shap_summary_bar(
 
     fig = _apply_common_layout(
         fig, 
-        'Mean |SHAP Value|', 
-        'Features', 
+        'Mean |SHAP Value|', 'Features', 
         "SHAP Summary Bar Plot"
     )
 
@@ -381,18 +349,12 @@ def shap_summary_bar(
     fig.update_layout(
         autosize=True,
         showlegend=False,
-        #margin=dict(l=250, r=50, t=50, b=50),
         height=1100,
         title=dict(font=dict(size=24)),
-        xaxis=dict(
-            title=dict(font=dict(size=20)), 
-            #scaleanchor="y", 
-            #scaleratio=0.5
-        ),
+        xaxis=dict(title=dict(font=dict(size=20))),
         yaxis=dict(
-            title=dict(font=dict(size=20),  standoff=100,), 
+            title=dict(font=dict(size=20), standoff=100), # Distance between title and ticks
             automargin=True,
-             # Distance between title and ticks
             tickfont=dict(size=16), 
             showticklabels=True
         )
@@ -408,7 +370,7 @@ def shap_beeswarm(
     max_display: int = 20
 ) -> go.Figure:
     """
-    Convert SHAP beeswarm plot to a Plotly figure.
+    Convert SHAP beeswarm plot to a Plotly figure with simplified red-blue color scheme.
     
     Args:
         shap_values:    SHAP values array (n_samples, n_features).
@@ -431,6 +393,10 @@ def shap_beeswarm(
     fig = go.Figure()
     y_offset = 0.3  # Vertical spread for jitter
     
+    # Define color scheme
+    low_color = '#1e88e5'  # Blue for low values
+    high_color = '#ff0d57'  # Red for high values
+    
     # Add scatter traces for each feature
     np.random.seed(42)  # Consistent jitter
     for idx, feature_idx in enumerate(top_indices):
@@ -438,22 +404,21 @@ def shap_beeswarm(
         feat_vals = feature_values[:, feature_idx]
         
         # Generate jittered y-coordinates
-        jitter = np.random.uniform(
-            -y_offset, y_offset, size=len(shap_vals)
-        )
+        jitter = np.random.uniform(-y_offset, y_offset, size=len(shap_vals))
         y_pos = idx + jitter
         
         # Normalize feature values for coloring
         vmin, vmax = np.min(feat_vals), np.max(feat_vals)
         normalized_vals = (feat_vals - vmin) / (vmax - vmin + 1e-8)
         
-        # Custom red-blue color scale
-        colors = [
-            f'rgb({int(30 + 225*(1 - nv)) if nv < 0.5 else 255}, '
-            f'{int(136 + 119*(1 - 2*abs(nv - 0.5))) if nv < 0.5 else 67 + 188*(1 - nv)}, '
-            f'{int(229 - 229*nv) if nv < 0.5 else 54 + 201*(1 - nv)})'
-            for nv in normalized_vals
-        ]
+        # Create colors using linear interpolation in RGB space
+        colors = []
+        for nv in normalized_vals:
+            # Interpolate between blue (low) and red (high)
+            r = int(30 + (255 - 30) * nv)
+            g = int(136 + (13 - 136) * nv)
+            b = int(229 + (87 - 229) * nv)
+            colors.append(f'rgb({r},{g},{b})')
         
         # Add trace
         fig.add_trace(go.Scatter(
@@ -501,17 +466,14 @@ def shap_beeswarm(
         xaxis=dict(
             title=dict(font=dict(size=20)),
             range=[x_min - x_padding, x_max + x_padding], 
-            #scaleanchor="y", 
-            #scaleratio=0.5
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20),  standoff=100,),
+            title=dict(font=dict(size=20), standoff=100),
             automargin=True,
             tickfont=dict(size=16),
             showticklabels=True,
             tickvals=list(range(len(top_features_full))),
-            ticktext=simplified_labels,  # Use simplified labels here
-            
+            ticktext=simplified_labels,
             range=[-0.5, len(top_features_full) - 0.5]
         )
     )
@@ -648,7 +610,14 @@ def shap_dependency_plot(
         marker_config.update({
             'color': color_data,
             'colorscale': 'Viridis',
-            'colorbar': {'title': {'text': color_title_display, 'side': 'right', 'font': {'size': 20}}, 'tickfont': {'size': 16}},
+            'colorbar': {
+                'title': {
+                    'text': color_title_display, 
+                    'side': 'right', 
+                    'font': {'size': 20}
+                }, 
+                'tickfont': {'size': 16}
+            },
             
         })
         hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"  # Full name in hover
@@ -656,7 +625,14 @@ def shap_dependency_plot(
         marker_config.update({
             'color': y,
             'colorscale': 'RdBu',
-            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right', 'font': {'size': 20}}, 'tickfont': {'size': 16}},
+            'colorbar': {
+                'title': {
+                    'text': 'SHAP Value', 
+                    'side': 'right', 
+                    'font': {'size': 20}
+                }, 
+                'tickfont': {'size': 16}
+            },
         })
     
     hover_template += "<extra></extra>"
@@ -713,9 +689,7 @@ def shap_dependency_plot(
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
-            range=[x.min() - x_padding, x.max() + x_padding], 
-            #scaleanchor="y", 
-            #scaleratio=0.75
+            range=[x.min() - x_padding, x.max() + x_padding],
         ),
         yaxis=dict(
             title=dict(font=dict(size=20)),
@@ -730,7 +704,328 @@ def shap_dependency_plot(
     )
     return fig
 
+
+# SHAP Heatmap
+def shap_heatmap(
+    shap_values: np.array,
+    feature_values: np.array,
+    feature_names: List[str],
+    max_display: int = 20,
+    max_samples: int = 1000
+) -> go.Figure:
+    """
+    Create a SHAP heatmap showing SHAP values across instances and features.
+
+    Args:
+        shap_values:     SHAP values array (n_samples, n_features).
+        feature_values:  Feature values array (n_samples, n_features).
+        feature_names:   List of feature names.
+        max_display:     Maximum number of features to display.
+        max_samples:     Maximum number of samples to display.
+
+    Returns:
+        Heatmap figure with clustered instances and features.
+    """
+    # Select top features
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
+    top_features_full = [feature_names[i] for i in top_indices]
+    
+    # Generate simplified labels
+    simplified_labels = generate_unique_simplified_labels(top_features_full)
+    
+    # Downsample instances if needed
+    if len(shap_values) > max_samples:
+        sample_idx = np.random.choice(len(shap_values), max_samples, replace=False)
+        shap_values = shap_values[sample_idx]
+        feature_values = feature_values[sample_idx]
+    else:
+        sample_idx = np.arange(len(shap_values))
+    
+    # Cluster instances
+    instance_order = leaves_list(linkage(shap_values[:, top_indices], method='complete'))
+    
+    # Prepare data for heatmap
+    clustered_shap = shap_values[instance_order][:, top_indices]
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add heatmap trace
+    fig.add_trace(go.Heatmap(
+        z=clustered_shap,
+        x=simplified_labels,
+        y=instance_order,
+        colorscale='RdBu',
+        zmid=0,
+        colorbar=dict(
+            title='SHAP Value',
+            titleside='right',
+            titlefont=dict(size=18),
+        hoverinfo='text',
+        text=[[(
+            f"<b>Feature</b>: {feature_names[top_indices[j]]}<br>"
+            f"<b>SHAP</b>: {clustered_shap[i, j]:.4f}<br>"
+            f"<b>Value</b>: {feature_values[instance_order[i], top_indices[j]]:.4f}<br>"
+            f"<b>Instance</b>: {instance_order[i]}"
+        ) for j in range(len(top_indices))] for i in range(len(instance_order))]
+    ))
+    
+    # Apply common layout
+    fig = _apply_common_layout(
+        fig,
+        "Features",
+        "Instances (ordered by similarity)",
+        "SHAP Heatmap"
+    )
+    
+    # Custom layout adjustments
+    fig.update_layout(
+        height=800,
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(showticklabels=False),
+        margin=dict(l=100, r=100, t=100, b=100)
+    )
+    
+    return fig
+
+
+# SHAP Force Plot
+def shap_force_plot(
+    base_value: float,
+    shap_values: np.array,
+    feature_values: np.array,
+    feature_names: List[str],
+    instance_index: int = 0,
+    max_display: int = 12
+) -> go.Figure:
+    """
+    Create a force plot showing feature contributions for a single instance.
+
+    Args:
+        base_value:      Base value (expected model output).
+        shap_values:     SHAP values array (n_samples, n_features).
+        feature_values:  Feature values array (n_samples, n_features).
+        feature_names:   List of feature names.
+        instance_index:  Index of instance to visualize.
+        max_display:     Maximum number of features to display.
+
+    Returns:
+        Force plot figure showing contribution breakdown.
+    """
+    # Select instance data
+    instance_shap = shap_values[instance_index]
+    instance_feature_values = feature_values[instance_index]
+    prediction = base_value + instance_shap.sum()
+    
+    # Sort features by absolute SHAP value
+    sorted_indices = np.argsort(np.abs(instance_shap))[::-1]
+    top_indices = sorted_indices[:max_display]
+    other_idx = sorted_indices[max_display:]
+    
+    # Prepare data
+    top_features = [feature_names[i] for i in top_indices]
+    top_shap = instance_shap[top_indices]
+    top_values = instance_feature_values[top_indices]
+    
+    # Generate simplified labels
+    simplified_labels = generate_unique_simplified_labels(top_features)
+    
+    # Calculate "other" contribution
+    other_contrib = instance_shap[other_idx].sum() if len(other_idx) > 0 else 0
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add base value
+    fig.add_trace(go.Scatter(
+        x=[0, 0],
+        y=['Base Value', 'Prediction'],
+        mode='markers',
+        marker=dict(size=20, color='#999999'),
+        hoverinfo='text',
+        text=[f"<b>Base Value</b>: {base_value:.4f}", 
+              f"<b>Prediction</b>: {prediction:.4f}"]
+    ))
+    
+    # Add feature contributions
+    cumulative = base_value
+    for i, idx in enumerate(top_indices):
+        # Contribution line
+        fig.add_trace(go.Scatter(
+            x=[cumulative, cumulative + instance_shap[idx]],
+            y=[simplified_labels[i], simplified_labels[i]],
+            mode='lines+markers',
+            line=dict(width=8, color='#1e88e5' if instance_shap[idx] > 0 else '#ff0d57'),
+            marker=dict(size=12),
+            hoverinfo='text',
+            text=(
+                f"<b>Feature</b>: {feature_names[idx]}<br>"
+                f"<b>Value</b>: {instance_feature_values[idx]:.4f}<br>"
+                f"<b>SHAP</b>: {instance_shap[idx]:.4f}<br>"
+                f"<b>Cumulative</b>: {cumulative + instance_shap[idx]:.4f}"
+            )
+        ))
+        cumulative += instance_shap[idx]
+    
+    # Add other contributions
+    if other_contrib != 0:
+        fig.add_trace(go.Scatter(
+            x=[cumulative, cumulative + other_contrib],
+            y=['Other Features', 'Other Features'],
+            mode='lines+markers',
+            line=dict(width=8, color='#999999'),
+            marker=dict(size=12),
+            hoverinfo='text',
+            text=f"<b>Sum of {len(other_idx)} other features</b>: {other_contrib:.4f}"
+        ))
+    
+    # Add final prediction marker
+    fig.add_trace(go.Scatter(
+        x=[prediction],
+        y=['Prediction'],
+        mode='markers',
+        marker=dict(size=20, symbol='diamond', color='#000000'),
+        hoverinfo='text',
+        text=f"<b>Final Prediction</b>: {prediction:.4f}"
+    ))
+    
+    # Apply common layout
+    fig = _apply_common_layout(
+        fig,
+        "Model Output Value",
+        "Features",
+        "SHAP Force Plot"
+    )
+    
+    # Custom layout adjustments
+    fig.update_layout(
+        height=700,
+        showlegend=False,
+        hovermode='closest',
+        xaxis=dict(
+            showgrid=True,
+            zeroline=False,
+            tickfont=dict(size=14)
+        ),
+        yaxis=dict(
+            tickfont=dict(size=14),
+            automargin=True
+        )
+    )
+    
+    return fig
+
+
+# SHAP Waterfall Plot
+def shap_waterfall_plot(
+    base_value: float,
+    shap_values: np.array,
+    feature_values: np.array,
+    feature_names: List[str],
+    instance_index: int = 0,
+    max_display: int = 10
+) -> go.Figure:
+    """
+    Create a waterfall plot showing cumulative feature contributions.
+
+    Args:
+        base_value:      Base value (expected model output).
+        shap_values:     SHAP values array (n_samples, n_features).
+        feature_values:  Feature values array (n_samples, n_features).
+        feature_names:   List of feature names.
+        instance_index:  Index of instance to visualize.
+        max_display:     Maximum number of features to display.
+
+    Returns:
+        Waterfall plot figure showing contribution steps.
+    """
+    # Select instance data
+    instance_shap = shap_values[instance_index]
+    instance_feature_values = feature_values[instance_index]
+    prediction = base_value + instance_shap.sum()
+    
+    # Sort features by absolute SHAP value
+    sorted_indices = np.argsort(np.abs(instance_shap))[::-1]
+    top_indices = sorted_indices[:max_display]
+    other_idx = sorted_indices[max_display:]
+    
+    # Calculate other features contribution
+    other_contrib = instance_shap[other_idx].sum() if len(other_idx) > 0 else 0
+    
+    # Prepare waterfall data
+    cumulative = base_value
+    steps = [('Base Value', base_value, base_value)]
+    
+    for idx in top_indices:
+        new_value = cumulative + instance_shap[idx]
+        steps.append((
+            feature_names[idx],
+            instance_shap[idx],
+            new_value
+        ))
+        cumulative = new_value
+    
+    if other_contrib != 0:
+        steps.append((
+            f"{len(other_idx)} Other Features",
+            other_contrib,
+            cumulative + other_contrib
+        ))
+        cumulative += other_contrib
+    
+    steps.append(('Prediction', 0, cumulative))
+    
+    # Generate simplified labels
+    feature_labels = [simplify_feature_name(step[0]) for step in steps[:-1]]
+    feature_labels.append(steps[-1][0])
+    
+    # Create figure
+    fig = go.Figure(go.Waterfall(
+        name="",
+        orientation="v",
+        measure=["absolute"] + ["relative"] * (len(steps)-2) + ["total"],
+        x=feature_labels,
+        textposition="outside",
+        text=[f"{step[1]:+.4f}" if i > 0 and i < len(steps)-1 else f"{step[2]:.4f}" 
+              for i, step in enumerate(steps)],
+        y=[step[1] for step in steps],
+        connector={"line":{"color":"rgb(63, 63, 63)"}},
+        increasing={"marker":{"color":"#1e88e5"}},
+        decreasing={"marker":{"color":"#ff0d57"}},
+        totals={"marker":{"color":"#000000"}},
+        hoverinfo='text',
+        hovertext=[
+            f"<b>{step[0]}</b><br>"
+            f"<b>Value</b>: {instance_feature_values[feature_names.index(step[0])] if step[0] in feature_names else 'N/A'}<br>"
+            f"<b>Contribution</b>: {step[1]:+.4f if i>0 and i<len(steps)-1 else ''}<br>"
+            f"<b>Cumulative</b>: {step[2]:.4f}"
+            for i, step in enumerate(steps)
+        ]
+    ))
+    
+    # Apply common layout
+    fig = _apply_common_layout(
+        fig,
+        "Features",
+        "Model Output Value",
+        "SHAP Waterfall Plot"
+    )
+    
+    # Custom layout adjustments
+    fig.update_layout(
+        height=1100,
+        showlegend=False,
+        waterfallgap=0.3,
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14))
+    )
+    
+    return fig
+    
+
 def plot_shap(
+    base_value: float,
     shap_values: np.array, 
     feature_values: np.array, 
     feature_names: list, 
@@ -739,7 +1034,7 @@ def plot_shap(
     interaction_feature: Optional[Union[str, None]] = 'auto',
     show: bool = False,
     verbose: bool = False
-) -> Tuple[go.Figure, go.Figure, List[go.Figure]]:
+) -> dict:
     """
     Generate both SHAP bar plot, beeswarm plot, and dependency plots as Plotly figures.
     
@@ -772,6 +1067,44 @@ def plot_shap(
         output_dir / f"shap.summary.beeswarm.{n_features}",
         ['png', 'html'], verbose
     )
+    heatmap_fig = shap_heatmap(
+        shap_values,
+        feature_values,
+        feature_names,
+        max_display=n_features,
+        max_samples=1000
+    )
+    plotly_show_and_save(
+        heatmap_fig, show, 
+        output_dir / f"shap.summary.heatmap.{n_features}",
+        ['png', 'html'], verbose
+    )
+    force_fig = shap_force_plot(
+        base_value,
+        shap_values,
+        feature_values,
+        feature_names,
+        instance_index=0,
+        max_display=12
+    )
+    plotly_show_and_save(
+        force_fig, show, 
+        output_dir / f"shap.summary.force.{n_features}",
+        ['png', 'html'], verbose
+    )
+    waterfall_fig = shap_waterfall_plot(
+        base_value,
+        shap_values,
+        feature_values,
+        feature_names,
+        instance_index=0,
+        max_display=10
+    )
+    plotly_show_and_save(
+        waterfall_fig, show, 
+        output_dir / f"shap.summary.waterfall.{n_features}",
+        ['png', 'html'], verbose
+    )
     # Create dependency plots for top features
     dependency_figs = []
     if n_features > 0:
@@ -792,4 +1125,11 @@ def plot_shap(
                 dependency_figs.append(dep_fig)
             except Exception as e:
                 logger.error(f"Error creating dependency plot for {feature}: {str(e)}")
-    return bar_fig, beeswarm_fig, dependency_figs
+    return {
+        'bar_fig': bar_fig, 
+        'beeswarm_fig': beeswarm_fig, 
+        'heatmap_fig': heatmap_fig,
+        'force_fig': force_fig,
+        'waterfall_fig': waterfall_fig,
+        'dependency_figs': dependency_figs
+    }
