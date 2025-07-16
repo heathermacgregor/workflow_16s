@@ -390,11 +390,9 @@ def shap_summary_bar(
             #scaleratio=0.5
         ),
         yaxis=dict(
-            title=dict(
-                font=dict(size=20),
-                automargin=True,
-                standoff=100 # Distance between title and ticks
-            ), 
+            title=dict(font=dict(size=20)), 
+            automargin=True,
+            standoff=100, # Distance between title and ticks
             tickfont=dict(size=16), 
             showticklabels=True
         )
@@ -722,6 +720,12 @@ def shap_dependency_plot(
             title=dict(font=dict(size=20)),
             range=[y.min() - y_padding, y.max() + y_padding]
         )
+    )
+    fig.update_xaxes(
+      showgrid=False, mirror=True
+    )
+    fig.update_yaxes(
+      showgrid=False, mirror=True
     )
     return fig
 
