@@ -390,9 +390,9 @@ def shap_summary_bar(
             #scaleratio=0.5
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20), automargin=True,), 
+            title=dict(font=dict(size=20), automargin=True, standoff=100,), 
             
-            standoff=100, # Distance between title and ticks
+             # Distance between title and ticks
             tickfont=dict(size=16), 
             showticklabels=True
         )
@@ -505,12 +505,12 @@ def shap_beeswarm(
             #scaleratio=0.5
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20), automargin=True,),
+            title=dict(font=dict(size=20), automargin=True, standoff=100,),
             tickfont=dict(size=16),
             showticklabels=True,
             tickvals=list(range(len(top_features_full))),
             ticktext=simplified_labels,  # Use simplified labels here
-            standoff=100,
+            
             range=[-0.5, len(top_features_full) - 0.5]
         )
     )
