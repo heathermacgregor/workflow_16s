@@ -946,11 +946,11 @@ def shap_force_plot(
         height=600 + 40 * len(y_labels),  # Dynamic height based on features
         width=900,
         xaxis=dict(
-            title=dict(text='Model Output Value', font=dict(size=20)),
+            title=dict(text='Model Output Value', font=dict(size=20))),
         yaxis=dict(
             title=None,
             categoryorder='array',
-            categoryarray=list(reversed(y_labels)),
+            categoryarray=list(reversed(y_labels))),
         margin=dict(l=150, r=50, t=80, b=80),
         plot_bgcolor='white',
         shapes=[
