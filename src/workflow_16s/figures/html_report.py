@@ -464,9 +464,8 @@ def _format_shap_report(report: str) -> str:
             
             if table_data:
                 df = pd.DataFrame(table_data)
-                table_id = f"shap-top-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(_add_table_functionality(df, table_id))
+                html_output.append(df.to_html(index=False, classes='dynamic-table'))
                 
         elif "Beeswarm interpretation" in header:
             # Beeswarm table
@@ -486,9 +485,8 @@ def _format_shap_report(report: str) -> str:
             
             if table_data:
                 df = pd.DataFrame(table_data)
-                table_id = f"shap-beeswarm-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(_add_table_functionality(df, table_id))
+                html_output.append(df.to_html(index=False, classes='dynamic-table'))
                 
         elif "Dependency" in header and "interpretations" in header:
             # Dependency plot table
@@ -508,9 +506,8 @@ def _format_shap_report(report: str) -> str:
             
             if table_data:
                 df = pd.DataFrame(table_data)
-                table_id = f"shap-dependency-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(_add_table_functionality(df, table_id))
+                html_output.append(df.to_html(index=False, classes='dynamic-table'))
                 
         elif "Interaction summaries" in header:
             # Interaction table
@@ -536,9 +533,8 @@ def _format_shap_report(report: str) -> str:
             
             if table_data:
                 df = pd.DataFrame(table_data)
-                table_id = f"shap-interaction-{uuid.uuid4().hex[:8]}"
                 html_output.append(f'<h4>{header}</h4>')
-                html_output.append(_add_table_functionality(df, table_id))
+                html_output.append(df.to_html(index=False, classes='dynamic-table'))
                 
         else:
             # Default formatting for other sections
@@ -1024,34 +1020,23 @@ def generate_html_report(
     """
     
     # Add styling for SHAP report
-    shap_css = """
+        shap_css = """
     .shap-report-section {
         margin-top: 30px;
         padding: 20px;
-        background: #1a1a1a;
+        background: #2a2a2a;  /* Lighter background */
         border-radius: 8px;
         border-left: 4px solid #3498db;
     }
     .shap-report-content {
         margin-top: 15px;
         padding: 15px;
-        background: #222;
+        background: #2a2a2a;  /* Same as section background */
         border-radius: 5px;
-        font-family: monospace;
+        font-family: inherit;  /* Use default font */
         white-space: pre-wrap;
         line-height: 1.6;
-    }
-    .shap-report-content strong {
-        color: #3498db;
-    }
-    .shap-report-content ul {
-        padding-left: 20px;
-        list-style-type: disc;
-        margin-top: 10px;
-        margin-bottom: 10px;
-    }
-    .shap-report-content li {
-        margin-bottom: 5px;
+        color: #e0e0e0;       /* Lighter text color */
     }
     """
     
