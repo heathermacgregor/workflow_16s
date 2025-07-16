@@ -1273,6 +1273,21 @@ class _AnalysisManager(_ProcessingMixin):
         violin_output_dir = self.output_dir / 'violin_plots'
         violin_output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Define required columns for violin plots
+        required_columns = [
+            DEFAULT_GROUP_COLUMN,
+            DEFAULT_DATASET_COLUMN,
+            "env_feature",
+            "env_material",
+            "country"
+        ]
+        
+        # Filter to only existing columns
+        available_columns = [col for col in required_columns if col in self.meta.columns]
+        missing = set(required_columns) - set(available_columns)
+        if missing and self.verbose:
+            logger.warning(f"Missing metadata columns for violin plots: {', '.join(missing)}")
+        
         logger.info(f"Generating violin plots for top {n} features")
         
         # Contaminated features
@@ -1288,8 +1303,9 @@ class _AnalysisManager(_ProcessingMixin):
                     table = self.tables[table_type][level]
                     df = table_to_df(table)
                     
+                    # Merge with all required metadata columns
                     merged_df = df.merge(
-                        self.meta[[DEFAULT_GROUP_COLUMN]], 
+                        self.meta[available_columns], 
                         left_index=True, 
                         right_index=True
                     )
@@ -1324,8 +1340,9 @@ class _AnalysisManager(_ProcessingMixin):
                     table = self.tables[table_type][level]
                     df = table_to_df(table)
                     
+                    # Merge with all required metadata columns
                     merged_df = df.merge(
-                        self.meta[[DEFAULT_GROUP_COLUMN]], 
+                        self.meta[available_columns], 
                         left_index=True, 
                         right_index=True
                     )
@@ -1346,7 +1363,6 @@ class _AnalysisManager(_ProcessingMixin):
                     feat['violin_figure'] = None
         else:
             logger.warning("No pristine features for violin plots")
-
 
 class AmpliconData:
     """
