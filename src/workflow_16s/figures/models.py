@@ -939,7 +939,7 @@ def shap_force_plot(
     fig.update_layout(
         title=dict(
             text=f"SHAP Force Plot - Instance {instance_index}",
-            font=dict(size=24),
+            font=dict(size=24)),
         barmode='stack',
         showlegend=False,
         hovermode='closest',
