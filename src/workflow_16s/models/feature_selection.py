@@ -1089,24 +1089,26 @@ def grid_search(
             confusion_matrix(y_test, y_pred),
             str(output_dir / "best_confusion_matrix.png")
         )
+        
         fpr, tpr, _ = roc_curve(y_test, y_proba)
-        auc_score = roc_auc_score(y_test, y_proba)
         roc_fig = plot_roc_curve(
             fpr, 
             tpr, 
-            auc_score,
+            roc_auc_score(y_test, y_proba),
             str(output_dir / "best_roc_curve.png")
         )
+        
         prc_fig = plot_precision_recall_curve(
             *precision_recall_curve(y_test, y_proba)[:2],
             average_precision_score(y_test, y_proba),
             str(output_dir / "best_precision_recall_curve.png")
         )
-        fig = combine_figures_as_subplots(
-            figures=[cm_fig, roc_fig, prc_fig],
+        
+        eval_fig = combine_figures_as_subplots(
+            figures=[roc_fig, prc_fig, cm_fig],
             figures_per_row=3,
             show=False,
-            output_path=str(output_dir / "best_eval.png"),
+            output_path=str(output_dir / "best_model_eval.png"),
             verbose=False
         )
         
@@ -1129,7 +1131,7 @@ def grid_search(
         for metric, score in test_scores.items():
             logger.debug(f"{metric}: {score:.4f}")
     
-    return best_model, best_params, best_score, test_scores, fig
+    return best_model, best_params, best_score, test_scores, eval_fig
 
 
 def save_feature_importances(
@@ -1295,6 +1297,7 @@ def catboost_feature_selection(
         
         # NOTE: Assumes binary classification
         shap_vals = explainer.shap_values(X_sample)
+        base_value = explainer.expected_value
         if isinstance(shap_vals, list) and len(shap_vals) == 2:
             shap_vals = shap_vals[1]  # Use class 1 (positive)
         
@@ -1303,7 +1306,8 @@ def catboost_feature_selection(
         feature_names = X_sample.columns.tolist()
         
         # Generate SHAP figures
-        bar_fig, beeswarm_fig, dependency_figs = plot_shap(
+        shap_figs = plot_shap(
+            base_value,
             shap_vals, 
             feature_vals, 
             feature_names, 
@@ -1328,8 +1332,13 @@ def catboost_feature_selection(
         'top_features': top_features,
         'best_params': best_params,
         'test_scores': test_scores,
-        'eval_plots': eval_fig,
-        'shap_summary_bar': bar_fig,
-        'shap_summary_beeswarm': beeswarm_fig,
-        'shap_dependency': dependency_figs
+        'figures': {
+            'eval_plots': eval_fig,
+            'shap_summary_bar': shap_figs['bar_fig'], 
+            'shap_summary_beeswarm': shap_figs['beeswarm_fig'], 
+            'shap_summary_heatmap': shap_figs['heatmap_fig'],
+            'shap_summary_force': shap_figs['force_fig'],
+            'shap_summary_waterfall': shap_figs['waterfall_fig'],
+            'shap_dependency': shap_figs['dependency_figs']
+        }
     }
