@@ -203,16 +203,16 @@ ml:
     - 'normalized'
   levels:
     - 'genus'
-    #- 'family'
-    #- 'order'
-    #- 'class'
-    #- 'phylum'
+    - 'family'
+    - 'order'
+    - 'class'
+    - 'phylum'
   methods:
     - 'rfe'
-    #- 'select_k_best'
-    #- 'chi_squared'
-    #- 'lasso'
-    #- 'shap'
+    - 'select_k_best'
+    - 'chi_squared'
+    - 'lasso'
+    - 'shap'
   num_features: 500
   step_size: 100
   permutation_importance: True
