@@ -376,7 +376,7 @@ def shap_summary_bar(
     fig.update_layout(
         showlegend=False,
         margin=dict(l=150, r=50, t=50, b=50),
-        width=1600,
+        height=1100,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)), 
