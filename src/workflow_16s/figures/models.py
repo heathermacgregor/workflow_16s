@@ -108,10 +108,11 @@ def plot_confusion_matrix(
     fig = _apply_common_layout(fig, 'Predicted Label', 'Actual Label', '<b>Confusion Matrix</b>') 
     # Update font sizes
     fig.update_layout(
+        autosize=True,
         height=1100,
-        title=dict(font=dict(size=20)),
-        xaxis=dict(title=dict(font=dict(size=18)), scaleanchor="y", scaleratio=1.0, showticklabels=False, ticks=''),
-        yaxis=dict(title=dict(font=dict(size=18)), showticklabels=False, ticks='')
+        title=dict(font=dict(size=24)),
+        xaxis=dict(title=dict(font=dict(size=20))),#, scaleanchor="y", scaleratio=1.0, showticklabels=False, ticks=''),
+        yaxis=dict(title=dict(font=dict(size=20)))#, showticklabels=False, ticks='')
     )
     # Move x-axis title to bottom
     fig.update_xaxes(side='bottom') 
@@ -161,9 +162,11 @@ def plot_roc_curve(
     
     # Update layout
     fig.update_layout(
+        autosize=True,
         height=1100,
-        xaxis=dict(range=[-0.05, 1.05], constrain='domain'),
-        yaxis=dict(range=[-0.05, 1.05], scaleanchor='x', scaleratio=1),
+        title=dict(font=dict(size=24)),
+        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, constrain='domain'),
+        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, scaleanchor='x', scaleratio=1),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
     fig = _apply_common_layout(fig, 'False Positive Rate', 'True Positive Rate', 'Receiver Operating Characteristic') 
@@ -204,9 +207,11 @@ def plot_precision_recall_curve(
     
     # Update layout
     fig.update_layout(
+        autosize=True,
         height=1100,
-        xaxis=dict(range=[-0.05, 1.05], constrain='domain'),
-        yaxis=dict(range=[-0.05, 1.05]),
+        title=dict(font=dict(size=24)),
+        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),#, constrain='domain'),
+        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     fig = _apply_common_layout(fig, 'Recall', 'Precision', 'Precision-Recall Curve')
@@ -374,19 +379,21 @@ def shap_summary_bar(
 
     # Layout adjustments
     fig.update_layout(
+        autosize=True,
         showlegend=False,
-        margin=dict(l=150, r=50, t=50, b=50),
+        #margin=dict(l=250, r=50, t=50, b=50),
         height=1100,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)), 
-            scaleanchor="y", 
-            scaleratio=0.5
+            #scaleanchor="y", 
+            #scaleratio=0.5
         ),
         yaxis=dict(
             title=dict(
                 font=dict(size=20),
-                standoff=30 # Distance between title and ticks
+                automargin=True,
+                standoff=100 # Distance between title and ticks
             ), 
             tickfont=dict(size=16), 
             showticklabels=True
@@ -489,14 +496,15 @@ def shap_beeswarm(
     
     # Update layout with dynamic axis scaling
     fig.update_layout(
+        autosize=True,
         hovermode='closest',
         height=1100,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
             range=[x_min - x_padding, x_max + x_padding], 
-            scaleanchor="y", 
-            scaleratio=0.5
+            #scaleanchor="y", 
+            #scaleratio=0.5
         ),
         yaxis=dict(
             title=dict(font=dict(size=20)),
@@ -505,6 +513,7 @@ def shap_beeswarm(
             tickvals=list(range(len(top_features_full))),
             ticktext=simplified_labels,  # Use simplified labels here
             automargin=True,
+            standoff=100,
             range=[-0.5, len(top_features_full) - 0.5]
         )
     )
@@ -641,14 +650,14 @@ def shap_dependency_plot(
         marker_config.update({
             'color': color_data,
             'colorscale': 'Viridis',
-            'colorbar': {'title': {'text': color_title_display, 'side': 'right'}}
+            'colorbar': {'title': {'text': color_title_display, 'side': 'right', 'font': {'size': 20}}}
         })
         hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"  # Full name in hover
     else:
         marker_config.update({
             'color': y,
             'colorscale': 'RdBu',
-            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right'}}
+            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right', 'font': {'size': 20}}}
         })
     
     hover_template += "<extra></extra>"
@@ -700,13 +709,14 @@ def shap_dependency_plot(
     )
     
     fig.update_layout(
+        autosize=True,
         height=1100,
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
             range=[x.min() - x_padding, x.max() + x_padding], 
-            scaleanchor="y", 
-            scaleratio=0.75
+            #scaleanchor="y", 
+            #scaleratio=0.75
         ),
         yaxis=dict(
             title=dict(font=dict(size=20)),
