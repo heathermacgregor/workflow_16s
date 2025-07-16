@@ -759,9 +759,11 @@ def shap_heatmap(
         colorscale='RdBu',
         zmid=0,
         colorbar=dict(
-            title='SHAP Value',
-            titleside='right',
-            titlefont=dict(size=18),
+            title=dict(
+                text='SHAP Value',
+                font=dict(size=18)
+            )
+        ),
         hoverinfo='text',
         text=[[(
             f"<b>Feature</b>: {feature_names[top_indices[j]]}<br>"
@@ -769,7 +771,8 @@ def shap_heatmap(
             f"<b>Value</b>: {feature_values[instance_order[i], top_indices[j]]:.4f}<br>"
             f"<b>Instance</b>: {instance_order[i]}"
         ) for j in range(len(top_indices))] for i in range(len(instance_order))]
-    )))
+    ))
+
     
     # Apply common layout
     fig = _apply_common_layout(
