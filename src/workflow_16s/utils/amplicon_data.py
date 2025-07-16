@@ -1217,14 +1217,6 @@ class _AnalysisManager(_ProcessingMixin):
                                     progress=progress, 
                                     task_id=table_task,
                                 )
-
-                                # Store figures within model result
-                                model_result['figures'] = {
-                                    'eval_plots': model_result.get('eval_plots'),
-                                    'shap_summary_bar': model_result.get('shap_summary_bar'),
-                                    'shap_summary_beeswarm': model_result.get('shap_summary_beeswarm'),
-                                    'shap_dependency': model_result.get('shap_dependency', {})
-                                }
                                 
                                 # Log if no figures were generated
                                 if not any(model_result['figures'].values()):
