@@ -76,6 +76,95 @@ DEFAULT_THREAD_COUNT = 4
 
 # ==================================== FUNCTIONS ===================================== #
 
+import shap
+import numpy as np
+import pandas as pd
+from scipy.stats import spearmanr
+
+def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
+    expl = shap.Explainer(model, X)
+    sv_exp = expl(X)
+    sv = sv_exp.values  # SHAP values: (n_samples, n_features)
+
+    mean_abs = np.abs(sv).mean(axis=0)
+    feat_idx = np.argsort(mean_abs)[::-1][:K]
+    top_feats = list(X.columns[feat_idx])
+    top_means = mean_abs[feat_idx]
+
+    lines = [f"**Top {K} features by average impact:**"]
+    for feat, m in zip(top_feats, top_means):
+        lines.append(f" • `{feat}` (mean |SHAP| = {m:.3f})")
+    lines.append("")
+
+    # Beeswarm interpretation
+    lines.append("**Beeswarm interpretation:**")
+    for feat in top_feats:
+        vals = X[feat].values
+        shap_vals = sv[:, X.columns.get_loc(feat)]
+        rho, _ = spearmanr(vals, shap_vals)
+        dir_text = "higher → higher prediction" if rho > 0 else "higher → lower prediction"
+        lines.append(f" • `{feat}`: {dir_text} (ρ = {rho:.2f})")
+    lines.append("")
+
+    # Dependency interpretation
+    lines.append("**Dependency‐plot interpretations:**")
+    for feat in top_feats:
+        vals = X[feat].values
+        shap_vals = sv[:, X.columns.get_loc(feat)]
+        rho, _ = spearmanr(vals, shap_vals)
+        strength = "strong" if abs(rho) > 0.5 else "moderate" if abs(rho) > 0.3 else "weak"
+        trend = "positive" if rho > 0 else "negative"
+        lines.append(
+            f" • `{feat}` shows a {strength} {trend} monotonic relationship (ρ = {rho:.2f})"
+        )
+    lines.append("")
+
+    # Interactions with relationships
+    lines.append("**Interaction summaries among top features:**")
+    try:
+        # TreeExplainer for SHAP interaction values
+        int_explainer = shap.TreeExplainer(model)
+        int_vals = int_explainer.shap_interaction_values(X)  # shape: (n_samples, n_features, n_features)
+        mean_abs_int = np.abs(int_vals).mean(axis=0)
+    except Exception:
+        lines.append("Could not compute SHAP interaction values.")
+        return "\n".join(lines)
+
+    for i, feat in enumerate(top_feats):
+        i_idx = X.columns.get_loc(feat)
+        inter_strengths = mean_abs_int[i_idx].copy()
+        inter_strengths[i_idx] = 0  # exclude self-interaction
+        j_idx = inter_strengths.argmax()
+        partner = X.columns[j_idx]
+        score = inter_strengths[j_idx]
+
+        # Characterize relationship
+        xi = X[feat].values
+        xj = X[partner].values
+        shap_i = sv[:, i_idx]
+        shap_j = sv[:, j_idx]
+
+        rho_i = spearmanr(xj, shap_i)[0]
+        rho_j = spearmanr(xi, shap_j)[0]
+
+        if rho_i > 0 and rho_j > 0:
+            relation = "mutually reinforcing"
+        elif rho_i < 0 and rho_j < 0:
+            relation = "mutually diminishing"
+        elif rho_i * rho_j < 0:
+            relation = "opposing or balancing"
+        else:
+            relation = "complex or weak"
+
+        lines.append(
+            f" • `{feat}` interacts most with `{partner}` "
+            f"(mean |interaction SHAP| = {score:.3f}); relationship: {relation} "
+            f"(ρ_feat→SHAP = {rho_j:.2f}, ρ_partner→SHAP = {rho_i:.2f})"
+        )
+
+    return "\n".join(lines)
+
+
 def _validate_inputs(X_train, y_train, X_test, y_test):
     """Validate input alignment and data integrity"""
     if X_train.shape[0] != y_train.shape[0] or X_test.shape[0] != y_test.shape[0]:
@@ -1224,6 +1313,9 @@ def catboost_feature_selection(
             show=False,
             verbose=verbose
         )
+
+        shap_report = generate_shap_report(model=best_model, X=X_sample, K=20)
+        logger.info(shap_report)
         
     except Exception as e:
         logger.error(f"SHAP plot generation failed: {e}")
