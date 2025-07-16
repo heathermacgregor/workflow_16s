@@ -769,7 +769,7 @@ def shap_heatmap(
             f"<b>Value</b>: {feature_values[instance_order[i], top_indices[j]]:.4f}<br>"
             f"<b>Instance</b>: {instance_order[i]}"
         ) for j in range(len(top_indices))] for i in range(len(instance_order))]
-    ))
+    )))
     
     # Apply common layout
     fig = _apply_common_layout(
