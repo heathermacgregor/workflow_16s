@@ -1024,7 +1024,7 @@ class _AnalysisManager(_ProcessingMixin):
             return [], []
             
         tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = None, None#tfa.analyze(stats_results, DEFAULT_GROUP_COLUMN)
+        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(stats_results, DEFAULT_GROUP_COLUMN)
 
         logger.info(f"Identified {len(self.top_contaminated_features)} top contaminated features")
         logger.info(f"Identified {len(self.top_pristine_features)} top pristine features")
