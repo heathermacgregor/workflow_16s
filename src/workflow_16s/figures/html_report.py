@@ -381,12 +381,13 @@ def _prepare_ml_summary(
     models: Dict, 
     top_contaminated: List[Dict], 
     top_pristine: List[Dict]
-) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Dict]:
     if not models:
-        return None, None
+        return None, None, {}
 
     metrics_summary = []
     features_summary = []
+    shap_reports = {}
     
     for table_type, levels in models.items():
         for level, methods in levels.items():
@@ -420,15 +421,47 @@ def _prepare_ml_summary(
                         "Feature": feat,
                         "Importance": f"{importance:.4f}"
                     })
+                
+                # Capture SHAP report if available
+                if "shap_report" in result:
+                    key = (table_type, level, method)
+                    shap_reports[key] = result["shap_report"]
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
     
-    return metrics_df, features_df
+    return metrics_df, features_df, shap_reports
+
+def _format_shap_report(report: str) -> str:
+    """Convert SHAP report markdown to HTML"""
+    # Process bold text
+    report = report.replace("**", "<strong>").replace("<strong>", "</strong>", 1)
+    # Process bullet points
+    report = report.replace(" • ", "<li>")
+    # Convert newlines to paragraphs
+    sections = report.split("\n\n")
+    html_sections = []
+    
+    for section in sections:
+        if section.startswith("<strong>"):
+            # Header section
+            header, content = section.split("</strong>", 1)
+            html_sections.append(f"{header}</strong>")
+            # Convert list items
+            if "<li>" in content:
+                items = [f"<li>{item.strip()}</li>" for item in content.split("<li>")[1:]]
+                html_sections.append(f"<ul>{''.join(items)}</ul>")
+            else:
+                html_sections.append(f"<p>{content.strip()}</p>")
+        else:
+            html_sections.append(f"<p>{section.strip()}</p>")
+    
+    return "\n".join(html_sections)
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
-    ml_features: pd.DataFrame
+    ml_features: pd.DataFrame,
+    shap_reports: Dict
 ) -> str:
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
@@ -466,6 +499,20 @@ def _format_ml_section(
     
     features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
     
+    # SHAP Reports section
+    shap_html = ""
+    if shap_reports:
+        shap_html = "<h3>SHAP Interpretability Report</h3>"
+        for (table_type, level, method), report in shap_reports.items():
+            shap_html += f"""
+            <div class="shap-report-section">
+                <h4>{table_type} - {level} - {method}</h4>
+                <div class="shap-report-content">
+                    {_format_shap_report(report)}
+                </div>
+            </div>
+            """
+    
     return f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
@@ -473,6 +520,8 @@ def _format_ml_section(
         
         <h3>Top Features</h3>
         {features_html}
+        
+        {shap_html}
     </div>
     """
 
@@ -778,12 +827,12 @@ def generate_html_report(
     )
     
     # ML summary
-    ml_metrics, ml_features = _prepare_ml_summary(
+    ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
         amplicon_data.top_contaminated_features,
         amplicon_data.top_pristine_features
     )
-    ml_html = _format_ml_section(ml_metrics, ml_features) if ml_metrics is not None else "<p>No ML results available</p>"
+    ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
     
     tables_html = f"""
     <div class="subsection">
@@ -885,11 +934,43 @@ def generate_html_report(
     }
     """
     
+    # Add styling for SHAP report
+    shap_css = """
+    .shap-report-section {
+        margin-top: 30px;
+        padding: 20px;
+        background: #1a1a1a;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+    }
+    .shap-report-content {
+        margin-top: 15px;
+        padding: 15px;
+        background: #222;
+        border-radius: 5px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        line-height: 1.6;
+    }
+    .shap-report-content strong {
+        color: #3498db;
+    }
+    .shap-report-content ul {
+        padding-left: 20px;
+        list-style-type: disc;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    .shap-report-content li {
+        margin-bottom: 5px;
+    }
+    """
+    
     try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css
+        css_content = css_path.read_text(encoding='utf-8') + tooltip_css + shap_css
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
-        css_content = tooltip_css
+        css_content = tooltip_css + shap_css
         
     try:
         html_template = html_template_path.read_text(encoding="utf-8")
