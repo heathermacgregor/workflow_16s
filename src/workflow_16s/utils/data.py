@@ -682,72 +682,30 @@ def trim_and_merge_asvs(
     return merged_df, trimmed_seqs, obs_ids
 
 
-def collapse_taxa(
-    table: Union[pd.DataFrame, Table], 
-    target_level: str, 
-    progress=None, 
-    task_id=None,
-    verbose: bool = False
-) -> Table:
+def collapse_taxa(table: Table, level: str, progress=None, task_id=None) -> Table:
     """
-    Collapse feature table to specified taxonomic level.
-    
-    Args:
-        table:        Input BIOM Table or DataFrame.
-        target_level: Taxonomic level to collapse to (phylum/class/order/family).
-        output_dir:   Directory to save collapsed table.
-        verbose:      Verbosity flag.
-    
-    Returns:
-        Collapsed BIOM Table.
-    
-    Raises:
-        ValueError: For invalid target_level.
+    Collapses features to a specified taxonomic level, truncating the taxonomy strings.
     """
+    level_index = {"phylum": 1, "class": 2, "order": 3, "family": 4, "genus": 5}.get(level)
+    if level_index is None:
+        raise ValueError(f"Invalid taxonomic level: {level}")
+
+    df = table_to_df(table)
     
-    table = table.copy()
-    table = to_biom(table)
-        
-    if target_level not in levels:
-        raise ValueError(
-            f"Invalid `target_level`: {target_level}. "
-            f"Expected one of {list(levels.keys())}")
-
-    level_idx = levels[target_level]
-
-    # Create taxonomy mapping
-    id_map = {}
-    sub_desc = "Feature:"
-    sub_task = progress.add_task(
-        f"[white]{sub_desc:<{DEFAULT_N}}",
-        parent=task_id,
-        total=len(table.ids(axis='observation').astype(str))
-    )
-    for taxon in table.ids(axis='observation').astype(str):
-        try:
-            new_desc = f"Feature: {taxon}"
-            if len(new_desc) > DEFAULT_N:
-                new_desc = f"{new_desc[:DEFAULT_N-3]}..."
-            progress.update(sub_task, description=new_desc)
-            parts = taxon.split(';')
-            truncated = ';'.join(
-                parts[:level_idx + 1]
-            ) if len(parts) >= level_idx + 1 else 'Unclassified'
-            id_map[taxon] = truncated
-        except Exception as e:
-            logger.error(f"Mapping failed for taxon {taxon}: {e!r}")
-        finally:
-            progress.update(sub_task, advance=1)
-
-    # Collapse table
-    collapsed_table = table.collapse(
-        lambda id, _: id_map.get(id, 'Unclassified'),
-        norm=False,
-        axis='observation',
-        include_collapsed_metadata=False
-    ).remove_empty()
-    progress.remove_task(sub_task)
-    return collapsed_table
+    # Extract the appropriate taxonomic level from the full taxonomy strings
+    def truncate_taxonomy(tax_str):
+        parts = tax_str.split(';')
+        if len(parts) >= level_index:
+            return ';'.join(parts[:level_index])
+        return tax_str  # Return original if not enough levels
+    
+    df.index = df.index.map(truncate_taxonomy)
+    
+    # Group by the truncated taxonomy strings
+    collapsed_df = df.groupby(df.index).sum()
+    
+    # Convert back to BIOM table
+    return to_biom(collapsed_df)
   
 
 def presence_absence(
