@@ -443,18 +443,29 @@ def _format_shap_report(report: str) -> str:
     html_sections = []
     
     for section in sections:
+        # Handle sections with headers
         if section.startswith("<strong>"):
-            # Header section
-            header, content = section.split("</strong>", 1)
-            html_sections.append(f"{header}</strong>")
+            parts = section.split("</strong>", 1)
+            if len(parts) == 2:
+                header, content = parts
+                html_sections.append(f"{header}</strong>")
+                # Convert list items
+                if "<li>" in content:
+                    items = [f"<li>{item.strip()}</li>" for item in content.split("<li>")[1:]]
+                    html_sections.append(f"<ul>{''.join(items)}</ul>")
+                else:
+                    html_sections.append(f"<p>{content.strip()}</p>")
+            else:
+                # Handle case where </strong> is missing
+                html_sections.append(f"<p>{section}</p>")
+        # Handle sections without headers
+        else:
             # Convert list items
-            if "<li>" in content:
-                items = [f"<li>{item.strip()}</li>" for item in content.split("<li>")[1:]]
+            if "<li>" in section:
+                items = [f"<li>{item.strip()}</li>" for item in section.split("<li>")[1:]]
                 html_sections.append(f"<ul>{''.join(items)}</ul>")
             else:
-                html_sections.append(f"<p>{content.strip()}</p>")
-        else:
-            html_sections.append(f"<p>{section.strip()}</p>")
+                html_sections.append(f"<p>{section.strip()}</p>")
     
     return "\n".join(html_sections)
 
