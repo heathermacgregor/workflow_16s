@@ -1020,7 +1020,7 @@ def generate_html_report(
     """
     
     # Add styling for SHAP report
-        shap_css = """
+    shap_css = """
         .shap-report-section {
             margin-top: 30px;
             padding: 20px;
