@@ -433,41 +433,146 @@ def _prepare_ml_summary(
     return metrics_df, features_df, shap_reports
 
 def _format_shap_report(report: str) -> str:
-    """Convert SHAP report markdown to HTML"""
-    # Process bold text
-    report = report.replace("**", "<strong>").replace("<strong>", "</strong>", 1)
-    # Process bullet points
-    report = report.replace(" • ", "<li>")
-    # Convert newlines to paragraphs
+    """Convert SHAP report to HTML tables"""
     sections = report.split("\n\n")
-    html_sections = []
+    html_output = []
     
     for section in sections:
-        # Handle sections with headers
-        if section.startswith("<strong>"):
-            parts = section.split("</strong>", 1)
-            if len(parts) == 2:
-                header, content = parts
-                html_sections.append(f"{header}</strong>")
-                # Convert list items
-                if "<li>" in content:
-                    items = [f"<li>{item.strip()}</li>" for item in content.split("<li>")[1:]]
-                    html_sections.append(f"<ul>{''.join(items)}</ul>")
-                else:
-                    html_sections.append(f"<p>{content.strip()}</p>")
-            else:
-                # Handle case where </strong> is missing
-                html_sections.append(f"<p>{section}</p>")
-        # Handle sections without headers
+        section = section.strip()
+        if not section:
+            continue
+            
+        # Extract section header
+        if section.startswith("**") and "**" in section[2:]:
+            header, content = section.split("**", 2)[1], section.split("**", 2)[2]
+            header = header.strip().rstrip(':')
         else:
-            # Convert list items
-            if "<li>" in section:
-                items = [f"<li>{item.strip()}</li>" for item in section.split("<li>")[1:]]
-                html_sections.append(f"<ul>{''.join(items)}</ul>")
-            else:
-                html_sections.append(f"<p>{section.strip()}</p>")
+            header = "Report"
+            content = section
+            
+        # Process different section types
+        if "Top" in header and "features by average impact" in header:
+            # Top features table
+            table_data = []
+            for line in content.split('\n'):
+                if '•' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        value = parts[2].split('=')[-1].strip().rstrip(')')
+                        table_data.append({"Feature": feature, "Mean |SHAP|": value})
+            
+            if table_data:
+                df = pd.DataFrame(table_data)
+                html_output.append(f'<h4>{header}</h4>')
+                html_output.append(df.to_html(index=False, classes='shap-table'))
+                
+        elif "Beeswarm interpretation" in header:
+            # Beeswarm table
+            table_data = []
+            for line in content.split('\n'):
+                if '•' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        interpretation = parts[2].split(':', 1)[1].split('(')[0].strip()
+                        rho = line.split('ρ = ')[-1].rstrip(')')
+                        table_data.append({
+                            "Feature": feature, 
+                            "Interpretation": interpretation,
+                            "ρ": rho
+                        })
+            
+            if table_data:
+                df = pd.DataFrame(table_data)
+                html_output.append(f'<h4>{header}</h4>')
+                html_output.append(df.to_html(index=False, classes='shap-table'))
+                
+        elif "Dependency" in header and "interpretations" in header:
+            # Dependency plot table
+            table_data = []
+            for line in content.split('\n'):
+                if '•' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        relationship = line.split('shows a ')[1].split('(')[0].strip()
+                        rho = line.split('ρ = ')[-1].rstrip(')')
+                        table_data.append({
+                            "Feature": feature, 
+                            "Relationship": relationship,
+                            "ρ": rho
+                        })
+            
+            if table_data:
+                df = pd.DataFrame(table_data)
+                html_output.append(f'<h4>{header}</h4>')
+                html_output.append(df.to_html(index=False, classes='shap-table'))
+                
+        elif "Interaction summaries" in header:
+            # Interaction table
+            table_data = []
+            for line in content.split('\n'):
+                if '•' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 4:
+                        feature = parts[1]
+                        partner = parts[3]
+                        score = line.split('mean |interaction SHAP| = ')[1].split(')')[0]
+                        relationship = line.split('relationship: ')[1].split(' (ρ')[0]
+                        rho_feat = line.split('ρ_feat→SHAP = ')[1].split(',')[0]
+                        rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0]
+                        table_data.append({
+                            "Feature": feature,
+                            "Partner": partner,
+                            "Mean |Interaction SHAP|": score,
+                            "Relationship": relationship,
+                            "ρ_feat": rho_feat,
+                            "ρ_partner": rho_partner
+                        })
+            
+            if table_data:
+                df = pd.DataFrame(table_data)
+                html_output.append(f'<h4>{header}</h4>')
+                html_output.append(df.to_html(index=False, classes='shap-table'))
+                
+        else:
+            # Default formatting for other sections
+            html_output.append(f'<h4>{header}</h4>')
+            html_output.append(f'<div class="shap-report-content">{content}</div>')
     
-    return "\n".join(html_sections)
+    # Add styling for tables
+    table_style = """
+    <style>
+    .shap-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 0.9em;
+        background: #1a1a1a;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    .shap-table th {
+        background-color: #2c3e50;
+        color: #ecf0f1;
+        text-align: left;
+        padding: 12px 15px;
+    }
+    .shap-table td {
+        padding: 10px 15px;
+        border-bottom: 1px solid #34495e;
+    }
+    .shap-table tbody tr:nth-of-type(even) {
+        background-color: #222;
+    }
+    .shap-table tbody tr:last-of-type {
+        border-bottom: 2px solid #2c3e50;
+    }
+    </style>
+    """
+    
+    return table_style + "\n".join(html_output)
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
