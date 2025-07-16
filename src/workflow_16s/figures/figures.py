@@ -390,6 +390,13 @@ def attach_legend_to_figure(
     return combined_fig
 
 
+import math
+from pathlib import Path
+from typing import List, Union
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 def combine_figures_as_subplots(
     figures: List[go.Figure],
     figures_per_row: int = 2,
@@ -403,7 +410,8 @@ def combine_figures_as_subplots(
     verbose: bool = False
 ) -> go.Figure:
     """
-    Combines multiple Plotly go.Figure objects into a subplot figure.
+    Combines multiple Plotly go.Figure objects into a subplot figure, preserving 
+    legends, color bars, and the original x/y axis ratio for each subplot.
 
     Parameters:
         figures (List[go.Figure]): List of Plotly figures to combine.
@@ -413,8 +421,9 @@ def combine_figures_as_subplots(
         subplot_titles (List[str]): Optional list of subplot titles.
         vertical_spacing (float): Vertical spacing between subplots (0-1).
         horizontal_spacing (float): Horizontal spacing between subplots (0-1).
-        width (int): Width of the combined figure.
-        height (int): Height of the combined figure.
+        show (bool): Whether to display the figure.
+        output_path (Union[str, Path]): Path to save the figure.
+        verbose (bool): Whether to print verbose output.
 
     Returns:
         go.Figure: A single Plotly figure containing all input figures as subplots.
@@ -424,8 +433,8 @@ def combine_figures_as_subplots(
     rows = math.ceil(total_figs / cols)
 
     if subplot_titles is None:
-        subplot_titles = [fig.layout.title.text if fig.layout.title.text else ""
-        for fig in figures]
+        subplot_titles = [fig.layout.title.text if fig.layout.title and fig.layout.title.text else ""
+                          for fig in figures]
 
     fig = make_subplots(
         rows=rows,
@@ -437,16 +446,68 @@ def combine_figures_as_subplots(
         horizontal_spacing=horizontal_spacing
     )
 
+    # Store axis domain information for each subplot
+    axis_domains = {}
+    for r in range(1, rows + 1):
+        for c in range(1, cols + 1):
+            axis_num = (r - 1) * cols + c
+            xaxis_name = f'xaxis{axis_num}' if axis_num > 1 else 'xaxis'
+            yaxis_name = f'yaxis{axis_num}' if axis_num > 1 else 'yaxis'
+            
+            if xaxis_name in fig.layout and 'domain' in fig.layout[xaxis_name]:
+                x_domain = fig.layout[xaxis_name].domain
+            else:
+                x_domain = [0.0, 1.0]
+                
+            if yaxis_name in fig.layout and 'domain' in fig.layout[yaxis_name]:
+                y_domain = fig.layout[yaxis_name].domain
+            else:
+                y_domain = [0.0, 1.0]
+                
+            axis_domains[(r, c)] = (x_domain, y_domain)
+
     for idx, subfig in enumerate(figures):
         row = idx // cols + 1
         col = idx % cols + 1
+        x_domain, y_domain = axis_domains[(row, col)]
+        
         for trace in subfig.data:
             fig.add_trace(trace, row=row, col=col)
-
-        # Optionally update axes titles (if present in original figures)
+            added_trace = fig.data[-1]
+            
+            # Position color bars relative to subplot
+            if hasattr(added_trace, 'marker') and hasattr(added_trace.marker, 'colorbar') and added_trace.marker.colorbar is not None:
+                added_trace.marker.colorbar.update(
+                    x=x_domain[1] + 0.01,
+                    y=(y_domain[0] + y_domain[1]) / 2
+                )
+            elif hasattr(added_trace, 'colorbar') and added_trace.colorbar is not None:
+                added_trace.colorbar.update(
+                    x=x_domain[1] + 0.01,
+                    y=(y_domain[0] + y_domain[1]) / 2
+                )
+        
+        # Preserve axis titles
         if 'xaxis' in subfig.layout and subfig.layout.xaxis.title.text:
             fig.update_xaxes(title_text=subfig.layout.xaxis.title.text, row=row, col=col)
         if 'yaxis' in subfig.layout and subfig.layout.yaxis.title.text:
             fig.update_yaxes(title_text=subfig.layout.yaxis.title.text, row=row, col=col)
+        
+        # Preserve aspect ratio using scaleanchor
+        if hasattr(subfig.layout, 'yaxis') and hasattr(subfig.layout.yaxis, 'scaleanchor'):
+            fig.update_yaxes(
+                scaleanchor=subfig.layout.yaxis.scaleanchor,
+                scaleratio=subfig.layout.yaxis.scaleratio,
+                row=row, 
+                col=col
+            )
+    
+    # Preserve legends by showing them and adjusting their group assignments
+    for trace in fig.data:
+        if hasattr(trace, 'showlegend'):
+            trace.showlegend = True
+        if hasattr(trace, 'legendgroup'):
+            trace.legendgroup = f"group_{trace.legendgroup}"
+    
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
     return fig
