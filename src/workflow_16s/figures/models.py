@@ -706,9 +706,8 @@ def shap_dependency_plot(
       showgrid=False, mirror=True
     )
     return fig
+    
 
-
-# SHAP Heatmap
 def shap_heatmap(
     shap_values: np.array,
     feature_values: np.array,
@@ -729,68 +728,76 @@ def shap_heatmap(
     Returns:
         Heatmap figure with clustered instances and features.
     """
-    # Select top features
-    mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
-    top_features_full = [feature_names[i] for i in top_indices]
-    
-    # Generate simplified labels
-    simplified_labels = generate_unique_simplified_labels(top_features_full)
-    
     # Downsample instances if needed
     if len(shap_values) > max_samples:
         sample_idx = np.random.choice(len(shap_values), max_samples, replace=False)
-        shap_values = shap_values[sample_idx]
-        feature_values = feature_values[sample_idx]
+        shap_values_sampled = shap_values[sample_idx]
+        feature_values_sampled = feature_values[sample_idx]
     else:
         sample_idx = np.arange(len(shap_values))
+        shap_values_sampled = shap_values
+        feature_values_sampled = feature_values
+
+    # Select top features by mean absolute SHAP value
+    mean_abs_shap = np.abs(shap_values_sampled).mean(axis=0)
+    top_indices = np.argsort(mean_abs_shap)[-max_display:][::-1]
+    top_features = [feature_names[i] for i in top_indices]
     
-    # Cluster instances
-    instance_order = leaves_list(linkage(shap_values[:, top_indices], method='complete'))
+    # Cluster FEATURES using correlation of SHAP values
+    corr_matrix = np.corrcoef(shap_values_sampled[:, top_indices].T)
+    np.fill_diagonal(corr_matrix, 1.0)  # Ensure diagonal is 1 before absolute
+    dist_matrix = 1 - np.abs(corr_matrix)
+    feature_linkage = linkage(dist_matrix, method='complete', optimal_ordering=True)
+    feature_order = leaves_list(feature_linkage)
+    clustered_feature_names = [top_features[i] for i in feature_order]
+    clustered_indices = top_indices[feature_order]  # Original feature indices in clustered order
+
+    # Cluster INSTANCES using SHAP values of clustered features
+    instance_linkage = linkage(shap_values_sampled[:, clustered_indices], method='complete')
+    instance_order = leaves_list(instance_linkage)
+
+    # Prepare clustered SHAP values and feature values
+    clustered_shap = shap_values_sampled[instance_order][:, clustered_indices]
+    clustered_feature_vals = feature_values_sampled[instance_order][:, clustered_indices]
     
-    # Prepare data for heatmap
-    clustered_shap = shap_values[instance_order][:, top_indices]
-    
-    # Create figure
-    fig = go.Figure()
-    
-    # Add heatmap trace
-    fig.add_trace(go.Heatmap(
+    # Generate hover text
+    hover_text = []
+    for i, instance_idx in enumerate(instance_order):
+        row_text = []
+        for j, feat_idx in enumerate(clustered_indices):
+            row_text.append(
+                f"<b>Feature</b>: {feature_names[feat_idx]}<br>"
+                f"<b>SHAP</b>: {clustered_shap[i, j]:.4f}<br>"
+                f"<b>Value</b>: {clustered_feature_vals[i, j]:.4f}<br>"
+                f"<b>Instance</b>: {sample_idx[instance_order[i]]}"
+            )
+        hover_text.append(row_text)
+
+    # Create heatmap
+    fig = go.Figure(go.Heatmap(
         z=clustered_shap,
-        x=simplified_labels,
-        y=instance_order,
+        x=clustered_feature_names,
+        y=[f"Instance {sample_idx[i]}" for i in instance_order],
         colorscale='RdBu',
         zmid=0,
+        hoverinfo="text",
+        text=hover_text,
         colorbar=dict(
-            title=dict(
-                text='SHAP Value',
-                font=dict(size=18)
-            )
-        ),
-        hoverinfo='text',
-        text=[[(
-            f"<b>Feature</b>: {feature_names[top_indices[j]]}<br>"
-            f"<b>SHAP</b>: {clustered_shap[i, j]:.4f}<br>"
-            f"<b>Value</b>: {feature_values[instance_order[i], top_indices[j]]:.4f}<br>"
-            f"<b>Instance</b>: {instance_order[i]}"
-        ) for j in range(len(top_indices))] for i in range(len(instance_order))]
-    ))
-
-    
-    # Apply common layout
-    fig = _apply_common_layout(
-        fig,
-        "Features",
-        "Instances (ordered by similarity)",
-        "SHAP Heatmap"
+            title=dict(text='SHAP Value', font=dict(size=14)),
+        )
     )
-    
-    # Custom layout adjustments
+
+    # Apply layout adjustments
     fig.update_layout(
-        height=1100,
-        xaxis=dict(tickfont=dict(size=14)),
-        yaxis=dict(showticklabels=False),
-        margin=dict(l=100, r=100, t=100, b=100)
+        title="SHAP Feature Importance",
+        title_font_size=20,
+        xaxis_title="Features (clustered by similarity)",
+        yaxis_title="Instances (clustered by similarity)",
+        height=700,
+        width=900,
+        margin=dict(t=60, b=100, l=100, r=50),
+        xaxis=dict(tickangle=-45, tickfont=dict(size=12)),
+        yaxis=dict(showticklabels=False)
     )
     
     return fig
@@ -909,13 +916,16 @@ def shap_force_plot(
         height=1100,
         showlegend=False,
         hovermode='closest',
+        title=dict(font=dict(size=24)),
         xaxis=dict(
+            title=dict(font=dict(size=20)),
             showgrid=True,
             zeroline=False,
-            tickfont=dict(size=14)
+            tickfont=dict(size=16)
         ),
         yaxis=dict(
-            tickfont=dict(size=14),
+            title=dict(font=dict(size=20)),
+            tickfont=dict(size=16),
             automargin=True
         )
     )
@@ -1044,10 +1054,11 @@ def shap_waterfall_plot(
     # Custom layout adjustments
     fig.update_layout(
         height=1100,
+        title=dict(font=dict(size=24)),
         showlegend=False,
         waterfallgap=0.3,
-        xaxis=dict(tickfont=dict(size=14)),
-        yaxis=dict(tickfont=dict(size=14))
+        xaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16)),
+        yaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16))
     )
     
     return fig
