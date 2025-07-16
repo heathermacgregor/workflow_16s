@@ -785,7 +785,7 @@ def shap_heatmap(
         colorbar=dict(
             title=dict(text='SHAP Value', font=dict(size=14)),
         )
-    )
+    ))
 
     # Apply layout adjustments
     fig.update_layout(
