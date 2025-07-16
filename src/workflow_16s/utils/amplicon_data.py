@@ -1000,7 +1000,7 @@ class _AnalysisManager(_ProcessingMixin):
                             # Log number of significant features
                             if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
                                 n_sig = sum(result["p_value"] < 0.05)
-                                logger.info(f"Found {n_sig} significant features for {table_type}/{level}/{test_name}")
+                                logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test_name}")
                                 
                                 # Add debug info for first 5 features if none are significant
                                 if n_sig == 0 and self.verbose:
