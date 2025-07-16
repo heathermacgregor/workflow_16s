@@ -465,9 +465,10 @@ class TopFeaturesAnalyzer:
         san = StatisticalAnalyzer(self.cfg, self.verbose)
         all_features = []
 
-        for table_type, tests in stats_results.items():
-            for test_name, test_results in tests.items():
-                for level, df in test_results.items():
+        # FIXED: Corrected loop structure to match stats_results hierarchy
+        for table_type, levels in stats_results.items():  # First level: table types
+            for level, tests in levels.items():  # Second level: taxonomic levels
+                for test_name, df in tests.items():  # Third level: test names
                     if df is None or not isinstance(df, pd.DataFrame):
                         continue
                     if "p_value" not in df.columns:
