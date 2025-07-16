@@ -177,7 +177,7 @@ def parse_faprotax_db(path: str | Path, *, compile_regex: bool = True) -> Faprot
         compile_regex: Compile patterns with re.compile() for faster matching
         
     Returns:
-        Dictionary mapping trait names to metadata and taxa patterns
+        Dictionary mapping valid trait names to metadata and taxa patterns
     """
     trait_dict: FaprotaxDB = {}
     current_trait: str | None = None
@@ -190,6 +190,12 @@ def parse_faprotax_db(path: str | Path, *, compile_regex: bool = True) -> Faprot
                 trait = parts[0]
                 meta_blob = parts[1] if len(parts) > 1 else ""
                 
+                # Skip traits with suspicious names (e.g., *Chondromyces*crocatus*)
+                if re.search(r"^\*.*\*$", trait) or ";" in trait:
+                    logger.debug(f"Skipping invalid trait: {trait}")
+                    current_trait = None
+                    continue
+                    
                 trait_dict[trait] = {
                     "metadata": dict(_metadata_kv_iter(meta_blob)),
                     "taxa": [],
@@ -197,26 +203,39 @@ def parse_faprotax_db(path: str | Path, *, compile_regex: bool = True) -> Faprot
                 current_trait = trait
                 continue
 
+            # Only process pattern lines for valid traits
             if current_trait is None:
-                raise ValueError(f"Pattern line before trait header: {line}")
+                continue
 
-            fields = line.split(None, 1)  # Split into [pattern, reference?]
-            pattern_raw = fields[0]
-            ref = fields[1][2:] if len(fields) > 1 and fields[1].startswith("//") else ""
+            # Handle pattern lines
+            fields = line.split(None, 1)
+            pattern_raw = fields[0].strip()
+            ref = fields[1][2:].strip() if len(fields) > 1 and fields[1].startswith("//") else ""
 
-            # FIXED: Proper pattern conversion with wildcard handling
-            regex_str = pattern_raw.replace("*", ".*")
-            regex_str = re.sub(r'(\.\*)+', '.*', regex_str)  # Collapse redundant wildcards
+            # Skip empty/invalid patterns
+            if not pattern_raw or pattern_raw == "*":
+                continue
+
+            # Convert FAPROTAX pattern to regex
+            regex_str = re.sub(r"\*+", ".*", pattern_raw)  # Handle wildcards
+            regex_str = f"^{regex_str}$"  # Match full taxonomic strings
             
-            # FIXED: Compile with IGNORECASE flag for case-insensitive matching
-            regex_pat: str | Pattern[str] = regex_str
             if compile_regex:
-                regex_pat = re.compile(regex_str, re.IGNORECASE)
+                try:
+                    regex_pat = re.compile(regex_str, re.IGNORECASE)
+                except re.error:
+                    logger.warning(f"Invalid regex pattern for {current_trait}: {regex_str}")
+                    continue
+            else:
+                regex_pat = regex_str
 
-            trait_dict[current_trait]["taxa"].append({"pat": regex_pat, "ref": ref})
+            trait_dict[current_trait]["taxa"].append({
+                "pat": regex_pat,
+                "ref": ref
+            })
 
-    return trait_dict
-
+    # Remove traits with no valid patterns
+    return {t: d for t, d in trait_dict.items() if d["taxa"]}
 
 def get_faprotax_parsed(*, compile_regex: bool = True) -> FaprotaxDB | None:
     """
