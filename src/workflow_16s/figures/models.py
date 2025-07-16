@@ -648,16 +648,15 @@ def shap_dependency_plot(
         marker_config.update({
             'color': color_data,
             'colorscale': 'Viridis',
-            'colorbar': {'title': {'text': color_title_display, 'side': 'right', 'font': {'size': 20}}},
-            'tickfont': {'size': 16}
+            'colorbar': {'title': {'text': color_title_display, 'side': 'right', 'font': {'size': 20}}, 'tickfont': {'size': 16}},
+            
         })
         hover_template += f"<br><b>{color_title}</b>: %{{marker.color:.4f}}"  # Full name in hover
     else:
         marker_config.update({
             'color': y,
             'colorscale': 'RdBu',
-            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right', 'font': {'size': 20}}},
-            'tickfont': {'size': 16}
+            'colorbar': {'title': {'text': 'SHAP Value', 'side': 'right', 'font': {'size': 20}}, 'tickfont': {'size': 16}},
         })
     
     hover_template += "<extra></extra>"
