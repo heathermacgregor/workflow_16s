@@ -961,7 +961,7 @@ def shap_force_plot(
                 x1=base_value,
                 y0=-1,
                 y1=len(y_labels),
-                line=dict(color='#999999', width=1, dash='dot')
+                line=dict(color='#999999', width=1, dash='dot'))
         ]
     )
     
