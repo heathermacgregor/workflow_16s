@@ -66,31 +66,6 @@ FEATURE_PATTERNS = {
 
 # ================================ TABLE CONVERSION ================================== #
 
-def table_to_df(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
-    """
-    Convert various table formats to samples × features DataFrame.
-    
-    Handles:
-    - Pandas DataFrame (returns unchanged)
-    - BIOM Table (transposes to samples × features)
-    - Dictionary (converts to DataFrame)
-    
-    Args:
-        table: Input table in various formats.
-        
-    Returns:
-        DataFrame in samples × features orientation.
-        
-    Raises:
-        TypeError: For unsupported input types
-    """
-    if isinstance(table, pd.DataFrame):  # samples × features
-        return table
-    if isinstance(table, Table):     # features × samples
-        return table.to_dataframe(dense=True).T
-    if isinstance(table, dict):          # samples × features
-        return pd.DataFrame(table)
-    raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
 def to_biom(
@@ -245,33 +220,40 @@ def merge_table_with_meta(
     return table
 
 
-def update_table_and_meta(
-    table: Table,
-    meta: pd.DataFrame,
-    sample_col: str = DEFAULT_META_ID_COL
-) -> Tuple[Table, pd.DataFrame]:
-    """
-    Align BIOM table with metadata using sample IDs.
+# ========================== UPDATED UTILITY FUNCTIONS ========================== #
+# In workflow_16s/utils/data.py
+
+def update_table_and_meta(table: Table, metadata: pd.DataFrame, sample_id_col: str = "#SampleID") -> Tuple[Table, pd.DataFrame]:
+    """Align table and metadata by sample IDs, case-insensitive matching"""
+    # Normalize all sample IDs to lowercase
+    table_ids = [sid.lower() for sid in table.ids()]
+    metadata_ids = metadata[sample_id_col].str.lower().tolist()
     
-    Args:
-        table:         BIOM feature table.
-        metadata_df:   Sample metadata DataFrame.
-        sample_column: Metadata column containing sample IDs.
+    # Find common sample IDs (case-insensitive)
+    common_ids = set(table_ids) & set(metadata_ids)
     
-    Returns:
-        Tuple of (filtered BIOM table, filtered metadata DataFrame)
+    if not common_ids:
+        # Try without any normalization as last resort
+        common_ids = set(table.ids()) & set(metadata[sample_id_col])
+        if not common_ids:
+            raise ValueError("No common sample IDs found between table and metadata")
     
-    Raises:
-        ValueError: For duplicate lowercase sample IDs in BIOM table.
-    """
-    norm_meta = _normalize_metadata(meta, sample_col)
-    biom_mapping = _create_biom_id_mapping(table)
+    # Filter table
+    table = table.filter(common_ids, axis='sample', inplace=False)
     
-    shared_ids = [sid for sid in norm_meta[sample_col] if sid in biom_mapping]
-    filtered_meta = norm_meta[norm_meta[sample_col].isin(shared_ids)]
-    original_ids = [biom_mapping[sid] for sid in filtered_meta[sample_col]]
+    # Filter metadata
+    metadata = metadata[metadata[sample_id_col].str.lower().isin(common_ids)]
     
-    return table.filter(original_ids, axis='sample', inplace=False), filtered_meta
+    return table, metadata
+
+def table_to_df(table: Table) -> pd.DataFrame:
+    """Convert BIOM table to DataFrame with lowercase sample IDs"""
+    df = pd.DataFrame(table.matrix_data.toarray().T,
+                      index=table.ids(),
+                      columns=table.ids(axis='observation'))
+    # Normalize sample IDs to lowercase
+    df.index = df.index.str.lower()
+    return df
 
 
 def _normalize_metadata(
