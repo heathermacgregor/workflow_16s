@@ -443,7 +443,7 @@ class MapPlotter:
                 self.figures[col] = fig
                 
                 progress.update(plot_task, advance=1)
-            progress.update(plot_task, description=plot_desc)
+            progress.update(plot_task, description=_format_task_desc(plot_desc))
         return self.figures
 
 
@@ -678,7 +678,7 @@ class _TableProcessor(_ProcessingMixin):
                 processed = {}
                 for level in levels:
                     level_desc = f"{table_type.replace('_', ' ').title()} → {level.title()}"
-                    progress.update(table_task, description=f"[white]{level_desc:<{DEFAULT_N}}")
+                    progress.update(table_task, description=_format_task_desc(level_desc))
                     try:
                         start_time = time.perf_counter()
                         processed[level] = collapse_taxa(base_table, level, progress, table_task)
@@ -837,7 +837,7 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_levels = tt_cfg.get("levels", list(levels.keys()))
             enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
             # Accumulate tasks: levels × metrics for this table
-            n += len(enabled_levels) * len(metrics)
+            n += len(enabled_levels) 
         
         if not n:
             return
@@ -1308,8 +1308,8 @@ class _AnalysisManager(_ProcessingMixin):
                                 use_permutation_importance = False if method == "select_k_best" else permutation_importance
                                     
                                 model_result = catboost_feature_selection(
-                                    metadata=meta_aligned,#y,
-                                    features=table_aligned,#X,
+                                    metadata=y,
+                                    features=X,
                                     output_dir=output_dir,
                                     group_col=group_col,
                                     method=method,
