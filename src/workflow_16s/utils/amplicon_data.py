@@ -992,7 +992,7 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
             enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
             # Accumulate tasks: levels × tests for this table
-            n += len(enabled_methods) * len(enabled_tests)
+            n += len(enabled_levels) * len(enabled_tests)
         
         if not n:
             return
@@ -1117,7 +1117,7 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_methods = tt_cfg.get("methods", default_table_type_methods[table_type])
             enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
             # Accumulate tasks: levels × methods for this table
-            n += len(enabled_methods) * len(enabled_methods)
+            n += len(enabled_levels) * len(enabled_methods)
         if not n:
             return
     
@@ -1247,7 +1247,7 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_methods = tt_cfg.get("methods", [])#default_table_type_methods[table_type])
             #enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
             # Accumulate tasks: levels × tests for this table
-            n += len(enabled_tests) * len(enabled_methods) 
+            n += len(enabled_levels) * len(enabled_methods) 
         if not n:
             return
 
