@@ -785,7 +785,6 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ordination()
         self._run_ml_feature_selection()
         self._compare_top_features()
-        del ml_tables
 
         if self.faprotax_enabled and self.top_contaminated_features:
             self._annotate_top_features()
