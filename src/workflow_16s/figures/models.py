@@ -774,7 +774,7 @@ def shap_heatmap(
         z=clustered_shap,
         x=clustered_feature_names,
         y=[f"Instance {sample_idx[i]}" for i in instance_order],
-        colorscale='RdBu',
+        colorscale='Viridis',
         zmid=0,
         hoverinfo="text",
         text=hover_text,
