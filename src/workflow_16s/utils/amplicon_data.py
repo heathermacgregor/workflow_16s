@@ -1039,7 +1039,7 @@ class _AnalysisManager(_ProcessingMixin):
                     table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
                     
                     for test in enabled_tests:
-                        test_desc = f"{level_desc} → {san_cfg[test]["name"]}"
+                        test_desc = f"{level_desc} → {san_cfg[test]['name']}"
                         progress.update(tt_task, description=_format_task_desc(test_desc))
                         try:
                             if debug_mode:
