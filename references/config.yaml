@@ -165,7 +165,7 @@ alpha_diversity:
     
 # Beta Diversity + Ordination
 ordination:
-  enabled: False
+  enabled: True
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
   tables:
