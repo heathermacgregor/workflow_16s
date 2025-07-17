@@ -65,11 +65,11 @@ DEFAULT_LEARNING_RATE_SHAP = 0.1
 DEFAULT_DEPTH_SHAP = 4
 
 DEFAULT_PARAM_GRID = {
-    'iterations': [500],#, 1000, 1500],
-    'learning_rate': [0.01],#, 0.05, 0.1],
-    'depth': [4],#, 6, 8],
-    'l2_leaf_reg': [1],#, 3, 5, 7],
-    'border_count': [32],#, 64, 128]
+    'iterations': [500, 1000, 1500],
+    'learning_rate': [0.01, 0.05, 0.1],
+    'depth': [4, 6, 8],
+    'l2_leaf_reg': [1, 3, 5, 7],
+    'border_count': [32, 64, 128]
 }
 DEFAULT_LOSS_FUNCTION = 'Logloss'
 DEFAULT_THREAD_COUNT = 4
