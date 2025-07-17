@@ -800,7 +800,6 @@ def shap_heatmap(
         title=dict(font=dict(size=24)),
         xaxis=dict(
             title=dict(font=dict(size=20)),
-            range=[x_min - x_padding, x_max + x_padding], 
             automargin=True,
             tickangle=-45, 
             tickfont=dict(size=16)
