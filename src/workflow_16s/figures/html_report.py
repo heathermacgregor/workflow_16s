@@ -417,8 +417,7 @@ def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
-    category: str,
-    shap_data: Dict[str, Dict[str, str]]
+    category: str
 ) -> pd.DataFrame:
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
@@ -441,37 +440,8 @@ def _prepare_features_table(
     df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
     df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
     
-    # Add SHAP columns
-    new_columns = [
-        "Mean |SHAP|", "Beeswarm Interpretation", "Spearman's ρ",
-        "Dependency plot interpretation Relationship", "Partner Feature",
-        "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
-    ]
-    
-    for col in new_columns:
-        df[col] = ""
-    
-    # Populate SHAP data
-    for idx, row in df.iterrows():
-        feature = row['Feature']
-        if feature in shap_data:
-            data = shap_data[feature]
-            df.at[idx, "Mean |SHAP|"] = data.get('mean_shap', '')
-            df.at[idx, "Beeswarm Interpretation"] = data.get('beeswarm_interpretation', '')
-            df.at[idx, "Spearman's ρ"] = data.get('spearman_rho', '')
-            df.at[idx, "Dependency plot interpretation Relationship"] = data.get('dependency_relationship', '')
-            df.at[idx, "Partner Feature"] = data.get('partner_feature', '')
-            df.at[idx, "Interaction Strength"] = data.get('interaction_strength', '')
-            df.at[idx, "Relationship"] = data.get('interaction_relationship', '')
-            df.at[idx, "ρ (Feature)"] = data.get('rho_feature', '')
-            df.at[idx, "ρ (Partner)"] = data.get('rho_partner', '')
-    
-    # Reorder columns
-    base_cols = ["Feature", "Taxonomic Level", "Test", "Effect Size", 
-                 "P-value", "Direction"]
-    if "Functions" in df.columns:
-        base_cols.append("Functions")
-    return df[base_cols + new_columns]
+    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
+               "P-value", "Direction", "Functions"]]
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
@@ -547,116 +517,38 @@ def _prepare_ml_summary(
     
     return metrics_df, features_df, shap_reports
 
-def _format_shap_report(report: str) -> str:
-    """Convert SHAP report to styled HTML tables matching the report's theme"""
-    sections = report.split("\n\n")
-    html_output = []
+def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
+    """Prepare comprehensive SHAP data table for ML section"""
+    rows = []
+    for (table_type, level, method), report in shap_reports.items():
+        shap_data = _parse_shap_report(report)
+        for feature, values in shap_data.items():
+            row = {
+                "Table Type": table_type,
+                "Level": level,
+                "Method": method,
+                "Feature": feature,
+                "Mean |SHAP|": values.get("mean_shap", ""),
+                "Beeswarm Interpretation": values.get("beeswarm_interpretation", ""),
+                "Spearman's ρ": values.get("spearman_rho", ""),
+                "Dependency plot interpretation Relationship": values.get("dependency_relationship", ""),
+                "Partner Feature": values.get("partner_feature", ""),
+                "Interaction Strength": values.get("interaction_strength", ""),
+                "Relationship": values.get("interaction_relationship", ""),
+                "ρ (Feature)": values.get("rho_feature", ""),
+                "ρ (Partner)": values.get("rho_partner", "")
+            }
+            rows.append(row)
     
-    for section in sections:
-        section = section.strip()
-        if not section:
-            continue
-            
-        # Extract section header
-        if section.startswith("**") and "**" in section[2:]:
-            header, content = section.split("**", 2)[1], section.split("**", 2)[2]
-            header = header.strip().rstrip(':')
-        else:
-            header = "Report"
-            content = section
-            
-        # Process different section types
-        if "Top" in header and "features by average impact" in header:
-            # Top features table
-            table_data = []
-            for line in content.split('\n'):
-                if '•' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        value = parts[2].split('=')[-1].strip().rstrip(')')
-                        table_data.append({"Feature": feature, "Mean |SHAP|": value})
-            
-            if table_data:
-                df = pd.DataFrame(table_data)
-                html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='dynamic-table'))
-                
-        elif "Beeswarm interpretation" in header:
-            # Beeswarm table
-            table_data = []
-            for line in content.split('\n'):
-                if '•' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        interpretation = parts[2].split(':', 1)[1].split('(')[0].strip()
-                        rho = line.split('ρ = ')[-1].rstrip(')')
-                        table_data.append({
-                            "Feature": feature, 
-                            "Interpretation": interpretation,
-                            "Spearman's ρ": rho
-                        })
-            
-            if table_data:
-                df = pd.DataFrame(table_data)
-                html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='dynamic-table'))
-                
-        elif "Dependency" in header and "interpretations" in header:
-            # Dependency plot table
-            table_data = []
-            for line in content.split('\n'):
-                if '•' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        relationship = line.split('shows a ')[1].split('(')[0].strip()
-                        rho = line.split('ρ = ')[-1].rstrip(')')
-                        table_data.append({
-                            "Feature": feature, 
-                            "Relationship": relationship,
-                            "Spearman's ρ": rho
-                        })
-            
-            if table_data:
-                df = pd.DataFrame(table_data)
-                html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='dynamic-table'))
-                
-        elif "Interaction summaries" in header:
-            # Interaction table
-            table_data = []
-            for line in content.split('\n'):
-                if '•' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 4:
-                        feature = parts[1]
-                        partner = parts[3]
-                        score = line.split('mean |interaction SHAP| = ')[1].split(')')[0]
-                        relationship = line.split('relationship: ')[1].split(' (ρ')[0]
-                        rho_feat = line.split('ρ_feat→SHAP = ')[1].split(',')[0]
-                        rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0]
-                        table_data.append({
-                            "Feature": feature,
-                            "Partner Feature": partner,
-                            "Interaction Strength": score,
-                            "Relationship": relationship,
-                            "ρ (Feature)": rho_feat,
-                            "ρ (Partner)": rho_partner
-                        })
-            
-            if table_data:
-                df = pd.DataFrame(table_data)
-                html_output.append(f'<h4>{header}</h4>')
-                html_output.append(df.to_html(index=False, classes='dynamic-table'))
-                
-        else:
-            # Default formatting for other sections
-            html_output.append(f'<h4>{header}</h4>')
-            html_output.append(f'<div class="shap-report-content">{content}</div>')
+    if not rows:
+        return pd.DataFrame(columns=[
+            "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
+            "Beeswarm Interpretation", "Spearman's ρ", 
+            "Dependency plot interpretation Relationship", "Partner Feature", 
+            "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
+        ])
     
-    return "\n".join(html_output)
+    return pd.DataFrame(rows)
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
@@ -699,26 +591,25 @@ def _format_ml_section(
     
     features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
     
-    # SHAP Reports section
+    # SHAP Analysis table
     shap_html = ""
     if shap_reports:
-        shap_html = "<h3>SHAP Interpretability Report</h3>"
-        for (table_type, level, method), report in shap_reports.items():
-            shap_html += f"""
-            <div class="shap-report-section">
-                <h4>{table_type} - {level} - {method}</h4>
-                <div class="shap-report-content">
-                    {_format_shap_report(report)}
-                </div>
-            </div>
+        shap_df = _prepare_shap_table(shap_reports)
+        if not shap_df.empty:
+            shap_html = """
+            <h3>SHAP Analysis</h3>
+            <div class="shap-analysis-table">
+                <p>Comprehensive SHAP analysis for top features across all models:</p>
             """
+            shap_html += _add_table_functionality(shap_df, 'shap-table')
+            shap_html += "</div>"
     
     return f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
         {enhanced_metrics}
         
-        <h3>Top Features</h3>
+        <h3>Top Features by Importance</h3>
         {features_html}
         
         {shap_html}
@@ -1009,26 +900,16 @@ def generate_html_report(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Get SHAP data
-    _, _, shap_reports = _prepare_ml_summary(
-        amplicon_data.models,
-        amplicon_data.top_contaminated_features,
-        amplicon_data.top_pristine_features
-    )
-    shap_data = _aggregate_shap_data(shap_reports) if shap_reports else {}
-    
-    # Create feature tables with SHAP data
+    # Top features tables (without SHAP data)
     contam_df = _prepare_features_table(
         amplicon_data.top_contaminated_features,
         max_features,
-        "Contaminated",
-        shap_data
+        "Contaminated"
     )
     pristine_df = _prepare_features_table(
         amplicon_data.top_pristine_features,
         max_features,
-        "Pristine",
-        shap_data
+        "Pristine"
     )
     
     # Stats summary
@@ -1036,7 +917,7 @@ def generate_html_report(
         amplicon_data.stats
     )
     
-    # ML summary
+    # ML summary (includes SHAP reports)
     ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
         amplicon_data.top_contaminated_features,
@@ -1144,26 +1025,16 @@ def generate_html_report(
     }
     """
     
-    # Add styling for SHAP report
+    # Add styling for SHAP analysis table
     shap_css = """
-        .shap-report-section {
-            margin-top: 30px;
-            padding: 20px;
-            background: #2a2a2a;  /* Lighter background */
-            border-radius: 8px;
-            border-left: 4px solid #3498db;
-        }
-        .shap-report-content {
-            margin-top: 15px;
-            padding: 15px;
-            background: #2a2a2a;  /* Same as section background */
-            border-radius: 5px;
-            font-family: inherit;  /* Use default font */
-            white-space: pre-wrap;
-            line-height: 1.6;
-            color: #e0e0e0;       /* Lighter text color */
-        }
-        """
+    .shap-analysis-table {
+        margin-top: 30px;
+        padding: 20px;
+        background: #2a2a2a;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+    }
+    """
     
     try:
         css_content = css_path.read_text(encoding='utf-8') + tooltip_css + shap_css
