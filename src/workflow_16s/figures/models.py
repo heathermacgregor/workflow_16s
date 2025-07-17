@@ -995,8 +995,7 @@ def shap_force_plot(
         width=1600,
         title=dict(font=dict(size=24)),
         xaxis=dict(
-            title=dict(font=dict(size=20)),
-            range=[x.min() - x_padding, x.max() + x_padding],
+            title=dict(font=dict(size=20))
         ),
         yaxis=dict(
             title=dict(font=dict(size=20)),
