@@ -1339,7 +1339,7 @@ def catboost_feature_selection(
             'shap_summary_beeswarm': shap_figs['beeswarm_fig'], 
             'shap_summary_heatmap': shap_figs['heatmap_fig'],
             'shap_summary_force': shap_figs['force_fig'],
-            'shap_summary_waterfall': shap_figs['waterfall_fig'],
+            #'shap_summary_waterfall': shap_figs['waterfall_fig'],
             'shap_dependency': shap_figs['dependency_figs']
         }
     }
