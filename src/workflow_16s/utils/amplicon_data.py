@@ -1219,7 +1219,7 @@ class _AnalysisManager(_ProcessingMixin):
             logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
             return table_type, level, method, None, None
 
-    def _run_ml_feature_selection(self, ml_tables: Dict) -> None:
+    def _run_ml_feature_selection(self) -> None:
         ml_cfg = self.cfg.get("ml", {})
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection disabled.")
