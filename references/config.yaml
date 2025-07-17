@@ -72,6 +72,13 @@ clean_fastq: True
 
 # Part II. Downstream
 # ===================
+
+group_column: "nuclear_contamination_status"
+group_column_values: 
+  - True
+  - False
+  
+# Feature Table Processing
 features:
   filter: True
   normalize: True
@@ -80,31 +87,59 @@ features:
 
 # Statistical Analyses
 stats:
-  raw:
-    ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True      # ✅ non-parametric alternative
-    kruskal_bonferroni: True
-  presence_absence:
-    fisher: True              # ✅ ideal for binary data
-    ttest: False              # ❌ designed for continuous data
-    mwu_bonferroni: False     # ❌ not designed for binary data
-    kruskal_bonferroni: False
-  filtered:
-    ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: True
-    kruskal_bonferroni: True
-  normalized:
-    ttest: True               # ✅ can be used after proper normalization
-    mwu_bonferroni: True      # ✅ still valuable for robustness
-    kruskal_bonferroni: True
-  clr_transformed:
-    ttest: True               # ✅ CLR addresses compositionality
-    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
-    kruskal_bonferroni: True
+  enabled: True
+  tables:
+    raw:
+      enabled: True
+      tests:
+        #- "fisher"
+        #- "ttest"                # ❌ compositionality violates assumptions
+        - "mwu_bonferroni"        # ✅ non-parametric alternative
+        - "kruskal_bonferroni"
+    presence_absence:
+      enabled: True
+      tests:
+        - "fisher"                # ✅ ideal for binary data
+        #- "ttest"                # ❌ designed for continuous data
+        #- "mwu_bonferroni"       # ❌ not designed for binary data
+        #- "kruskal_bonferroni"
+    filtered:
+      enabled: True
+      tests:
+        #- "fisher"
+        #- "ttest"                # ❌ compositionality violates assumptions
+        - "mwu_bonferroni"
+        - "kruskal_bonferroni"
+    normalized:
+      enabled: True
+      tests:
+        #- "fisher"
+        - "ttest"                 # ✅ can be used after proper normalization
+        - "mwu_bonferroni"        # ✅ still valuable for robustness
+        - "kruskal_bonferroni"
+    clr_transformed:
+      enabled: True
+      tests:
+        #- "fisher"
+        - "ttest"                 # ✅ CLR addresses compositionality
+        - "mwu_bonferroni"        # ✅ good alternative for non-normal distributions
+        - "kruskal_bonferroni"
 
 # Alpha Diversity
 alpha_diversity:
   enabled: True
+  tables: # Table type
+    raw:  
+      enabled: True
+      levels:  # Taxonomic levels
+        #- 'genus'
+        - 'family'
+        - 'class'
+    normalized:
+      enabled: True
+      levels: 
+        #- 'genus'
+        - 'family'
   metrics:  # Metrics to calculate
     - 'shannon'
     - 'observed_features'
@@ -117,59 +152,75 @@ alpha_diversity:
     - 'heip_evenness' 
     #- 'dominance'
   parametric: False  # Statistical test type
-  generate_plots: True  # Enable/disable plot generation
-  tables:
-    raw:  # Table type
-      enabled: True
-      levels:  # Taxonomic levels
-        #- 'genus'
-        - 'family'
-        - 'class'
-    normalized:
-      enabled: True
-      levels: 
-        #- 'genus'
-        - 'family'
-        
-  correlation_analysis: False #True
-  max_categories: 20       # Max unique values for categorical variables
-  min_group_size: 5        # Min samples per group for valid comparison
-  top_columns: 20          # Number of top associations to show
+  plots: 
+    enabled: True  # Enable/disable plot generation
+    add_points: True
+    add_stat_annot: True
+    effect_size_threshold: 0.5
+  correlation_analysis: 
+    enabled: False #True
+    max_categories: 20       # Max unique values for categorical variables
+    min_group_size: 5        # Min samples per group for valid comparison
+    top_n_correlations: 20          # Number of top associations to show
     
 # Beta Diversity + Ordination
 ordination:
-  max_workers: 2  # Max concurrent ordination tasks
+  enabled: False
+  max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
-  raw:
-    pca: False 
-    pcoa: True
-    pcoa_metric: "braycurtis"
-    tsne: False
-    umap: False
-  presence_absence:
-    pca: False
-    pcoa: True
-    pcoa_metric: "jaccard"
-    tsne: True
-    umap: True
-  filtered:
-    pca: False
-    pcoa: True
-    pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
-  normalized:
-    pca: True
-    pcoa: True
-    pcoa_metric: "braycurtis"
-    tsne: True
-    umap: True
-  clr_transformed:
-    pca: True
-    pcoa: True
-    pcoa_metric: "euclidean"
-    tsne: True
-    umap: True
+  tables:
+    raw:
+      enabled: True
+      pcoa_metric: "braycurtis"
+      methods:
+        #- "pca"
+        - "pcoa"
+        #- "tsne"
+        #- "umap"
+      levels:
+        #- 'genus'
+        - 'family'
+        - 'class'
+    filtered:
+      enabled: True
+      pcoa_metric: "braycurtis"
+      methods:
+        #- "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - 'phylum'
+    normalized:
+      enabled: True
+      pcoa_metric: "braycurtis"
+      methods:
+        - "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - 'phylum'
+    clr_transformed:
+      enabled: True
+      pcoa_metric: "euclidean"
+      methods:
+        - "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - 'phylum'
+    presence_absence:
+      enabled: True
+      pcoa_metric: "jaccard"
+      methods:
+        #- "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - 'phylum'
 
 # Functional Prediction
 faprotax: True
@@ -183,38 +234,90 @@ figures:
     - "env_feature"
     - "env_material"
     - "country"
-  alpha_diversity:
-    add_points: True
-    add_stat_annot: True
-    effect_size_threshold: 0.5
-    height: 600
-    width: 800
-    
+
+# Violin Plots of Top Important Features
 violin_plots: 
   enabled: True
   n: 50  # Number of features to plot per category
 
 # Machine Learning
-run_ml: True
 ml:
   enabled: True
-  table_types:
-    - 'clr_transformed'
-    - 'normalized'
-    - 'presence_absence'
-  levels:
-    - 'genus'
-    - 'family'
-    - 'order'
-    - 'class'
-    - 'phylum'
-  methods:
-    - 'rfe'
-    - 'select_k_best'
-    - 'chi_squared'
-    - 'lasso'
-    - 'shap'
+  tables:
+    raw:
+      enabled: False
+      levels:
+      #- 'genus'
+      #- 'family'
+      #- 'order'
+      #- 'class'
+      - 'phylum'
+    methods:
+      - 'rfe'
+      #- 'select_k_best'
+      #- 'chi_squared'
+      #- 'lasso'
+      #- 'shap'
+    filtered:
+      enabled: False
+      levels:
+      #- 'genus'
+      #- 'family'
+      #- 'order'
+      #- 'class'
+      - 'phylum'
+    methods:
+      - 'rfe'
+      #- 'select_k_best'
+      #- 'chi_squared'
+      #- 'lasso'
+      #- 'shap'
+    normalized:
+      enabled: True
+      levels:
+      #- 'genus'
+      #- 'family'
+      #- 'order'
+      #- 'class'
+      - 'phylum'
+    methods:
+      - 'rfe'
+      #- 'select_k_best'
+      #- 'chi_squared'
+      #- 'lasso'
+      #- 'shap'
+    clr_transformed:
+      enabled: True
+      levels:
+      #- 'genus'
+      #- 'family'
+      #- 'order'
+      #- 'class'
+      - 'phylum'
+    methods:
+      - 'rfe'
+      #- 'select_k_best'
+      #- 'chi_squared'
+      #- 'lasso'
+      #- 'shap'
+    presence_absence:
+      enabled: True
+      levels:
+      #- 'genus'
+      #- 'family'
+      #- 'order'
+      #- 'class'
+      - 'phylum'
+    methods:
+      - 'rfe'
+      #- 'select_k_best'
+      #- 'chi_squared'
+      #- 'lasso'
+      #- 'shap'
   num_features: 500
   step_size: 100
-  permutation_importance: True
+  permutation_importance: 
+    enabled: True
   n_threads: 16
+  plots:
+    enabled: True
