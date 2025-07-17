@@ -110,7 +110,6 @@ class _ProcessingMixin:
         processed: Dict[str, Table] = {}
 
         if getattr(self, "verbose", False):
-            logger.info(f"{process_name}")
             for level in levels:
                 start_time = time.perf_counter() 
                 processed[level] = process_func(get_source(level), level, *func_args)
@@ -325,6 +324,9 @@ class Ordination:
         kwargs
     ):
         try:
+            if debug_mode:
+                time.sleep(3)
+                return
             method_params = {}
             if cfg["key"] == "pcoa":
                 method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
@@ -538,7 +540,7 @@ class _DataLoader(_ProcessingMixin):
         metadata_paths = [paths["metadata"] 
                           for subset_id, paths in self.existing_subsets.items()]
         if self.verbose:
-            logger.info(f"Found {len(metadata_paths)} metadata files")
+            (f"Found {len(metadata_paths)} metadata files")
         return metadata_paths
 
     def _get_metadata_paths_glob(self) -> List[Path]:
