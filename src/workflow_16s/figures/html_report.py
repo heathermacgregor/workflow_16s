@@ -329,10 +329,96 @@ def _alpha_correlations_to_nested_html(
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data
     
+def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
+    """Parse SHAP report string into structured feature data"""
+    shap_data = {}
+    sections = report.split("\n\n")
+    
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+        
+        header, _, content = section.partition('\n')
+        header = header.strip().strip('*').strip()
+        
+        # Top features section
+        if "Top features by average impact" in header:
+            for line in content.split('\n'):
+                if '•' in line and '`' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        value = parts[2].split('=')[-1].strip().rstrip(')')
+                        if feature not in shap_data:
+                            shap_data[feature] = {}
+                        shap_data[feature]['mean_shap'] = value
+        
+        # Beeswarm interpretation
+        elif "Beeswarm interpretation" in header:
+            for line in content.split('\n'):
+                if '•' in line and '`' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        interpretation = parts[2].split(':', 1)[1].split('(')[0].strip()
+                        rho = line.split('ρ = ')[-1].rstrip(')') if 'ρ = ' in line else ''
+                        if feature not in shap_data:
+                            shap_data[feature] = {}
+                        shap_data[feature]['beeswarm_interpretation'] = interpretation
+                        shap_data[feature]['spearman_rho'] = rho
+        
+        # Dependency plot interpretations
+        elif "Dependency plot interpretations" in header:
+            for line in content.split('\n'):
+                if '•' in line and '`' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 2:
+                        feature = parts[1]
+                        relationship = line.split('shows a ')[1].split('(')[0].strip() if 'shows a ' in line else ''
+                        rho = line.split('ρ = ')[-1].rstrip(')') if 'ρ = ' in line else ''
+                        if feature not in shap_data:
+                            shap_data[feature] = {}
+                        shap_data[feature]['dependency_relationship'] = relationship
+                        shap_data[feature]['dependency_rho'] = rho
+        
+        # Interaction summaries
+        elif "Interaction summaries" in header:
+            for line in content.split('\n'):
+                if '•' in line and '`' in line:
+                    parts = line.split('`')
+                    if len(parts) >= 4:
+                        feature = parts[1]
+                        partner = parts[3]
+                        score = line.split('mean |interaction SHAP| = ')[1].split(')')[0] if 'mean |interaction SHAP| = ' in line else ''
+                        relationship = line.split('relationship: ')[1].split(' (ρ')[0] if 'relationship: ' in line else ''
+                        rho_feat = line.split('ρ_feat→SHAP = ')[1].split(',')[0] if 'ρ_feat→SHAP = ' in line else ''
+                        rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0] if 'ρ_partner→SHAP = ' in line else ''
+                        
+                        if feature not in shap_data:
+                            shap_data[feature] = {}
+                        shap_data[feature]['partner_feature'] = partner
+                        shap_data[feature]['interaction_strength'] = score
+                        shap_data[feature]['interaction_relationship'] = relationship
+                        shap_data[feature]['rho_feature'] = rho_feat
+                        shap_data[feature]['rho_partner'] = rho_partner
+    return shap_data
+
+def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
+    """Combine SHAP reports from different models into single feature dictionary"""
+    aggregated = {}
+    for report in shap_reports.values():
+        data = _parse_shap_report(report)
+        for feature, values in data.items():
+            if feature not in aggregated:
+                aggregated[feature] = values
+    return aggregated
+
 def _prepare_features_table(
     features: List[Dict], 
     max_features: int,
-    category: str
+    category: str,
+    shap_data: Dict[str, Dict[str, str]]
 ) -> pd.DataFrame:
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
@@ -355,8 +441,37 @@ def _prepare_features_table(
     df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
     df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
     
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
-               "P-value", "Direction", "Functions"]]
+    # Add SHAP columns
+    new_columns = [
+        "Mean |SHAP|", "Beeswarm Interpretation", "Spearman's ρ",
+        "Dependency plot interpretation Relationship", "Partner Feature",
+        "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
+    ]
+    
+    for col in new_columns:
+        df[col] = ""
+    
+    # Populate SHAP data
+    for idx, row in df.iterrows():
+        feature = row['Feature']
+        if feature in shap_data:
+            data = shap_data[feature]
+            df.at[idx, "Mean |SHAP|"] = data.get('mean_shap', '')
+            df.at[idx, "Beeswarm Interpretation"] = data.get('beeswarm_interpretation', '')
+            df.at[idx, "Spearman's ρ"] = data.get('spearman_rho', '')
+            df.at[idx, "Dependency plot interpretation Relationship"] = data.get('dependency_relationship', '')
+            df.at[idx, "Partner Feature"] = data.get('partner_feature', '')
+            df.at[idx, "Interaction Strength"] = data.get('interaction_strength', '')
+            df.at[idx, "Relationship"] = data.get('interaction_relationship', '')
+            df.at[idx, "ρ (Feature)"] = data.get('rho_feature', '')
+            df.at[idx, "ρ (Partner)"] = data.get('rho_partner', '')
+    
+    # Reorder columns
+    base_cols = ["Feature", "Taxonomic Level", "Test", "Effect Size", 
+                 "P-value", "Direction"]
+    if "Functions" in df.columns:
+        base_cols.append("Functions")
+    return df[base_cols + new_columns]
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
@@ -894,16 +1009,26 @@ def generate_html_report(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Top features tables
+    # Get SHAP data
+    _, _, shap_reports = _prepare_ml_summary(
+        amplicon_data.models,
+        amplicon_data.top_contaminated_features,
+        amplicon_data.top_pristine_features
+    )
+    shap_data = _aggregate_shap_data(shap_reports) if shap_reports else {}
+    
+    # Create feature tables with SHAP data
     contam_df = _prepare_features_table(
         amplicon_data.top_contaminated_features,
         max_features,
-        "Contaminated"
+        "Contaminated",
+        shap_data
     )
     pristine_df = _prepare_features_table(
         amplicon_data.top_pristine_features,
         max_features,
-        "Pristine"
+        "Pristine",
+        shap_data
     )
     
     # Stats summary
