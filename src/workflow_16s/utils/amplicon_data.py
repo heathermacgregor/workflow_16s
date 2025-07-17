@@ -781,12 +781,7 @@ class _AnalysisManager(_ProcessingMixin):
         del stats_copy
 
         self._run_ordination()
-
-        ml_table_types = {"presence_absence", "normalized", "clr_transformed"}
-        ml_tables = {
-            t: d for t, d in self.tables.items() if t in ml_table_types
-        }
-        self._run_ml_feature_selection(ml_tables)
+        self._run_ml_feature_selection()
         self._compare_top_features()
         del ml_tables
 
@@ -1238,13 +1233,15 @@ class _AnalysisManager(_ProcessingMixin):
         n = 0
         table_cfg = ml_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
+            print(table_type)
             tt_cfg = table_cfg.get(table_type, {})
             if not tt_cfg.get('enabled', False):
                 continue
             enabled_levels = tt_cfg.get("levels", list(levels.keys()))
             enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
-
+            print(enabled_levels)
             enabled_methods = tt_cfg.get("methods", [])#default_table_type_methods[table_type])
+            print(enabled_methods)
             #enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
             # Accumulate tasks: levels × tests for this table
             n += len(enabled_levels) * len(enabled_methods) 
