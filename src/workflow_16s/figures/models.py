@@ -38,14 +38,38 @@ logger = logging.getLogger('workflow_16s')
 sns.set_style('whitegrid')  # Set seaborn style globally
 warnings.filterwarnings("ignore") # Suppress warnings
 
+DEFAULT_HEIGHT = 1100
+DEFAULT_WIDTH_SQUARE = 1200
+DEFAULT_WIDTH_RECTANGLE = 1600
+DEFAULT_TITLE_FONT_SIZE = 24
+DEFAULT_AXIS_TITLE_FONT_SIZE = 20
+DEFAULT_TICKS_LABEL_FONT_SIZE = 16
+
 # ==================================== FUNCTIONS ===================================== #
 
+def update_font_sizes(fig):
+    fig.update_layout(
+        title=dict(font=dict(size=DEFAULT_TITLE_FONT_SIZE)),
+        xaxis=dict(
+            title=dict(font=dict(size=DEFAULT_AXIS_TITLE_FONT_SIZE)),
+            tickfont=dict(size=DEFAULT_TICKS_LABEL_FONT_SIZE), 
+        ),
+        yaxis=dict(
+            title=dict(font=dict(size=DEFAULT_AXIS_TITLE_FONT_SIZE)),
+            tickfont=dict(size=DEFAULT_TICKS_LABEL_FONT_SIZE), 
+        )
+    )    
+    return fig
+    
+    
 def plot_confusion_matrix(
     cm_flipped: np.ndarray,
     output_path: Union[str, Path],
     class_names: List[str] = ['Positive', 'Negative'],
     show: bool = False,
-    verbose: bool = True
+    verbose: bool = True,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_SQUARE
 ) -> Any:
     """
     Create an interactive confusion matrix plot using Plotly.
@@ -106,17 +130,22 @@ def plot_confusion_matrix(
         x0=0, y0=0, x1=1, y1=1,
         line=dict(color="black", width=2)
     )
-    fig = _apply_common_layout(fig, 'Predicted Label', 'Actual Label', '<b>Confusion Matrix</b>') 
+    fig = _apply_common_layout(
+        fig, 
+        'Predicted Label', 'Actual Label', 
+        '<b>Confusion Matrix</b>'
+    ) 
     # Update font sizes
+    fig = update_font_sizes(fig)
     fig.update_layout(
         autosize=True,
-        height=1100,
-        width=1200,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20)), side='bottom'),
-        yaxis=dict(title=dict(font=dict(size=20)))
+        height=height, width=width,
+        xaxis=dict(side='bottom')
     )    
-    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    plotly_show_and_save(
+        fig, show, output_path, 
+        ['png', 'html'], verbose
+    )
     return fig
 
         
@@ -126,7 +155,9 @@ def plot_roc_curve(
     roc_auc, 
     output_path: Union[str, Path],
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_SQUARE
 ) -> go.Figure:
     """
     Plot ROC curve using Plotly.
@@ -160,21 +191,27 @@ def plot_roc_curve(
     ))
     
     # Update layout
+    fig = update_font_sizes(fig)
     fig.update_layout(
         autosize=True,
-        height=1100,
-        width=1000,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
-        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        height=height,
+        width=width,
+        xaxis=dict(range=[-0.05, 1.05]),
+        yaxis=dict(range=[-0.05, 1.05]),
+        legend=dict(
+            yanchor="top", y=0.99, 
+            xanchor="left", x=0.01
+        ),
     )
     fig = _apply_common_layout(
         fig, 
         'False Positive Rate', 'True Positive Rate', 
         'Receiver Operating Characteristic'
     ) 
-    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    plotly_show_and_save(
+        fig, show, output_path, 
+        ['png', 'html'], verbose
+    )
     return fig
     
 
@@ -184,7 +221,9 @@ def plot_precision_recall_curve(
     average_precision, 
     output_path: Union[str, Path],
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_SQUARE
 ) -> go.Figure:
     """
     Plot Precision-Recall curve using Plotly.
@@ -210,17 +249,25 @@ def plot_precision_recall_curve(
     ))
     
     # Update layout
+    fig = update_font_sizes(fig)
     fig.update_layout(
         autosize=True,
-        height=1100,
-        width=1000,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
-        yaxis=dict(range=[-0.05, 1.05], title=dict(font=dict(size=20))),
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+        height=height, width=width,
+        xaxis=dict(range=[-0.05, 1.05]),
+        yaxis=dict(range=[-0.05, 1.05]),
+        legend=dict(
+            yanchor="top", y=0.99, 
+            xanchor="left", x=0.01
+        )
     )
-    fig = _apply_common_layout(fig, 'Recall', 'Precision', 'Precision-Recall Curve')
-    plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
+    fig = _apply_common_layout(
+        fig, 'Recall', 'Precision', 
+        'Precision-Recall Curve'
+    )
+    plotly_show_and_save(
+        fig, show, output_path, 
+        ['png', 'html'], verbose
+    )
     return fig
 
 
@@ -304,7 +351,9 @@ def generate_unique_simplified_labels(feature_names: List[str]) -> List[str]:
 def shap_summary_bar(
     shap_values: np.array,
     feature_names: List[str],
-    max_display: int = 20
+    max_display: int = 20,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> Tuple[go.Figure, List[str]]:
     """
     Convert SHAP summary bar plot to a Plotly figure.
@@ -338,7 +387,8 @@ def shap_summary_bar(
         hovertext=top_features_full,
         hoverinfo='text+x'
     ))
-
+    
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig, 
         'Mean |SHAP Value|', 'Features', 
@@ -346,21 +396,17 @@ def shap_summary_bar(
     )
 
     # Layout adjustments
+    fig = update_font_sizes(fig)
     fig.update_layout(
         autosize=True,
         showlegend=False,
-        height=1100,
-        width=1600,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(title=dict(font=dict(size=20))),
+        height=height, width=width,
         yaxis=dict(
-            title=dict(font=dict(size=20), standoff=100), # Distance between title and ticks
+            title=dict(standoff=100), # Distance between title and ticks
             automargin=True,
-            tickfont=dict(size=16), 
             showticklabels=True
         )
     )
-
     return fig, top_features_full 
     
 
@@ -368,7 +414,9 @@ def shap_beeswarm(
     shap_values: np.array, 
     feature_values: np.array, 
     feature_names: List, 
-    max_display: int = 20
+    max_display: int = 20,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> go.Figure:
     """
     Convert SHAP beeswarm plot to a Plotly figure with simplified red-blue color scheme.
@@ -450,33 +498,30 @@ def shap_beeswarm(
     x_min = min(np.min(all_shap_vals), 0)
     x_max = max(np.max(all_shap_vals), 0)
     x_padding = 0.05 * (x_max - x_min)
-
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig, 
         'SHAP Value', 
         'Features', 
         'SHAP Beeswarm Plot'
     )
-    
     # Update layout with dynamic axis scaling
     fig.update_layout(
         autosize=True,
         hovermode='closest',
-        height=1100,
-        width=1600,
-        title=dict(font=dict(size=24)),
+        height=height, width=width,
         xaxis=dict(
-            title=dict(font=dict(size=20)),
-            range=[x_min - x_padding, x_max + x_padding], 
+            range=[x_min - x_padding, 
+                   x_max + x_padding], 
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20), standoff=100),
+            title=dict(standoff=100),
             automargin=True,
-            tickfont=dict(size=16),
             showticklabels=True,
             tickvals=list(range(len(top_features_full))),
             ticktext=simplified_labels,
-            range=[-0.5, len(top_features_full) - 0.5]
+            range=[-0.5, 
+                   len(top_features_full) - 0.5]
         )
     )
     return fig
@@ -488,7 +533,9 @@ def shap_dependency_plot(
     feature_names: List[str], 
     feature: str, 
     max_points: int = 1000,
-    interaction_feature: Optional[Union[str, None]] = None
+    interaction_feature: Optional[Union[str, None]] = None,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> go.Figure:
     """
     Create a SHAP dependency plot for a single feature with optional interaction coloring.
@@ -677,7 +724,7 @@ def shap_dependency_plot(
     
     # Update layout with dynamic axis scaling
     title_suffix = " with interaction" if auto_interaction else ""    
-
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig, 
         f'Feature Value: {feature_display}', 
@@ -687,20 +734,20 @@ def shap_dependency_plot(
     
     fig.update_layout(
         autosize=True,
-        height=1100,
-        width=1600,
-        title=dict(font=dict(size=24)),
+        height=height, width=width,
         xaxis=dict(
-            title=dict(font=dict(size=20)),
-            range=[x.min() - x_padding, x.max() + x_padding],
+            showgrid=False,
+            mirror=True,
+            range=[x.min() - x_padding, 
+                   x.max() + x_padding],
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20)),
-            range=[y.min() - y_padding, y.max() + y_padding]
+            showgrid=False,
+            mirror=True,
+            range=[y.min() - y_padding, 
+                   y.max() + y_padding]
         )
     )
-    fig.update_xaxes(showgrid=False, mirror=True)
-    fig.update_yaxes(showgrid=False, mirror=True)
     return fig
     
 
@@ -709,7 +756,9 @@ def shap_heatmap(
     feature_values: np.array,
     feature_names: List[str],
     max_display: int = 20,
-    max_samples: int = 1000
+    max_samples: int = 1000,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> go.Figure:
     """
     Create a SHAP heatmap showing SHAP values across instances and features.
@@ -784,6 +833,7 @@ def shap_heatmap(
     ))
 
     # Apply layout adjustments
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig, 
         "Features (clustered by similarity)", 
@@ -795,23 +845,17 @@ def shap_heatmap(
     fig.update_layout(
         autosize=True,
         hovermode='closest',
-        height=1100,
-        width=1600,
-        title=dict(font=dict(size=24)),
+        height=height, width=width,
         xaxis=dict(
-            title=dict(font=dict(size=20)),
             automargin=True,
             tickangle=-45, 
-            tickfont=dict(size=16)
         ),
         yaxis=dict(
-            title=dict(font=dict(size=20), standoff=100),
+            title=dict(standoff=100),
             automargin=True,
-            tickfont=dict(size=16),
             showticklabels=False
         )
     )
-    
     return fig
 
 
@@ -821,7 +865,9 @@ def shap_force_plot(
     feature_values: np.array,
     feature_names: List[str],
     instance_index: int = 0,
-    max_display: int = 12
+    max_display: int = 12,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> go.Figure:
     """
     Create a waterfall-style force plot showing feature contributions for a single instance.
@@ -952,7 +998,7 @@ def shap_force_plot(
         barmode='stack',
         showlegend=False,
         hovermode='closest',
-        height=600 + 40 * len(y_labels),  # Dynamic height based on features
+        height=50 * len(y_labels),  # Dynamic height based on features
         yaxis=dict(
             categoryorder='array',
             categoryarray=list(reversed(y_labels))
@@ -983,24 +1029,18 @@ def shap_force_plot(
             font=dict(size=12),
             xshift=10 if val >= base_value else -10
         )
+        
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig, 
         'Model Output Value', 
         None, 
         f"SHAP Force Plot - Instance {instance_index}"
     )
-    
     fig.update_layout(
         autosize=True,
-        width=1600,
-        title=dict(font=dict(size=24)),
-        xaxis=dict(
-            title=dict(font=dict(size=20))
-        ),
-        yaxis=dict(
-            title=dict(font=dict(size=20)),
-            automargin=True,
-        )
+        width=width,
+        yaxis=dict(automargin=True)
     )
     return fig
 
@@ -1012,7 +1052,9 @@ def shap_waterfall_plot(
     feature_values: np.array,
     feature_names: List[str],
     instance_index: int = 0,
-    max_display: int = 10
+    max_display: int = 10,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> go.Figure:
     """
     Create a waterfall plot showing cumulative feature contributions.
@@ -1116,6 +1158,7 @@ def shap_waterfall_plot(
     ))
     
     # Apply common layout
+    fig = update_font_sizes(fig)
     fig = _apply_common_layout(
         fig,
         "Features",
@@ -1125,14 +1168,10 @@ def shap_waterfall_plot(
     
     # Custom layout adjustments
     fig.update_layout(
-        height=1100,
-        title=dict(font=dict(size=24)),
+        height=height,
         showlegend=False,
-        waterfallgap=0.3,
-        xaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16)),
-        yaxis=dict(title=dict(font=dict(size=20)), tickfont=dict(size=16))
+        waterfallgap=0.3
     )
-    
     return fig
     
 
@@ -1145,7 +1184,9 @@ def plot_shap(
     output_dir: Union[str, Path] = None,
     interaction_feature: Optional[Union[str, None]] = 'auto',
     show: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH_RECTANGLE
 ) -> dict:
     """
     Generate both SHAP bar plot, beeswarm plot, and dependency plots as Plotly figures.
