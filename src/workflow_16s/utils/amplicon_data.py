@@ -680,10 +680,8 @@ class _TableProcessor(_ProcessingMixin):
                     try:
                         start_time = time.perf_counter()
                         processed[level] = collapse_taxa(base_table, level, progress, table_task)
-                        print(processed[level].shape)
                         duration = time.perf_counter() - start_time
-                        if self.verbose:
-                            logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
+                        logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
                     except Exception as e:
                         logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
                         processed[level] = None
@@ -843,7 +841,7 @@ class _AnalysisManager(_ProcessingMixin):
             enabled_levels = tt_cfg.get("levels", list(levels.keys()))
             enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
             # Accumulate tasks: levels × metrics for this table
-            n += len(enabled_methods) * len(metrics)
+            n += len(enabled_levels) * len(metrics)
         
         if not n:
             return
@@ -1515,7 +1513,7 @@ class AmpliconData:
         self.alpha_diversity: Dict[str, Any] = {}
         self.top_contaminated_features: List[Dict] = []
         self.top_pristine_features: List[Dict] = []
-        
+        logger.info("Running amplicon data analysis pipeline...")
         self._execute_pipeline()
 
     def _execute_pipeline(self):
