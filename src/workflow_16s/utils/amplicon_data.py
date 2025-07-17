@@ -783,7 +783,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         self._run_ordination()
 
-        ml_table_types = {"clr_transformed"}
+        ml_table_types = {"presence_absence", "normalized", "clr_transformed"}
         ml_tables = {
             t: d for t, d in self.tables.items() if t in ml_table_types
         }
