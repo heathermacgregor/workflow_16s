@@ -82,8 +82,8 @@ features:
 stats:
   raw:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: False #True      # ✅ non-parametric alternative
-    kruskal_bonferroni: False #True
+    mwu_bonferroni: True      # ✅ non-parametric alternative
+    kruskal_bonferroni: True
   presence_absence:
     fisher: True              # ✅ ideal for binary data
     ttest: False              # ❌ designed for continuous data
@@ -91,30 +91,30 @@ stats:
     kruskal_bonferroni: False
   filtered:
     ttest: False              # ❌ compositionality violates assumptions
-    mwu_bonferroni: False #True
-    kruskal_bonferroni: False #True
+    mwu_bonferroni: True
+    kruskal_bonferroni: True
   normalized:
-    ttest: False #True               # ✅ can be used after proper normalization
-    mwu_bonferroni: False #True      # ✅ still valuable for robustness
-    kruskal_bonferroni: False #True
+    ttest: True               # ✅ can be used after proper normalization
+    mwu_bonferroni: True      # ✅ still valuable for robustness
+    kruskal_bonferroni: True
   clr_transformed:
-    ttest: False #True               # ✅ CLR addresses compositionality
-    mwu_bonferroni: False #True      # ✅ good alternative for non-normal distributions
-    kruskal_bonferroni: False #True
+    ttest: True               # ✅ CLR addresses compositionality
+    mwu_bonferroni: True      # ✅ good alternative for non-normal distributions
+    kruskal_bonferroni: True
 
 # Alpha Diversity
 alpha_diversity:
-  enabled: False #True
+  enabled: True
   metrics:  # Metrics to calculate
     - 'shannon'
     - 'observed_features'
-    #- 'simpson'
-    #- 'pielou_evenness'
+    - 'simpson'
+    - 'pielou_evenness'
     #- 'chao1'
     #- 'ace'
     #- 'gini_index'
     #- 'goods_coverage'
-    #- 'heip_evenness' 
+    - 'heip_evenness' 
     #- 'dominance'
   parametric: False  # Statistical test type
   generate_plots: True  # Enable/disable plot generation
@@ -142,41 +142,41 @@ ordination:
   cpu_limit: 16    # CPU cores per ordination method
   raw:
     pca: False 
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
     tsne: False
     umap: False
   presence_absence:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "jaccard"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   filtered:
     pca: False
-    pcoa: False #True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   normalized:
-    pca: False #True
-    pcoa: False #True
+    pca: True
+    pcoa: True
     pcoa_metric: "braycurtis"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
   clr_transformed:
-    pca: False #True
-    pcoa: False #True
+    pca: True
+    pcoa: True
     pcoa_metric: "euclidean"
-    tsne: False #True
-    umap: False #True
+    tsne: True
+    umap: True
 
 # Functional Prediction
 faprotax: True
 
 # Figures
 figures:
-  map: False #True
+  map: True
   color_columns: 
     - "dataset_name"
     - "nuclear_contamination_status"
@@ -191,7 +191,7 @@ figures:
     width: 800
     
 violin_plots: 
-  enabled: False #True
+  enabled: True
   n: 50  # Number of features to plot per category
 
 # Machine Learning
@@ -201,6 +201,7 @@ ml:
   table_types:
     - 'clr_transformed'
     - 'normalized'
+    - 'presence_absence'
   levels:
     - 'genus'
     - 'family'
