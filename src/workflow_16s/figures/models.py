@@ -699,12 +699,8 @@ def shap_dependency_plot(
             range=[y.min() - y_padding, y.max() + y_padding]
         )
     )
-    fig.update_xaxes(
-      showgrid=False, mirror=True
-    )
-    fig.update_yaxes(
-      showgrid=False, mirror=True
-    )
+    fig.update_xaxes(showgrid=False, mirror=True)
+    fig.update_yaxes(showgrid=False, mirror=True)
     return fig
     
 
@@ -788,16 +784,33 @@ def shap_heatmap(
     ))
 
     # Apply layout adjustments
+    fig = _apply_common_layout(
+        fig, 
+        "Features (clustered by similarity)", 
+        "Instances (clustered by similarity)", 
+        "SHAP Feature Importance"
+    )
+    
+    # Update layout with dynamic axis scaling
     fig.update_layout(
-        title="SHAP Feature Importance",
-        title_font_size=24,
-        xaxis_title="Features (clustered by similarity)",
-        yaxis_title="Instances (clustered by similarity)",
-        height=700,
-        width=900,
-        margin=dict(t=60, b=100, l=100, r=50),
-        xaxis=dict(tickangle=-45, tickfont=dict(size=16)),
-        yaxis=dict(showticklabels=False)
+        autosize=True,
+        hovermode='closest',
+        height=1100,
+        width=1600,
+        title=dict(font=dict(size=24)),
+        xaxis=dict(
+            title=dict(font=dict(size=20)),
+            range=[x_min - x_padding, x_max + x_padding], 
+            automargin=True,
+            tickangle=-45, 
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title=dict(font=dict(size=20), standoff=100),
+            automargin=True,
+            tickfont=dict(size=16),
+            showticklabels=False
+        )
     )
     
     return fig
@@ -937,22 +950,14 @@ def shap_force_plot(
     
     # Custom layout adjustments
     fig.update_layout(
-        title=dict(
-            text=f"SHAP Force Plot - Instance {instance_index}",
-            font=dict(size=24)),
         barmode='stack',
         showlegend=False,
         hovermode='closest',
         height=600 + 40 * len(y_labels),  # Dynamic height based on features
-        width=900,
-        xaxis=dict(
-            title=dict(text='Model Output Value', font=dict(size=20))),
         yaxis=dict(
-            title=None,
             categoryorder='array',
-            categoryarray=list(reversed(y_labels))),
-        margin=dict(l=150, r=50, t=80, b=80),
-        plot_bgcolor='white',
+            categoryarray=list(reversed(y_labels))
+        ),
         shapes=[
             # Base value line
             dict(
@@ -961,7 +966,7 @@ def shap_force_plot(
                 x1=base_value,
                 y0=-1,
                 y1=len(y_labels),
-                line=dict(color='#999999', width=1, dash='dot'))
+                line=dict(color='#999999', width=2, dash='dot'))
         ]
     )
     
@@ -979,7 +984,26 @@ def shap_force_plot(
             font=dict(size=12),
             xshift=10 if val >= base_value else -10
         )
+    fig = _apply_common_layout(
+        fig, 
+        'Model Output Value', 
+        None, 
+        f"SHAP Force Plot - Instance {instance_index}"
+    )
     
+    fig.update_layout(
+        autosize=True,
+        width=1600,
+        title=dict(font=dict(size=24)),
+        xaxis=dict(
+            title=dict(font=dict(size=20)),
+            range=[x.min() - x_padding, x.max() + x_padding],
+        ),
+        yaxis=dict(
+            title=dict(font=dict(size=20)),
+            automargin=True,
+        )
+    )
     return fig
 
 
