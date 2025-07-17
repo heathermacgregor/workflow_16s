@@ -74,7 +74,7 @@ DEFAULT_ALPHA_METRICS = [
     'dominance'       
 ]
 PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
-
+debug_mode = True
 # ===================================== CLASSES ====================================== #
 
 def _format_task_desc(desc: str):
@@ -212,7 +212,7 @@ class StatisticalAnalyzer:
                 continue
             cfg = self.TEST_CONFIG[test_name]
             if self.verbose:
-                logger.info(f"Running {cfg['name']}...")
+                logger.debug(f"Running {cfg['name']}...")
             results[cfg["key"]] = cfg["func"](table, metadata, group_column, 
                                               group_column_values)
         return results
@@ -321,13 +321,14 @@ class Ordination:
         return results, figures
 
     def _run_ordination_method(
-        self, cfg, table, metadata, symbol_col, transformation, trans_cfg, 
+        self, cfg, table, metadata, symbol_col, transformation, trans_cfg,
         kwargs
     ):
         try:
             method_params = {}
             if cfg["key"] == "pcoa":
                 method_params["metric"] = trans_cfg.get("pcoa_metric", "braycurtis")
+                logger.info(method_params["metric"])
             
             # Handle UMAP/TSNE thread safety
             if cfg["key"] in ["tsne", "umap"]:
@@ -829,17 +830,20 @@ class _AnalysisManager(_ProcessingMixin):
             return
         
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        
         metrics = alpha_cfg.get("metrics", DEFAULT_ALPHA_METRICS)
         parametric = alpha_cfg.get("parametric", False)
-        generate_plots = alpha_cfg.get("generate_plots", True)
         
         n = 0
-        enabled_table_types = alpha_cfg.get("tables", {})
+        table_cfg = alpha_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
-            if not enabled_table_types.get(table_type, False):
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
                 continue
-            enabled_levels = enabled_table_types[table_type].get("levels", list(levels.keys()))
-            n += len(enabled_levels)
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+            # Accumulate tasks: levels × metrics for this table
+            n += len(enabled_methods) * len(metrics)
         
         if not n:
             return
@@ -847,66 +851,78 @@ class _AnalysisManager(_ProcessingMixin):
         with get_progress_bar() as progress:
             alpha_desc = f"Running alpha diversity for '{group_col}'"
             alpha_task = progress.add_task(_format_task_desc(alpha_desc), total=n)
+            
             for table_type, levels in self.tables.items():
-                if not enabled_table_types.get(table_type, False):
+                tt_cfg = table_cfg.get(table_type, {})
+                if not tt_cfg.get('enabled', False):
                     continue
-
-                table_cfg = enabled_table_types[table_type]
-                enabled_levels = table_cfg.get("levels", list(levels.keys()))
+                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
                 
-                table_desc = f"{table_type.replace('_', ' ').title()}"
-                table_task = progress.add_task(
-                    _format_task_desc(table_desc),
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
                     parent=alpha_task,
-                    total=len(enabled_levels))
+                    total=len(enabled_levels)
+                )
+                
                 for level in enabled_levels:
-                    if level not in levels:
-                        logger.warning(f"Level '{level}' not found for table type '{table_type}'")
-                        continue
-                    
-                    level_desc = f"{table_desc} ({level.title()})"
-                    progress.update(table_task, description=_format_task_desc(level_desc))
-                    
+                    level_desc = f"{tt_desc} ({level.title()})"
+                    progress.update(tt_task, description=_format_task_desc(level_desc))
+
+                    _init_dict_level(self.alpha_diversity, table_type, level) 
+                    data_storage = self.alpha_diversity[table_type][level]
                     try: 
-                        alpha_df = alpha_diversity(table_to_df(levels[level]), metrics=metrics)
+                        if debug_mode:
+                            time.sleep(3)
+                            return
+                        table = self.tables[table_type][level]
+                        table_df = table_to_df(table)
+                        
+                        alpha_df = alpha_diversity(
+                            table_df, metrics=metrics
+                        )
+                        
                         stats_df = analyze_alpha_diversity(
                             alpha_diversity_df=alpha_df,
                             metadata=self.meta,
                             group_column=group_col,
                             parametric=parametric
                         )
+                        
                         # Save results
                         output_dir = self.output_dir / 'alpha_diversity' / table_type / level
                         output_dir.mkdir(parents=True, exist_ok=True)
                         alpha_df.to_csv(output_dir / 'alpha_diversity.tsv', sep='\t', index=True)
                         stats_df.to_csv(output_dir / f'stats_{group_col}.tsv', sep='\t', index=True)
                         
-                        _init_dict_level(self.alpha_diversity, table_type, level)  
-                        self.alpha_diversity[table_type][level]['results'] = alpha_df
-                        self.alpha_diversity[table_type][level]['stats'] = stats_df
-                        
-                        if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                        data_storage['results'] = alpha_df
+                        data_storage['stats'] = stats_df
+
+                        corr_cfg = alpha_cfg.get("correlation_analysis", {})
+                        if corr_cfg.get("enabled", False):
                             corr_results = analyze_alpha_correlations(
                                 alpha_df,
                                 self.meta,
-                                max_categories=self.cfg["alpha_diversity"].get("max_categories", 20),
-                                min_samples=self.cfg["alpha_diversity"].get("min_group_size", 5)
+                                max_categories=corr_cfg.get("max_categories", 20),
+                                min_samples=corr_cfg.get("min_group_size", 5)
                             )
                             # Save results
                             pd.DataFrame.from_dict([corr_results], orient='index').to_csv(
                                 output_dir / f'correlations_{group_col}.tsv', 
                                 sep='\t', index=True
                             )
-                            self.alpha_diversity[table_type][level]['correlations'] = corr_results
-                        
-                        if generate_plots:
-                            self.alpha_diversity[table_type][level]['figures'] = {}
-                            plot_cfg = alpha_cfg.get("plot", {})
+                            data_storage['correlations'] = corr_results
+
+                        plot_cfg = alpha_cfg.get("plots", {})
+                        if plot_cfg.get("enabled", True):
+                            data_storage['figures'] = {}
+                            fig_storage = data_storage['figures']
+                            
                             for metric in metrics:
                                 if alpha_df[metric].isnull().all():
                                     logger.error(f"All values NaN for metric {metric} in {table_type}/{level}")
                                     
-                                #metric_stats = stats_df[stats_df['metric'] == metric].iloc[0]
                                 fig = create_alpha_diversity_boxplot(
                                     alpha_df=alpha_df,
                                     metadata=self.meta,
@@ -919,7 +935,7 @@ class _AnalysisManager(_ProcessingMixin):
                                     add_stat_annot=plot_cfg.get("add_stat_annot", True),
                                     test_type="parametric" if parametric else "nonparametric"
                                 )
-                                self.alpha_diversity[table_type][level]['figures'][metric] = fig
+                                fig_storage[metric] = fig
                             
                             stats_fig = create_alpha_diversity_stats_plot(
                                 stats_df=stats_df,
@@ -927,96 +943,139 @@ class _AnalysisManager(_ProcessingMixin):
                                 verbose=self.verbose,
                                 effect_size_threshold=plot_cfg.get("effect_size_threshold", 0.5)
                             )
-                            self.alpha_diversity[table_type][level]['figures']['summary'] = stats_fig
+                            fig_storage['summary'] = stats_fig
                             
-                            if self.cfg["alpha_diversity"].get("correlation_analysis", True):
+                            if corr_cfg.get("enabled", False):
                                 corr_figures = plot_alpha_correlations(
                                     corr_results,
                                     output_dir=output_dir,
-                                    top_n=self.cfg["alpha_diversity"].get("top_n_correlations", 10)
+                                    top_n=corr_cfg.get("top_n_correlations", 10)
                                 )
-                                self.alpha_diversity[table_type][level]['figures']['correlations'] = corr_figures
+                                fig_storage['correlations'] = corr_figures
                             
                     except Exception as e:
                         logger.error(f"Alpha diversity analysis failed for {table_type}/{level}: {e}")
-                        self.alpha_diversity[table_type][level] = {'results': None, 'stats': None, 'figures': {}}
+                        data_storage = {'results': None, 'stats': None, 'figures': {}}
                         
                     finally:
-                        progress.update(table_task, advance=1)
+                        progress.update(tt_task, advance=1)
                         progress.update(alpha_task, advance=1)
-                progress.remove_task(table_task)
+                progress.remove_task(tt_task)
             
     def _run_statistical_tests(self) -> None:
+        stats_cfg = self.cfg.get("stats", {})
+        if not stats_cfg.get("enabled", False):
+            logger.info("Statistical analysis disabled.")
+            return
+
+        KNOWN_TESTS = ['fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni']
+        default_table_type_tests = {
+            "raw": ["ttest"],
+            "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
+            "normalized": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+            "clr_transformed": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+            "presence_absence": ["fisher"]
+        }
+        
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        group_vals = self.cfg.get("group_values", [True, False])
+        group_vals = self.cfg.get("group_column_values", [True, False])
         san = StatisticalAnalyzer(self.cfg, self.verbose)
+        san_cfg = san.TEST_CONFIG
         
         n = 0
+        table_cfg = stats_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
-            tests_config = self.cfg["stats"].get(table_type, {})
-            enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
-            n += len(levels) * len(enabled_for_table_type)
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
+                continue
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+
+            enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
+            enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
+            # Accumulate tasks: levels × tests for this table
+            n += len(enabled_methods) * len(enabled_tests)
+        
+        if not n:
+            return
 
         with get_progress_bar() as progress:
             stats_desc = f"Running statistics for '{group_col}'"
             stats_task = progress.add_task(_format_task_desc(stats_desc), total=n)
+            
             for table_type, levels in self.tables.items():
-                tests_config = self.cfg["stats"].get(table_type, {})
-                enabled_for_table_type = [t for t, flag in tests_config.items() if flag]
+                # Check that table type is enabled
+                tt_cfg = table_cfg.get(table_type, {})
+                if not tt_cfg.get('enabled', False):
+                    continue
+
+                # Get enabled levels for table type
+                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
                 
-                table_desc = f"{table_type.replace('_', ' ').title()}"
-                table_task = progress.add_task(
-                    _format_task_desc(table_desc),
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
                     parent=stats_task,
-                    total=len(levels) * len(enabled_for_table_type))
-                for level, table in levels.items():
-                    level_desc = f"{table_desc} ({level.title()})"
-                    progress.update(table_task, description=_format_task_desc(level_desc))
-                    
+                    total=len(enabled_levels)
+                )
+
+                # Get enabled tests for table type
+                enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
+                enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
+                
+                for level in enabled_levels:
+                    level_desc = f"{tt_desc} ({level.title()})"
+                    progress.update(tt_task, description=_format_task_desc(level_desc))
+
                     # Create output directory 
                     output_dir = self.output_dir / 'stats' / table_type / level
                     output_dir.mkdir(parents=True, exist_ok=True)
+
+                    _init_dict_level(self.stats, table_type, level) 
+                    data_storage = self.stats[table_type][level]
                     
+                    table = self.tables[table_type][level]
                     table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
-                
-                    for test_name in enabled_for_table_type:
-                        if test_name not in san.TEST_CONFIG:
-                            continue
-                        cfg = san.TEST_CONFIG[test_name]
-                        _init_dict_level(self.stats, table_type, level)    
-                        test_desc = f"{level_desc} → {cfg['name']}"
-                        progress.update(table_task, description=_format_task_desc(test_desc))
+                    
+                    for test in enabled_tests:
+                        test_desc = f"{level_desc} → {san_cfg[test]["name"]}"
+                        progress.update(tt_task, description=_format_task_desc(test_desc))
                         try:
-                            result = cfg["func"](
+                            if debug_mode:
+                                time.sleep(3)
+                                return
+                            result = san_cfg[test]["func"](
                                 table=table_aligned,
                                 metadata=meta_aligned,
                                 group_column=group_col,
                                 group_column_values=group_vals,
                             )
                             # Save results 
-                            result.to_csv(output_dir / f'{test_name}.tsv', sep='\t', index=True)
-                            self.stats[table_type][level][test_name] = result
+                            result.to_csv(output_dir / f'{test}.tsv', sep='\t', index=True)
+                            data_storage[test] = result
                             
                             # Log number of significant features
                             if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
                                 n_sig = sum(result["p_value"] < 0.05)
-                                logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test_name}")
+                                logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test}")
                                 
                                 # Add debug info for first 5 features if none are significant
                                 if n_sig == 0 and self.verbose:
-                                    logger.debug(f"Top 5 features by p-value ({test_name}):")
+                                    logger.debug(f"Top 5 features by p-value ({test}):")
                                     top_p = result.nsmallest(5, "p_value")[["feature", "p_value", cfg["effect_col"]]]
                                     for _, row in top_p.iterrows():
                                         logger.debug(f"  {row['feature']}: p={row['p_value']:.3e}, effect={row[cfg['effect_col']]:.3f}")
                             
                         except Exception as e:
-                            logger.error(f"Test '{test_name}' failed for {table_type}/{level}: {e}")
-                            self.stats[table_type][level][test_name] = None
+                            logger.error(f"Test '{test}' failed for {table_type}/{level}: {e}")
+                            data_storage[test] = None
                             
                         finally:
-                            progress.update(table_task, advance=1)
+                            progress.update(tt_task, advance=1)
                             progress.update(stats_task, advance=1)
-                progress.remove_task(table_task)
+                progress.remove_task(tt_task)
+                        
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         if not stats_results:
@@ -1033,41 +1092,70 @@ class _AnalysisManager(_ProcessingMixin):
             logger.warning("No significant features found in any statistical test. Top features tables and violin plots will be empty.")
 
     def _run_ordination(self) -> None:
+        ordination_cfg = self.cfg.get("ordination", {})
+        if not ordination_cfg.get("enabled", False):
+            logger.info("Ordination analysis disabled.")
+            return
+
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        
         KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
-        default_ord_config = {"pca": False, "pcoa": False, "tsne": False, "umap": False}
+        default_table_type_methods = {
+            "raw": ["pca"],
+            "filtered": ["pca", "pcoa"],
+            "normalized": ["pca", "pcoa", "tsne", "umap"],
+            "clr_transformed": ["pca", "pcoa", "tsne", "umap"],
+            "presence_absence": ["pcoa", "tsne", "umap"]
+        }
         
-        total_tasks = 0
+        n = 0
+        table_cfg = ordination_cfg.get("tables", {})
         for table_type, levels in self.tables.items():
-            ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
-            enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
-            total_tasks += len(levels) * len(enabled_methods)
-        
-        if not total_tasks:
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
+                continue
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+            enabled_methods = tt_cfg.get("methods", default_table_type_methods[table_type])
+            enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
+            # Accumulate tasks: levels × methods for this table
+            n += len(enabled_methods) * len(enabled_methods)
+        if not n:
             return
     
         self.ordination = {tt: {} for tt in self.tables}
     
         with get_progress_bar() as progress:
             beta_desc = "Running beta diversity analysis"
-            beta_task = progress.add_task(_format_task_desc(beta_desc), total=total_tasks)
+            beta_task = progress.add_task(_format_task_desc(beta_desc), total=n)
             
             max_workers = min(2, os.cpu_count() // 2)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
                 future_to_key = {}
                 for table_type, levels in self.tables.items():
-                    ord_config = self.cfg.get("ordination", {}).get(table_type, default_ord_config)
-                    enabled_methods = [m for m in KNOWN_METHODS if ord_config.get(m, False)]
+                    tt_cfg = table_cfg.get(table_type, {})
+                    if not tt_cfg.get('enabled', False):
+                        continue
+                    enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                    enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
                     
-                    for level, table in levels.items():
+                    enabled_methods = tt_cfg.get("methods", default_table_type_methods[table_type])
+                    enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
+                    
+                    for level in enabled_levels:
+                        table = self.tables[table_type][level]
+                        table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                        
                         output_dir = self.output_dir / 'ordination' / table_type / level
-                        output_dir.mkdir(parents=True, exist_ok=True)
+                        output_dir.mkdir(parents=True, exist_ok=True)                        
                         
                         for method in enabled_methods:
                             future = executor.submit(
                                 self._run_single_ordination,
-                                table=table,
-                                meta=self.meta,
+                                table=table_aligned,
+                                meta=meta_aligned,
+                                symbol_col=group_col,
                                 table_type=table_type,
                                 level=level,
                                 method=method,
@@ -1082,6 +1170,9 @@ class _AnalysisManager(_ProcessingMixin):
                     for future in as_completed(futures, timeout=2*3600):  # 2 hour timeout
                         key = future_to_key[future]
                         try:
+                            if debug_mode:
+                                time.sleep(3)
+                                return
                             result = future.result()
                             completed_results[key] = result
                         except Exception as e:
@@ -1096,7 +1187,8 @@ class _AnalysisManager(_ProcessingMixin):
                     table_type, level, method = key
                     _, _, _, res, figs = result
                     _init_dict_level(self.ordination, table_type, level) 
-                    self.ordination[table_type][level][method] = {'result': res, 'figures': figs}
+                    data_storage = self.ordination[table_type][level]
+                    data_storage[method] = {'result': res, 'figures': figs}
                 
                 # Log summary
                 completed_count = len(completed_results)
@@ -1116,15 +1208,15 @@ class _AnalysisManager(_ProcessingMixin):
                             f.write(f"{tt}\t{lv}\t{mt}\t{err}\n")
                     logger.info(f"Saved ordination errors to {error_file}")
 
-    def _run_single_ordination(self, table, meta, table_type, level, method, output_dir):
+    def _run_single_ordination(self, table, meta, symbol_col, table_type, level, method, output_dir):
         try:
             ordn = Ordination(self.cfg, output_dir, verbose=False)
             res, figs = ordn.run_tests(
                 table=table,
                 metadata=meta,
-                symbol_col=DEFAULT_GROUP_COLUMN,
+                symbol_col=symbol_col,
                 transformation=table_type,
-                enabled_tests=[method],
+                enabled_tests=[method]
             )
             method_key = ordn.TEST_CONFIG[method]['key']
             return table_type, level, method, res.get(method_key), figs.get(method_key)
@@ -1137,56 +1229,76 @@ class _AnalysisManager(_ProcessingMixin):
         if not ml_cfg.get("enabled", False):
             logger.info("ML feature selection disabled.")
             return
-            
+           
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        methods = ml_cfg.get("methods", ["rfe"])
         n_top_features = ml_cfg.get("num_features", 100)
         step_size = ml_cfg.get("step_size", 100)
-        permutation_importance = ml_cfg.get("permutation_importance", True)
+        permutation_importance = ml_cfg.get("permutation_importance", {}).get("enabled", True)
         n_threads = ml_cfg.get("n_threads", 8)
-        
-        enabled_table_types = set(ml_cfg.get("table_types", ["clr_transformed"]))
-        enabled_levels = set(ml_cfg.get("levels", ["genus"]))
-        
-        filtered_ml_tables = {}
-        for table_type, levels in ml_tables.items():
-            if table_type not in enabled_table_types:
+
+
+        n = 0
+        table_cfg = ml_cfg.get("tables", {})
+        for table_type, levels in self.tables.items():
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
                 continue
-            filtered_levels = {
-                level: table 
-                for level, table in levels.items() 
-                if level in enabled_levels
-            }
-            if filtered_levels:
-                filtered_ml_tables[table_type] = filtered_levels
-    
-        n = sum(len(levels) * len(methods) for levels in filtered_ml_tables.values())
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+
+            enabled_methods = tt_cfg.get("methods", [])#default_table_type_methods[table_type])
+            #enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
+            # Accumulate tasks: levels × tests for this table
+            n += len(enabled_tests) * len(enabled_methods) 
         if not n:
             return
-        
+
         with get_progress_bar() as progress:
             cb_desc = "Running CatBoost feature selection"
             cb_task = progress.add_task(_format_task_desc(cb_desc), total=n)
-            for table_type, levels in filtered_ml_tables.items():
-                table_desc = f"{table_type.replace('_', ' ').title()}"
-                table_task = progress.add_task(
-                    _format_task_desc(table_desc),
+            
+            for table_type, levels in self.tables.items():
+                # Check that table type is enabled
+                tt_cfg = table_cfg.get(table_type, {})
+                if not tt_cfg.get('enabled', False):
+                    continue
+
+                # Get enabled levels for table type
+                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+                
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
                     parent=cb_task,
-                    total=len(levels) * len(methods))
-                for level, table in levels.items():
-                    level_desc = f"{table_desc} ({level.title()})"
-                    progress.update(table_task, description=_format_task_desc(level_desc))
-                    
+                    total=len(enabled_levels)
+                )
+
+                # Get enabled tests for table type
+                enabled_methods = tt_cfg.get("methods", ["rfe"])#default_table_type_tests[table_type])
+                #enabled_methods = [m for m in enabled_methods if m in KNOWN_METHODS]
+                
+                for level in enabled_levels:
+                    level_desc = f"{tt_desc} ({level.title()})"
+                    progress.update(tt_task, description=_format_task_desc(level_desc))
+
                     # Create output directory 
                     output_dir = self.output_dir / 'ml' / table_type / level
                     output_dir.mkdir(parents=True, exist_ok=True)
+
+                    table = self.tables[table_type][level]
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
                     
-                    for method in methods:
-                        method_desc = f"{level_desc} → {method.upper()}"
-                        progress.update(table_task, description=_format_task_desc(method_desc))
-                        
+                    for method in enabled_methods:
+                        method_desc = f"{level_desc} → {method.title()}"
+                        progress.update(tt_task, description=_format_task_desc(method_desc))
+
                         _init_dict_level(self.models, table_type, level, method) 
+                        data_storage = self.models[table_type][level][method]
                         try:
+                            if debug_mode:
+                                time.sleep(3)
+                                return
                             if table_type == "clr_transformed" and method == "chi_squared":
                                 logger.warning(
                                     "Skipping chi_squared feature selection for CLR data."
@@ -1203,8 +1315,8 @@ class _AnalysisManager(_ProcessingMixin):
                                 use_permutation_importance = False if method == "select_k_best" else permutation_importance
                                     
                                 model_result = catboost_feature_selection(
-                                    metadata=y,
-                                    features=X,
+                                    metadata=meta_aligned,#y,
+                                    features=table_aligned,#X,
                                     output_dir=output_dir,
                                     group_col=group_col,
                                     method=method,
@@ -1213,7 +1325,7 @@ class _AnalysisManager(_ProcessingMixin):
                                     use_permutation_importance=use_permutation_importance,
                                     thread_count=n_threads,
                                     progress=progress, 
-                                    task_id=table_task,
+                                    task_id=tt_task,
                                 )
                                 
                                 # Log if no figures were generated
@@ -1224,12 +1336,12 @@ class _AnalysisManager(_ProcessingMixin):
                                     
                         except Exception as e:
                             logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
-                            self.models[table_type][level][method] = None
+                            data_storage = None
                                 
                         finally:
-                            progress.update(table_task, advance=1)
+                            progress.update(tt_task, advance=1)
                             progress.update(cb_task, advance=1)
-                progress.remove_task(table_task)
+                progress.remove_task(tt_task)
                         
     def _compare_top_features(self) -> None:
         if not self.models:
