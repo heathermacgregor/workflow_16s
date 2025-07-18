@@ -352,8 +352,6 @@ class Ordination:
         try:
             figures = {}
             pkwargs = {**cfg.get("plot_kwargs", {}), **kwargs}
-            pkwargs.setdefault("width", 800)
-            pkwargs.setdefault("height", 600)
             
             for color_col in self.color_columns:
                 if color_col not in metadata.columns:
