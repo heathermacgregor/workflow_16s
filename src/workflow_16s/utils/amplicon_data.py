@@ -1379,8 +1379,9 @@ class _AnalysisManager(_ProcessingMixin):
         violin_output_dir.mkdir(parents=True, exist_ok=True)
         
         # Define required metadata columns (add these)
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         required_metadata = [
-            self.cfg.get("group_column", DEFAULT_GROUP_COLUMN),
+            group_col,
             DEFAULT_DATASET_COLUMN,
             "env_feature",
             "env_material",
