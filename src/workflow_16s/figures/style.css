@@ -70,6 +70,35 @@ th                                   { background-color: #f2f2f2; position: rela
 .dynamic-table th.asc::after         { content: " ▲"; font-size: 0.8em; position: absolute; right: 8px; }
 .dynamic-table th.desc::after        { content: " ▼"; font-size: 0.8em; position: absolute; right: 8px; }
 
+/* Add column resizing styles */
+.dynamic-table th {
+    position: relative;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resizable-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 5px;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+.dynamic-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dynamic-table {
+    table-layout: fixed;
+}
+
 /* ======================= BUTTON STYLES ======================= */
 
 .tab-button, .method-button, .table-button, .level-button, .metric-button, .pagination-btn                                           { color: black; background-color: white; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; margin-right: 5px; transition: all 0.3s ease; }
