@@ -185,13 +185,19 @@
                 }});
                 
                 const newTable = document.getElementById(tableId);
-                if (newTable) newTable.style.display = 'block';
-                document.querySelector(`[data-table="${{tableId}}"]`).classList.add('active');
-                
-                // Show first level
-                const firstLevel = newTable.querySelector('.level-pane');
-                if (firstLevel) showLevel(firstLevel.id);
-            }}
+                if (newTable) {
+                    newTable.style.display = 'block';
+                    document.querySelector(`[data-table="${tableId}"]`).classList.add('active');
+                    
+                    // Ensure a level is always selected
+                    const activeLevel = newTable.querySelector('.level-pane[style*="display: block"]');
+                    if (!activeLevel) {
+                        const firstLevel = newTable.querySelector('.level-pane');
+                        if (firstLevel) showLevel(firstLevel.id);
+                    }
+                }
+            }
+
             
             function showLevel(levelId) {{
                 // Purge all plots in current level
@@ -212,14 +218,32 @@
                     btn.classList.remove('active');
                 }});
                 
+                // Show the new level
                 const newLevel = document.getElementById(levelId);
-                if (newLevel) newLevel.style.display = 'block';
-                document.querySelector(`[data-level="${{levelId}}"]`).classList.add('active');
-                
-                // Show first method
-                const firstMethod = newLevel.querySelector('.method-pane');
-                if (firstMethod) showMethod(firstMethod.id);
-            }}
+                if (newLevel) {
+                    newLevel.style.display = 'block';
+                    document.querySelector(`[data-level="${levelId}"]`).classList.add('active');
+                    
+                    // Ensure a method or metric is always selected
+                    const activeMethod = newLevel.querySelector('.method-pane[style*="display: block"]');
+                    const activeMetric = newLevel.querySelector('.metric-pane[style*="display: block"]');
+                    
+                    if (!activeMethod && !activeMetric) {
+                        const firstMethod = newLevel.querySelector('.method-pane');
+                        if (firstMethod) {
+                            showMethod(firstMethod.id);
+                        } else {
+                            const firstMetric = newLevel.querySelector('.metric-pane');
+                            const firstButton = newLevel.querySelector('.metric-button');
+                            if (firstMetric && firstButton) {
+                                const plotId = firstMetric.querySelector('.plot-container')?.id.replace('container-', '');
+                                if (plotId) showMetric(firstMetric.id, plotId);
+                            }
+                        }
+                    }
+                }
+            }
+
             
             function showMethod(methodId) {{
                 // Purge all plots in current method
@@ -241,13 +265,18 @@
                 }});
                 
                 const newMethod = document.getElementById(methodId);
-                if (newMethod) newMethod.style.display = 'block';
-                document.querySelector(`[data-method="${{methodId}}"]`).classList.add('active');
-                
-                // Show first plot
-                const firstPlot = newMethod.querySelector('.tab-pane');
-                if (firstPlot) showTab(firstPlot.id, firstPlot.dataset.plotId);
-            }}
+                if (newMethod) {
+                    newMethod.style.display = 'block';
+                    document.querySelector(`[data-method="${methodId}"]`).classList.add('active');
+                    
+                    // Ensure a plot is always selected
+                    const activeTab = newMethod.querySelector('.tab-pane[style*="display: block"]');
+                    if (!activeTab) {
+                        const firstTab = newMethod.querySelector('.tab-pane');
+                        if (firstTab) showTab(firstTab.id, firstTab.dataset.plotId);
+                    }
+                }
+            }
             
             function showMetric(metricId, plotId) {{
                 // Purge any existing plot in this metric pane
@@ -291,41 +320,51 @@
             {table_js}
             
             /* ---- initialization ---- */
-            document.addEventListener('DOMContentLoaded', () => {{
+            document.addEventListener('DOMContentLoaded', () => {
                 // Initialize all first-level plots
-                document.querySelectorAll('.subsection').forEach(sub => {{
+                document.querySelectorAll('.subsection').forEach(sub => {
                     const first = sub.querySelector('.tab-pane');
                     if (first) showTab(first.id, first.dataset.plotId);
-                }});
+                });
                 
-                // Initialize nested tabs
-                document.querySelectorAll('.table-pane').forEach(pane => {{
-                    const firstLevel = pane.querySelector('.level-pane');
-                    if (firstLevel) showLevel(firstLevel.id);
-                }});
+                // Activate first table in each section to cascade through nested tabs
+                document.querySelectorAll('.table-pane').forEach(pane => {
+                    const tableId = pane.id;
+                    const tableButton = document.querySelector(`[data-table="${tableId}"]`);
+                    
+                    if (tableButton) {
+                        // Activate first table to cascade through nested tabs
+                        showTable(tableId);
+                    }
+                });
                 
-                // Initialize SHAP tabs
-                document.querySelectorAll('.level-pane').forEach(pane => {{
-                    const firstMethod = pane.querySelector('.method-pane');
-                    if (firstMethod) showMethod(firstMethod.id);
-                }});
+                // Fallback: If no tables found, activate first level directly
+                document.querySelectorAll('.level-pane').forEach(pane => {
+                    if (pane.style.display !== 'block') {
+                        const levelId = pane.id;
+                        const levelButton = document.querySelector(`[data-level="${levelId}"]`);
+                        
+                        if (levelButton) {
+                            showLevel(levelId);
+                        }
+                    }
+                });
                 
-                // Initialize alpha diversity tabs
-                document.querySelectorAll('.table-pane').forEach(pane => {{
-                    const firstLevel = pane.querySelector('.level-pane');
-                    if (firstLevel) {{
-                        const firstMetric = firstLevel.querySelector('.metric-pane');
-                        const firstButton = firstLevel.querySelector('.metric-button');
-                        if (firstMetric && firstButton) {{
-                            const plotId = firstMetric.querySelector('.plot-container').id.replace('container-', '');
-                            showMetric(firstMetric.id, plotId);
-                        }}
-                    }}
-                }});
+                // Fallback: If no levels found, activate first method directly
+                document.querySelectorAll('.method-pane').forEach(pane => {
+                    if (pane.style.display !== 'block') {
+                        const methodId = pane.id;
+                        const methodButton = document.querySelector(`[data-method="${methodId}"]`);
+                        
+                        if (methodButton) {
+                            showMethod(methodId);
+                        }
+                    }
+                });
                 
                 // Initialize tables
                 initTables();
-            }});
+            });
         </script>
     </body>
 </html>
