@@ -56,6 +56,49 @@ function setupTableSorting(tableId) {
     });
 }
 
+function setupTableResizing(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+
+    const headers = table.querySelectorAll('thead th');
+    headers.forEach((header, index) => {
+        // Skip the last header
+        if (index === headers.length - 1) return;
+
+        // Create resizable handle
+        const handle = document.createElement('div');
+        handle.className = 'resizable-handle';
+        header.appendChild(handle);
+
+        let startX, startWidth;
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startX = e.clientX;
+            startWidth = header.offsetWidth;
+
+            const doDrag = (e) => {
+                const newWidth = startWidth + (e.clientX - startX);
+                if (newWidth < 10) return; // Minimum width
+                header.style.width = `${newWidth}px`;
+                // Adjust all cells in this column
+                const cells = table.querySelectorAll(`tbody tr > :nth-child(${index+1})`);
+                cells.forEach(cell => {
+                    cell.style.width = `${newWidth}px`;
+                });
+            };
+
+            const stopDrag = () => {
+                document.removeEventListener('mousemove', doDrag);
+                document.removeEventListener('mouseup', stopDrag);
+            };
+
+            document.addEventListener('mousemove', doDrag);
+            document.addEventListener('mouseup', stopDrag);
+        });
+    });
+}
+
 function paginateTable(tableId, pageSize) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -165,5 +208,6 @@ function initTables() {
         const tableId = table.id;
         setupTableSorting(tableId);
         changePageSize(tableId, 10); // Initialize with 10 rows per page
+        setupTableResizing(tableId);  // Add this line
     });
 }
