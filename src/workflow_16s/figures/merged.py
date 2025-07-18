@@ -742,10 +742,11 @@ def create_violin_plot(
     output_dir: Union[Path, None] = None,
     sub_dir: str = 'violin',
     xaxis_title: str = "Contamination Status",
-    show: bool = False
-) -> go.Figure:
+    show: bool = False,
+    verbose: bool = False
+) -> Union[go.Figure, None]:
     """
-    Generate feature distribution violin plot.
+    Generate feature distribution violin plot with robust NaN handling.
     
     Args:
         data:       DataFrame containing feature abundances and metadata.
@@ -754,16 +755,44 @@ def create_violin_plot(
         output_dir: Directory to save outputs.
         sub_dir:    Subdirectory for output.
         show:       Display figure interactively.
+        verbose:    Enable debug logging.
         
     Returns:
-        Plotly violin figure
+        Plotly violin figure or None if no valid data
     """
-    plot_data = data.reset_index().dropna(subset=[feature, status_col])
+    # Check if feature exists in data
+    if feature not in data.columns:
+        if verbose:
+            logger.warning(f"Feature '{feature}' not found in data columns. Available features: {data.columns.tolist()[:5]}")
+        return None
+
+    # Create working copy
+    plot_data = data.reset_index()
+    initial_count = len(plot_data)
     
+    # Check for NaNs
+    nan_status = plot_data[status_col].isna().sum()
+    nan_feature = plot_data[feature].isna().sum()
+    
+    # Remove NaNs
+    plot_data = plot_data.dropna(subset=[feature, status_col])
+    final_count = len(plot_data)
+    
+    if verbose:
+        logger.info(
+            f"Violin plot preprocessing for '{feature}': "
+            f"Initial samples={initial_count}, "
+            f"NaNs in status={nan_status}, "
+            f"NaNs in feature={nan_feature}, "
+            f"Final samples={final_count}"
+        )
+
+    # Handle empty data case
     if plot_data.empty:
-        logger.error(f"No valid data for {feature} after NaN removal")
-        return go.Figure()  # Return empty figure instead of erroring
-    
+        logger.warning(f"No valid data for '{feature}' after NaN removal")
+        return None
+        
+    # Create plot
     fig = px.violin(
         plot_data, 
         y=feature, 
@@ -774,12 +803,16 @@ def create_violin_plot(
         hover_data=['index', 'dataset_name']
     )
     
+    # Customize layout
     fig.update_layout(
         template='heather',
-        xaxis_title=status_col,
-        yaxis_title=feature.replace('_', ' ').title()
+        xaxis_title=xaxis_title,
+        yaxis_title=feature.replace('_', ' ').title(),
+        height=600,
+        width=800
     )
 
+    # Save plot if requested
     if output_dir:
         plot_dir = output_dir / sub_dir
         plot_dir.mkdir(parents=True, exist_ok=True)
