@@ -1378,20 +1378,15 @@ class _AnalysisManager(_ProcessingMixin):
         violin_output_dir = self.output_dir / 'violin_plots'
         violin_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Define required columns for violin plots
-        required_columns = [
-            DEFAULT_GROUP_COLUMN,
+        # Define required metadata columns (add these)
+        required_metadata = [
+            self.cfg.get("group_column", DEFAULT_GROUP_COLUMN),
             DEFAULT_DATASET_COLUMN,
             "env_feature",
             "env_material",
             "country"
         ]
-        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        # Filter to only existing columns
-        available_columns = [col for col in required_columns if col in self.meta.columns]
-        missing = set(required_columns) - set(available_columns)
-        if missing and self.verbose:
-            logger.warning(f"Missing metadata columns for violin plots: {', '.join(missing)}")
+        available_metadata = [col for col in required_metadata if col in self.meta.columns]
         
         logger.info(f"Generating violin plots for top {n} features")
         
@@ -1422,6 +1417,18 @@ class _AnalysisManager(_ProcessingMixin):
                     table_normalized_index = table.index.astype(str).str.strip().str.lower()
                     # Map group values using normalized IDs
                     table[group_col] = table_normalized_index.map(group_map)
+
+                    # MODIFIED: Get metadata for all required columns
+                    metadata_df = (
+                        self.meta
+                        .assign(norm_id=meta_ids)
+                        .set_index("norm_id")
+                        [available_metadata]  # Include all necessary columns
+                    )
+                    
+                    # Join feature table with metadata
+                    table = table_to_df(biom_table)[[feature_name]]
+                    table = table.join(metadata_df, how='inner')
                     # Verify feature exists
                     if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
@@ -1472,6 +1479,18 @@ class _AnalysisManager(_ProcessingMixin):
                     table_normalized_index = table.index.astype(str).str.strip().str.lower()
                     # Map group values using normalized IDs
                     table[group_col] = table_normalized_index.map(group_map)
+
+                    # MODIFIED: Get metadata for all required columns
+                    metadata_df = (
+                        self.meta
+                        .assign(norm_id=meta_ids)
+                        .set_index("norm_id")
+                        [available_metadata]  # Include all necessary columns
+                    )
+                    
+                    # Join feature table with metadata
+                    table = table_to_df(biom_table)[[feature_name]]
+                    table = table.join(metadata_df, how='inner')
                     # Verify feature exists
                     if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
