@@ -775,17 +775,16 @@ def create_violin_plot(
     nan_feature = plot_data[feature].isna().sum()
     
     # Remove NaNs
-    plot_data = plot_data.dropna(subset=[feature, status_col])
-    final_count = len(plot_data)
+    plot_data_remove = plot_data.dropna(subset=[feature, status_col])
+    final_count = len(plot_data_remove)
     
-    if verbose:
-        logger.info(
+    logger.info(
             f"Violin plot preprocessing for '{feature}': "
             f"Initial samples={initial_count}, "
             f"NaNs in status={nan_status}, "
             f"NaNs in feature={nan_feature}, "
             f"Final samples={final_count}"
-        )
+    )
 
     # Handle empty data case
     if plot_data.empty:
