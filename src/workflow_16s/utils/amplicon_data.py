@@ -1405,7 +1405,6 @@ class _AnalysisManager(_ProcessingMixin):
                         
                         # Get the table at the specific taxonomic level
                         table = self.tables[table_type][level]
-                        df = 
                         
                         # Verify feature exists at this level
                         if feature_name not in df.columns:
