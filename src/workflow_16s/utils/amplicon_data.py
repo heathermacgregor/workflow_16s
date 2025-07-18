@@ -1007,18 +1007,18 @@ class _AnalysisManager(_ProcessingMixin):
                 # Get enabled levels for table type
                 enabled_levels = tt_cfg.get("levels", list(levels.keys()))
                 enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
-                
-                tt_desc = f"{table_type.replace('_', ' ').title()}"
-                tt_task = progress.add_task(
-                    _format_task_desc(tt_desc),
-                    parent=stats_task,
-                    total=len(enabled_levels)
-                )
 
                 # Get enabled tests for table type
                 enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
                 enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
                 
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
+                    parent=stats_task,
+                    total=len(enabled_levels) * len(enabled_tests)
+                )
+
                 for level in enabled_levels:
                     level_desc = f"{tt_desc} ({level.title()})"
                     progress.update(tt_task, description=_format_task_desc(level_desc))
