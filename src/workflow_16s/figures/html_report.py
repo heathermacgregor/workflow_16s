@@ -268,14 +268,24 @@ def _section_html(sec: Dict) -> str:
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
         f'  <div class="tab-content">\n'          
-        f'    <div class="tabs">{sub["buttons_html"]}</div>\n'
+        f'    {sub["buttons_html"]}\n'
         f'    {sub["tabs_html"]}\n'
         f'  </div>\n'                             
         f'</div>'
         for sub in sec["subsections"]
     )
-    return f'<div class="section" id="{sec["id"]}">\n' \
-           f'  <h2>{sec["title"]}</h2>\n{sub_html}\n</div>'
+    
+    return f'''
+    <div class="section" id="{sec["id"]}">
+        <div class="section-header" onclick="toggleSection('{sec["id"]}-content', this)">
+            <h2>{sec["title"]}</h2>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="section-content" id="{sec["id"]}-content">
+            {sub_html}
+        </div>
+    </div>
+    '''
 
 def _alpha_correlations_to_nested_html(
     figures: Dict[str, Any],
