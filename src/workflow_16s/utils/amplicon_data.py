@@ -1419,18 +1419,6 @@ class _AnalysisManager(_ProcessingMixin):
                     # Map group values using normalized IDs
                     table[group_col] = table_normalized_index.map(group_map)
                     logger.info(table)
-                    # MODIFIED: Get metadata for all required columns
-                    metadata_df = (
-                        self.meta
-                        .assign(norm_id=meta_ids)
-                        .set_index("norm_id")
-                        [available_metadata]  # Include all necessary columns
-                    )
-                    
-                    # Join feature table with metadata
-                    table = table_to_df(biom_table)[[feature_name]]
-                    table = table.join(metadata_df, how='inner')
-                    logger.info(table)
                     # Verify feature exists
                     if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
@@ -1482,17 +1470,6 @@ class _AnalysisManager(_ProcessingMixin):
                     # Map group values using normalized IDs
                     table[group_col] = table_normalized_index.map(group_map)
 
-                    # MODIFIED: Get metadata for all required columns
-                    metadata_df = (
-                        self.meta
-                        .assign(norm_id=meta_ids)
-                        .set_index("norm_id")
-                        [available_metadata]  # Include all necessary columns
-                    )
-                    
-                    # Join feature table with metadata
-                    table = table_to_df(biom_table)[[feature_name]]
-                    table = table.join(metadata_df, how='inner')
                     # Verify feature exists
                     if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
