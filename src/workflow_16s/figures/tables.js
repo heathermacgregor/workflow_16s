@@ -211,3 +211,20 @@ function initTables() {
         setupTableResizing(tableId);  // Add this line
     });
 }
+
+function toggleSection(contentId, header) {
+    const content = document.getElementById(contentId);
+    const section = header.parentElement;
+    const isCollapsing = !section.classList.contains('collapsed');
+    
+    // Toggle collapsed class
+    section.classList.toggle('collapsed');
+    
+    // Rotate toggle icon
+    const icon = header.querySelector('.toggle-icon');
+    if (isCollapsing) {
+        icon.textContent = '▶';
+    } else {
+        icon.textContent = '▼';
+    }
+}
