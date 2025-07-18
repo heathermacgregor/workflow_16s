@@ -1031,10 +1031,49 @@ def generate_html_report(
         opacity: 1;
     }
     """
+    collapsible_css = """
+    /* Collapsible sections */
+    .section-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background-color: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+        user-select: none;
+    }
     
+    .section-header:hover {
+        background-color: #e9e9e9;
+    }
+    
+    .toggle-icon {
+        font-size: 0.8em;
+        transition: transform 0.3s ease;
+    }
+    
+    .section-content {
+        padding: 15px;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+        max-height: 5000px; /* Large initial value */
+    }
+    
+    .section.collapsed .section-content {
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+    }
+    
+    .section.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+    }
+    """
     
     try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css 
+        css_content = css_path.read_text(encoding='utf-8') + tooltip_css + collapsible_css
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
         css_content = tooltip_css + shap_css
