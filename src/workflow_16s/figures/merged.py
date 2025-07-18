@@ -760,6 +760,10 @@ def create_violin_plot(
     """
     plot_data = data.reset_index().dropna(subset=[feature, status_col])
     
+    if plot_data.empty:
+        logger.error(f"No valid data for {feature} after NaN removal")
+        return go.Figure()  # Return empty figure instead of erroring
+    
     fig = px.violin(
         plot_data, 
         y=feature, 
