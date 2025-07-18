@@ -205,6 +205,7 @@ def _figs_to_html(
         idx     = next(counter)
         tab_id  = f"{prefix}-tab-{idx}"
         plot_id = f"{prefix}-plot-{idx}"
+        pane_id = f"pane-{plot_id}"  # Add this line
 
         btns.append(
             f'<button class="tab-button {"active" if idx==0 else ""}" '
@@ -213,9 +214,8 @@ def _figs_to_html(
         )
 
         tabs.append(
-            f'<div id="{tab_id}" class="tab-pane" '
-            f'style="display:{"block" if idx==0 else "none"}" '
-            f'data-plot-id="{plot_id}">'
+            f'<div id="{pane_id}" class="metric-pane" '  # Use metric-pane class
+            f'style="display:{"block" if idx==0 else "none"}">'
             f'<div id="container-{plot_id}" class="plot-container"></div></div>'
         )
 
@@ -598,11 +598,8 @@ def _format_ml_section(
         if not shap_df.empty:
             shap_html = """
             <h3>SHAP Analysis</h3>
-            <div class="shap-analysis-table">
-                <p>Comprehensive SHAP analysis for top features across all models:</p>
-            """
-            shap_html += _add_table_functionality(shap_df, 'shap-table')
-            shap_html += "</div>"
+            <p>Comprehensive SHAP analysis for top features across all models:</p>
+            """ + _add_table_functionality(shap_df, 'shap-table')
     
     return f"""
     <div class="ml-section">
@@ -1025,19 +1022,9 @@ def generate_html_report(
     }
     """
     
-    # Add styling for SHAP analysis table
-    shap_css = """
-    .shap-analysis-table {
-        margin-top: 30px;
-        padding: 20px;
-        background: #2a2a2a;
-        border-radius: 8px;
-        border-left: 4px solid #3498db;
-    }
-    """
     
     try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css + shap_css
+        css_content = css_path.read_text(encoding='utf-8') + tooltip_css 
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
         css_content = tooltip_css + shap_css
