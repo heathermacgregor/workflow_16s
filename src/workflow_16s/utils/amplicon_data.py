@@ -781,6 +781,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         self._identify_top_features(stats_copy)
         del stats_copy
+        self._generate_violin_plots(n=cfg.get("violin_plots", {}).get("n", 50))
 
         self._run_ordination()
         self._run_ml_feature_selection()
@@ -1402,22 +1403,36 @@ class _AnalysisManager(_ProcessingMixin):
                     level = feat['level']
                     feature_name = feat['feature']
                     
+                    phylum_table = self.tables['clr_transformed']['phylum']
+                    phylum_df = table_to_df(phyum_table)
+                    logger.info(phylum_df.index)
+                    test_meta = self.meta
+                    meta_ids = meta[meta_id_col].astype(str).str.strip().str.lower()
+                    table_ids = table.index.astype(str).str.strip().str.lower()
+                    shared_ids = set(table_ids) & set(meta_ids)
+                    d__Bacteria;p__Actinobacteriota
+                    
                     # Get the table and convert to DataFrame
                     biom_table = self.tables[table_type][level]
-                    biom_table, meta_aligned = update_table_and_meta(biom_table, self.meta[available_columns])
-                    df = table_to_df(biom_table)
-                    
+                    table = table_to_df(biom_table)[[feature_name]]
+                    meta_ids = self.meta['#sampleid'].astype(str).str.strip().str.lower()
+                    table_ids = table.index.astype(str).str.strip().str.lower()
+                    shared_ids = set(table_ids) & set(meta_ids)
+
+                    group_map = (
+                        meta
+                        .assign(norm_id=meta_ids)
+                        .set_index("norm_id")[DEFAULT_GROUP_COLUMN]
+                    )
+                
+                    # Create normalized table index
+                    table_normalized_index = table.index.astype(str).str.strip().str.lower()
+                    # Map group values using normalized IDs
+                    table[group_col] = table_normalized_index.map(group_map)
                     # Verify feature exists
-                    if feature_name not in df.columns:
+                    if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
                         continue
-                    
-                    # Merge feature with metadata
-                    plot_df = df[[feature_name]].merge(
-                        meta_aligned, 
-                        left_index=True, 
-                        right_index=True
-                    )
                     
                     # Create output directory
                     feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
@@ -1425,7 +1440,7 @@ class _AnalysisManager(_ProcessingMixin):
                     
                     # Generate violin plot
                     fig = violin_feature(
-                        df=plot_df,
+                        df=table,
                         feature=feature_name,
                         output_dir=feature_output_dir,
                         status_col=DEFAULT_GROUP_COLUMN
