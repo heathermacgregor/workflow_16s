@@ -750,17 +750,12 @@ def collapse_taxa(
     return collapsed_table
   
 
-def presence_absence(
-    table: Union[Table, pd.DataFrame], 
-    target_level: str, 
-) -> Table:
+def presence_absence(table: Union[Table, pd.DataFrame]) -> Table:
     """
     Convert table to presence/absence format and filter by abundance.
     
     Args:
-        table:        Input BIOM Table or DataFrame.
-        target_level: Taxonomic level for output naming.
-        output_dir:   Directory to save output.
+        table: Input BIOM Table or DataFrame.
     
     Returns:
         Presence/absence BIOM Table filtered by abundance.
@@ -780,15 +775,12 @@ def presence_absence(
     pa_table_filtered = pa_table.filter(keep_ids, axis='observation')
     pa_df_filtered = pa_table_filtered.to_dataframe(dense=True)
 
-    # Save output
-    pa_table = Table(
+    return Table(
         pa_df_filtered.values,
         pa_df_filtered.index,
         pa_df_filtered.columns,
         table_id='Presence Absence BIOM Table'
     )
-    
-    return pa_table
 
 
 def filter_presence_absence(
