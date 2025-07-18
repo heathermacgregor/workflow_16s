@@ -770,8 +770,8 @@ class _AnalysisManager(_ProcessingMixin):
         self.ordination: Dict[str, Any] = {}
         self.models: Dict[str, Any] = {}
         self.alpha_diversity: Dict[str, Any] = {}
-        self.top_contaminated_features: List[Dict] = []
-        self.top_pristine_features: List[Dict] = []
+        self.top_features_group_1: List[Dict] = [] # contaminated
+        self.top_features_group_2: List[Dict] = [] # pristine
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
 
@@ -787,7 +787,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ml_feature_selection()
         self._compare_top_features()
 
-        if self.faprotax_enabled and self.top_contaminated_features:
+        if self.faprotax_enabled and self.top_features_group_1:
             self._annotate_top_features()
 
         self._generate_violin_plots(n=cfg.get("violin_plots", {}).get("n", 50))
@@ -804,7 +804,7 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _annotate_top_features(self) -> None:
         all_taxa = {
-            f["feature"] for f in self.top_contaminated_features + self.top_pristine_features
+            f["feature"] for f in self.top_features_group_1 + self.top_features_group_2
         }
 
         with ThreadPoolExecutor() as executor:
@@ -812,10 +812,10 @@ class _AnalysisManager(_ProcessingMixin):
 
         taxon_map = dict(zip(all_taxa, results))
 
-        for feat in self.top_contaminated_features:
+        for feat in self.top_features_group_1:
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
 
-        for feat in self.top_pristine_features:
+        for feat in self.top_features_group_2:
             feat["faprotax_functions"] = taxon_map.get(feat["feature"], [])
 
     def _run_alpha_diversity_analysis(self) -> None:      
@@ -1076,14 +1076,16 @@ class _AnalysisManager(_ProcessingMixin):
         if not stats_results:
             logger.warning("No statistical results available for feature selection")
             return [], []
-            
-        tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
-        self.top_contaminated_features, self.top_pristine_features = tfa.analyze(stats_results, DEFAULT_GROUP_COLUMN)
-
-        logger.debug(f"Identified {len(self.top_contaminated_features)} top contaminated features")
-        logger.debug(f"Identified {len(self.top_pristine_features)} top pristine features")
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
+        group_col_values = self.cfg.get("group_column_values", DEFAULT_GROUP_COLUMN_VALUES)
         
-        if not self.top_contaminated_features and not self.top_pristine_features:
+        tfa = TopFeaturesAnalyzer(self.cfg, self.verbose)
+        self.top_features_group_1, self.top_features_group_2 = tfa.analyze(stats_results, group_col)
+
+        logger.debug(f"Identified {len(self.top_features_group_1)} top features for '{group_col}' = {group_col_values[0]}")
+        logger.debug(f"Identified {len(self.top_features_group_2)} top features for '{group_col}' = {group_col_values[1]}")
+        
+        if not self.top_features_group_1 and not self.top_features_group_2:
             logger.warning("No significant features found in any statistical test. Top features tables and violin plots will be empty.")
 
     def _run_ordination(self) -> None:
@@ -1384,7 +1386,7 @@ class _AnalysisManager(_ProcessingMixin):
             "env_material",
             "country"
         ]
-        
+        group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
         # Filter to only existing columns
         available_columns = [col for col in required_columns if col in self.meta.columns]
         missing = set(required_columns) - set(available_columns)
@@ -1394,23 +1396,14 @@ class _AnalysisManager(_ProcessingMixin):
         logger.info(f"Generating violin plots for top {n} features")
         
         # Contaminated features
-        if self.top_contaminated_features:
-            logger.debug(f"Processing {min(n, len(self.top_contaminated_features))} contaminated features")
-            for i in range(min(n, len(self.top_contaminated_features))):
-                feat = self.top_contaminated_features[i]
+        if self.top_features_group_1:
+            logger.debug(f"Processing {min(n, len(self.top_features_group_1))} contaminated features")
+            for i in range(min(n, len(self.top_features_group_1))):
+                feat = self.top_features_group_1[i]
                 try:
                     table_type = feat['table_type']
                     level = feat['level']
                     feature_name = feat['feature']
-                    
-                    phylum_table = self.tables['clr_transformed']['phylum']
-                    phylum_df = table_to_df(phyum_table)
-                    logger.info(phylum_df.index)
-                    test_meta = self.meta
-                    meta_ids = meta[meta_id_col].astype(str).str.strip().str.lower()
-                    table_ids = table.index.astype(str).str.strip().str.lower()
-                    shared_ids = set(table_ids) & set(meta_ids)
-                    d__Bacteria;p__Actinobacteriota
                     
                     # Get the table and convert to DataFrame
                     biom_table = self.tables[table_type][level]
@@ -1422,7 +1415,7 @@ class _AnalysisManager(_ProcessingMixin):
                     group_map = (
                         meta
                         .assign(norm_id=meta_ids)
-                        .set_index("norm_id")[DEFAULT_GROUP_COLUMN]
+                        .set_index("norm_id")[group_col]
                     )
                 
                     # Create normalized table index
@@ -1443,7 +1436,7 @@ class _AnalysisManager(_ProcessingMixin):
                         df=table,
                         feature=feature_name,
                         output_dir=feature_output_dir,
-                        status_col=DEFAULT_GROUP_COLUMN
+                        status_col=group_col
                     )
                     feat['violin_figure'] = fig
                 except Exception as e:
@@ -1453,30 +1446,36 @@ class _AnalysisManager(_ProcessingMixin):
             logger.warning("No contaminated features for violin plots")
         
         # Pristine features
-        if self.top_pristine_features:
-            logger.debug(f"Processing {min(n, len(self.top_pristine_features))} pristine features")
-            for i in range(min(n, len(self.top_pristine_features))):
-                feat = self.top_pristine_features[i]
+        if self.top_features_group_2:
+            logger.debug(f"Processing {min(n, len(self.top_features_group_2))} pristine features")
+            for i in range(min(n, len(self.top_features_group_2))):
+                feat = self.top_features_group_2[i]
                 try:
                     table_type = feat['table_type']
                     level = feat['level']
                     feature_name = feat['feature']
                     
-                    # Get the table at the specific taxonomic level
-                    table = self.tables[table_type][level]
-                    df = table_to_df(table)
-                    
-                    # Verify feature exists at this level
-                    if feature_name not in df.columns:
+                    # Get the table and convert to DataFrame
+                    biom_table = self.tables[table_type][level]
+                    table = table_to_df(biom_table)[[feature_name]]
+                    meta_ids = self.meta['#sampleid'].astype(str).str.strip().str.lower()
+                    table_ids = table.index.astype(str).str.strip().str.lower()
+                    shared_ids = set(table_ids) & set(meta_ids)
+
+                    group_map = (
+                        meta
+                        .assign(norm_id=meta_ids)
+                        .set_index("norm_id")[group_col]
+                    )
+                
+                    # Create normalized table index
+                    table_normalized_index = table.index.astype(str).str.strip().str.lower()
+                    # Map group values using normalized IDs
+                    table[group_col] = table_normalized_index.map(group_map)
+                    # Verify feature exists
+                    if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
                         continue
-                    
-                    # Merge with required metadata columns
-                    merged_df = df[[feature_name]].merge(
-                        self.meta[available_columns], 
-                        left_index=True, 
-                        right_index=True
-                    )
                     
                     # Create output directory for this feature
                     feature_output_dir = violin_output_dir / 'pristine' / table_type / level
@@ -1484,10 +1483,10 @@ class _AnalysisManager(_ProcessingMixin):
                     
                     # Generate violin plot
                     fig = violin_feature(
-                        df=merged_df,
+                        df=table,
                         feature=feature_name,
                         output_dir=feature_output_dir,
-                        status_col=DEFAULT_GROUP_COLUMN
+                        status_col=group_col
                     )
                     feat['violin_figure'] = fig
                 except Exception as e:
@@ -1522,8 +1521,8 @@ class AmpliconData:
         self.ordination: Dict[str, Any] = {}
         self.models: Dict[str, Any] = {}
         self.alpha_diversity: Dict[str, Any] = {}
-        self.top_contaminated_features: List[Dict] = []
-        self.top_pristine_features: List[Dict] = []
+        self.top_features_group_1: List[Dict] = []
+        self.top_features_group_2: List[Dict] = []
         logger.info("Running amplicon data analysis pipeline...")
         self._execute_pipeline()
 
@@ -1603,5 +1602,5 @@ class AmpliconData:
         self.ordination = analyzer.ordination
         self.models = analyzer.models
         self.alpha_diversity = analyzer.alpha_diversity
-        self.top_contaminated_features = analyzer.top_contaminated_features
-        self.top_pristine_features = analyzer.top_pristine_features
+        self.top_features_group_1 = analyzer.top_contaminated_features
+        self.top_features_group_2 = analyzer.top_pristine_features
