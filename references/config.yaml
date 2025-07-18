@@ -2,7 +2,7 @@
 
 # Hardware
 cpu:
-  limit: 16  # Global CPU limit for all operations
+  limit: 32  # Global CPU limit for all operations
 
 # Important directory and file paths
 dataset_list: "./datasets.txt"
@@ -132,13 +132,13 @@ alpha_diversity:
     raw:  
       enabled: True
       levels:  # Taxonomic levels
-        #- 'genus'
+        - 'genus'
         - 'family'
         - 'class'
     normalized:
       enabled: True
       levels: 
-        #- 'genus'
+        - 'genus'
         - 'family'
   metrics:  # Metrics to calculate
     - 'shannon'
@@ -178,7 +178,7 @@ ordination:
         #- "tsne"
         #- "umap"
       levels:
-        #- 'genus'
+        - 'genus'
         - 'family'
         - 'class'
     filtered:
@@ -190,6 +190,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
+        - 'genus'
         - 'phylum'
     normalized:
       enabled: True
@@ -200,6 +201,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
+        - 'genus'
         - 'phylum'
     clr_transformed:
       enabled: True
@@ -210,6 +212,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
+        - 'genus'
         - 'phylum'
     presence_absence:
       enabled: True
@@ -220,6 +223,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
+        - 'genus'
         - 'phylum'
 
 # Functional Prediction
@@ -247,11 +251,11 @@ ml:
     raw:
       enabled: False
       levels:
-      #- 'genus'
-      #- 'family'
-      #- 'order'
-      #- 'class'
-      - 'phylum'
+        - 'genus'
+        #- 'family'
+        #- 'order'
+        #- 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         #- 'select_k_best'
@@ -261,11 +265,11 @@ ml:
     filtered:
       enabled: False
       levels:
-      #- 'genus'
-      #- 'family'
-      #- 'order'
-      #- 'class'
-      - 'phylum'
+        - 'genus'
+        #- 'family'
+        #- 'order'
+        #- 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         #- 'select_k_best'
@@ -275,11 +279,11 @@ ml:
     normalized:
       enabled: True
       levels:
-      #- 'genus'
-      #- 'family'
-      #- 'order'
-      #- 'class'
-      - 'phylum'
+        - 'genus'
+        #- 'family'
+        #- 'order'
+        #- 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         #- 'select_k_best'
@@ -289,11 +293,11 @@ ml:
     clr_transformed:
       enabled: True
       levels:
-      #- 'genus'
-      #- 'family'
-      #- 'order'
-      #- 'class'
-      - 'phylum'
+        - 'genus'
+        #- 'family'
+        #- 'order'
+        #- 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         #- 'select_k_best'
@@ -303,11 +307,11 @@ ml:
     presence_absence:
       enabled: True
       levels:
-      #- 'genus'
-      #- 'family'
-      #- 'order'
-      #- 'class'
-      - 'phylum'
+        - 'genus'
+        #- 'family'
+        #- 'order'
+        #- 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         #- 'select_k_best'
@@ -318,6 +322,6 @@ ml:
   step_size: 100
   permutation_importance: 
     enabled: True
-  n_threads: 16
+  n_threads: 32
   plots:
     enabled: True
