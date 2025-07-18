@@ -1413,7 +1413,7 @@ class _AnalysisManager(_ProcessingMixin):
                     shared_ids = set(table_ids) & set(meta_ids)
 
                     group_map = (
-                        meta
+                        self.meta
                         .assign(norm_id=meta_ids)
                         .set_index("norm_id")[group_col]
                     )
@@ -1463,7 +1463,7 @@ class _AnalysisManager(_ProcessingMixin):
                     shared_ids = set(table_ids) & set(meta_ids)
 
                     group_map = (
-                        meta
+                        self.meta
                         .assign(norm_id=meta_ids)
                         .set_index("norm_id")[group_col]
                     )
