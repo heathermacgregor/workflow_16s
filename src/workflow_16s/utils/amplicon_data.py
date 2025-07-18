@@ -705,15 +705,17 @@ class _TableProcessor(_ProcessingMixin):
                 _format_task_desc(pa_desc),
                 total=len(levels)  
             )
-            raw_table = self.tables["raw"][self.mode]
             processed = {}
             
             for level in levels:
                 level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
                 progress.update(pa_task, description=_format_task_desc(level_desc))
                 try:
+                    # USE COLLAPSED RAW TABLE FOR THIS LEVEL
+                    collapsed_table = self.tables["raw"][level]
+                    
                     start_time = time.perf_counter()
-                    processed[level] = presence_absence(raw_table, level)
+                    processed[level] = presence_absence(collapsed_table)
                     duration = time.perf_counter() - start_time
                     if self.verbose:
                         logger.debug(f"Created Presence/Absence table for {level} in {duration:.2f}s")
