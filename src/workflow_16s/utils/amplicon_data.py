@@ -1397,38 +1397,43 @@ class _AnalysisManager(_ProcessingMixin):
             logger.debug(f"Processing {min(n, len(self.top_contaminated_features))} contaminated features")
             for i in range(min(n, len(self.top_contaminated_features))):
                 feat = self.top_contaminated_features[i]
-                for col in available_columns:
-                    try:
-                        table_type = feat['table_type']
-                        level = feat['level']
-                        feature_name = feat['feature']
-                        
-                        # Get the table at the specific taxonomic level
-                        table = self.tables[table_type][level]
-                        
-                        # Verify feature exists at this level
-                        if feature_name not in df.columns:
-                            logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
-                            continue
-                        
-                        # Merge with required metadata columns
-                        #table_aligned, meta_aligned = update_table_and_meta(table, self.meta[required_columns])
-                        df = merge_table_with_meta(table, self.meta, col)
-                        # Create output directory for this feature
-                        feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
-                        feature_output_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Generate violin plot
-                        fig = violin_feature(
-                            df=df,
-                            feature=feature_name,
-                            output_dir=feature_output_dir,
-                            status_col=DEFAULT_GROUP_COLUMN
-                        )
-                        feat['violin_figure'] = fig
-                    except Exception as e:
-                        logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
-                        feat['violin_figure'] = None
+                try:
+                    table_type = feat['table_type']
+                    level = feat['level']
+                    feature_name = feat['feature']
+                    
+                    # Get the table and convert to DataFrame
+                    biom_table = self.tables[table_type][level]
+                    biom_table, meta_aligned = update_table_and_meta(biom_table, self.meta[available_columns])
+                    df = table_to_df(biom_table)
+                    
+                    # Verify feature exists
+                    if feature_name not in df.columns:
+                        logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
+                        continue
+                    
+                    # Merge feature with metadata
+                    plot_df = df[[feature_name]].merge(
+                        meta_aligned, 
+                        left_index=True, 
+                        right_index=True
+                    )
+                    
+                    # Create output directory
+                    feature_output_dir = violin_output_dir / 'contaminated' / table_type / level
+                    feature_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Generate violin plot
+                    fig = violin_feature(
+                        df=plot_df,
+                        feature=feature_name,
+                        output_dir=feature_output_dir,
+                        status_col=DEFAULT_GROUP_COLUMN
+                    )
+                    feat['violin_figure'] = fig
+                except Exception as e:
+                    logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
+                    feat['violin_figure'] = None
         else:
             logger.warning("No contaminated features for violin plots")
         
