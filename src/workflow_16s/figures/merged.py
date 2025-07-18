@@ -799,7 +799,7 @@ def create_violin_plot(
         box=True,
         points="all",
         title=f"{feature.replace('_', ' ').title()} Distribution",
-        hover_data=['index', 'dataset_name']
+        hover_data=['index']#, 'dataset_name']
     )
     
     # Customize layout
