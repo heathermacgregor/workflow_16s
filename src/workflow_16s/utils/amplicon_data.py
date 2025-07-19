@@ -49,7 +49,7 @@ from workflow_16s.utils.io import (
     export_h5py, import_merged_metadata_tsv, import_merged_table_biom
 )
 from workflow_16s.utils.progress import get_progress_bar
-from workflow_16s.utils.nfc_facilities import append_nfc_facilities, process_and_geocode_excel
+from workflow_16s.utils.nfc_facilities import append_nfc_facilities, process_and_geocode_excel, analyze_contamination_correlation
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -570,7 +570,11 @@ class _DataLoader(_ProcessingMixin):
         facilities_df = process_and_geocode_excel()
         self.nfc_facilities = facilities_df
         logger.info(self.nfc_facilities)
+        results = analyze_contamination_correlation(facilities_df)
         meta_with_facilities = append_nfc_facilities(self.meta)
+        logger.info("Correlation Analysis Results:")
+        logger.info(f"Accuracy: {results['classification_report']['accuracy']:.2%}")
+        logger.info(f"Contamination is {results['summary_metrics']['relative_risk']:.1f} times more likely near facilities")
         self.meta = meta_with_facilities
         logger.info(self.meta[['facility_match', 'nuclear_contamination_status']])
 
