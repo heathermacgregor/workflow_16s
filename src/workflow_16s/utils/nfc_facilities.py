@@ -1,15 +1,16 @@
 import pandas as pd
 import numpy as np
 from math import radians, sin, cos, asin, sqrt
-import pandas as pd
 import os
 import requests
 import time
 from openpyxl import load_workbook
-import pandas as pd
 from sklearn.metrics import confusion_matrix, classification_report
-
+import logging
+from workflow_16s.utils.progress import get_progress_bar
+logger = logging.getLogger("workflow_16s")
 DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
+DEFAULT_N: int = 65 # Length of description for progress bar
 
 def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=8, skip_first_col=True):
     """
@@ -50,7 +51,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     # Set header from first row after skipping
     df.columns = df.iloc[0]
     df = df.iloc[1:].reset_index(drop=True)
-    
+    logger.info(df.shape)
     # Verify required columns
     required_cols = ['Facility Name', 'Country']
     missing = [col for col in required_cols if col not in df.columns]
@@ -80,12 +81,23 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     df['Longitude'] = None
     
     # Geocode with rate limiting
-    for i, row in df.iterrows():
-        facility = str(row['Facility Name'])
-        country = str(row['Country'])
-        if facility and country and facility != 'nan' and country != 'nan':
-            df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
-        time.sleep(1)  # Respect API rate limits
+    with get_progress_bar() as progress:
+        task_desc = "Geocoding NFC facilities..."
+        task = progress.add_task(
+            f"[white]{task_desc:<{DEFAULT_N}}", 
+            total=len(df.shape[1])
+        )
+        for i, row in df.iterrows():
+            facility = str(row['Facility Name'])
+            country = str(row['Country'])
+            try:
+                if facility and country and facility != 'nan' and country != 'nan':
+                    df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
+                time.sleep(1)  # Respect API rate limits
+            except Exception as e:
+                logger.error(f"Geocoding failed for facility '{facility}': {e!r}")
+            finally:
+                progress.update(task, advance=1)
     
     return df
 
