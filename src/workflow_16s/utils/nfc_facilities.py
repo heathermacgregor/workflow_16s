@@ -1,0 +1,167 @@
+import pandas as pd
+import numpy as np
+from math import radians, sin, cos, asin, sqrt
+import pandas as pd
+import requests
+import time
+from openpyxl import load_workbook
+DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/SFCISFacilityList.xlsx'
+
+def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0"):
+    """
+    Process an Excel file and add latitude/longitude coordinates using geocoding API
+    
+    Args:
+        file_path (str): Path to input .xlsx file
+        user_agent (str): Custom user agent for API requests (required by Nominatim)
+    
+    Returns:
+        pd.DataFrame: Processed DataFrame with coordinates
+    """
+    # Load workbook to handle header properly
+    wb = load_workbook(file_path, read_only=True)
+    sheet = wb.active
+    
+    # Read data skipping first 8 rows and first column
+    df = pd.DataFrame(sheet.values)
+    df = df.iloc[8:, 1:]  # Skip first 8 rows and first column
+    df.columns = df.iloc[0]  # Set row 9 as header
+    df = df.iloc[1:].reset_index(drop=True)
+    
+    # Verify required columns exist
+    required_cols = ['Facility Name', 'Country']
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+    
+    # Geocoding function with rate limiting
+    def geocode_location(facility, country):
+        """Get coordinates from Nominatim API"""
+        query = f"{facility}, {country}"
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            'q': query,
+            'format': 'json',
+            'limit': 1
+        }
+        headers = {'User-Agent': user_agent}
+        
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if data:
+                return float(data[0]['lat']), float(data[0]['lon'])
+        except (requests.RequestException, ValueError, KeyError) as e:
+            print(f"Geocoding failed for '{query}': {str(e)}")
+        return None, None
+    
+    # Add coordinate columns
+    df['Latitude'] = None
+    df['Longitude'] = None
+    
+    # Geocode with rate limiting (1 request per second)
+    for i, row in df.iterrows():
+        facility = str(row['Facility Name'])
+        country = str(row['Country'])
+        if facility and country:
+            df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
+        time.sleep(1)  # Critical: respect API rate limits
+    
+    return df
+
+# Example usage:
+# df = process_and_geocode_excel("input_file.xlsx", user_agent="MyApp/1.0")
+# df.to_excel("output_file.xlsx", index=False)
+
+def haversine(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great-circle distance (in km) between two points 
+    on the Earth using the Haversine formula.
+    """
+    # Convert degrees to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    
+    # Earth radius in kilometers
+    r = 6371
+    return c * r
+
+def match_facilities_to_locations(facilities_df, locations_df, max_distance_km=50):
+    """
+    Match locations to nearby facilities within a specified distance threshold.
+    
+    Args:
+        facilities_df (pd.DataFrame): Facilities dataframe with 'Latitude' and 'Longitude' columns
+        locations_df (pd.DataFrame): Locations dataframe with 'latitude_deg' and 'longitude_deg' columns
+        max_distance_km (float): Maximum distance in kilometers for matching (default=50)
+    
+    Returns:
+        pd.DataFrame: Modified locations_df with appended facility information
+    """
+    # Create a copy to avoid modifying original dataframe
+    result_df = locations_df.copy()
+    
+    # Precompute valid facilities (non-null coordinates)
+    valid_facilities = facilities_df.dropna(subset=['Latitude', 'Longitude'])
+    facilities_coords = valid_facilities[['Latitude', 'Longitude']].values
+    facilities_data = valid_facilities.to_dict('records')
+    
+    # Initialize columns for facility data
+    for col in facilities_df.columns:
+        result_df[f'facility_{col}'] = np.nan
+    
+    # Initialize match status column
+    result_df['facility_match'] = False
+    
+    # Iterate through each location
+    for idx, loc_row in result_df.iterrows():
+        loc_lat = loc_row['latitude_deg']
+        loc_lon = loc_row['longitude_deg']
+        
+        # Skip if location coordinates are missing
+        if pd.isna(loc_lat) or pd.isna(loc_lon):
+            continue
+            
+        min_distance = float('inf')
+        closest_facility = None
+        
+        # Find the closest facility
+        for facility_coord, facility_record in zip(facilities_coords, facilities_data):
+            fac_lat, fac_lon = facility_coord
+            distance = haversine(loc_lat, loc_lon, fac_lat, fac_lon)
+            
+            if distance < min_distance:
+                min_distance = distance
+                closest_facility = facility_record
+        
+        # Check if closest facility is within threshold
+        if min_distance <= max_distance_km and closest_facility is not None:
+            # Add facility data to the location row
+            for col, value in closest_facility.items():
+                result_df.at[idx, f'facility_{col}'] = value
+            
+            # Add distance and match status
+            result_df.at[idx, 'facility_distance_km'] = min_distance
+            result_df.at[idx, 'facility_match'] = True
+    
+    return result_df
+
+def append_nfc_facilities(
+    metadata_df: pd.DataFrame,
+    xlsx_path: str = DEFAULT_XLSX_PATH, 
+):
+    # Process facilities data (from previous function)
+    facilities_df = process_and_geocode_excel(xlsx_path)
+    # Match facilities within 50km
+    matched_df = match_facilities_to_locations(
+        facilities_df, 
+        metadata_df,
+        max_distance_km=50
+    )
+    return matched_df
