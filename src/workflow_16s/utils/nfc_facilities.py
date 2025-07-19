@@ -8,10 +8,11 @@ from openpyxl import load_workbook
 from sklearn.metrics import confusion_matrix, classification_report
 import logging
 from workflow_16s.utils.progress import get_progress_bar
+
 logger = logging.getLogger("workflow_16s")
 DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
 DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
-DEFAULT_N: int = 65 # Length of description for progress bar
+DEFAULT_N: int = 65  # Length of description for progress bar
 
 def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=0, skip_first_col=False):
     """
@@ -54,17 +55,27 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
     df = df.iloc[1:].reset_index(drop=True)
     logger.info(f"Loaded data shape: {df.shape}")
     
-    # Determine facility column name ('Project Name' takes priority)
+    # Create normalized column name mapping
+    col_normalized_to_original = {col.lower().strip(): col for col in df.columns}
+    
+    # Determine facility column name
     facility_col = None
-    if 'Project Name' in df.columns:
-        facility_col = 'Project Name'
-    elif 'Facility Name' in df.columns:
-        facility_col = 'Facility Name'
+    for candidate in ['project name', 'facility name']:
+        if candidate in col_normalized_to_original:
+            facility_col = col_normalized_to_original[candidate]
+            break
+    if not facility_col:
+        raise ValueError("Could not find facility name column. Tried: 'Project Name', 'Facility Name'")
+    
+    # Determine country column name
     country_col = None
-    if 'Country/Area' in df.columns:
-        country_col = 'Country/Area'
-    elif 'Country' in df.columns:
-        country_col = 'Country'
+    for candidate in ['country/area', 'country']:
+        if candidate in col_normalized_to_original:
+            country_col = col_normalized_to_original[candidate]
+            break
+    if not country_col:
+        raise ValueError("Could not find country column. Tried: 'Country/Area', 'Country'")
+    
     # Verify required columns exist
     required_cols = [facility_col, country_col] 
     missing = [col for col in required_cols if col not in df.columns]
@@ -102,7 +113,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
         )
         for i, row in df.iterrows():
             facility = str(row[facility_col])
-            country = str(row['Country'])
+            country = str(row[country_col])  # Fixed: use dynamic country_col
             try:
                 if facility and country and facility != 'nan' and country != 'nan':
                     df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
