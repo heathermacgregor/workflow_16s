@@ -1324,7 +1324,7 @@ def catboost_feature_selection(
     except Exception as e:
         logger.error(f"SHAP plot generation failed: {e}")
         shap_figs = {}
-    
+    logger.info(model.classes_)
     # Return comprehensive results
     return {
         'model': best_model,
