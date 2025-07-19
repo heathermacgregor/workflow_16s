@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
 
-def process_and_geocode_file(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=8, skip_first_col=True):
+def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=8, skip_first_col=True):
     """
     Process a data file (Excel or TSV) and add latitude/longitude coordinates
     
