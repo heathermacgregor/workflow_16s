@@ -1,14 +1,3 @@
-Traceback (most recent call last):
-  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 326, in <module>
-    main()
-  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 323, in main
-    downstream(cfg, logger)
-  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 307, in downstream
-    generate_html_report(
-  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/workflow_16s/figures/html_report.py", line 1026, in generate_html_report
-    html = html_template.format(
-ValueError: expected ':' after conversion specifier
-
 # ===================================== IMPORTS ====================================== #
 import base64
 import itertools
