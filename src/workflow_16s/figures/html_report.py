@@ -999,7 +999,7 @@ def generate_html_report(
 
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")
-    payload = payload.replace("{", "{{").replace("}", "}}")  # Escape curly braces
+    #payload = payload.replace("{", "{{").replace("}", "}}")  # Escape curly braces
 
     try:
         table_js = import_js_as_str(tables_js_path)
@@ -1023,17 +1023,21 @@ def generate_html_report(
         <body>Report generation failed: Missing template</body>
         </html>"""
 
+    # Escape variables that might contain curly braces
+    def escape_braces(s: str) -> str:
+        return s.replace("{", "{{").replace("}", "}}") if isinstance(s, str) else s
+    
     html = html_template.format(
-        title="16S Amplicon Analysis Report",
-        plotly_js_tag=plotly_js_tag,
-        generated_ts=ts,
-        section_list=", ".join(include_sections),
-        nav_html=nav_html,
-        tables_html=tables_html,
-        sections_html=sections_html,
-        plot_data_json=payload,
-        table_js=table_js,
-        css_content=css_content
+        title=escape_braces("16S Amplicon Analysis Report"),
+        plotly_js_tag=escape_braces(plotly_js_tag),
+        generated_ts=escape_braces(ts),
+        section_list=escape_braces(", ".join(include_sections)),
+        nav_html=escape_braces(nav_html),
+        tables_html=escape_braces(tables_html),
+        sections_html=escape_braces(sections_html),
+        plot_data_json=payload,  # Already escaped
+        table_js=escape_braces(table_js),
+        css_content=escape_braces(css_content)
     )
         
     output_path.write_text(html, encoding="utf-8")
