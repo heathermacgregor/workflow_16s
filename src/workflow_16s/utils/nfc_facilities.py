@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 import pandas as pd
 from sklearn.metrics import confusion_matrix, classification_report
 
-DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/SFCISFacilityList.xlsx'
+DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/NSFCISFacilityList.xlsx'
 
 def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0"):
     """
