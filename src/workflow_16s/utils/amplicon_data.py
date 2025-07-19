@@ -567,11 +567,12 @@ class _DataLoader(_ProcessingMixin):
                 "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
-        facilities_df = process_and_geocode_excel()
-        self.nfc_facilities = facilities_df
-        logger.info(self.nfc_facilities)
-        results = analyze_contamination_correlation(facilities_df)
+        #facilities_df = process_and_geocode_excel()
+        #self.nfc_facilities = facilities_df
         meta_with_facilities = append_nfc_facilities(self.meta)
+        
+        results = analyze_contamination_correlation(meta_with_facilities)
+        
         logger.info("Correlation Analysis Results:")
         logger.info(f"Accuracy: {results['classification_report']['accuracy']:.2%}")
         logger.info(f"Contamination is {results['summary_metrics']['relative_risk']:.1f} times more likely near facilities")
