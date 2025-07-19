@@ -567,7 +567,7 @@ class _DataLoader(_ProcessingMixin):
                 "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
-        """
+        
         meta_with_facilities = append_nfc_facilities(self.meta)
         
         results = analyze_contamination_correlation(meta_with_facilities)
@@ -577,7 +577,7 @@ class _DataLoader(_ProcessingMixin):
         logger.info(f"Contamination is {results['summary_metrics']['relative_risk']:.1f} times more likely near facilities")
         self.meta = meta_with_facilities
         logger.info(self.meta[['facility_match', 'nuclear_contamination_status']])
-        """
+        
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
         biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
