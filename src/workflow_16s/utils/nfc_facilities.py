@@ -113,7 +113,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
         )
         for i, row in df.iterrows():
             facility = str(row[facility_col])
-            country = str(row[country_col])  # Fixed: use dynamic country_col
+            country = str(row[country_col])
             try:
                 if facility and country and facility != 'nan' and country != 'nan':
                     df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
@@ -173,6 +173,7 @@ def match_facilities_to_locations(
     
     # Initialize match status column
     result_df['facility_match'] = False
+    result_df['facility_distance_km'] = np.nan
     
     # Iterate through each location
     for idx, loc_row in result_df.iterrows():
@@ -213,13 +214,35 @@ def append_nfc_facilities(
     nfcis_path: str = DEFAULT_NFCIS_PATH, 
     gem_path: str = DEFAULT_GEM_PATH
 ):
-    # Process facilities data (from previous function)
+    # Process facilities data
     facilities_df_1 = process_and_geocode_excel(file_path=nfcis_path, skip_rows=8, skip_first_col=True)
-    logger.info(facilities_df_1)
+    logger.info(f"Processed NFCIS facilities: {facilities_df_1.shape}")
+    
     facilities_df_2 = process_and_geocode_excel(file_path=gem_path, skip_rows=0, skip_first_col=False)
-    logger.info(facilities_df_2)
-    facilities_df = facilities_df_1.merge(facilities_df_2, left_on='Facility Name', right_on='Project Name')
-    logger.info(facilities_df)
+    logger.info(f"Processed GEM facilities: {facilities_df_2.shape}")
+    
+    # Merge facilities data - preserve coordinate columns
+    facilities_df = pd.merge(
+        facilities_df_1,
+        facilities_df_2,
+        left_on='Facility Name',
+        right_on='Project Name',
+        suffixes=('_nfcis', '_gem'),
+        how='outer'
+    )
+    
+    # Create unified coordinate columns (prefer NFCIS data, fall back to GEM)
+    facilities_df['Latitude'] = facilities_df['Latitude_nfcis'].combine_first(facilities_df['Latitude_gem'])
+    facilities_df['Longitude'] = facilities_df['Longitude_nfcis'].combine_first(facilities_df['Longitude_gem'])
+    
+    # Clean up merged dataframe
+    facilities_df.drop(columns=[
+        'Latitude_nfcis', 'Longitude_nfcis', 
+        'Latitude_gem', 'Longitude_gem'
+    ], inplace=True, errors='ignore')
+    
+    logger.info(f"Merged facilities: {facilities_df.shape}")
+    
     # Match facilities within 50km
     matched_df = match_facilities_to_locations(
         facilities_df, 
@@ -255,13 +278,11 @@ def analyze_contamination_correlation(
     analysis_df = df.set_index('#sampleid')[required_cols].copy().dropna()
     
     # Convert contamination status to boolean
-    # Handle different data types: bool, int (0/1), float (probability), or string
     if analysis_df['nuclear_contamination_status'].dtype in ['int64', 'float64']:
         analysis_df['contaminated'] = (
             analysis_df['nuclear_contamination_status'] > threshold
         )
     elif analysis_df['nuclear_contamination_status'].dtype == 'object':
-        # Handle string values - customize based on your actual values
         positive_indicators = ['contaminated', 'positive', 'high', 'yes', 'true']
         analysis_df['contaminated'] = analysis_df['nuclear_contamination_status'].str.lower().isin(positive_indicators)
     else:
