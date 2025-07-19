@@ -60,9 +60,13 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
         facility_col = 'Project Name'
     elif 'Facility Name' in df.columns:
         facility_col = 'Facility Name'
-    
+    country_col = None
+    if 'Country/Area' in df.columns:
+        country_col = 'Country/Area'
+    elif 'Country' in df.columns:
+        country_col = 'Country'
     # Verify required columns exist
-    required_cols = [facility_col, 'Country'] if facility_col else ['Country']
+    required_cols = [facility_col, country_col] 
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
