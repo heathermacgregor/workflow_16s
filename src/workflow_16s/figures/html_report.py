@@ -1,3 +1,14 @@
+Traceback (most recent call last):
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 326, in <module>
+    main()
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 323, in main
+    downstream(cfg, logger)
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 307, in downstream
+    generate_html_report(
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/workflow_16s/figures/html_report.py", line 1026, in generate_html_report
+    html = html_template.format(
+ValueError: expected ':' after conversion specifier
+
 # ===================================== IMPORTS ====================================== #
 import base64
 import itertools
@@ -997,9 +1008,9 @@ def generate_html_report(
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
 
+    # Prepare payload with proper escaping
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("</", "<\\/")
-    #payload = payload.replace("{", "{{").replace("}", "}}")  # Escape curly braces
+    payload = payload.replace("\\", "\\\\").replace("'", "\\'").replace('</', '<\\/')
 
     try:
         table_js = import_js_as_str(tables_js_path)
@@ -1023,21 +1034,24 @@ def generate_html_report(
         <body>Report generation failed: Missing template</body>
         </html>"""
 
-    # Escape variables that might contain curly braces
+    # Escape curly braces in all variables except payload, table_js, and css_content
     def escape_braces(s: str) -> str:
-        return s.replace("{", "{{").replace("}", "}}") if isinstance(s, str) else s
+        return s.replace("{", "{{").replace("}", "}}") if isinstance(s, str) else str(s)
+    
+    title = "16S Amplicon Analysis Report"
+    section_list = ", ".join(include_sections)
     
     html = html_template.format(
-        title=escape_braces("16S Amplicon Analysis Report"),
+        title=escape_braces(title),
         plotly_js_tag=escape_braces(plotly_js_tag),
         generated_ts=escape_braces(ts),
-        section_list=escape_braces(", ".join(include_sections)),
+        section_list=escape_braces(section_list),
         nav_html=escape_braces(nav_html),
         tables_html=escape_braces(tables_html),
         sections_html=escape_braces(sections_html),
         plot_data_json=payload,  # Already escaped
-        table_js=escape_braces(table_js),
-        css_content=escape_braces(css_content)
+        table_js=table_js,       # Raw JavaScript
+        css_content=css_content   # Raw CSS
     )
         
     output_path.write_text(html, encoding="utf-8")
