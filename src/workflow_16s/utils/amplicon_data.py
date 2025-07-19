@@ -49,6 +49,7 @@ from workflow_16s.utils.io import (
     export_h5py, import_merged_metadata_tsv, import_merged_table_biom
 )
 from workflow_16s.utils.progress import get_progress_bar
+from workflow_16s.utils.nfc_facilities import append_nfc_facilities, process_and_geocode_excel
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -566,6 +567,12 @@ class _DataLoader(_ProcessingMixin):
                 "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
+        facilities_df = process_and_geocode_excel()
+        self.nfc_facilities = facilities_df
+        logger.info(self.nfc_facilities)
+        meta_with_facilities = append_nfc_facilities(self.meta)
+        self.meta = meta_with_facilities
+        logger.info(self.meta[['facility_match', 'nuclear_contamination_status']])
 
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
