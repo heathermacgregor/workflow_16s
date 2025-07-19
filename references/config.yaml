@@ -133,13 +133,13 @@ alpha_diversity:
       enabled: True
       levels:  # Taxonomic levels
         - 'genus'
-        - 'family'
-        - 'class'
+        #- 'family'
+        #- 'class'
     normalized:
       enabled: True
       levels: 
         - 'genus'
-        - 'family'
+        #- 'family'
   metrics:  # Metrics to calculate
     - 'shannon'
     - 'observed_features'
@@ -178,8 +178,8 @@ ordination:
         #- "tsne"
         #- "umap"
       levels:
-        - 'genus'
-        - 'family'
+        #- 'genus'
+        #- 'family'
         - 'class'
     filtered:
       enabled: True
@@ -190,7 +190,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
+        #- 'genus'
         - 'phylum'
     normalized:
       enabled: True
@@ -201,7 +201,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
+        #- 'genus'
         - 'phylum'
     clr_transformed:
       enabled: True
@@ -212,7 +212,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
+        #- 'genus'
         - 'phylum'
     presence_absence:
       enabled: True
@@ -223,7 +223,7 @@ ordination:
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
+        #- 'genus'
         - 'phylum'
 
 # Functional Prediction
@@ -279,7 +279,7 @@ ml:
     normalized:
       enabled: True
       levels:
-        - 'genus'
+        #- 'genus'
         #- 'family'
         #- 'order'
         #- 'class'
@@ -291,7 +291,7 @@ ml:
         #- 'lasso'
         #- 'shap'
     clr_transformed:
-      enabled: True
+      enabled: False #True
       levels:
         - 'genus'
         #- 'family'
@@ -305,7 +305,7 @@ ml:
         #- 'lasso'
         #- 'shap'
     presence_absence:
-      enabled: True
+      enabled: False #True
       levels:
         - 'genus'
         #- 'family'
