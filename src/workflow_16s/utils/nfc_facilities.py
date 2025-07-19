@@ -85,7 +85,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
         task_desc = "Geocoding NFC facilities..."
         task = progress.add_task(
             f"[white]{task_desc:<{DEFAULT_N}}", 
-            total=len(df.shape[1])
+            total=df.shape[0]
         )
         for i, row in df.iterrows():
             facility = str(row['Facility Name'])
