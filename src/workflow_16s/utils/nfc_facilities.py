@@ -9,10 +9,11 @@ from sklearn.metrics import confusion_matrix, classification_report
 import logging
 from workflow_16s.utils.progress import get_progress_bar
 logger = logging.getLogger("workflow_16s")
-DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
+DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
+DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
 DEFAULT_N: int = 65 # Length of description for progress bar
 
-def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=8, skip_first_col=True):
+def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=0, skip_first_col=False):
     """
     Process a data file (Excel or TSV) and add latitude/longitude coordinates
     
@@ -42,7 +43,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
         except Exception as e2:
             raise ValueError(f"Failed to read file: {e}\nSecondary error: {e2}")
 
-    # Skip rows and columns
+    # Skip rows and columns based on parameters
     if skip_first_col:
         df = raw_df.iloc[skip_rows:, 1:].copy()
     else:
@@ -51,9 +52,17 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     # Set header from first row after skipping
     df.columns = df.iloc[0]
     df = df.iloc[1:].reset_index(drop=True)
-    logger.info(df.shape)
-    # Verify required columns
-    required_cols = ['Facility Name', 'Country']
+    logger.info(f"Loaded data shape: {df.shape}")
+    
+    # Determine facility column name ('Project Name' takes priority)
+    facility_col = None
+    if 'Project Name' in df.columns:
+        facility_col = 'Project Name'
+    elif 'Facility Name' in df.columns:
+        facility_col = 'Facility Name'
+    
+    # Verify required columns exist
+    required_cols = [facility_col, 'Country'] if facility_col else ['Country']
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
@@ -82,13 +91,13 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     
     # Geocode with rate limiting
     with get_progress_bar() as progress:
-        task_desc = "Geocoding NFC facilities..."
+        task_desc = "Geocoding facilities..."
         task = progress.add_task(
             f"[white]{task_desc:<{DEFAULT_N}}", 
             total=df.shape[0]
         )
         for i, row in df.iterrows():
-            facility = str(row['Facility Name'])
+            facility = str(row[facility_col])
             country = str(row['Country'])
             try:
                 if facility and country and facility != 'nan' and country != 'nan':
@@ -101,10 +110,6 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     
     return df
 
-
-# Example usage:
-# df = process_and_geocode_excel("input_file.xlsx", user_agent="MyApp/1.0")
-# df.to_excel("output_file.xlsx", index=False)
 
 def haversine(lat1, lon1, lat2, lon2):
     """
@@ -124,7 +129,10 @@ def haversine(lat1, lon1, lat2, lon2):
     r = 6371
     return c * r
 
-def match_facilities_to_locations(facilities_df, locations_df, max_distance_km=50):
+def match_facilities_to_locations(
+    facilities_df: pd.DataFrame, 
+    locations_df: pd.DataFrame, 
+    max_distance_km: float = 50):
     """
     Match locations to nearby facilities within a specified distance threshold.
     
@@ -183,13 +191,20 @@ def match_facilities_to_locations(facilities_df, locations_df, max_distance_km=5
             result_df.at[idx, 'facility_match'] = True
     
     return result_df
+    
 
 def append_nfc_facilities(
     metadata_df: pd.DataFrame,
-    xlsx_path: str = DEFAULT_XLSX_PATH, 
+    nfcis_path: str = DEFAULT_NFCIS_PATH, 
+    gem_path: str = DEFAULT_GEM_PATH
 ):
     # Process facilities data (from previous function)
-    facilities_df = process_and_geocode_excel(xlsx_path)
+    facilities_df_1 = process_and_geocode_excel(file_path=nfcis_path, skip_rows=8, skip_first_col=True)
+    logger.info(facilities_df_1)
+    facilities_df_2 = process_and_geocode_excel(file_path=gem_path, skip_rows=0, skip_first_col=False)
+    logger.info(facilities_df_2)
+    facilities_df = facilities_df_1.merge(facilities_df_2, left_on='Facility Name', right_on='Project Name')
+    logger.info(facilities_df)
     # Match facilities within 50km
     matched_df = match_facilities_to_locations(
         facilities_df, 
@@ -198,7 +213,11 @@ def append_nfc_facilities(
     )
     return matched_df.reset_index()
 
-def analyze_contamination_correlation(df, threshold=0.5):
+
+def analyze_contamination_correlation(
+    df: pd.DataFrame, 
+    threshold: float = 0.5
+):
     """
     Analyzes correlation between facility proximity and contamination status
     
