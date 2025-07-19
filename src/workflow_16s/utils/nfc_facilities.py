@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from math import radians, sin, cos, asin, sqrt
 import pandas as pd
+import os
 import requests
 import time
 from openpyxl import load_workbook
@@ -10,43 +11,58 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
 
-def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0"):
+def process_and_geocode_file(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=8, skip_first_col=True):
     """
-    Process an Excel file and add latitude/longitude coordinates using geocoding API
+    Process a data file (Excel or TSV) and add latitude/longitude coordinates
     
     Args:
-        file_path (str): Path to input .xlsx file
-        user_agent (str): Custom user agent for API requests (required by Nominatim)
+        file_path (str): Path to input file (.xlsx or .tsv)
+        user_agent (str): Custom user agent for API requests
+        skip_rows (int): Number of initial rows to skip
+        skip_first_col (bool): Whether to drop the first column
     
     Returns:
         pd.DataFrame: Processed DataFrame with coordinates
     """
-    # Load workbook to handle header properly
-    wb = load_workbook(file_path, read_only=True)
-    sheet = wb.active
+    # Detect file type and load data
+    ext = os.path.splitext(file_path)[1].lower()
     
-    # Read data skipping first 8 rows and first column
-    df = pd.DataFrame(sheet.values)
-    df = df.iloc[8:, 1:]  # Skip first 8 rows and first column
-    df.columns = df.iloc[0]  # Set row 9 as header
+    try:
+        if ext in ['.xlsx', '.xls']:
+            raw_df = pd.read_excel(file_path, header=None)
+        elif ext in ['.tsv', '.txt']:
+            raw_df = pd.read_csv(file_path, sep='\t', header=None, encoding_errors='replace')
+        else:
+            raise ValueError(f"Unsupported file format: {ext}")
+    except Exception as e:
+        # Try to load as TSV if Excel fails
+        try:
+            raw_df = pd.read_csv(file_path, sep='\t', header=None, encoding_errors='replace')
+        except Exception as e2:
+            raise ValueError(f"Failed to read file: {e}\nSecondary error: {e2}")
+
+    # Skip rows and columns
+    if skip_first_col:
+        df = raw_df.iloc[skip_rows:, 1:].copy()
+    else:
+        df = raw_df.iloc[skip_rows:, :].copy()
+    
+    # Set header from first row after skipping
+    df.columns = df.iloc[0]
     df = df.iloc[1:].reset_index(drop=True)
     
-    # Verify required columns exist
+    # Verify required columns
     required_cols = ['Facility Name', 'Country']
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
-    
-    # Geocoding function with rate limiting
+
+    # Geocoding function
     def geocode_location(facility, country):
         """Get coordinates from Nominatim API"""
         query = f"{facility}, {country}"
         url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            'q': query,
-            'format': 'json',
-            'limit': 1
-        }
+        params = {'q': query, 'format': 'json', 'limit': 1}
         headers = {'User-Agent': user_agent}
         
         try:
@@ -55,7 +71,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
             data = response.json()
             if data:
                 return float(data[0]['lat']), float(data[0]['lon'])
-        except (requests.RequestException, ValueError, KeyError) as e:
+        except Exception as e:
             print(f"Geocoding failed for '{query}': {str(e)}")
         return None, None
     
@@ -63,15 +79,16 @@ def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="My
     df['Latitude'] = None
     df['Longitude'] = None
     
-    # Geocode with rate limiting (1 request per second)
+    # Geocode with rate limiting
     for i, row in df.iterrows():
         facility = str(row['Facility Name'])
         country = str(row['Country'])
-        if facility and country:
+        if facility and country and facility != 'nan' and country != 'nan':
             df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
-        time.sleep(1)  # Critical: respect API rate limits
+        time.sleep(1)  # Respect API rate limits
     
     return df
+
 
 # Example usage:
 # df = process_and_geocode_excel("input_file.xlsx", user_agent="MyApp/1.0")
@@ -164,10 +181,10 @@ def append_nfc_facilities(
     # Match facilities within 50km
     matched_df = match_facilities_to_locations(
         facilities_df, 
-        metadata_df,
+        metadata_df.set_index('#sampleid'),
         max_distance_km=50
     )
-    return matched_df
+    return matched_df.reset_index()
 
 def analyze_contamination_correlation(df, threshold=0.5):
     """
@@ -189,7 +206,7 @@ def analyze_contamination_correlation(df, threshold=0.5):
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
     
     # Create clean working copy
-    analysis_df = df[required_cols].copy().dropna()
+    analysis_df = df.set_index('#sampleid')[required_cols].copy().dropna()
     
     # Convert contamination status to boolean
     # Handle different data types: bool, int (0/1), float (probability), or string
