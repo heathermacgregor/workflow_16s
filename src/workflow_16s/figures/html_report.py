@@ -80,13 +80,15 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures['shap'] = shap_figures
 
     # Violin plots
-    violin_figures = {'contaminated': {}, 'pristine': {}}
-    for feat in amplicon_data.top_contaminated_features:
+    group_1_name = 'contaminated'
+    group_2_name = 'pristine'
+    violin_figures = {group_1_name: {}, group_2_name: {}}
+    for feat in amplicon_data.top_features_group_1:
         if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['contaminated'][feat['feature']] = feat['violin_figure']
-    for feat in amplicon_data.top_pristine_features:
+            violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
+    for feat in amplicon_data.top_features_group_2:
         if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures['pristine'][feat['feature']] = feat['violin_figure']
+            violin_figures[group_2_name][feat['feature']] = feat['violin_figure']
     figures['violin'] = violin_figures
 
     return figures
@@ -474,8 +476,8 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
 
 def _prepare_ml_summary(
     models: Dict, 
-    top_contaminated: List[Dict], 
-    top_pristine: List[Dict]
+    top_group_1: List[Dict], 
+    top_group_2: List[Dict]
 ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Dict]:
     if not models:
         return None, None, {}
@@ -893,8 +895,16 @@ def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
     include_sections: Optional[List[str]] = None,
-    max_features: int = 20  
+    max_features: int = 20,
+    cfg: Optional[Dict] = None
 ) -> None:
+    if cfg:
+        group_col = cfg.get("group_column", "nuclear_contamination_status")
+        group_col_values = cfg.get("group_column_values", [True, False])
+    else:
+        group_col = "nuclear_contamination_status"
+        group_col_values = [True, False]
+        
     figures_dict = _extract_figures(amplicon_data)
     
     include_sections = include_sections or [
@@ -906,17 +916,23 @@ def generate_html_report(
     ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
+    
     # Top features tables (without SHAP data)
-    contam_df = _prepare_features_table(
-        amplicon_data.top_contaminated_features,
+    #contam_df
+    x = 1
+    group_1_name = f"{group_col}={group_col_values[x-1]}"
+    group_1_df = _prepare_features_table(
+        getattr(amplicon_data, f'top_features_group_{x}', []),
         max_features,
-        "Contaminated"
+        group_1_name
     )
-    pristine_df = _prepare_features_table(
-        amplicon_data.top_pristine_features,
+    #pristine_df 
+    x = 2
+    group_2_name = f"{group_col}={group_col_values[x-1]}"
+    group_2_df = _prepare_features_table(
+        getattr(amplicon_data, f'top_features_group_{x}', []),
         max_features,
-        "Pristine"
+        group_2_name
     )
     
     # Stats summary
@@ -927,19 +943,19 @@ def generate_html_report(
     # ML summary (includes SHAP reports)
     ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
-        amplicon_data.top_contaminated_features,
-        amplicon_data.top_pristine_features
+        amplicon_data.top_features_group_1,
+        amplicon_data.top_features_group_2
     )
     ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
     
     tables_html = f"""
     <div class="subsection">
         <h3>Top Features</h3>
-        <h4>Contaminated-Associated Features</h4>
-        {_add_table_functionality(contam_df, 'contam-table')}
+        <h4>Features associated with {group_1_name}</h4>
+        {_add_table_functionality(group_1_df, 'contam-table')}
         
-        <h4>Pristine-Associated Features</h4>
-        {_add_table_functionality(pristine_df, 'pristine-table')}
+        <h4>Features Associated with {group_2_name}</h4>
+        {_add_table_functionality(group_2_df, 'pristine-table')}
     </div>
     
     <div class="subsection">
@@ -989,94 +1005,12 @@ def generate_html_report(
     except Exception as e:
         logger.error(f"Error reading JavaScript file: {e}")
         table_js = ""
-        
-    tooltip_css = """
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        cursor: help;
-        border-bottom: 1px dashed #3498db;
-    }
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 280px;
-        background-color: #222;
-        color: #fff;
-        text-align: left;
-        border-radius: 6px;
-        padding: 12px;
-        position: absolute;
-        z-index: 1000;
-        bottom: 125%;
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.3s;
-        font-size: 14px;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    .tooltip .tooltiptext::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: #222 transparent transparent transparent;
-    }
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
-    }
-    """
-    collapsible_css = """
-    /* Collapsible sections */
-    .section-header {
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px;
-        background-color: #f5f5f5;
-        border-bottom: 1px solid #ddd;
-        user-select: none;
-    }
-    
-    .section-header:hover {
-        background-color: #e9e9e9;
-    }
-    
-    .toggle-icon {
-        font-size: 0.8em;
-        transition: transform 0.3s ease;
-    }
-    
-    .section-content {
-        padding: 15px;
-        overflow: hidden;
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out;
-        max-height: 5000px; /* Large initial value */
-    }
-    
-    .section.collapsed .section-content {
-        max-height: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-        overflow: hidden;
-    }
-    
-    .section.collapsed .toggle-icon {
-        transform: rotate(-90deg);
-    }
-    """
     
     try:
-        css_content = css_path.read_text(encoding='utf-8') + tooltip_css + collapsible_css
+        css_content = css_path.read_text(encoding='utf-8') 
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
-        css_content = tooltip_css + shap_css
+        css_content = ""
         
     try:
         html_template = html_template_path.read_text(encoding="utf-8")
