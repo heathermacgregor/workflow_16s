@@ -1022,22 +1022,17 @@ def generate_html_report(
         <body>Report generation failed: Missing template</body>
         </html>"""
 
-    # Use safe string replacement instead of .format()
-    replacements = {
-        "<!-- PLOTLY_JS_TAG -->": plotly_js_tag,
-        "<!-- GENERATED_TS -->": ts,
-        "<!-- SECTION_LIST -->": ", ".join(include_sections),
-        "<!-- NAV_HTML -->": nav_html,
-        "<!-- TABLES_HTML -->": tables_html,
-        "<!-- SECTIONS_HTML -->": sections_html,
-        "<!-- PLOT_DATA_JSON -->": payload,
-        "<!-- TABLE_JS -->": table_js,
-        "<!-- CSS_CONTENT -->": css_content
-    }
-
-    # Apply replacements
-    html = html_template
-    for placeholder, value in replacements.items():
-        html = html.replace(placeholder, value)
+    html = html_template.format(
+        title="16S Amplicon Analysis Report",
+        plotly_js_tag=plotly_js_tag,
+        generated_ts=ts,
+        section_list=", ".join(include_sections),
+        nav_html=nav_html,
+        tables_html=tables_html,
+        sections_html=sections_html,
+        plot_data_json=payload,
+        table_js=table_js,
+        css_content=css_content
+    )
         
     output_path.write_text(html, encoding="utf-8")
