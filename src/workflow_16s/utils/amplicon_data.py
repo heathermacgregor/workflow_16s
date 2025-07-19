@@ -606,10 +606,10 @@ class _DataLoader(_ProcessingMixin):
         orig_n = self.table.shape[1]
         self.table, self.meta = update_table_and_meta(self.table, self.meta, "#sampleid")
         ftype = "genera" if self.mode == "genus" else "ASVs"
-        logger.info(
+        (
             f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples × {self.meta.shape[1]:>5} cols"
         )
-        logger.info(
+        (
             f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples × {self.table.shape[0]:>5} {ftype}"
         )
 
@@ -821,7 +821,7 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_alpha_diversity_analysis(self) -> None:      
         alpha_cfg = self.cfg.get("alpha_diversity", {})
         if not alpha_cfg.get("enabled", False):
-            logger.info("Alpha diversity analysis disabled.")
+            ("Alpha diversity analysis disabled.")
             return
         
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -960,7 +960,7 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_statistical_tests(self) -> None:
         stats_cfg = self.cfg.get("stats", {})
         if not stats_cfg.get("enabled", False):
-            logger.info("Statistical analysis disabled.")
+            ("Statistical analysis disabled.")
             return
 
         KNOWN_TESTS = ['fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni']
@@ -1091,7 +1091,7 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_ordination(self) -> None:
         ordination_cfg = self.cfg.get("ordination", {})
         if not ordination_cfg.get("enabled", False):
-            logger.info("Ordination analysis disabled.")
+            ("Ordination analysis disabled.")
             return
 
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
@@ -1195,15 +1195,6 @@ class _AnalysisManager(_ProcessingMixin):
                     f"Ordination completed: {completed_count} succeeded, "
                     f"{error_count} failed, {timeout_count} timed out"
                 )
-                
-                # Save error report
-                if errors:
-                    error_file = self.output_dir / "ordination_errors.tsv"
-                    with open(error_file, "w") as f:
-                        f.write("TableType\tLevel\tMethod\tError\n")
-                        for (tt, lv, mt), err in errors.items():
-                            f.write(f"{tt}\t{lv}\t{mt}\t{err}\n")
-                    logger.info(f"Saved ordination errors to {error_file}")
 
     def _run_single_ordination(self, table, meta, symbol_col, table_type, level, method, output_dir):
         try:
@@ -1414,12 +1405,11 @@ class _AnalysisManager(_ProcessingMixin):
                         .assign(norm_id=meta_ids)
                         .set_index("norm_id")[group_col]
                     )
-                
                     # Create normalized table index
                     table_normalized_index = table.index.astype(str).str.strip().str.lower()
                     # Map group values using normalized IDs
                     table[group_col] = table_normalized_index.map(group_map)
-                    logger.info(table)
+                    
                     # Verify feature exists
                     if feature_name not in table.columns:
                         logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
@@ -1465,7 +1455,6 @@ class _AnalysisManager(_ProcessingMixin):
                         .assign(norm_id=meta_ids)
                         .set_index("norm_id")[group_col]
                     )
-                
                     # Create normalized table index
                     table_normalized_index = table.index.astype(str).str.strip().str.lower()
                     # Map group values using normalized IDs
