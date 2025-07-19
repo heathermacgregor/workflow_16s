@@ -5,6 +5,9 @@ import pandas as pd
 import requests
 import time
 from openpyxl import load_workbook
+import pandas as pd
+from sklearn.metrics import confusion_matrix, classification_report
+
 DEFAULT_XLSX_PATH = '/usr2/people/macgregor/amplicon/SFCISFacilityList.xlsx'
 
 def process_and_geocode_excel(file_path: str = DEFAULT_XLSX_PATH, user_agent="MyGeocodingApp/1.0"):
@@ -165,3 +168,94 @@ def append_nfc_facilities(
         max_distance_km=50
     )
     return matched_df
+
+def analyze_contamination_correlation(df, threshold=0.5):
+    """
+    Analyzes correlation between facility proximity and contamination status
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing 'facility_match' and 
+                           'nuclear_contamination_status' columns
+        threshold (float): Probability threshold for contamination status
+                           (default=0.5)
+    
+    Returns:
+        dict: Dictionary containing analysis results and metrics
+    """
+    # Validate required columns
+    required_cols = ['facility_match', 'nuclear_contamination_status']
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+    
+    # Create clean working copy
+    analysis_df = df[required_cols].copy().dropna()
+    
+    # Convert contamination status to boolean
+    # Handle different data types: bool, int (0/1), float (probability), or string
+    if analysis_df['nuclear_contamination_status'].dtype in ['int64', 'float64']:
+        analysis_df['contaminated'] = (
+            analysis_df['nuclear_contamination_status'] > threshold
+        )
+    elif analysis_df['nuclear_contamination_status'].dtype == 'object':
+        # Handle string values - customize based on your actual values
+        positive_indicators = ['contaminated', 'positive', 'high', 'yes', 'true']
+        analysis_df['contaminated'] = analysis_df['nuclear_contamination_status'].str.lower().isin(positive_indicators)
+    else:
+        analysis_df['contaminated'] = analysis_df['nuclear_contamination_status'].astype(bool)
+    
+    # Prepare boolean series
+    facility_nearby = analysis_df['facility_match'].astype(bool)
+    is_contaminated = analysis_df['contaminated']
+    
+    # Calculate confusion matrix
+    tn, fp, fn, tp = confusion_matrix(
+        is_contaminated, 
+        facility_nearby,
+        labels=[False, True]
+    ).ravel()
+    
+    # Calculate key metrics
+    total = len(analysis_df)
+    contamination_rate = is_contaminated.mean()
+    facility_presence_rate = facility_nearby.mean()
+    
+    # Calculate correlation metrics
+    true_positive_rate = tp / (tp + fn) if (tp + fn) > 0 else 0
+    false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    relative_risk = (tp / (tp + fp)) / (fn / (fn + tn)) if (fn + tn) > 0 else float('nan')
+    
+    # Generate classification report
+    report = classification_report(
+        is_contaminated, 
+        facility_nearby,
+        target_names=['Not Contaminated', 'Contaminated'],
+        output_dict=True
+    )
+    
+    return {
+        'summary_metrics': {
+            'total_locations': total,
+            'contamination_rate': contamination_rate,
+            'facility_presence_rate': facility_presence_rate,
+            'true_positive_rate': true_positive_rate,
+            'false_positive_rate': false_positive_rate,
+            'precision': precision,
+            'relative_risk': relative_risk
+        },
+        'confusion_matrix': {
+            'true_positive': tp,
+            'false_positive': fp,
+            'true_negative': tn,
+            'false_negative': fn
+        },
+        'contingency_table': pd.crosstab(
+            facility_nearby, 
+            is_contaminated,
+            rownames=['Facility Nearby'],
+            colnames=['Contaminated'],
+            margins=True
+        ).to_dict(),
+        'classification_report': report
+    }
