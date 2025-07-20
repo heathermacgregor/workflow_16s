@@ -27,7 +27,7 @@ DEFAULT_N: int = 65  # Length of description for progress bar
 DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx' #'../../../references/NFCISFacilityList.xlsx'
 DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv' #'../../../references/gem_nuclearpower_2024-07.tsv'
 
-NFCIS_COLUMNS = {
+DEFAULT_NFCIS_COLUMNS = {
     'country': "Country",
     'facility': "Facility Name",
     'facility_type': "Facility Type",
@@ -36,7 +36,7 @@ NFCIS_COLUMNS = {
     'facility_start_year': "Start of Operation",
     'facility_end_year': "End of Operation"
 }
-GEM_COLUMNS = {
+DEFAULT_GEM_COLUMNS = {
     'country': "Country/Area",
     'facility': "Project Name",
     'facility_type': "Reactor Type",
