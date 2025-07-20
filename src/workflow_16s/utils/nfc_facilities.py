@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 # ================================== LOCAL IMPORTS =================================== #
 
-from workflow_16s.utils.progress import get_progress_bar
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -140,12 +140,12 @@ def process_and_geocode_db(
     with get_progress_bar() as progress:
         task_desc = "Geocoding facilities..."
         task = progress.add_task(
-            f"[white]{task_desc:<{DEFAULT_N}}", 
+            _format_task_desc(task_desc), 
             total=df.shape[0]
         )
         for i, row in df.iterrows():
-            facility = str(row[facility_col])
-            country = str(row[country_col])
+            facility = str(row['facility'])
+            country = str(row['country'])
             try:
                 if facility and country and facility != 'nan' and country != 'nan':
                     df.at[i, 'latitude_deg'], df.at[i, 'longitude_deg'] = geocode_location(facility, country)
