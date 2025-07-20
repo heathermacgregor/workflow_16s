@@ -83,7 +83,7 @@ def execute_per_dataset_qiime_workflow(
     
     if qiime_config.get("hard_rerun", False):
         command.append("--hard_rerun")
-    if qiime_config.get("trim", {}).get("run", False):
+    if qiime_config.get("trim", {}).get("enabled", False):
         command.append("--trim_sequences")
 
     try:
