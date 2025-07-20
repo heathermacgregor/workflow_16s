@@ -230,7 +230,7 @@ def find_nearby_nfc_facilities(
     logger.info(f"Merged facilities: {facilities_df.shape}")
 
     max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
-    matched_df = match_facilities_to_locations(facilities_df, meta, max_distance_km=max_dist)
+    matched_df = match_facilities_to_locations(facilities_df, meta[['country']], max_distance_km=max_dist)
     matched_df.to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
                       sep='\t', index=False)
     return matched_df
