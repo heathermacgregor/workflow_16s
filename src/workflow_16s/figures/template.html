@@ -2,18 +2,18 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <title>@@title@@</title>
-        @@plotly_js_tag@@
+        <title>{title}</title>
+        {plotly_js_tag}
         <style>
-            @@css_content@@
+            {css_content}
         </style>
     </head>
     <body>
-        <h1>@@title@@</h1>
-        <p>Generated: @@generated_ts@@</p>
-        <p>Sections: @@section_list@@</p>
+        <h1>{title}</h1>
+        <p>Generated: {generated_ts}</p>
+        <p>Sections: {section_list}</p>
         <!-- Navigation Section -->
-        @@nav_html@@
+        {nav_html}
         <div class="section-controls">
             <button class="section-button" onclick="toggleAllSections(true)">Expand All</button>
             <button class="section-button" onclick="toggleAllSections(false)">Collapse All</button>
@@ -21,12 +21,12 @@
         <!-- Analysis Summary Section -->
         <div class="section" id="analysis-summary">
             <h2>Analysis Summary</h2>
-            @@tables_html@@
+            {tables_html}
         </div>
         <!-- Figures Sections -->
-        @@sections_html@@
+        {sections_html}
         <!-- serialised figure data -->
-        <script id="plot-data" type="application/json">@@plot_data_json@@</script>
+        <script id="plot-data" type="application/json">{plot_data_json}</script>
         <script>
             /* ======================= FIGURE FUNCTIONALITY ======================= */
             /* ---- data ---- */
@@ -38,25 +38,25 @@
             const activeWebGLPlots = new Set();
             
             /* ---- helpers ---- */
-            function purgePlot(plotId) {
+            function purgePlot(plotId) {{
                 const plotDiv = document.getElementById(plotId);
-                if (plotDiv && Plotly) {
+                if (plotDiv && Plotly) {{
                     Plotly.purge(plotDiv);
-                }
-                const container = document.getElementById(`container-${plotId}`);
+                }}
+                const container = document.getElementById(`container-${{plotId}}`);
                 if (container) container.innerHTML = '';
                 rendered.delete(plotId);
                 activeWebGLPlots.delete(plotId);
-            }
+            }}
             
-            function enforceWebGLLimit() {
-                while (activeWebGLPlots.size > MAX_WEBGL_CONTEXTS) {
+            function enforceWebGLLimit() {{
+                while (activeWebGLPlots.size > MAX_WEBGL_CONTEXTS) {{
                     const oldest = activeWebGLPlots.values().next().value;
                     purgePlot(oldest);
-                }
-            }
+                }}
+            }}
             
-            function renderPlot(containerId, plotId) {
+            function renderPlot(containerId, plotId) {{
                 const container = document.getElementById(containerId);
                 if (!container) return console.error('Missing container', containerId);
             
@@ -67,10 +67,10 @@
                 container.appendChild(div);
             
                 const payload = plotData[plotId];
-                if (!payload) {
+                if (!payload) {{
                     div.innerHTML = '<div class="error">Plot data unavailable</div>';
                     return;
-                }
+                }}
             
                 // Compute responsive width (min 500px, max 1000px)
                 const fullWidth = container.clientWidth || window.innerWidth;
@@ -82,59 +82,59 @@
                 // Check if this is a 3D plot
                 const is3D = payload.data?.some(d => d.type.includes('3d'));
             
-                try {
-                    if (payload.type === 'plotly') {
-                        if (payload.layout) {
+                try {{
+                    if (payload.type === 'plotly') {{
+                        if (payload.layout) {{
                             payload.layout.showlegend = false;
                             payload.layout.width = width;
                             payload.layout.height = height;
                             
                             // Optimize 3D plots
-                            if (is3D) {
-                                payload.layout.scene = payload.layout.scene || {};
+                            if (is3D) {{
+                                payload.layout.scene = payload.layout.scene || {{}};
                                 payload.layout.scene.aspectmode = 'data';
                                 payload.layout.uirevision = 'constant';
-                            }
-                        }
+                            }}
+                        }}
                         
-                        const config = {
+                        const config = {{
                             responsive: true,
-                            webglOptions: { preserveDrawingBuffer: false }
-                        };
+                            webglOptions: {{ preserveDrawingBuffer: false }}
+                        }};
                         
                         Plotly.newPlot(plotId, payload.data, payload.layout, config)
-                            .then(() => {
-                                if (is3D) {
+                            .then(() => {{
+                                if (is3D) {{
                                     activeWebGLPlots.add(plotId);
                                     enforceWebGLLimit();
-                                }
-                            })
-                            .catch(err => {
-                                div.innerHTML = `<div class="error">Plotly error: ${err}</div>`;
+                                }}
+                            }})
+                            .catch(err => {{
+                                div.innerHTML = `<div class="error">Plotly error: ${{err}}</div>`;
                                 console.error(err);
-                            });
-                    }
-                    else if (payload.type === 'image') {
+                            }});
+                    }}
+                    else if (payload.type === 'image') {{
                         const img = document.createElement('img');
                         img.src = 'data:image/png;base64,' + payload.data;
                         img.style.maxWidth = '100%';
                         img.style.height = 'auto';
                         div.appendChild(img);
-                    } 
-                    else if (payload.type === 'error') {
-                        div.innerHTML = `<div class="error">${payload.error}</div>`;
-                    } 
-                    else {
+                    }} 
+                    else if (payload.type === 'error') {{
+                        div.innerHTML = `<div class="error">${{payload.error}}</div>`;
+                    }} 
+                    else {{
                         div.innerHTML = '<div class="error">Unknown plot type</div>';
-                    }
-                } catch (err) {
-                    div.innerHTML = `<div class="error">Rendering error: ${err}</div>`;
+                    }}
+                }} catch (err) {{
+                    div.innerHTML = `<div class="error">Rendering error: ${{err}}</div>`;
                     console.error(err);
-                }
-            }
+                }}
+            }}
             
             /* ---- tab logic ---- */
-            function showTab(tabId, plotId) {
+            function showTab(tabId, plotId) {{
                 const pane = document.getElementById(tabId);
                 if (!pane) return;
             
@@ -143,46 +143,46 @@
                 
                 // Purge previous plot in this subsection
                 const prevPane = subsection.querySelector('.tab-pane[style*="display: block"]');
-                if (prevPane) {
+                if (prevPane) {{
                     const prevPlotId = prevPane.dataset.plotId;
-                    if (rendered.has(prevPlotId)) {
+                    if (rendered.has(prevPlotId)) {{
                         purgePlot(prevPlotId);
-                    }
-                }
+                    }}
+                }}
             
                 // Update UI
                 subsection.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
                 subsection.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
                 
                 pane.style.display = 'block';
-                const button = subsection.querySelector(`[data-tab="${tabId}"]`);
+                const button = subsection.querySelector(`[data-tab="${{tabId}}"]`);
                 if (button) button.classList.add('active');
             
                 // Render new plot
-                if (!rendered.has(plotId)) {
-                    renderPlot(`container-${plotId}`, plotId);
+                if (!rendered.has(plotId)) {{
+                    renderPlot(`container-${{plotId}}`, plotId);
                     rendered.add(plotId);
-                }
-            }
+                }}
+            }}
             
             /* ---- nested tab management ---- */
-            function showTable(tableId) {
+            function showTable(tableId) {{
                 // Purge all plots in current table
                 const currentTable = document.querySelector('.table-pane[style*="display: block"]');
-                if (currentTable) {
-                    currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+                if (currentTable) {{
+                    currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
                         const plotId = pane.dataset.plotId;
                         if (rendered.has(plotId)) purgePlot(plotId);
-                    });
-                }
+                    }});
+                }}
             
                 // Update UI
-                document.querySelectorAll('.table-pane').forEach(pane => {
+                document.querySelectorAll('.table-pane').forEach(pane => {{
                     pane.style.display = 'none';
-                });
-                document.querySelectorAll('.table-button').forEach(btn => {
+                }});
+                document.querySelectorAll('.table-button').forEach(btn => {{
                     btn.classList.remove('active');
-                });
+                }});
                 
                 const newTable = document.getElementById(tableId);
                 if (newTable) {
@@ -199,24 +199,24 @@
             }
 
             
-            function showLevel(levelId) {
+            function showLevel(levelId) {{
                 // Purge all plots in current level
                 const tablePane = document.getElementById(levelId).closest('.table-pane');
                 const currentLevel = tablePane.querySelector('.level-pane[style*="display: block"]');
-                if (currentLevel) {
-                    currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+                if (currentLevel) {{
+                    currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
                         const plotId = pane.dataset.plotId;
                         if (rendered.has(plotId)) purgePlot(plotId);
-                    });
-                }
+                    }});
+                }}
             
                 // Update UI
-                tablePane.querySelectorAll('.level-pane').forEach(pane => {
+                tablePane.querySelectorAll('.level-pane').forEach(pane => {{
                     pane.style.display = 'none';
-                });
-                tablePane.querySelectorAll('.level-button').forEach(btn => {
+                }});
+                tablePane.querySelectorAll('.level-button').forEach(btn => {{
                     btn.classList.remove('active');
-                });
+                }});
                 
                 // Show the new level
                 const newLevel = document.getElementById(levelId);
@@ -245,24 +245,24 @@
             }
 
             
-            function showMethod(methodId) {
+            function showMethod(methodId) {{
                 // Purge all plots in current method
                 const levelPane = document.getElementById(methodId).closest('.level-pane');
                 const currentMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
-                if (currentMethod) {
-                    currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+                if (currentMethod) {{
+                    currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
                         const plotId = pane.dataset.plotId;
                         if (rendered.has(plotId)) purgePlot(plotId);
-                    });
-                }
+                    }});
+                }}
             
                 // Update UI
-                levelPane.querySelectorAll('.method-pane').forEach(pane => {
+                levelPane.querySelectorAll('.method-pane').forEach(pane => {{
                     pane.style.display = 'none';
-                });
-                levelPane.querySelectorAll('.method-button').forEach(btn => {
+                }});
+                levelPane.querySelectorAll('.method-button').forEach(btn => {{
                     btn.classList.remove('active');
-                });
+                }});
                 
                 const newMethod = document.getElementById(methodId);
                 if (newMethod) {
@@ -278,12 +278,12 @@
                 }
             }
             
-            function showMetric(metricId, plotId) {
+            function showMetric(metricId, plotId) {{
                 // Purge any existing plot in this metric pane
-                const container = document.getElementById(`container-${plotId}`);
-                if (container) {
+                const container = document.getElementById(`container-${{plotId}}`);
+                if (container) {{
                     container.innerHTML = '';
-                }
+                }}
                 
                 // Update UI
                 const metricPane = document.getElementById(metricId);
@@ -292,32 +292,32 @@
                 const levelPane = metricPane.closest('.level-pane');
                 if (!levelPane) return;
                 
-                levelPane.querySelectorAll('.metric-pane').forEach(pane => {
+                levelPane.querySelectorAll('.metric-pane').forEach(pane => {{
                     pane.style.display = 'none';
-                });
-                levelPane.querySelectorAll('.metric-button').forEach(btn => {
+                }});
+                levelPane.querySelectorAll('.metric-button').forEach(btn => {{
                     btn.classList.remove('active');
-                });
+                }});
                 
                 metricPane.style.display = 'block';
-                document.querySelector(`[data-metric="${metricId}"]`).classList.add('active');
+                document.querySelector(`[data-metric="${{metricId}}"]`).classList.add('active');
                 
                 // Render new plot
-                if (!rendered.has(plotId)) {
-                    renderPlot(`container-${plotId}`, plotId);
+                if (!rendered.has(plotId)) {{
+                    renderPlot(`container-${{plotId}}`, plotId);
                     rendered.add(plotId);
-                }
-            }
+                }}
+            }}
             
             /* ---- section toggles ---- */
-            function toggleAllSections(show) {
-                document.querySelectorAll('.section').forEach(s => {
+            function toggleAllSections(show) {{
+                document.querySelectorAll('.section').forEach(s => {{
                     s.style.display = show ? 'block' : 'none';
-                });
-            }
+                }});
+            }}
             
             /* ======================= TABLE FUNCTIONALITY ======================= */
-            @@table_js@@
+            {table_js}
             
             /* ---- initialization ---- */
             document.addEventListener('DOMContentLoaded', () => {
