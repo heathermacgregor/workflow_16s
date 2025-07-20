@@ -102,7 +102,10 @@ def process_and_geocode_db(
     logger.info(f"Loaded data shape: {df.shape}")
 
     # Filter and rename columns
-    df = df[list(column_names.values())]
+    try:
+        df = df[list(column_names.values())]
+    except KeyError:
+        logger.info(df.columns)
     df = df.rename(columns={v: k for k, v in column_names.items()})
     df = df[list(column_names.keys())]
     
