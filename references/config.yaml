@@ -17,8 +17,11 @@ project_dir: "../../test" # Output directory
 ena_email: "macgregor@berkeley.edu" # ENA API
 
 # Toggle what parts to run
-upstream: False
-downstream: True
+upstream: 
+  enabled: False
+downstream: 
+  enabled: True
+  find_subsets: False
 
 ##########################################################################################################################################
 # UPSTREAM
@@ -79,6 +82,12 @@ group_column_values:
   - True
   - False
 
+metadata_id_column: '#sampleid'
+dataset_column: "dataset_name"
+group_columns:
+  - name: "nuclear_contamination_status"
+    type: "bool"
+
 nfc_facilities:
   enabled: True
   databases:
@@ -88,13 +97,6 @@ nfc_facilities:
   maps:
     enabled: True
 
-
-group_columns:
-  - name: "nuclear_contamination_status"
-    type: "bool"
-
-dataset_column: "dataset_name"
-  
 features: # Feature table pre-processing
   filter: True
   normalize: True
