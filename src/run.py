@@ -237,7 +237,7 @@ def upstream(cfg, logger) -> None:
                         success_subsets.append(subset["dataset"])
 
                         # Check if clean_fastq is enabled
-                        clean_fastq = cfg.get("clean_fastq", True)
+                        clean_fastq = cfg.get("clean_fastq", {}).get("enabled", True)
                         dataset_type = dataset_info.get('dataset_type', '').upper()
                         if clean_fastq and dataset_type == 'ENA':
                             dir_types = ["raw_seqs", "trimmed_seqs"]
