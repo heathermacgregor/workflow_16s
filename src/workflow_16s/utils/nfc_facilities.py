@@ -194,9 +194,6 @@ def match_facilities_to_locations(
 def find_nearby_nfc_facilities(
     cfg: Dict,
     meta: pd.DataFrame
-) -> pd.DataFrame:(
-    cfg: Dict,
-    meta: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Load facility databases, geocode, merge, and match to sample metadata.
