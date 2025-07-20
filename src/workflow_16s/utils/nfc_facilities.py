@@ -180,6 +180,11 @@ def match_facilities_to_locations(
             }
             for _ in range(len(samples))
         ])
+        # Rename facility coordinate columns before returning
+        matches = matches.rename(columns={
+            'latitude_deg': 'facility_latitude_deg',
+            'longitude_deg': 'facility_longitude_deg'
+        })
         return pd.concat([samples, matches], axis=1)
 
     # Prepare facility KD-tree
@@ -211,8 +216,15 @@ def match_facilities_to_locations(
 
     # Combine matches in original order
     matches_df = pd.DataFrame(records)
-    return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
     
+    # Rename facility coordinate columns to avoid conflicts
+    matches_df = matches_df.rename(columns={
+        'latitude_deg': 'facility_latitude_deg',
+        'longitude_deg': 'facility_longitude_deg'
+    })
+    
+    return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
+
 
 def find_nearby_nfc_facilities(
     cfg: Dict,
@@ -220,7 +232,7 @@ def find_nearby_nfc_facilities(
 ) -> pd.DataFrame:
     """
     Load facility databases, geocode, merge, and match to sample metadata.
-    Returns DataFrame with first 10 columns from original metadata + match details.
+    Returns DataFrame with specific metadata columns + facility details.
     """
     databases = cfg.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
     dfs = []
@@ -231,15 +243,30 @@ def find_nearby_nfc_facilities(
     logger.info(f"Merged facilities: {facilities_df.shape}")
 
     max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
-    # Pass full metadata instead of subset
+    # Pass full metadata to ensure coordinate columns are available
     matched_df = match_facilities_to_locations(facilities_df, meta, max_distance_km=max_dist)
     
     
     
-    # Keep only first 10 columns from original metadata + new facility columns
-    original_first_10_cols = meta.columns[:10].tolist()
+    # Define required metadata columns to keep
+    required_meta_cols = [
+        'nuclear_contamination_status', 
+        'dataset_name', 
+        'country', 
+        'latitude_deg', 
+        'longitude_deg'
+    ]
+    
+    # Get new facility columns (including renamed coordinates)
     new_cols = [col for col in matched_df.columns if col not in meta.columns]
-    result_cols = original_first_10_cols + new_cols
+    
+    # Combine required metadata and new facility columns
+    result_cols = [col for col in required_meta_cols if col in matched_df] + new_cols
+    
+    # Log warning if any required columns are missing
+    missing_cols = set(required_meta_cols) - set(result_cols)
+    if missing_cols:
+        logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
     # Save full matched results
     matched_df[result_cols].to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
                       sep='\t', index=False)
