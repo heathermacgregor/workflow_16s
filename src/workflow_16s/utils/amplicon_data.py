@@ -75,6 +75,13 @@ DEFAULT_ALPHA_METRICS = [
     'dominance'       
 ]
 PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
+DEFAULT_GROUP_COLUMNS = [
+    {
+        'name': "nuclear_contamination_status",
+        'type': "bool",
+        'values': [True, False]
+    },
+]
 debug_mode = False
 # ===================================== CLASSES ====================================== #
 
@@ -270,15 +277,12 @@ class Ordination:
         self.cfg = cfg
         self.verbose = verbose
         self.figure_output_dir = Path(output_dir)
-        self.color_columns = cfg["figures"].get(
+        self.color_columns = cfg["maps"].get(
             "color_columns",
-            cfg["figures"].get(
-                "map_columns",
-                [
-                    DEFAULT_DATASET_COLUMN, DEFAULT_GROUP_COLUMN,
-                    "env_feature", "env_material", "country"
-                ],
-            ),
+            [
+                DEFAULT_DATASET_COLUMN, DEFAULT_GROUP_COLUMN,
+                "env_feature", "env_material", "country"
+            ],
         )
 
     def run_tests(
@@ -403,8 +407,8 @@ class MapPlotter:
         self.cfg = cfg
         self.output_dir = output_dir
         self.verbose = verbose
-        self.color_columns = cfg["figures"].get(
-            "map_columns",
+        self.color_columns = cfg["maps"].get(
+            "color_columns",
             [
                 DEFAULT_DATASET_COLUMN,
                 DEFAULT_GROUP_COLUMN,
