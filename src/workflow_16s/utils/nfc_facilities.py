@@ -168,7 +168,7 @@ def find_nearby_nfc_facilities(
         meta.set_index('#sampleid'),
         max_distance_km=max_distance_km
     )
-    df.to_csv(f"/usr2/people/macgregor/amplicoin/test/facility_matches_{max_distance_km}km.tsv", sep='\t', index=True)
+    matched_df.to_csv(f"/usr2/people/macgregor/amplicoin/test/facility_matches_{max_distance_km}km.tsv", sep='\t', index=True)
 
     return matched_df.reset_index()
 
