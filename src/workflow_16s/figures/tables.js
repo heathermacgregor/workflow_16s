@@ -1,4 +1,272 @@
+/* ======================= FIGURE FUNCTIONALITY ======================= */
+/* ---- data ---- */
+const plotData = JSON.parse(document.getElementById('plot-data').textContent);
+
+/* ---- state ---- */
+const rendered = new Set();
+const MAX_WEBGL_CONTEXTS = 6;  // Conservative limit for most browsers
+const activeWebGLPlots = new Set();
+
+/* ---- helpers ---- */
+function purgePlot(plotId) {
+    const plotDiv = document.getElementById(plotId);
+    if (plotDiv && Plotly) {
+        Plotly.purge(plotDiv);
+    }
+    const container = document.getElementById(`container-${plotId}`);
+    if (container) container.innerHTML = '';
+    rendered.delete(plotId);
+    activeWebGLPlots.delete(plotId);
+}
+
+function enforceWebGLLimit() {
+    while (activeWebGLPlots.size > MAX_WEBGL_CONTEXTS) {
+        const oldest = activeWebGLPlots.values().next().value;
+        purgePlot(oldest);
+    }
+}
+
+function renderPlot(containerId, plotId) {
+    const container = document.getElementById(containerId);
+    if (!container) return console.error('Missing container', containerId);
+
+    container.innerHTML = '';
+    const div = document.createElement('div');
+    div.id = plotId;
+    div.className = 'plot-container';
+    container.appendChild(div);
+
+    const payload = plotData[plotId];
+    if (!payload) {
+        div.innerHTML = '<div class="error">Plot data unavailable</div>';
+        return;
+    }
+
+    // Compute responsive width (min 500px, max 1000px)
+    const fullWidth = container.clientWidth || window.innerWidth;
+    const minWidth = fullWidth * 0.15;
+    const width = Math.max(minWidth, Math.min(1000, fullWidth * 0.95));
+    const height = payload.square ? width : Math.round(width * 0.6);
+
+    const is3D = payload.data?.some(d => d.type.includes('3d'));
+
+    try {
+        if (payload.type === 'plotly') {
+            if (payload.layout) {
+                payload.layout.showlegend = false;
+                payload.layout.width = width;
+                payload.layout.height = height;
+
+                if (is3D) {
+                    payload.layout.scene = payload.layout.scene || {};
+                    payload.layout.scene.aspectmode = 'data';
+                    payload.layout.uirevision = 'constant';
+                }
+            }
+
+            const config = {
+                responsive: true,
+                webglOptions: { preserveDrawingBuffer: false }
+            };
+
+            Plotly.newPlot(plotId, payload.data, payload.layout, config)
+                .then(() => {
+                    if (is3D) {
+                        activeWebGLPlots.add(plotId);
+                        enforceWebGLLimit();
+                    }
+                })
+                .catch(err => {
+                    div.innerHTML = `<div class="error">Plotly error: ${err}</div>`;
+                    console.error(err);
+                });
+        } else if (payload.type === 'image') {
+            const img = document.createElement('img');
+            img.src = 'data:image/png;base64,' + payload.data;
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            div.appendChild(img);
+        } else if (payload.type === 'error') {
+            div.innerHTML = `<div class="error">${payload.error}</div>`;
+        } else {
+            div.innerHTML = '<div class="error">Unknown plot type</div>';
+        }
+    } catch (err) {
+        div.innerHTML = `<div class="error">Rendering error: ${err}</div>`;
+        console.error(err);
+    }
+}
+
+/* ---- tab logic ---- */
+function showTab(tabId, plotId) {
+    const pane = document.getElementById(tabId);
+    if (!pane) return;
+
+    const subsection = pane.closest('.subsection');
+    if (!subsection) return;
+
+    const prevPane = subsection.querySelector('.tab-pane[style*="display: block"]');
+    if (prevPane) {
+        const prevPlotId = prevPane.dataset.plotId;
+        if (rendered.has(prevPlotId)) {
+            purgePlot(prevPlotId);
+        }
+    }
+
+    subsection.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    subsection.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+
+    pane.style.display = 'block';
+    const button = subsection.querySelector(`[data-tab="${tabId}"]`);
+    if (button) button.classList.add('active');
+
+    if (!rendered.has(plotId)) {
+        renderPlot(`container-${plotId}`, plotId);
+        rendered.add(plotId);
+    }
+}
+
+/* ---- nested tab management ---- */
+function showTable(tableId) {
+    const currentTable = document.querySelector('.table-pane[style*="display: block"]');
+    if (currentTable) {
+        currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+            const plotId = pane.dataset.plotId;
+            if (rendered.has(plotId)) purgePlot(plotId);
+        });
+    }
+
+    document.querySelectorAll('.table-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    document.querySelectorAll('.table-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    const newTable = document.getElementById(tableId);
+    if (newTable) {
+        newTable.style.display = 'block';
+        document.querySelector(`[data-table="${tableId}"]`).classList.add('active');
+
+        const activeLevel = newTable.querySelector('.level-pane[style*="display: block"]');
+        if (!activeLevel) {
+            const firstLevel = newTable.querySelector('.level-pane');
+            if (firstLevel) showLevel(firstLevel.id);
+        }
+    }
+}
+
+function showLevel(levelId) {
+    const levelPane = document.getElementById(levelId);
+    if (!levelPane) return;
+
+    const tablePane = levelPane.closest('.table-pane');
+    if (!tablePane) return;
+
+    const currentLevel = tablePane.querySelector('.level-pane[style*="display: block"]');
+    if (currentLevel) {
+        currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+            const plotId = pane.dataset.plotId;
+            if (rendered.has(plotId)) purgePlot(plotId);
+        });
+    }
+
+    tablePane.querySelectorAll('.level-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    tablePane.querySelectorAll('.level-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    levelPane.style.display = 'block';
+    document.querySelector(`[data-level="${levelId}"]`).classList.add('active');
+
+    const activeMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
+    const activeMetric = levelPane.querySelector('.metric-pane[style*="display: block"]');
+
+    if (!activeMethod && !activeMetric) {
+        const firstMethod = levelPane.querySelector('.method-pane');
+        if (firstMethod) {
+            showMethod(firstMethod.id);
+        } else {
+            const firstMetric = levelPane.querySelector('.metric-pane');
+            if (firstMetric) {
+                const plotId = firstMetric.dataset.plotId;
+                if (plotId) showMetric(firstMetric.id, plotId);
+            }
+        }
+    }
+}
+
+function showMethod(methodId) {
+    const methodPane = document.getElementById(methodId);
+    if (!methodPane) return;
+
+    const levelPane = methodPane.closest('.level-pane');
+    if (!levelPane) return;
+
+    const currentMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
+    if (currentMethod) {
+        currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
+            const plotId = pane.dataset.plotId;
+            if (rendered.has(plotId)) purgePlot(plotId);
+        });
+    }
+
+    levelPane.querySelectorAll('.method-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    levelPane.querySelectorAll('.method-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    methodPane.style.display = 'block';
+    document.querySelector(`[data-method="${methodId}"]`).classList.add('active');
+
+    const activeTab = methodPane.querySelector('.tab-pane[style*="display: block"]');
+    if (!activeTab) {
+        const firstTab = methodPane.querySelector('.tab-pane');
+        if (firstTab) showTab(firstTab.id, firstTab.dataset.plotId);
+    }
+}
+
+function showMetric(metricId, plotId) {
+    const container = document.getElementById(`container-${plotId}`);
+    if (container) {
+        container.innerHTML = '';
+    }
+
+    const metricPane = document.getElementById(metricId);
+    if (!metricPane) return;
+
+    const levelPane = metricPane.closest('.level-pane');
+    if (!levelPane) return;
+
+    levelPane.querySelectorAll('.metric-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    levelPane.querySelectorAll('.metric-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    metricPane.style.display = 'block';
+    document.querySelector(`[data-metric="${metricId}"]`).classList.add('active');
+
+    if (!rendered.has(plotId)) {
+        renderPlot(`container-${plotId}`, plotId);
+        rendered.add(plotId);
+    }
+}
+
+/* ---- section toggles ---- */
+function toggleAllSections(show) {
+    document.querySelectorAll('.section').forEach(s => {
+        s.style.display = show ? 'block' : 'none';
+    });
+}
+
 /* ======================= TABLE FUNCTIONALITY ======================= */
+
 
 function sortTable(tableId, columnIndex, isNumeric) {
     const table = document.getElementById(tableId);
@@ -229,3 +497,55 @@ function toggleSection(contentId, header) {
         icon.textContent = '▼';
     }
 }
+
+/* ---- initialization ---- */
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize all first-level plots in subsections
+    document.querySelectorAll('.subsection').forEach(sub => {
+        const firstTab = sub.querySelector('.tab-pane');
+        const plotId = firstTab?.dataset.plotId;
+
+        if (firstTab && plotId && !rendered.has(plotId)) {
+            showTab(firstTab.id, plotId);
+        }
+    });
+
+    // Activate first table in each section
+    const activatedTables = new Set();
+    document.querySelectorAll('.table-pane').forEach(pane => {
+        const tableId = pane.id;
+        const tableButton = document.querySelector(`[data-table="${tableId}"]`);
+
+        if (tableButton && !activatedTables.has(tableId)) {
+            showTable(tableId);
+            activatedTables.add(tableId);
+        }
+    });
+
+    // Fallback: If no tables visible, show first level
+    document.querySelectorAll('.level-pane').forEach(pane => {
+        const levelId = pane.id;
+        const levelButton = document.querySelector(`[data-level="${levelId}"]`);
+
+        if (levelButton && pane.style.display !== 'block') {
+            showLevel(levelId);
+        }
+    });
+
+    // Fallback: If no levels visible, show first method
+    document.querySelectorAll('.method-pane').forEach(pane => {
+        const methodId = pane.id;
+        const methodButton = document.querySelector(`[data-method="${methodId}"]`);
+
+        if (methodButton && pane.style.display !== 'block') {
+            showMethod(methodId);
+        }
+    });
+
+    // Initialize any tabular behavior
+    if (typeof initTables === 'function') {
+        initTables();
+    } else {
+        console.warn('initTables() is not defined');
+    }
+});
