@@ -207,7 +207,6 @@ def _figs_to_html(
         idx     = next(counter)
         tab_id  = f"{prefix}-tab-{idx}"
         plot_id = f"{prefix}-plot-{idx}"
-        pane_id = f"pane-{plot_id}"  # Add this line
 
         btns.append(
             f'<button class="tab-button {"active" if idx==0 else ""}" '
@@ -216,8 +215,9 @@ def _figs_to_html(
         )
 
         tabs.append(
-            f'<div id="{pane_id}" class="metric-pane" '  # Use metric-pane class
-            f'style="display:{"block" if idx==0 else "none"}">'
+            f'<div id="{tab_id}" class="tab-pane" '
+            f'style="display:{"block" if idx==0 else "none"}" '
+            f'data-plot-id="{plot_id}">'
             f'<div id="container-{plot_id}" class="plot-container"></div></div>'
         )
 
@@ -725,7 +725,7 @@ def _violin_to_nested_html(
         buttons_html.append(
             f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
             f'data-tab="{cat_id}" '
-            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
+            f'onclick="showTab(\'{cat_id}\', \'{cat_id}-plot\')">{category.title()}</button>'
         )
         
         feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
