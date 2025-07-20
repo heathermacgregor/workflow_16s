@@ -1103,7 +1103,8 @@ def grid_search(
             average_precision_score(y_test, y_proba),
             str(output_dir / "best_precision_recall_curve.png")
         )
-        
+
+        """
         eval_fig = combine_figures_as_subplots(
             figures=[roc_fig, prc_fig, cm_fig],
             figures_per_row=3,
@@ -1111,6 +1112,7 @@ def grid_search(
             output_path=str(output_dir / "best_model_eval.png"),
             verbose=False
         )
+        """
         
         # Add test scores to results
         for result in results:
@@ -1131,7 +1133,7 @@ def grid_search(
         for metric, score in test_scores.items():
             logger.debug(f"{metric}: {score:.4f}")
     
-    return best_model, best_params, best_score, test_scores, eval_fig
+    return best_model, best_params, best_score, test_scores, [roc_fig, prc_fig, cm_fig]
 
 
 def save_feature_importances(
@@ -1324,8 +1326,9 @@ def catboost_feature_selection(
     except Exception as e:
         logger.error(f"SHAP plot generation failed: {e}")
         shap_figs = {}
-    logger.info(model.classes_)
+    
     # Return comprehensive results
+    logger.info(model.classes_)
     return {
         'model': best_model,
         'feature_importances': feat_imp.to_dict(),
@@ -1334,12 +1337,14 @@ def catboost_feature_selection(
         'test_scores': test_scores,
         'shap_report': shap_report,
         'figures': {
-            'eval_plots': eval_fig,
+            #'eval_plots': eval_fig,
+            'roc': eval_fig[0],
+            'prc': eval_fig[1],
+            'confusion_matrix': eval_fig[2],
             'shap_summary_bar': shap_figs['bar_fig'], 
             'shap_summary_beeswarm': shap_figs['beeswarm_fig'], 
             'shap_summary_heatmap': shap_figs['heatmap_fig'],
             'shap_summary_force': shap_figs['force_fig'],
-            #'shap_summary_waterfall': shap_figs['waterfall_fig'],
             'shap_dependency': shap_figs['dependency_figs']
         }
     }
