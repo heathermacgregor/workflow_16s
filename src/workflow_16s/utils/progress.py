@@ -145,3 +145,6 @@ def get_progress_bar(transient: bool = False) -> Progress:
         transient=transient,
         expand=False
     )
+
+def _format_task_desc(desc: str):
+    return f"[white]{str(desc):<{DEFAULT_N}}"
