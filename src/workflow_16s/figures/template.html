@@ -199,82 +199,84 @@
             }
 
             
-            function showLevel(levelId) {{
+            function showLevel(levelId) {
                 // Purge all plots in current level
-                const tablePane = document.getElementById(levelId).closest('.table-pane');
+                const levelPane = document.getElementById(levelId);
+                if (!levelPane) return;
+                
+                const tablePane = levelPane.closest('.table-pane');
+                if (!tablePane) return;
+                
                 const currentLevel = tablePane.querySelector('.level-pane[style*="display: block"]');
-                if (currentLevel) {{
-                    currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                if (currentLevel) {
+                    currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
                         const plotId = pane.dataset.plotId;
                         if (rendered.has(plotId)) purgePlot(plotId);
-                    }});
-                }}
+                    });
+                }
             
                 // Update UI
-                tablePane.querySelectorAll('.level-pane').forEach(pane => {{
+                tablePane.querySelectorAll('.level-pane').forEach(pane => {
                     pane.style.display = 'none';
-                }});
-                tablePane.querySelectorAll('.level-button').forEach(btn => {{
+                });
+                tablePane.querySelectorAll('.level-button').forEach(btn => {
                     btn.classList.remove('active');
-                }});
+                });
                 
                 // Show the new level
-                const newLevel = document.getElementById(levelId);
-                if (newLevel) {
-                    newLevel.style.display = 'block';
-                    document.querySelector(`[data-level="${levelId}"]`).classList.add('active');
-                    
-                    // Ensure a method or metric is always selected
-                    const activeMethod = newLevel.querySelector('.method-pane[style*="display: block"]');
-                    const activeMetric = newLevel.querySelector('.metric-pane[style*="display: block"]');
-                    
-                    if (!activeMethod && !activeMetric) {
-                        const firstMethod = newLevel.querySelector('.method-pane');
-                        if (firstMethod) {
-                            showMethod(firstMethod.id);
-                        } else {
-                            const firstMetric = newLevel.querySelector('.metric-pane');
-                            const firstButton = newLevel.querySelector('.metric-button');
-                            if (firstMetric && firstButton) {
-                                const plotId = firstMetric.querySelector('.plot-container')?.id.replace('container-', '');
-                                if (plotId) showMetric(firstMetric.id, plotId);
-                            }
+                levelPane.style.display = 'block';
+                document.querySelector(`[data-level="${levelId}"]`).classList.add('active');
+                
+                // Ensure a method or metric is always selected
+                const activeMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
+                const activeMetric = levelPane.querySelector('.metric-pane[style*="display: block"]');
+                
+                if (!activeMethod && !activeMetric) {
+                    const firstMethod = levelPane.querySelector('.method-pane');
+                    if (firstMethod) {
+                        showMethod(firstMethod.id);
+                    } else {
+                        const firstMetric = levelPane.querySelector('.metric-pane');
+                        if (firstMetric) {
+                            const plotId = firstMetric.dataset.plotId;
+                            if (plotId) showMetric(firstMetric.id, plotId);
                         }
                     }
                 }
             }
-
             
-            function showMethod(methodId) {{
+            function showMethod(methodId) {
+                const methodPane = document.getElementById(methodId);
+                if (!methodPane) return;
+                
+                const levelPane = methodPane.closest('.level-pane');
+                if (!levelPane) return;
+                
                 // Purge all plots in current method
-                const levelPane = document.getElementById(methodId).closest('.level-pane');
                 const currentMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
-                if (currentMethod) {{
-                    currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {{
+                if (currentMethod) {
+                    currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
                         const plotId = pane.dataset.plotId;
                         if (rendered.has(plotId)) purgePlot(plotId);
-                    }});
-                }}
+                    });
+                }
             
                 // Update UI
-                levelPane.querySelectorAll('.method-pane').forEach(pane => {{
+                levelPane.querySelectorAll('.method-pane').forEach(pane => {
                     pane.style.display = 'none';
-                }});
-                levelPane.querySelectorAll('.method-button').forEach(btn => {{
+                });
+                levelPane.querySelectorAll('.method-button').forEach(btn => {
                     btn.classList.remove('active');
-                }});
+                });
                 
-                const newMethod = document.getElementById(methodId);
-                if (newMethod) {
-                    newMethod.style.display = 'block';
-                    document.querySelector(`[data-method="${methodId}"]`).classList.add('active');
-                    
-                    // Ensure a plot is always selected
-                    const activeTab = newMethod.querySelector('.tab-pane[style*="display: block"]');
-                    if (!activeTab) {
-                        const firstTab = newMethod.querySelector('.tab-pane');
-                        if (firstTab) showTab(firstTab.id, firstTab.dataset.plotId);
-                    }
+                methodPane.style.display = 'block';
+                document.querySelector(`[data-method="${methodId}"]`).classList.add('active');
+                
+                // Ensure a plot is always selected
+                const activeTab = methodPane.querySelector('.tab-pane[style*="display: block"]');
+                if (!activeTab) {
+                    const firstTab = methodPane.querySelector('.tab-pane');
+                    if (firstTab) showTab(firstTab.id, firstTab.dataset.plotId);
                 }
             }
             
