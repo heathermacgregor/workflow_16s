@@ -142,31 +142,59 @@ def match_facilities_to_locations(
 ) -> pd.DataFrame:
     """
     Match locations to nearby facilities within a specified distance threshold.
+    Handles missing coordinates by preserving original rows.
     """
-    # Prepare valid coords
-    valid = facilities.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
-    fac_xyz = sph2cart(valid['latitude_deg'], valid['longitude_deg'])
+    # Copy samples to preserve order and index
+    samples = samples.reset_index(drop=True).copy()
+
+    # Identify valid coordinates
+    valid_mask = samples[['latitude_deg', 'longitude_deg']].notnull().all(axis=1)
+    valid_samples = samples[valid_mask]
+    invalid_samples = samples[~valid_mask]
+
+    # If no valid samples, return all unmatched
+    if valid_samples.empty:
+        matches = pd.DataFrame([
+            {**{col: np.nan for col in facilities.columns}, 'facility_distance_km': np.nan, 'facility_match': False}
+            for _ in range(len(samples))
+        ])
+        return pd.concat([samples, matches], axis=1)
+
+    # Prepare facility KD-tree
+    valid_fac = facilities.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
+    fac_xyz = sph2cart(valid_fac['latitude_deg'], valid_fac['longitude_deg'])
     tree = cKDTree(fac_xyz)
 
-    samp_xyz = sph2cart(samples['latitude_deg'], samples['longitude_deg'])
+    # Build sample coordinates
+    samp_xyz = sph2cart(valid_samples['latitude_deg'], valid_samples['longitude_deg'])
     dists, idxs = tree.query(samp_xyz, distance_upper_bound=max_distance_km)
 
-    # Build result DataFrame
-    matched = []
+    # Build result records
+    records = []
+    # First handle valid_samples
     for dist, idx in zip(dists, idxs):
         if np.isfinite(dist):
-            rec = valid.iloc[idx].to_dict()
+            rec = valid_fac.iloc[idx].to_dict()
             rec.update({'facility_distance_km': dist, 'facility_match': True})
         else:
             rec = {col: np.nan for col in facilities.columns}
             rec.update({'facility_distance_km': np.nan, 'facility_match': False})
-        matched.append(rec)
+        records.append(rec)
 
-    matches_df = pd.DataFrame(matched)
-    return pd.concat([samples.reset_index(drop=True), matches_df], axis=1)
+    # Then handle invalid_samples: no match
+    for _ in range(len(invalid_samples)):
+        rec = {col: np.nan for col in facilities.columns}
+        rec.update({'facility_distance_km': np.nan, 'facility_match': False})
+        records.append(rec)
 
+    # Combine matches in original order
+    matches_df = pd.DataFrame(records)
+    return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
 
 def find_nearby_nfc_facilities(
+    cfg: Dict,
+    meta: pd.DataFrame
+) -> pd.DataFrame:(
     cfg: Dict,
     meta: pd.DataFrame
 ) -> pd.DataFrame:
