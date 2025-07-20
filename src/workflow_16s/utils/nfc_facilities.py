@@ -220,6 +220,7 @@ def find_nearby_nfc_facilities(
 ) -> pd.DataFrame:
     """
     Load facility databases, geocode, merge, and match to sample metadata.
+    Returns DataFrame with first 10 columns from original metadata + match details.
     """
     databases = cfg.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
     dfs = []
@@ -230,10 +231,19 @@ def find_nearby_nfc_facilities(
     logger.info(f"Merged facilities: {facilities_df.shape}")
 
     max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
-    matched_df = match_facilities_to_locations(facilities_df, meta[['country']], max_distance_km=max_dist)
+    # Pass full metadata instead of subset
+    matched_df = match_facilities_to_locations(facilities_df, meta, max_distance_km=max_dist)
+    
+    # Save full matched results
     matched_df.to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
                       sep='\t', index=False)
-    return matched_df
+    
+    # Keep only first 10 columns from original metadata + new facility columns
+    original_first_10_cols = meta.columns[:10].tolist()
+    new_cols = [col for col in matched_df.columns if col not in meta.columns]
+    result_cols = original_first_10_cols + new_cols
+    
+    return matched_df[result_cols]
 
 
 def analyze_contamination_correlation(
