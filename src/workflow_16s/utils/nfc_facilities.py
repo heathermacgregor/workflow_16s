@@ -11,22 +11,54 @@ from workflow_16s.utils.progress import get_progress_bar
 
 logger = logging.getLogger("workflow_16s")
 DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
+#'../../../references/NFCISFacilityList.xlsx'
 DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
+#'../../../references/gem_nuclearpower_2024-07.tsv'
 DEFAULT_N: int = 65  # Length of description for progress bar
+NFCIS_COLUMNS = {
+    'country': "Country",
+    'facility': "Facility Name",
+    'facility_type': "Facility Type",
+    'facility_capacity': "Design Capacity",
+    'facility_status': "Facility Status",
+    'facility_start_year': "Start of Operation",
+    'facility_end_year': "End of Operation"
+}
+GEM_COLUMNS = {
+    'country': "Country/Area",
+    'facility': "Project Name",
+    'facility_type': "Reactor Type",
+    'facility_capacity': "Capacity (MW)",
+    'facility_status': "Status",
+    'facility_start_year': "Start Year",
+    'facility_end_year': "Retirement Year"
+}
 
-def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyGeocodingApp/1.0", skip_rows=0, skip_first_col=False):
+def process_and_geocode_db(
+    database: str = "GEM",
+    file_path: str = DEFAULT_GEM_PATH, 
+    user_agent="MyGeocodingApp/1.0", 
+):
     """
     Process a data file (Excel or TSV) and add latitude/longitude coordinates
     
     Args:
         file_path (str): Path to input file (.xlsx or .tsv)
         user_agent (str): Custom user agent for API requests
-        skip_rows (int): Number of initial rows to skip
-        skip_first_col (bool): Whether to drop the first column
     
     Returns:
         pd.DataFrame: Processed DataFrame with coordinates
     """
+    if database == "GEM":
+        skip_rows = 0
+        skip_first_col = False
+        column_names = DEFAULT_GEM_COLUMNS
+        
+    elif database == "NFCIS":
+        skip_rows = 8
+        skip_first_col = True
+        column_names = DEFAULT_NFCIS_COLUMNS
+        
     # Detect file type and load data
     ext = os.path.splitext(file_path)[1].lower()
     
@@ -54,30 +86,14 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
     df.columns = df.iloc[0]
     df = df.iloc[1:].reset_index(drop=True)
     logger.info(f"Loaded data shape: {df.shape}")
-    
-    # Create normalized column name mapping
-    col_normalized_to_original = {col.lower().strip(): col for col in df.columns}
-    
-    # Determine facility column name
-    facility_col = None
-    for candidate in ['project name', 'facility name']:
-        if candidate in col_normalized_to_original:
-            facility_col = col_normalized_to_original[candidate]
-            break
-    if not facility_col:
-        raise ValueError("Could not find facility name column. Tried: 'Project Name', 'Facility Name'")
-    
-    # Determine country column name
-    country_col = None
-    for candidate in ['country/area', 'country']:
-        if candidate in col_normalized_to_original:
-            country_col = col_normalized_to_original[candidate]
-            break
-    if not country_col:
-        raise ValueError("Could not find country column. Tried: 'Country/Area', 'Country'")
+
+    # Filter and rename columns
+    df = df[list(column_names.values())]
+    df = df.rename(columns={v: k for k, v in column_names.items()})
+    df = df[list(column_names.keys()]
     
     # Verify required columns exist
-    required_cols = [facility_col, country_col] 
+    required_cols = ['facility', 'country'] 
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
@@ -101,8 +117,7 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
         return None, None
     
     # Add coordinate columns
-    df['Latitude'] = None
-    df['Longitude'] = None
+    df['latitude'], df['longitude'] = None, None
     
     # Geocode with rate limiting
     with get_progress_bar() as progress:
@@ -116,8 +131,8 @@ def process_and_geocode_excel(file_path: str = DEFAULT_GEM_PATH, user_agent="MyG
             country = str(row[country_col])
             try:
                 if facility and country and facility != 'nan' and country != 'nan':
-                    df.at[i, 'Latitude'], df.at[i, 'Longitude'] = geocode_location(facility, country)
-                time.sleep(1)  # Respect API rate limits
+                    df.at[i, 'latitude_deg'], df.at[i, 'longitude_deg'] = geocode_location(facility, country)
+                #time.sleep(1)  # Respect API rate limits
             except Exception as e:
                 logger.error(f"Geocoding failed for facility '{facility}': {e!r}")
             finally:
@@ -145,14 +160,14 @@ def haversine(lat1, lon1, lat2, lon2):
     return c * r
 
 def match_facilities_to_locations(
-    facilities_df: pd.DataFrame, 
-    locations_df: pd.DataFrame, 
+    facilities: pd.DataFrame, 
+    samples: pd.DataFrame, 
     max_distance_km: float = 50):
     """
     Match locations to nearby facilities within a specified distance threshold.
     
     Args:
-        facilities_df (pd.DataFrame): Facilities dataframe with 'Latitude' and 'Longitude' columns
+        facilities_df (pd.DataFrame): Facilities dataframe with 'latitude' and 'longitude' columns
         locations_df (pd.DataFrame): Locations dataframe with 'latitude_deg' and 'longitude_deg' columns
         max_distance_km (float): Maximum distance in kilometers for matching (default=50)
     
@@ -160,38 +175,34 @@ def match_facilities_to_locations(
         pd.DataFrame: Modified locations_df with appended facility information
     """
     # Create a copy to avoid modifying original dataframe
-    result_df = locations_df.copy()
+    result_df = samples[['latitude_deg', 'longitude_deg']].copy()
     
     # Precompute valid facilities (non-null coordinates)
-    valid_facilities = facilities_df.dropna(subset=['Latitude', 'Longitude'])
-    facilities_coords = valid_facilities[['Latitude', 'Longitude']].values
+    valid_facilities = facilities.dropna(subset=['latitude_deg', 'longitude_deg'])
+    facilities_coords = valid_facilities[['latitude_deg', 'longitude_deg']].values
     facilities_data = valid_facilities.to_dict('records')
     
     # Initialize columns for facility data
-    for col in facilities_df.columns:
+    for col in facilities.columns:
         result_df[f'facility_{col}'] = np.nan
     
     # Initialize match status column
-    result_df['facility_match'] = False
+    result_df[f'facility_within_{max_distance_km}_km'] = False
     result_df['facility_distance_km'] = np.nan
     
     # Iterate through each location
-    for idx, loc_row in result_df.iterrows():
-        loc_lat = loc_row['latitude_deg']
-        loc_lon = loc_row['longitude_deg']
-        
+    for idx, row in result_df.iterrows():
+        lat, lon = row['latitude_deg'], row['longitude_deg']
         # Skip if location coordinates are missing
-        if pd.isna(loc_lat) or pd.isna(loc_lon):
+        if pd.isna(lat) or pd.isna(lon):
             continue
-            
+
+        # Find the closest facility
         min_distance = float('inf')
         closest_facility = None
-        
-        # Find the closest facility
         for facility_coord, facility_record in zip(facilities_coords, facilities_data):
             fac_lat, fac_lon = facility_coord
-            distance = haversine(loc_lat, loc_lon, fac_lat, fac_lon)
-            
+            distance = haversine(lat, lon, fac_lat, fac_lon)
             if distance < min_distance:
                 min_distance = distance
                 closest_facility = facility_record
@@ -209,46 +220,32 @@ def match_facilities_to_locations(
     return result_df
     
 
-def append_nfc_facilities(
-    metadata_df: pd.DataFrame,
-    nfcis_path: str = DEFAULT_NFCIS_PATH, 
-    gem_path: str = DEFAULT_GEM_PATH
+def find_nearby_nfc_facilities(
+    cfg: Dict,
+    meta: pd.DataFrame
 ):
-    # Process facilities data
-    facilities_df_1 = process_and_geocode_excel(file_path=nfcis_path, skip_rows=8, skip_first_col=True)
-    logger.info(f"Processed NFCIS facilities: {facilities_df_1.shape}")
-    
-    facilities_df_2 = process_and_geocode_excel(file_path=gem_path, skip_rows=0, skip_first_col=False)
-    logger.info(f"Processed GEM facilities: {facilities_df_2.shape}")
-    
-    # Merge facilities data - preserve coordinate columns
-    facilities_df = pd.merge(
-        facilities_df_1,
-        facilities_df_2,
-        left_on='Facility Name',
-        right_on='Project Name',
-        suffixes=('_nfcis', '_gem'),
-        how='outer'
-    )
-    
-    # Create unified coordinate columns (prefer NFCIS data, fall back to GEM)
-    facilities_df['Latitude'] = facilities_df['Latitude_nfcis'].combine_first(facilities_df['Latitude_gem'])
-    facilities_df['Longitude'] = facilities_df['Longitude_nfcis'].combine_first(facilities_df['Longitude_gem'])
-    
-    # Clean up merged dataframe
-    facilities_df.drop(columns=[
-        'Latitude_nfcis', 'Longitude_nfcis', 
-        'Latitude_gem', 'Longitude_gem'
-    ], inplace=True, errors='ignore')
+    databases = cfg.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
+    facilities_dfs = []
+    for db in databases:
+        name = db['name']
+        if name == "NFCIS":
+            file_path = DEFAULT_NFCIS_PATH
+        elif name == "GEM":
+            file_path = DEFAULT_GEM_PATH
+        facilities_df = process_and_geocode_db(database=name, file_path=file_path)
+        facilities_dfs.append(facilities_df)
+    facilities_df = pd.concat(facilities_dfs, ignore_index=True)
     
     logger.info(f"Merged facilities: {facilities_df.shape}")
     
-    # Match facilities within 50km
+    max_distance_km=cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
     matched_df = match_facilities_to_locations(
         facilities_df, 
-        metadata_df.set_index('#sampleid'),
-        max_distance_km=50
+        meta.set_index('#sampleid'),
+        max_distance_km=max_distance_km
     )
+    df.to_csv(f"/usr2/people/macgregor/amplicoin/test/facility_matches_{max_distance_km}km.tsv", sep='\t', index=True)
+
     return matched_df.reset_index()
 
 
