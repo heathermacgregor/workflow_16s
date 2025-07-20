@@ -99,8 +99,9 @@
                         
                         const config = {{
                             responsive: true,
-                            webglOptions: {{ preserveDrawingBuffer: false }}
+                            webglOptions: {{ {{ preserveDrawingBuffer: false }} }}
                         }};
+
                         
                         Plotly.newPlot(plotId, payload.data, payload.layout, config)
                             .then(() => {{
