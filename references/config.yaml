@@ -73,11 +73,21 @@ clean_fastqc:
 # DOWNSTREAM
 ##########################################################################################################################################
 
-group_column: "nuclear_contamination_status"
+group_column: "nuclear_contamination_status" # The metadata column that defines categorical groups of samples
 group_column_type: "bool"
 group_column_values: 
   - True
   - False
+
+nfc_facilities:
+  enabled: True
+
+
+group_columns:
+  - name: "nuclear_contamination_status"
+    type: "bool"
+
+dataset_column: "dataset_name"
   
 features: # Feature table pre-processing
   filter: True
@@ -214,20 +224,10 @@ ordination: # Beta diversity + ordination
         #- 'genus'
         - 'phylum'
 
-faprotax: True
-# faprotax: # Functional prediction
-#   enabled: True
+faprotax: # Functional prediction
+  enabled: True
 
-figures:
-  map: True
-  color_columns: 
-    - "dataset_name"
-    - "nuclear_contamination_status"
-    - "env_feature"
-    - "env_material"
-    - "country"
-
-map:
+maps:
   enabled: True
   color_columns:
     - "dataset_name"
