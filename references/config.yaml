@@ -1,46 +1,52 @@
-# Default configuration file
+##########################################################################################################################################
+# CONFIG FILE
+# Example #1: Nuclear contamination
+##########################################################################################################################################
 
-# Hardware
+# HARDWARE
 cpu:
   limit: 32  # Global CPU limit for all operations
 
-# Important directory and file paths
-dataset_list: "./datasets.txt"
-dataset_info: "./datasets.tsv"
+# PATHS
+dataset_list: "./datasets.txt" # List of datasets
+dataset_info: "./datasets.tsv" # Dataset metadata
+manual_metadata_dir: "../../../manual_metadata" # Dataset sample metadata (manually collected)
+project_dir: "../../test" # Output directory
 
-project_dir: "../../test"
-manual_metadata_dir: "../../../manual_metadata"
-
-blast_db_dir: "./blast/silva_16s/SILVA_16S_db"
-
-# ENA API
-ena_email: "macgregor@berkeley.edu"
+# CREDENTIALS
+ena_email: "macgregor@berkeley.edu" # ENA API
 
 # Toggle what parts to run
 upstream: False
 downstream: True
 
-# Part I: Upstream
-# ================
+##########################################################################################################################################
+# UPSTREAM
+##########################################################################################################################################
 
-# Toggle if PCR primers used are manually provided or predicted
-pcr_primers_mode: "manual"
+pcr_primers_mode: "manual" # Toggle if PCR primers used are manually provided or predicted
+target_subfragment_mode: "any" # Target 16S subfragment
+blast_db_dir: "./blast/silva_16s/SILVA_16S_db" # BLAST DB directory
 
-# Target 16S subfragment
-target_subfragment_mode: "any"
-
-# Toggle sequence quality/validation tools
-run_validate_16s: False
 run_fastqc: False
-run_seqkit: False
+fastqc:
+  enabled: False
 
+run_seqkit: False
+seqkit:
+  enabled: False
+
+run_validate_16s: False
 validate_16s:
+  enabled: False
   n_runs: 10
   run_targets:
     - '16S'
     - 'unknown'
 
-cutadapt:
+run_cutadapt: False
+cutadapt: # Run CutAdapt outside of QIIME
+  enabled: False
   start_trim: 0
   end_trim: 0
   start_q_cutoff: 30
@@ -48,16 +54,13 @@ cutadapt:
   min_seq_length: 150
   n_cores: 16
 
-# Toggle CutAdapt outside of QIIME
-run_cutadapt: False
-
-# QIIME settings
-qiime2:
+qiime2: # QIIME 
   per_dataset:
     script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     hard_rerun: False
     trim:
       run: True
+      # enabled: True
     denoise:
       chimera_method: "consensus"
       denoise_algorithm: "DADA2"
@@ -69,69 +72,72 @@ qiime2:
       retain_threshold: 80
     
 clean_fastq: True
+# clean_fastqc: 
+#   enabled: True
 
-# Part II. Downstream
-# ===================
+##########################################################################################################################################
+# DOWNSTREAM
+##########################################################################################################################################
 
 group_column: "nuclear_contamination_status"
+group_column_type: "bool"
 group_column_values: 
   - True
   - False
   
-# Feature Table Processing
-features:
+features: # Feature table pre-processing
   filter: True
   normalize: True
   clr_transform: True
   presence_absence: True
 
-# Statistical Analyses
-stats:
+stats: # Statistical analyses
   enabled: True
   tables:
     raw:
       enabled: True
       tests:
-        #- "fisher"
-        #- "ttest"                # ❌ compositionality violates assumptions
-        - "mwu_bonferroni"        # ✅ non-parametric alternative
+        - "mwu_bonferroni"       
         - "kruskal_bonferroni"
     presence_absence:
       enabled: True
       tests:
-        - "fisher"                # ✅ ideal for binary data
-        #- "ttest"                # ❌ designed for continuous data
-        #- "mwu_bonferroni"       # ❌ not designed for binary data
-        #- "kruskal_bonferroni"
+        - "fisher"                
     filtered:
       enabled: True
       tests:
-        #- "fisher"
-        #- "ttest"                # ❌ compositionality violates assumptions
         - "mwu_bonferroni"
         - "kruskal_bonferroni"
     normalized:
       enabled: True
       tests:
-        #- "fisher"
-        - "ttest"                 # ✅ can be used after proper normalization
-        - "mwu_bonferroni"        # ✅ still valuable for robustness
+        - "ttest"                 
+        - "mwu_bonferroni"       
         - "kruskal_bonferroni"
     clr_transformed:
       enabled: True
       tests:
-        #- "fisher"
-        - "ttest"                 # ✅ CLR addresses compositionality
-        - "mwu_bonferroni"        # ✅ good alternative for non-normal distributions
+        - "ttest"                 
+        - "mwu_bonferroni"        
         - "kruskal_bonferroni"
 
-# Alpha Diversity
-alpha_diversity:
+alpha_diversity: # Alpha diversity
   enabled: True
-  tables: # Table type
+  plots: 
+    enabled: True
+    add_points: True
+    add_stat_annot: True
+    effect_size_threshold: 0.5
+  parametric: False  # Statistical test type
+  correlation_analysis: 
+    enabled: False #True
+    max_categories: 20       # Max unique values for categorical variables
+    min_group_size: 5        # Min samples per group for valid comparison
+    top_n_correlations: 20   # Number of top associations to show
+  tables: 
     raw:  
       enabled: True
-      levels:  # Taxonomic levels
+      levels:  
         - 'genus'
         #- 'family'
         #- 'class'
@@ -140,7 +146,7 @@ alpha_diversity:
       levels: 
         - 'genus'
         #- 'family'
-  metrics:  # Metrics to calculate
+  metrics:  
     - 'shannon'
     - 'observed_features'
     - 'simpson'
@@ -151,20 +157,8 @@ alpha_diversity:
     #- 'goods_coverage'
     - 'heip_evenness' 
     #- 'dominance'
-  parametric: False  # Statistical test type
-  plots: 
-    enabled: True  # Enable/disable plot generation
-    add_points: True
-    add_stat_annot: True
-    effect_size_threshold: 0.5
-  correlation_analysis: 
-    enabled: False #True
-    max_categories: 20       # Max unique values for categorical variables
-    min_group_size: 5        # Min samples per group for valid comparison
-    top_n_correlations: 20          # Number of top associations to show
-    
-# Beta Diversity + Ordination
-ordination:
+  
+ordination: # Beta diversity + ordination
   enabled: False
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
@@ -226,10 +220,10 @@ ordination:
         #- 'genus'
         - 'phylum'
 
-# Functional Prediction
 faprotax: True
+# faprotax: # Functional prediction
+#   enabled: True
 
-# Figures
 figures:
   map: True
   color_columns: 
@@ -239,14 +233,28 @@ figures:
     - "env_material"
     - "country"
 
-# Violin Plots of Top Important Features
-violin_plots: 
+map:
+  enabled: True
+  color_columns:
+    - "dataset_name"
+    - "nuclear_contamination_status"
+    - "env_feature"
+    - "env_material"
+    - "country"
+    
+violin_plots: # Violin plots of top important features
   enabled: False #True
   n: 50  # Number of features to plot per category
 
-# Machine Learning
-ml:
+ml: # Machine learning
   enabled: False #True
+  n_threads: 32
+  num_features: 500
+  step_size: 100
+  permutation_importance: 
+    enabled: True
+  plots:
+    enabled: True
   tables:
     raw:
       enabled: False
@@ -318,10 +326,4 @@ ml:
         #- 'chi_squared'
         #- 'lasso'
         #- 'shap'
-  num_features: 500
-  step_size: 100
-  permutation_importance: 
-    enabled: True
-  n_threads: 32
-  plots:
-    enabled: True
+  
