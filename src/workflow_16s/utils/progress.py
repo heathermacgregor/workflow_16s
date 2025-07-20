@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore") # Suppress warnings
 # ================================= GLOBAL VARIABLES ================================= #
 
 DEFAULT_PROGRESS_TEXT_N = 65
-
+DEFAULT_N = 65
 DEFAULT_DESCRIPTION_STYLE = "white"
 DEFAULT_BAR_COLUMN_COMPLETE_STYLE = "honeydew2"
 DEFAULT_FINISHED_STYLE = "dark_cyan" 
