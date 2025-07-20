@@ -675,7 +675,7 @@ class _TableProcessor(_ProcessingMixin):
             ct_desc = "Collapsing taxonomy"
             ct_task = progress.add_task(
                 _format_task_desc(ct_desc), 
-                total=len(self.tables) * len(levels)
+                total=len(self.tables) * len(self.levels)
             )   
             
             for table_type in list(self.tables.keys()):
