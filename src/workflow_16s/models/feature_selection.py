@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import shap
 from catboost import CatBoostClassifier, cv, Pool
+from scipy.stats import spearmanr
 from sklearn.feature_selection import (
     chi2, f_classif, RFE, SelectFromModel, SelectKBest, VarianceThreshold
 )
@@ -75,11 +76,6 @@ DEFAULT_LOSS_FUNCTION = 'Logloss'
 DEFAULT_THREAD_COUNT = 4
 
 # ==================================== FUNCTIONS ===================================== #
-
-import shap
-import numpy as np
-import pandas as pd
-from scipy.stats import spearmanr
 
 def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
     expl = shap.Explainer(model, X)
