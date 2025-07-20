@@ -49,7 +49,7 @@ from workflow_16s.utils.io import (
     export_h5py, import_merged_metadata_tsv, import_merged_table_biom
 )
 from workflow_16s.utils.progress import get_progress_bar
-from workflow_16s.utils.nfc_facilities import append_nfc_facilities, process_and_geocode_excel, analyze_contamination_correlation
+from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -571,8 +571,9 @@ class _DataLoader(_ProcessingMixin):
                 "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
+        meta_with_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
         """
-        meta_with_facilities = append_nfc_facilities(self.meta)
+        
         
         results = analyze_contamination_correlation(meta_with_facilities)
         
