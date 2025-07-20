@@ -89,7 +89,7 @@ group_columns:
     type: "bool"
 
 nfc_facilities:
-  enabled: True
+  enabled: False #True
   databases:
     - name: "GEM"
     - name: "NFCIS"
