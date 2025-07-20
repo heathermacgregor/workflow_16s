@@ -40,7 +40,7 @@ DEFAULT_GEM_COLUMNS = {
     'country': "Country/Area",
     'facility': "Project Name",
     'facility_type': "Reactor Type",
-    'facility_capacity': "Capacity (MW)",
+    'facility_capacity': " Capacity (MW) ",
     'facility_status': "Status",
     'facility_start_year': "Start Year",
     'facility_end_year': "Retirement Year"
