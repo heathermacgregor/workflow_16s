@@ -1,4 +1,6 @@
 # ===================================== IMPORTS ====================================== #
+
+# Standard Library Imports
 import logging
 import os
 import requests
@@ -7,6 +9,7 @@ from math import radians, sin, cos, asin, sqrt
 from typing import Dict
 from functools import lru_cache
 
+# Third-Party Imports
 import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
@@ -15,16 +18,19 @@ from scipy.spatial import cKDTree
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ================================== LOCAL IMPORTS =================================== #
+
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger("workflow_16s")
+_session = requests.Session() # Create a single requests session for reuse
 
 # ================================= DEFAULT VALUES =================================== #
-DEFAULT_N: int = 65  # Length of description for progress bar
-DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
-DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
 
+DEFAULT_N: int = 65  # Length of description for progress bar
+
+DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
 DEFAULT_NFCIS_COLUMNS = {
     'country': "Country",
     'facility': "Facility Name",
@@ -34,6 +40,8 @@ DEFAULT_NFCIS_COLUMNS = {
     'facility_start_year': "Start of Operation",
     'facility_end_year': "End of Operation"
 }
+
+DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
 DEFAULT_GEM_COLUMNS = {
     'country': "Country/Area",
     'facility': "Project Name",
@@ -44,10 +52,10 @@ DEFAULT_GEM_COLUMNS = {
     'facility_end_year': "Retirement Year"
 }
 
-# Create a single requests session for reuse
-_session = requests.Session()
+DEFAULT_USER_AGENT = "workflow_16s/1.0"
 
 # ==================================== FUNCTIONS ===================================== #  
+
 @lru_cache(maxsize=None)
 def _geocode_query(query: str, user_agent: str) -> (float, float):
     """Get coordinates from Nominatim API with caching"""
@@ -68,7 +76,7 @@ def _geocode_query(query: str, user_agent: str) -> (float, float):
 def process_and_geocode_db(
     database: str = "GEM",
     file_path: str = DEFAULT_GEM_PATH,
-    user_agent: str = "MyGeocodingApp/1.0",
+    user_agent: str = DEFAULT_USER_AGENT
 ):
     """
     Process a data file (Excel or TSV) and add latitude/longitude coordinates
@@ -86,11 +94,18 @@ def process_and_geocode_db(
     usecols = None
     try:
         if ext in ['.xlsx', '.xls']:
-            df_raw = pd.read_excel(file_path, header=None, skiprows=skip_rows, usecols=None)
+            df_raw = pd.read_excel(
+                file_path, header=None, skiprows=skip_rows, usecols=None
+            )
         else:
-            df_raw = pd.read_csv(file_path, sep='\t', header=None, skiprows=skip_rows, usecols=None, encoding_errors='replace')
+            df_raw = pd.read_csv(
+                file_path, sep='\t', header=None, skiprows=skip_rows, usecols=None, 
+                encoding_errors='replace'
+            )
     except Exception as e:
-        df_raw = pd.read_csv(file_path, sep='\t', header=None, skiprows=skip_rows, encoding_errors='replace')
+        df_raw = pd.read_csv(
+            file_path, sep='\t', header=None, skiprows=skip_rows, encoding_errors='replace'
+        )
 
     # Drop first column if needed
     df = df_raw.iloc[:, 1:] if skip_first_col else df_raw.copy()
@@ -98,7 +113,7 @@ def process_and_geocode_db(
     # Set header and reset
     df.columns = df.iloc[0]
     df = df.iloc[1:].reset_index(drop=True)
-    logger.info(f"Loaded data shape: {df.shape}")
+    logger.info(f"Loaded '{database}' data with {df.shape[0]} NFC facilities")
 
     # Filter and rename
     df = df[list(column_names.values())]
@@ -112,7 +127,10 @@ def process_and_geocode_db(
     # Geocode unique queries with progress
     coords = {}
     with get_progress_bar() as progress:
-        task = progress.add_task(_format_task_desc("Geocoding unique locations..."), total=len(unique_queries))
+        task = progress.add_task(
+            _format_task_desc("Geocoding unique locations"), 
+            total=len(unique_queries)
+        )
         for q in unique_queries:
             coords[q] = _geocode_query(q, user_agent)
             progress.update(task, advance=1)
@@ -155,7 +173,11 @@ def match_facilities_to_locations(
     # If no valid samples, return all unmatched
     if valid_samples.empty:
         matches = pd.DataFrame([
-            {**{col: np.nan for col in facilities.columns}, 'facility_distance_km': np.nan, 'facility_match': False}
+            {
+                **{col: np.nan for col in facilities.columns}, 
+                'facility_distance_km': np.nan, 
+                'facility_match': False
+            }
             for _ in range(len(samples))
         ])
         return pd.concat([samples, matches], axis=1)
@@ -190,6 +212,7 @@ def match_facilities_to_locations(
     # Combine matches in original order
     matches_df = pd.DataFrame(records)
     return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
+    
 
 def find_nearby_nfc_facilities(
     cfg: Dict,
