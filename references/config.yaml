@@ -241,12 +241,12 @@ figures:
 
 # Violin Plots of Top Important Features
 violin_plots: 
-  enabled: True
+  enabled: False #True
   n: 50  # Number of features to plot per category
 
 # Machine Learning
 ml:
-  enabled: True
+  enabled: False #True
   tables:
     raw:
       enabled: False
