@@ -1,4 +1,5 @@
 # ===================================== IMPORTS ====================================== #
+
 import base64
 import itertools
 import json
@@ -16,6 +17,7 @@ from plotly.offline import get_plotlyjs_version
 from workflow_16s.utils.io import import_js_as_str
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger('workflow_16s')
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
@@ -23,6 +25,7 @@ css_path = script_dir / "style.css"
 html_template_path = script_dir / "template.html"  
 
 # ===================================== CLASSES ====================================== #
+
 class NumpySafeJSONEncoder(json.JSONEncoder):
     def default(self, obj) -> Any:  
         if isinstance(obj, np.integer):
@@ -36,6 +39,7 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # ================================== CORE HELPERS =================================== #
+
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures = {}
     
