@@ -81,6 +81,12 @@ group_column_values:
 
 nfc_facilities:
   enabled: True
+  databases:
+    - name: "GEM"
+    - name: "NFCIS"
+  max_distance_km: 50
+  maps:
+    enabled: True
 
 
 group_columns:
