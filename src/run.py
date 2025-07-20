@@ -282,7 +282,8 @@ def upstream(cfg, logger) -> None:
                      for i in qiime_outputs.values()]
         table_df = pd.concat(table_dfs)
         logger.info(f"Feature table shape: {table_df.shape}")
-
+        return success_subsets
+        
     except Exception as global_error:
         logger.critical(
             f"❌ Fatal pipeline error: {str(global_error)}", 
@@ -292,8 +293,12 @@ def upstream(cfg, logger) -> None:
 
 def downstream(cfg, logger) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    existing_subsets = None#get_existing_subsets(cfg, logger)
-    #logger.info(f"Found {len(existing_subsets)} completed subsets")
+    if not cfg.get("upstream", {}).get("enabled", False):
+        existing_subsets = None
+        if cfg.get("downstream", {}).get("find_subsets", False):
+            existing_subsets = get_existing_subsets(cfg, logger)
+            logger.info(f"Found {len(existing_subsets)} completed subsets")
+            
     data = AmpliconData(
         cfg=cfg,
         project_dir=project_dir,
@@ -301,7 +306,6 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
-    #Section(data)
         
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
@@ -317,10 +321,11 @@ def main(config_path: Path = DEFAULT_CONFIG) -> None:
     project_dir = dir_utils.SubDirs(cfg["project_dir"])
     logger = setup_logging(project_dir.logs)
 
-    if cfg["upstream"]:
+    if cfg.get("upstream", {}).get("enabled", False):
         upstream(cfg, logger)
-    if cfg["downstream"]:
+    if cfg.get("downstream", {}).get("enabled", False):
         downstream(cfg, logger)
-        
+
+
 if __name__ == "__main__":
     main()
