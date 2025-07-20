@@ -1,4 +1,5 @@
 /* ======================= TABLE FUNCTIONALITY ======================= */
+
 function sortTable(tableId, columnIndex, isNumeric) {
     const table = document.getElementById(tableId);
     const tbody = table.querySelector('tbody');
