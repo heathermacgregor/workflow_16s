@@ -1,3 +1,14 @@
+Traceback (most recent call last):
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 326, in <module>
+    main()
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 323, in main
+    downstream(cfg, logger)
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/run.py", line 307, in downstream
+    generate_html_report(
+  File "/auto/sahara/namib/home/macgregor/amplicon/workflow_16s/src/workflow_16s/figures/html_report.py", line 1026, in generate_html_report
+    html = html_template.format(
+ValueError: expected ':' after conversion specifier
+
 # ===================================== IMPORTS ====================================== #
 import base64
 import itertools
@@ -1023,24 +1034,21 @@ def generate_html_report(
         <body>Report generation failed: Missing template</body>
         </html>"""
 
-    # Escape curly braces in all variables except payload, table_js, and css_content
+    # Escape curly braces in all string variables
     def escape_braces(s: str) -> str:
-        return s.replace("{", "{{").replace("}", "}}") if isinstance(s, str) else str(s)
-    
-    title = "16S Amplicon Analysis Report"
-    section_list = ", ".join(include_sections)
+        return s.replace("{", "{{").replace("}", "}}") if s is not None else ""
     
     html = html_template.format(
-        title=escape_braces(title),
+        title=escape_braces("16S Amplicon Analysis Report"),
         plotly_js_tag=escape_braces(plotly_js_tag),
         generated_ts=escape_braces(ts),
-        section_list=escape_braces(section_list),
+        section_list=escape_braces(", ".join(include_sections)),
         nav_html=escape_braces(nav_html),
         tables_html=escape_braces(tables_html),
         sections_html=escape_braces(sections_html),
         plot_data_json=payload,  # Already escaped
-        table_js=table_js,       # Raw JavaScript
-        css_content=css_content   # Raw CSS
+        table_js=table_js,       # Raw JavaScript doesn't need escaping
+        css_content=css_content   # Raw CSS doesn't need escaping
     )
         
     output_path.write_text(html, encoding="utf-8")
