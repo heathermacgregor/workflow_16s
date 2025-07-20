@@ -1573,7 +1573,7 @@ class AmpliconData:
         self.tables = processor.tables
 
     def _generate_sample_maps(self):
-        if self.cfg["figures"].get("map", False):
+        if self.cfg["maps"].get("enabled", False):
             # Create output directory for sample maps
             maps_output_dir = Path(self.project_dir.final) / 'sample_maps'
             maps_output_dir.mkdir(parents=True, exist_ok=True)
