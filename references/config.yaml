@@ -28,15 +28,12 @@ pcr_primers_mode: "manual" # Toggle if PCR primers used are manually provided or
 target_subfragment_mode: "any" # Target 16S subfragment
 blast_db_dir: "./blast/silva_16s/SILVA_16S_db" # BLAST DB directory
 
-run_fastqc: False
 fastqc:
   enabled: False
 
-run_seqkit: False
 seqkit:
   enabled: False
 
-run_validate_16s: False
 validate_16s:
   enabled: False
   n_runs: 10
@@ -44,7 +41,6 @@ validate_16s:
     - '16S'
     - 'unknown'
 
-run_cutadapt: False
 cutadapt: # Run CutAdapt outside of QIIME
   enabled: False
   start_trim: 0
@@ -59,8 +55,7 @@ qiime2: # QIIME
     script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     hard_rerun: False
     trim:
-      run: True
-      # enabled: True
+      enabled: True # Set to 'False' if cutadapt > enabled is 'True'
     denoise:
       chimera_method: "consensus"
       denoise_algorithm: "DADA2"
@@ -71,9 +66,8 @@ qiime2: # QIIME
     filter:
       retain_threshold: 80
     
-clean_fastq: True
-# clean_fastqc: 
-#   enabled: True
+clean_fastqc: 
+  enabled: True
 
 ##########################################################################################################################################
 # DOWNSTREAM
