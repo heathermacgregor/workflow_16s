@@ -5,6 +5,7 @@ import os
 import requests
 import time
 from math import radians, sin, cos, asin, sqrt
+from typing import Dict
 
 import numpy as np
 import pandas as pd
