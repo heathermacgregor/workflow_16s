@@ -711,7 +711,8 @@ class SubsetDataset:
 
             # Primer processing mode
             if self.config["pcr_primers_mode"] == "manual":
-                if self.config["run_validate_16s"]:
+                run_validate_16s = self.cfg.get("validate_16s", {}).get("enabled", False)
+                if run_validate_16s:
                     target_genes = self.config["validate_16s"]["run_targets"]
 
                     for gene in target_genes:
