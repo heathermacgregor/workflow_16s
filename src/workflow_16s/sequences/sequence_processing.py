@@ -33,9 +33,9 @@ def process_sequences(
     subset_dirs: Dict[str, Path],
     info: Any,
 ) -> Tuple[List[Path], pd.DataFrame]:
-    run_fastqc = cfg.get("run_fastqc", False)
-    run_seqkit = cfg.get("run_seqkit", False)
-    run_cutadapt = cfg.get("run_cutadapt", False)
+    run_fastqc = cfg.get("fastqc", {}).get("enabled", False)
+    run_seqkit = cfg.get("seqkit", {}).get("enabled", False)
+    run_cutadapt = cfg.get("cutadapt", {}).get("enabled", False)
     dataset_type = info.get('dataset_type', '').upper()
 
     if dataset_type == 'ENA':
