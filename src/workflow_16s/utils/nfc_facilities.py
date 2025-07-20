@@ -1,20 +1,31 @@
-import pandas as pd
-import numpy as np
-from math import radians, sin, cos, asin, sqrt
+# ===================================== IMPORTS ====================================== #
+
+import logging
 import os
 import requests
 import time
+from math import radians, sin, cos, asin, sqrt
+
+import numpy as np
+import pandas as pd
 from openpyxl import load_workbook
 from sklearn.metrics import confusion_matrix, classification_report
-import logging
+
+# ================================== LOCAL IMPORTS =================================== #
+
 from workflow_16s.utils.progress import get_progress_bar
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger("workflow_16s")
-DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
-#'../../../references/NFCISFacilityList.xlsx'
-DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
-#'../../../references/gem_nuclearpower_2024-07.tsv'
+
+# ================================= DEFAULT VALUES =================================== #
+
 DEFAULT_N: int = 65  # Length of description for progress bar
+
+DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx' #'../../../references/NFCISFacilityList.xlsx'
+DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv' #'../../../references/gem_nuclearpower_2024-07.tsv'
+
 NFCIS_COLUMNS = {
     'country': "Country",
     'facility': "Facility Name",
@@ -33,6 +44,8 @@ GEM_COLUMNS = {
     'facility_start_year': "Start Year",
     'facility_end_year': "Retirement Year"
 }
+
+# ==================================== FUNCTIONS ===================================== #  
 
 def process_and_geocode_db(
     database: str = "GEM",
@@ -90,7 +103,7 @@ def process_and_geocode_db(
     # Filter and rename columns
     df = df[list(column_names.values())]
     df = df.rename(columns={v: k for k, v in column_names.items()})
-    df = df[list(column_names.keys()]
+    df = df[list(column_names.keys())]
     
     # Verify required columns exist
     required_cols = ['facility', 'country'] 
