@@ -996,8 +996,8 @@ def generate_html_report(
     )
 
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    # Escape both curly braces and script tags
-    payload = payload.replace("{", "{{").replace("}", "}}").replace("</", "<\\/")
+    # Escape curly braces, colons, and script tags
+    payload = payload.replace("{", "{{").replace("}", "}}").replace(":", "\\u003a").replace("</", "<\\/")
 
     try:
         table_js = import_js_as_str(tables_js_path)
