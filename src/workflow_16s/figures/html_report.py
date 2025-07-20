@@ -1,5 +1,4 @@
 # ===================================== IMPORTS ====================================== #
-
 import base64
 import itertools
 import json
@@ -17,7 +16,6 @@ from plotly.offline import get_plotlyjs_version
 from workflow_16s.utils.io import import_js_as_str
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
-
 logger = logging.getLogger('workflow_16s')
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
@@ -25,7 +23,6 @@ css_path = script_dir / "style.css"
 html_template_path = script_dir / "template.html"  
 
 # ===================================== CLASSES ====================================== #
-
 class NumpySafeJSONEncoder(json.JSONEncoder):
     def default(self, obj) -> Any:  
         if isinstance(obj, np.integer):
@@ -39,7 +36,6 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # ================================== CORE HELPERS =================================== #
-
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures = {}
     
@@ -195,7 +191,7 @@ def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
         if isinstance(v, dict):
             _flatten(v, new_keys, out)
         else:
-            out[" - ".join(new_keys)] = v
+            out[" - ".join(new_keys)] = v
 
 def _figs_to_html(
     figs: Dict[str, Any], 
@@ -895,10 +891,6 @@ def _ordination_to_nested_html(
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data    
     
-# ... (keep all the imports and other functions unchanged) ...
-
-from string import Template
-
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -1003,9 +995,9 @@ def generate_html_report(
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
 
-    # Prepare payload with proper JavaScript escaping
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("\\", "\\\\").replace("'", "\\'").replace('</', '<\\/')
+    # Escape both curly braces and script tags
+    payload = payload.replace("{", "{{").replace("}", "}}").replace("</", "<\\/")
 
     try:
         table_js = import_js_as_str(tables_js_path)
@@ -1029,27 +1021,17 @@ def generate_html_report(
         <body>Report generation failed: Missing template</body>
         </html>"""
 
-    # Use custom delimiters to avoid conflicts with curly braces
-    class CustomTemplate(Template):
-        delimiter = '@@'
-        idpattern = r'[a-z][_a-z0-9]*'
-    
-    # Create a safe substitution mapping
-    safe_substitutes = {
-        'title': "16S Amplicon Analysis Report",
-        'plotly_js_tag': plotly_js_tag,
-        'generated_ts': ts,
-        'section_list': ", ".join(include_sections),
-        'nav_html': nav_html,
-        'tables_html': tables_html,
-        'sections_html': sections_html,
-        'plot_data_json': payload,
-        'table_js': table_js,
-        'css_content': css_content
-    }
-    
-    # Create template and perform safe substitution
-    template = CustomTemplate(html_template)
-    html = template.safe_substitute(safe_substitutes)
+    html = html_template.format(
+        title="16S Amplicon Analysis Report",
+        plotly_js_tag=plotly_js_tag,
+        generated_ts=ts,
+        section_list=", ".join(include_sections),
+        nav_html=nav_html,
+        tables_html=tables_html,
+        sections_html=sections_html,
+        plot_data_json=payload,
+        table_js=table_js,
+        css_content=css_content
+    )
         
     output_path.write_text(html, encoding="utf-8")
