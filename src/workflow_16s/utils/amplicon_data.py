@@ -48,7 +48,7 @@ from workflow_16s.utils.data import (
 from workflow_16s.utils.io import (
     export_h5py, import_merged_metadata_tsv, import_merged_table_biom
 )
-from workflow_16s.utils.progress import get_progress_bar
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
@@ -83,11 +83,8 @@ DEFAULT_GROUP_COLUMNS = [
     },
 ]
 debug_mode = False
-# ===================================== CLASSES ====================================== #
 
-def _format_task_desc(desc: str):
-    return f"[white]{str(desc):<{DEFAULT_N}}"
-    
+# =============================== HELPER FUNCTIONS ==================================== #
 
 def _init_dict_level(a, b, c=None, d=None, e=None):
     if b not in a:
@@ -99,6 +96,7 @@ def _init_dict_level(a, b, c=None, d=None, e=None):
     if e and e not in a[b][c][d]:
         a[b][c][d][e] = {}
         
+# ===================================== CLASSES ====================================== #
 
 class _ProcessingMixin:
     """
@@ -491,7 +489,7 @@ class TopFeaturesAnalyzer:
                     for _, row in sig_df.iterrows():
                         all_features.append({
                             "feature": row["feature"],
-                            "level": level,  # The specific taxonomic level
+                            "level": level,  
                             "table_type": table_type,
                             "test": test_name,
                             "effect": row["effect"],
@@ -533,6 +531,7 @@ class _DataLoader(_ProcessingMixin):
         self._filter_and_align()
 
     meta: pd.DataFrame
+    meta_nfc_facilities: pd.DataFrame
     table: Table
 
     def _validate_mode(self) -> None:
@@ -559,11 +558,14 @@ class _DataLoader(_ProcessingMixin):
         return paths
 
     def _load_metadata(self) -> None:
-        if self.existing_subsets != None:
-            paths = self._get_metadata_paths()
-        else:
+        if self.existing_subsets == None:
             paths = self._get_metadata_paths_glob()
+        else:
+            paths = self._get_metadata_paths()
+            
         self.meta = import_merged_metadata_tsv(paths, None, self.verbose)
+
+        # Remove duplicated columns
         if self.meta.columns.duplicated().any():
             duplicated_columns = self.meta.columns[self.meta.columns.duplicated()].tolist()
             logger.debug(
@@ -571,18 +573,11 @@ class _DataLoader(_ProcessingMixin):
                 "Removing duplicates."
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
-        meta_with_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
-        """
-        
-        
-        results = analyze_contamination_correlation(meta_with_facilities)
-        
-        logger.info("Correlation Analysis Results:")
-        logger.info(f"Accuracy: {results['classification_report']['accuracy']:.2%}")
-        logger.info(f"Contamination is {results['summary_metrics']['relative_risk']:.1f} times more likely near facilities")
-        self.meta = meta_with_facilities
-        logger.info(self.meta[['facility_match', 'nuclear_contamination_status']])
-        """
+            
+        # If enabled, find samples within a threshold distance from NFC facilities
+        if self.cfg.get("nfc_facilities", {}).get("enabled", False):
+            self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
+            
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
         biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
@@ -610,22 +605,25 @@ class _DataLoader(_ProcessingMixin):
         return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
-        if self.existing_subsets != None:
-            biom_paths = self._get_biom_paths()
-        else:
+        if self.existing_subsets == None:
             biom_paths = self._get_biom_paths_glob()
+        else:
+            biom_paths = self._get_biom_paths()
+            
         if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
         self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
     
     def _filter_and_align(self) -> None:
-        orig_n = self.table.shape[1]
-        self.table, self.meta = update_table_and_meta(self.table, self.meta, "#sampleid")
+        self.table, self.meta = update_table_and_meta(
+            self.table, self.meta, 
+            self.cfg.get("metadata_id_column", "#sampleid")
+        )
         ftype = "genera" if self.mode == "genus" else "ASVs"
-        (
+        logger.info(
             f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples × {self.meta.shape[1]:>5} cols"
         )
-        (
+        logger.info(
             f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples × {self.table.shape[0]:>5} {ftype}"
         )
 
@@ -649,6 +647,7 @@ class _TableProcessor(_ProcessingMixin):
         self.meta = meta
         self.output_dir = output_dir
         self.project_dir = project_dir
+        self.levels = ["phylum", "class", "order", "family", "genus"]
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
         self._apply_preprocessing()
         self._collapse_taxa()
@@ -656,28 +655,27 @@ class _TableProcessor(_ProcessingMixin):
         self._save_tables()
 
     def _apply_preprocessing(self) -> None:
-        feat_cfg = self.cfg["features"]
+        feat_cfg = self.cfg.get("features", {})
         table = self.tables["raw"][self.mode]
 
-        if feat_cfg["filter"]:
+        if feat_cfg.get("filter", True):
             table = filter(table)
             self.tables.setdefault("filtered", {})[self.mode] = table
 
-        if feat_cfg["normalize"]:
+        if feat_cfg.get("normalize", True):
             table = normalize(table, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = table
 
-        if feat_cfg["clr_transform"]:
+        if feat_cfg.get("clr_transform", True):
             table = clr(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
     def _collapse_taxa(self) -> None:
-        levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as progress:
             ct_desc = "Collapsing taxonomy"
             ct_task = progress.add_task(
-                _format_task_desc(ct_desc),
-                total=len(self.tables)*len(levels)
+                _format_task_desc(ct_desc), 
+                total=len(self.tables) * len(levels)
             )   
             
             for table_type in list(self.tables.keys()):
@@ -685,17 +683,24 @@ class _TableProcessor(_ProcessingMixin):
                 table_task = progress.add_task(
                     _format_task_desc(table_desc),
                     parent=ct_task,
-                    total=len(levels)
+                    total=len(self.levels)
                 )
                 
                 base_table = self.tables[table_type][self.mode]
                 processed = {}
-                for level in levels:
-                    level_desc = f"{table_type.replace('_', ' ').title()} → {level.title()}"
-                    progress.update(table_task, description=_format_task_desc(level_desc))
+                for level in self.levels:
+                    level_desc = f"{table_desc} → {level.title()}"
+                    progress.update(
+                        table_task, 
+                        description=_format_task_desc(level_desc)
+                    )
                     try:
                         start_time = time.perf_counter()
-                        processed[level] = collapse_taxa(base_table, level, progress, table_task)
+                        processed[level] = collapse_taxa(
+                            base_table, 
+                            level, 
+                            progress, table_task
+                        )
                         duration = time.perf_counter() - start_time
                         logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
                     except Exception as e:
@@ -709,25 +714,24 @@ class _TableProcessor(_ProcessingMixin):
                 progress.remove_task(table_task)
     
     def _create_presence_absence(self) -> None:
-        if not self.cfg["features"]["presence_absence"]:
+        if not self.cfg.get("features", {}).get("presence_absence", False):
             return
-               
-        levels = ["phylum", "class", "order", "family", "genus"]
         with get_progress_bar() as progress:
             pa_desc = "Converting to Presence/Absence"
             pa_task = progress.add_task(
                 _format_task_desc(pa_desc),
-                total=len(levels)  
+                total=len(self.levels)  
             )
             processed = {}
             
-            for level in levels:
+            for level in self.levels:
                 level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
-                progress.update(pa_task, description=_format_task_desc(level_desc))
+                progress.update(
+                    pa_task, 
+                    description=_format_task_desc(level_desc)
+                )
                 try:
-                    # USE COLLAPSED RAW TABLE FOR THIS LEVEL
                     collapsed_table = self.tables["raw"][level]
-                    
                     start_time = time.perf_counter()
                     processed[level] = presence_absence(collapsed_table)
                     duration = time.perf_counter() - start_time
@@ -740,9 +744,13 @@ class _TableProcessor(_ProcessingMixin):
                     progress.update(pa_task, advance=1)
                 
             self.tables["presence_absence"] = processed
-            progress.update(pa_task, description=_format_task_desc(pa_desc))
+            progress.update(
+                pa_task, 
+                description=_format_task_desc(pa_desc)
+            )
             
     def _save_tables(self) -> None:
+        # Create directory if it doesn't exist
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
 
