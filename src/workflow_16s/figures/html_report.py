@@ -636,7 +636,7 @@ def _shap_to_nested_html(
         table_id = f"{prefix}-table-{next(id_counter)}"
         is_first_table = not buttons_html
         buttons_html.append(
-            f'极<button class="table-button {"active" if is_first_table else ""}" '
+            f'<button class="table-button {"active" if is_first_table else ""}" '
             f'data-table="{table_id}" '
             f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
         )
@@ -665,7 +665,7 @@ def _shap_to_nested_html(
                     else:
                         flattened_plots[plot_type] = fig
                 
-                plot_btns, plot_tabs, pd = _figs极_to_html(
+                plot_btns, plot_tabs, pd = _figs_to_html(
                     flattened_plots, id_counter, method_id
                 )
                 plot_data.update(pd)
@@ -728,7 +728,6 @@ def _violin_to_nested_html(
             f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
         )
         
-        # Generate feature tabs for this category
         feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
             features, id_counter, cat_id
         )
@@ -737,7 +736,7 @@ def _violin_to_nested_html(
         tabs_html.append(
             f'<div id="{cat_id}" class="tab-pane" '
             f'style="display:{"block" if cat_idx==0 else "none"}">'
-            f'<div class="tabs">{feature_btns}</div>'
+            f'{feature_btns}'
             f'{feature_tabs}'
             f'</div>'
         )
@@ -919,15 +918,17 @@ def generate_html_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Top features tables (without SHAP data)
-    group_1_name = f"{group_col}={group_col_values[0]}"
+    x = 1
+    group_1_name = f"{group_col}={group_col_values[x-1]}"
     group_1_df = _prepare_features_table(
-        amplicon_data.top_features_group_1,
+        getattr(amplicon_data, f'top_features_group_{x}', []),
         max_features,
         group_1_name
     )
-    group_2_name = f"{group_col}={group_col_values[1]}"
+    x = 2
+    group_2_name = f"{group_col}={group_col_values[x-1]}"
     group_2_df = _prepare_features_table(
-        amplicon_data.top_features_group_2,
+        getattr(amplicon_data, f'top_features_group_{x}', []),
         max_features,
         group_2_name
     )
