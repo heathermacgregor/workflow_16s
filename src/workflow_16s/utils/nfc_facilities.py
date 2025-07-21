@@ -246,8 +246,6 @@ def find_nearby_nfc_facilities(
     # Pass full metadata to ensure coordinate columns are available
     matched_df = match_facilities_to_locations(facilities_df, meta, max_distance_km=max_dist)
     
-    
-    
     # Define required metadata columns to keep
     required_meta_cols = [
         'nuclear_contamination_status', 
@@ -270,7 +268,7 @@ def find_nearby_nfc_facilities(
     # Save full matched results
     matched_df[result_cols].to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
                       sep='\t', index=False)
-    return matched_df[result_cols]
+    return facilities_df, matched_df[result_cols]
 
 
 def analyze_contamination_correlation(
