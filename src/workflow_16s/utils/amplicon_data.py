@@ -420,6 +420,7 @@ class MapPlotter:
     def generate_sample_map(
         self, 
         metadata: pd.DataFrame, 
+        nfc_facility_data: Optional[pd.DataFrame] = None,
         **kwargs
     ) -> Dict[str, Any]:
         valid_columns = [col for col in self.color_columns if col in metadata]
@@ -437,6 +438,7 @@ class MapPlotter:
                 
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
+                    nfc_facility_data=nfc_facility_data,
                     output_dir=self.output_dir,
                     color_col=col,
                     **kwargs,
@@ -531,7 +533,7 @@ class _DataLoader(_ProcessingMixin):
         self._filter_and_align()
 
     meta: pd.DataFrame
-    meta_nfc_facilities: pd.DataFrame
+    nfc_facilities: pd.DataFrame
     table: Table
 
     def _validate_mode(self) -> None:
@@ -576,7 +578,7 @@ class _DataLoader(_ProcessingMixin):
             
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
+            self.nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
             
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
@@ -1572,6 +1574,7 @@ class AmpliconData:
         )
         self.meta = data_loader.meta
         self.table = data_loader.table
+        self.nfc_facilities = data_loader.nfc_facilities
 
     def _process_tables(self):
         processor = _TableProcessor(
@@ -1596,7 +1599,7 @@ class AmpliconData:
                 maps_output_dir,
                 self.verbose
             )
-            self.maps = plotter.generate_sample_map(self.meta)
+            self.maps = plotter.generate_sample_map(self.meta, nfc_facility_data=self.nfc_facilities)
 
     def _run_analysis(self):
         analyzer = _AnalysisManager(
