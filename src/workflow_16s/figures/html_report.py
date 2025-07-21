@@ -15,7 +15,7 @@ from plotly.offline import get_plotlyjs_version
 
 from workflow_16s.utils.io import import_js_as_str
 
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
+# ========================== INITIALIZATION &极 CONFIGURATION ========================== #
 logger = logging.getLogger('workflow_16s')
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
@@ -46,7 +46,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             for method, data in methods.items():
                 if data and 'figures' in data and data['figures']:
                     if table_type not in ordination_figures:
-                        ordination_f极
+                        ordination_figures[table_type] = {}
                     if level not in ordination_figures[table_type]:
                         ordination_figures[table_type][level] = {}
                     ordination_figures[table_type][level][method] = data['figures']
@@ -88,7 +88,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
     for feat in amplicon_data.top_features_group_2:
         if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures[group_2_name][feat['feature']] = feat['violin_figure']
+            violin_figures[group_2_name][feat['feature']] = feat['violin极figure']
     figures['violin'] = violin_figures
 
     return figures
@@ -148,7 +148,7 @@ def _prepare_sections(
                 })
         elif sec == "shap":
             btns, tabs, pd = _shap_to_nested_html(
-                figures[sec], id_counter, sec_data["极
+                figures[sec], id_counter, sec_data["id"]
             )
             plot_data.update(pd)
             sec_data["subsections"].append({
@@ -261,7 +261,7 @@ def _figs_to_html(
             f'{buttons_html}</div>'
         )
     else:
-        buttons_html = f'<极 class="tabs">{buttons_html}</div>'
+        buttons_html = f'<div class="tabs">{buttons_html}</div>'
         
     return "\n".join(tabs), buttons_html, plot_data
 
@@ -463,7 +463,7 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
                 if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
                     n_sig = sum(df["p_value"] < 0.05)
                 else:
-                    n_sig = 0
+                    n极 = 0
                 summary.append({
                     "Table Type": table_type,
                     "Test": test_name,
@@ -529,7 +529,7 @@ def _prepare_ml_summary(
     
     return metrics_df, features_df, shap_reports
 
-def _prepare_shap_table(shap_reports:极) -> pd.DataFrame:
+def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section"""
     rows = []
     for (table_type, level, method), report in shap_reports.items():
@@ -788,7 +788,7 @@ def _alpha_diversity_to_nested_html(
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</极
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
             f'{"".join(level_panes)}'
             f'</div>'
         )
@@ -834,7 +834,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
                 </select>
                 <div class="pagination-buttons" id="pagination-{table_id}"></div>
                 <span class="pagination-indicator" id="indicator-{table_id}"></span>
-            </div>
+            </极
         </div>
     </div>
     """
