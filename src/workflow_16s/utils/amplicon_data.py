@@ -23,7 +23,8 @@ from workflow_16s.figures.merged import (
     pca as plot_pca,
     pcoa as plot_pcoa,
     create_alpha_diversity_boxplot, create_alpha_diversity_stats_plot,
-    plot_alpha_correlations, sample_map_categorical, violin_feature
+    create_feature_abundance_map, plot_alpha_correlations, sample_map_categorical, 
+    violin_feature
 )
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
@@ -789,6 +790,7 @@ class _AnalysisManager(_ProcessingMixin):
         verbose: bool,
         faprotax_enabled: bool = False,
         fdb: Optional[Dict] = None,
+        nfc_facilities: Optional[pd.DataFrame] = None
     ) -> None:
         self.cfg, self.tables, self.meta, self.verbose = cfg, tables, meta, verbose
         self.output_dir = output_dir
@@ -801,6 +803,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.top_features_group_2: List[Dict] = [] # pristine
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
+        self.nfc_facilities = nfc_facilities 
 
         self._run_alpha_diversity_analysis()  
         self._run_statistical_tests()
@@ -1445,20 +1448,41 @@ class _AnalysisManager(_ProcessingMixin):
                     # Create output directory
                     feature_output_dir = violin_output_dir / f"{group_col}_{group_col_values[0]}" / table_type / level
                     feature_output_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Generate violin plot
-                    fig = violin_feature(
-                        df=table,
-                        feature=feature_name,
-                        output_dir=feature_output_dir,
-                        status_col=group_col
+                    try:
+                        # Generate violin plot
+                        fig = violin_feature(
+                            df=table,
+                            feature=feature_name,
+                            output_dir=feature_output_dir,
+                            status_col=group_col
+                        )
+                        feat['violin_figure'] = fig
+                    except Exception as e:
+                        logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
+                        feat['violin_figure'] = None
+                    # Create output directory for feature maps
+                    map_output_dir = violin_output_dir / "feature_maps" / f"{group_col}_{group_col_values[0]}" / table_type / level
+                    map_output_dir.mkdir(parents=True, exist_ok=True)
+                    try: 
+                    # Generate feature abundance map
+                    fig_map = create_feature_abundance_map(
+                        metadata=self.meta,
+                        feature_abundance=table[[feature_name]],
+                        feature_name=feature_name,
+                        nfc_facilities_data=self.nfc_facilities,
+                        output_dir=map_output_dir,
+                        show=False,
+                        verbose=self.verbose
                     )
-                    feat['violin_figure'] = fig
+                    feat['abundance_map'] = fig_map
+                    except Exception as e:
+                        logger.error(f"Failed feature map for {feature_name} at {level} level: {e}")
+                        feat['abundance_map'] = None
                 except Exception as e:
-                    logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
-                    feat['violin_figure'] = None
+                    logger.error(f"Failed plots for {feature_name} at {level} level: {e}")
+                    
         else:
-            logger.warning(f"No {group_col}={group_col_values[0]} features for violin plots")
+            logger.warning(f"No {group_col}={group_col_values[0]} features for plots")
         
         # Pristine features
         if self.top_features_group_2:
@@ -1495,20 +1519,40 @@ class _AnalysisManager(_ProcessingMixin):
                     # Create output directory for this feature
                     feature_output_dir = violin_output_dir / f"{group_col}_{group_col_values[1]}" / table_type / level
                     feature_output_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Generate violin plot
-                    fig = violin_feature(
-                        df=table,
-                        feature=feature_name,
-                        output_dir=feature_output_dir,
-                        status_col=group_col
-                    )
-                    feat['violin_figure'] = fig
+                    try:
+                        # Generate violin plot
+                        fig = violin_feature(
+                            df=table,
+                            feature=feature_name,
+                            output_dir=feature_output_dir,
+                            status_col=group_col
+                        )
+                        feat['violin_figure'] = fig
+                    except Exception as e:
+                        logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
+                        feat['violin_figure'] = None
+                    # Create output directory for feature maps
+                    map_output_dir = violin_output_dir / "feature_maps" / f"{group_col}_{group_col_values[1]}" / table_type / level
+                    map_output_dir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        # Generate feature abundance map
+                        fig_map = create_feature_abundance_map(
+                            metadata=self.meta,
+                            feature_abundance=table[[feature_name]],
+                            feature_name=feature_name,
+                            nfc_facilities_data=self.nfc_facilities,
+                            output_dir=map_output_dir,
+                            show=False,
+                            verbose=self.verbose
+                        )
+                        feat['abundance_map'] = fig_map
+                    except Exception as e:
+                        logger.error(f"Failed feature map for {feature_name} at {level} level: {e}")
+                        feat['abundance_map'] = None
                 except Exception as e:
-                    logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
-                    feat['violin_figure'] = None
+                    logger.error(f"Failed plots for {feature_name} at {level} level: {e}")
         else:
-            logger.warning(f"No {group_col}={group_col_values[1]} features for violin plots")
+            logger.warning(f"No {group_col}={group_col_values[1]} features for plots")
 
 class AmpliconData:
     """
@@ -1610,7 +1654,8 @@ class AmpliconData:
             Path(self.project_dir.final),
             self.verbose,
             self.cfg.get("faprotax", False),
-            get_faprotax_parsed() if self.cfg.get("faprotax", False) else None
+            get_faprotax_parsed() if self.cfg.get("faprotax", False) else None,
+            nfc_facilities=self.nfc_facilities
         )
         
         # Collect results
