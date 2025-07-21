@@ -497,7 +497,7 @@ def create_geographical_map(
     facilities_df = nfc_facilities_data
     if facilities_df is not None and color_col == 'nuclear_contamination_status':
         # Clean facilities data
-        facilities = facilities_df.dropna(subset=['facility_latitude_deg', 'facility_longitude_deg']).copy()
+        facilities = facilities_df.dropna(subset=['latitude_deg', 'longitude_deg']).copy()
         # Create text array without relying on index alignment
         facility_text = []
         for _, row in facilities.iterrows():
