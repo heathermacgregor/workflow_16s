@@ -15,7 +15,7 @@ from plotly.offline import get_plotlyjs_version
 
 from workflow_16s.utils.io import import_js_as_str
 
-# ========================== INITIALIZATION &极 CONFIGURATION ========================== #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 logger = logging.getLogger('workflow_16s')
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
@@ -88,7 +88,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
     for feat in amplicon_data.top_features_group_2:
         if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures[group_2_name][feat['feature']] = feat['violin极figure']
+            violin_figures[group_2_name][feat['feature']] = feat['violin_figure']
     figures['violin'] = violin_figures
 
     return figures
@@ -463,7 +463,7 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
                 if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
                     n_sig = sum(df["p_value"] < 0.05)
                 else:
-                    n极 = 0
+                    n_sig = 0
                 summary.append({
                     "Table Type": table_type,
                     "Test": test_name,
@@ -636,7 +636,7 @@ def _shap_to_nested_html(
         table_id = f"{prefix}-table-{next(id_counter)}"
         is_first_table = not buttons_html
         buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
+            f'极<button class="table-button {"active" if is_first_table else ""}" '
             f'data-table="{table_id}" '
             f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
         )
@@ -665,7 +665,7 @@ def _shap_to_nested_html(
                     else:
                         flattened_plots[plot_type] = fig
                 
-                plot_btns, plot_tabs, pd = _figs_to_html(
+                plot_btns, plot_tabs, pd = _figs极_to_html(
                     flattened_plots, id_counter, method_id
                 )
                 plot_data.update(pd)
@@ -834,7 +834,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
                 </select>
                 <div class="pagination-buttons" id="pagination-{table_id}"></div>
                 <span class="pagination-indicator" id="indicator-{table_id}"></span>
-            </极
+            </div>
         </div>
     </div>
     """
@@ -919,17 +919,15 @@ def generate_html_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Top features tables (without SHAP data)
-    x = 1
-    group_1_name = f"{group_col}={group_col_values[x-1]}"
+    group_1_name = f"{group_col}={group_col_values[0]}"
     group_1_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
+        amplicon_data.top_features_group_1,
         max_features,
         group_1_name
     )
-    x = 2
-    group_2_name = f"{group_col}={group_col_values[x-1]}"
+    group_2_name = f"{group_col}={group_col_values[1]}"
     group_2_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
+        amplicon_data.top_features_group_2,
         max_features,
         group_2_name
     )
