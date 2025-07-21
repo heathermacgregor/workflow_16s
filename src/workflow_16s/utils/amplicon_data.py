@@ -1464,17 +1464,17 @@ class _AnalysisManager(_ProcessingMixin):
                     map_output_dir = violin_output_dir / "feature_maps" / f"{group_col}_{group_col_values[0]}" / table_type / level
                     map_output_dir.mkdir(parents=True, exist_ok=True)
                     try: 
-                    # Generate feature abundance map
-                    fig_map = create_feature_abundance_map(
-                        metadata=self.meta,
-                        feature_abundance=table[[feature_name]],
-                        feature_name=feature_name,
-                        nfc_facilities_data=self.nfc_facilities,
-                        output_dir=map_output_dir,
-                        show=False,
-                        verbose=self.verbose
-                    )
-                    feat['abundance_map'] = fig_map
+                        # Generate feature abundance map
+                        fig_map = create_feature_abundance_map(
+                            metadata=self.meta,
+                            feature_abundance=table[[feature_name]],
+                            feature_name=feature_name,
+                            nfc_facilities_data=self.nfc_facilities,
+                            output_dir=map_output_dir,
+                            show=False,
+                            verbose=self.verbose
+                        )
+                        feat['abundance_map'] = fig_map
                     except Exception as e:
                         logger.error(f"Failed feature map for {feature_name} at {level} level: {e}")
                         feat['abundance_map'] = None
