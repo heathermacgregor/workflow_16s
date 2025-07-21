@@ -498,13 +498,20 @@ def create_geographical_map(
     if facilities_df is not None:
         # Clean facilities data
         facilities = facilities_df.dropna(subset=['facility_latitude_deg', 'facility_longitude_deg']).copy()
-        
+        # FIX: Handle text generation safely
+        # Create text array without relying on index alignment
+        facility_text = []
+        for _, row in facilities.iterrows():
+            try:
+                facility_text.append(f"{row['facility']}, {row['country']}")
+            except KeyError:
+                facility_text.append(f"{row['facility']}")
         # Add facility trace with distinct style
         fig.add_trace(
             go.Scattergeo(
                 lon=facilities['facility_longitude_deg'],
                 lat=facilities['facility_latitude_deg'],
-                text=facilities['facility'] + ', ' + facilities['country'],
+                text=facility_text,  # Use safe text array
                 marker=dict(
                     size=12,
                     color='black',
