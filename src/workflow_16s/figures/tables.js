@@ -108,7 +108,7 @@ function showTab(tabId, plotId) {
     const prevPane = subsection.querySelector('.tab-pane[style*="display: block"]');
     if (prevPane) {
         const prevPlotId = prevPane.dataset.plotId;
-        if (rendered.has(prevPlotId)) {
+        if (prevPlotId && rendered.has(prevPlotId)) {
             purgePlot(prevPlotId);
         }
     }
@@ -120,7 +120,8 @@ function showTab(tabId, plotId) {
     const button = subsection.querySelector(`[data-tab="${tabId}"]`);
     if (button) button.classList.add('active');
 
-    if (!rendered.has(plotId)) {
+    // Only render if plotId is provided
+    if (plotId && !rendered.has(plotId)) {
         renderPlot(`container-${plotId}`, plotId);
         rendered.add(plotId);
     }
