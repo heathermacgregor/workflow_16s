@@ -725,7 +725,7 @@ def _violin_to_nested_html(
         buttons_html.append(
             f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
             f'data-tab="{cat_id}" '
-            f'onclick="showTab(\'{cat_id}\', \'{cat_id}-plot\')">{category.title()}</button>'
+            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
         )
         
         feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
