@@ -220,8 +220,10 @@ def match_facilities_to_locations(
     # Rename facility coordinate columns to avoid conflicts
     matches_df = matches_df.rename(columns={
         'latitude_deg': 'facility_latitude_deg',
-        'longitude_deg': 'facility_longitude_deg'
+        'longitude_deg': 'facility_longitude_deg',
+        'country': 'facility_country'
     })
+    
     
     return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
 
