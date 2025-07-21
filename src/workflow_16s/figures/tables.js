@@ -98,32 +98,51 @@ function renderPlot(containerId, plotId) {
 }
 
 /* ---- tab logic ---- */
-function showTab(tabId, plotId) {
+function showTab(tabId) {
     const pane = document.getElementById(tabId);
     if (!pane) return;
 
     const subsection = pane.closest('.subsection');
     if (!subsection) return;
 
-    const prevPane = subsection.querySelector('.tab-pane[style*="display: block"]');
-    if (prevPane) {
-        const prevPlotId = prevPane.dataset.plotId;
-        if (prevPlotId && rendered.has(prevPlotId)) {
-            purgePlot(prevPlotId);
-        }
-    }
-
-    subsection.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
-    subsection.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-
+    // Hide all other panes in this subsection
+    subsection.querySelectorAll('.tab-pane').forEach(p => {
+        p.style.display = 'none';
+    });
+    
+    // Remove active class from all buttons in this subsection
+    subsection.querySelectorAll('.tab-button').forEach(b => {
+        b.classList.remove('active');
+    });
+    
+    // Show this pane
     pane.style.display = 'block';
+    
+    // Activate this button
     const button = subsection.querySelector(`[data-tab="${tabId}"]`);
     if (button) button.classList.add('active');
 
-    // Only render if plotId is provided
-    if (plotId && !rendered.has(plotId)) {
-        renderPlot(`container-${plotId}`, plotId);
-        rendered.add(plotId);
+    // Find the first feature tab in this pane
+    const firstFeatureTab = pane.querySelector('.tab-pane');
+    if (firstFeatureTab) {
+        const featureTabId = firstFeatureTab.id;
+        const plotId = firstFeatureTab.dataset.plotId;
+        
+        // Hide all feature tabs
+        pane.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+        
+        // Show first feature tab
+        firstFeatureTab.style.display = 'block';
+        
+        // Activate its button
+        const featureButton = pane.querySelector(`[data-tab="${featureTabId}"]`);
+        if (featureButton) featureButton.classList.add('active');
+        
+        // Render plot if needed
+        if (plotId && !rendered.has(plotId)) {
+            renderPlot(`container-${plotId}`, plot极
+            rendered.add(plotId);
+        }
     }
 }
 
@@ -415,7 +434,7 @@ function paginateTable(tableId, pageSize) {
         nextButton.textContent = '►';
         nextButton.classList.add('pagination-btn');
         nextButton.disabled = totalPages <= 1;
-        nextButton.addEventListener('click', () => {
+        nextButton.addEventListener('click', ()极
             changePage(tableId, totalPages - 1, pageSize); // Go to last page
         });
         paginationDiv.appendChild(nextButton);
@@ -507,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const plotId = firstTab?.dataset.plotId;
 
         if (firstTab && plotId && !rendered.has(plotId)) {
-            showTab(firstTab.id, plotId);
+            showTab(firstTab.id);
         }
     });
 
