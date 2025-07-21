@@ -1520,3 +1520,166 @@ def plot_alpha_correlations(
             plotly_show_and_save(fig, show, output_dir / file_stem, ['html', 'png'], verbose)
                 
     return figs
+
+def create_feature_abundance_map(
+    metadata: pd.DataFrame,
+    feature_abundance: pd.DataFrame,
+    feature_name: str,
+    nfc_facilities_data: Optional[pd.DataFrame] = None,
+    lat_col: str = DEFAULT_LATITUDE_COL,
+    lon_col: str = DEFAULT_LONGITUDE_COL,
+    projection: str = DEFAULT_PROJECTION,
+    output_dir: Union[Path, None] = None,
+    show: bool = False,
+    verbose: bool = False,
+    size: int = DEFAULT_SIZE_MAP,
+    opacity: float = DEFAULT_OPACITY_MAP,
+    color_scale: str = 'Viridis',
+    log_transform: bool = True
+) -> go.Figure:
+    """
+    Generate interactive geographical map colored by feature abundance.
+    
+    Args:
+        metadata:          DataFrame containing geographic coordinates and sample IDs.
+        feature_abundance: DataFrame with feature abundances (samples x features).
+        feature_name:      Name of the feature to visualize.
+        nfc_facilities_data: Optional DataFrame containing NFC facilities data.
+        lat_col:           Column containing latitude values.
+        lon_col:           Column containing longitude values.
+        projection:        Map projection type.
+        output_dir:        Directory to save outputs.
+        show:              Display figure interactively.
+        verbose:           Enable debug logging.
+        size:              Sample marker size.
+        opacity:           Sample marker opacity.
+        color_scale:       Plotly color scale name.
+        log_transform:    Apply log10 transformation to abundance values.
+        
+    Returns:
+        Plotly figure object.
+    """
+    # Preprocess sample data
+    metadata = metadata.copy()
+    
+    # Validate inputs
+    _validate_metadata(metadata, [lat_col, lon_col, '#sampleid'])
+    
+    # Prepare abundance data
+    if feature_name not in feature_abundance.columns:
+        raise ValueError(f"Feature '{feature_name}' not found in abundance data")
+    
+    abundance_data = feature_abundance[[feature_name]].copy()
+    abundance_data.index = abundance_data.index.astype(str).str.strip().str.lower()
+    
+    # Prepare metadata
+    metadata['#sampleid'] = metadata['#sampleid'].astype(str).str.strip().str.lower()
+    metadata.set_index('#sampleid', inplace=True)
+    
+    # Merge metadata with abundance data
+    merged = metadata.join(abundance_data, how='inner')
+    
+    if merged.empty:
+        raise ValueError("No matching samples between metadata and abundance data")
+    
+    # Apply log transformation if requested
+    abundance_values = merged[feature_name]
+    if log_transform:
+        # Handle zeros by adding a small pseudocount
+        min_nonzero = abundance_values[abundance_values > 0].min() / 10
+        abundance_values = np.log10(abundance_values.replace(0, min_nonzero))
+        hover_text = f"Log10({feature_name})"
+        colorbar_title = f"Log10 Abundance of {feature_name}"
+    else:
+        hover_text = feature_name
+        colorbar_title = f"Abundance of {feature_name}"
+    
+    # Create visualization
+    fig = go.Figure()
+    
+    # Add sample trace with continuous coloring
+    fig.add_trace(
+        go.Scattergeo(
+            lon=merged[lon_col],
+            lat=merged[lat_col],
+            text=merged.index + f"<br>{hover_text}: " + abundance_values.round(4).astype(str),
+            marker=dict(
+                size=size,
+                opacity=opacity,
+                color=abundance_values,
+                colorscale=color_scale,
+                colorbar=dict(
+                    title=colorbar_title,
+                    thickness=20,
+                    len=0.75
+                ),
+                showscale=True
+            ),
+            name='Samples',
+            hoverinfo='text',
+            hovertemplate='<b>%{text}</b><extra></extra>'
+        )
+    )
+
+    # Add facilities layer if provided
+    if nfc_facilities_data is not None:
+        facilities = nfc_facilities_data.dropna(subset=['latitude_deg', 'longitude_deg']).copy()
+        facility_text = []
+        for _, row in facilities.iterrows():
+            try:
+                facility_text.append(f"{row['facility']} \n{row['country']}  \n{row['facility_type']} \n{row['facility_capacity']} \n{row['facility_status']} \n{row['facility_start_year']}-{row['facility_end_year']}")
+            except KeyError:
+                facility_text.append(f"{row['facility']}")
+        
+        fig.add_trace(
+            go.Scattergeo(
+                lon=facilities['longitude_deg'],
+                lat=facilities['latitude_deg'],
+                text=facility_text,
+                marker=dict(
+                    size=12,
+                    color='black',
+                    symbol='star',
+                    line=dict(width=1, color='yellow')
+                ),
+                name='NFC Facilities',
+                hoverinfo='text',
+                hovertemplate='<b>%{text}</b><extra></extra>'
+            )
+        )
+
+    # Add sample count annotation
+    fig.add_annotation(
+        text=f"n = {len(merged)} samples",
+        xref="paper", yref="paper",
+        x=0.99, y=0.01,
+        xanchor="right", yanchor="bottom",
+        showarrow=False,
+        font=dict(size=12, color="black"),
+        bgcolor="rgba(255,255,255,0.4)",
+    )
+    
+    # Configure map
+    fig.update_geos(
+        projection_type=projection,
+        resolution=50,
+        showcoastlines=True, coastlinecolor="#b5b5b5",
+        showland=True, landcolor="#e8e8e8",
+        showlakes=True, lakecolor="#fff",
+        showrivers=True, rivercolor="#fff",
+    )
+    
+    fig.update_layout(
+        title_text=f"Geographical Distribution of {feature_name}",
+        title_x=0.5,
+        margin=dict(l=0, r=0, t=50, b=0)
+    )
+    
+    # Save output
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        safe_feature_name = feature_name.replace('/', '_').replace(' ', '_')
+        file_stem = f"feature_map.{safe_feature_name}"
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose)
+        
+    return fig
