@@ -438,7 +438,7 @@ class MapPlotter:
                 
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
-                    nfc_facilities_data=_facility_data,
+                    nfc_facilities_data=nfc_facility_data,
                     output_dir=self.output_dir,
                     color_col=col,
                     **kwargs,
