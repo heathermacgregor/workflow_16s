@@ -508,8 +508,8 @@ def create_geographical_map(
         # Add facility trace with distinct style
         fig.add_trace(
             go.Scattergeo(
-                lon=facilities['facility_longitude_deg'],
-                lat=facilities['facility_latitude_deg'],
+                lon=facilities['longitude_deg'],
+                lat=facilities['latitude_deg'],
                 text=facility_text,  # Use safe text array
                 marker=dict(
                     size=12,
