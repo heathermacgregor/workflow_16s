@@ -428,6 +428,7 @@ def _apply_common_layout(
 
 def create_geographical_map(
     metadata: pd.DataFrame,
+    nfc_facilities_data: Optional[pd.DataFrame] = None,
     color_col: str = DEFAULT_COLOR_COL,
     lat_col: str = DEFAULT_LATITUDE_COL,
     lon_col: str = DEFAULT_LONGITUDE_COL,
@@ -437,7 +438,6 @@ def create_geographical_map(
     verbose: bool = False,
     size: int = DEFAULT_SIZE_MAP,
     opacity: float = DEFAULT_OPACITY_MAP,
-    facilities_df: Optional[pd.DataFrame] = None
 ) -> Tuple[go.Figure, Dict]:
     """
     Generate interactive geographical map with distinct layers for samples and NFC facilities.
@@ -494,6 +494,7 @@ def create_geographical_map(
     )
 
     # Add facilities layer if provided
+    facilities_df = nfc_facilities_data
     if facilities_df is not None:
         # Clean facilities data
         facilities = facilities_df.dropna(subset=['facility_latitude_deg', 'facility_longitude_deg']).copy()
@@ -996,7 +997,7 @@ def sample_map_categorical(
     
     return create_geographical_map(
         metadata=metadata,
-        facilities_data=nfc_facilities_data,
+        nfc_facilities_data=nfc_facilities_data,
         color_col=color_col,
         lat_col=lat,
         lon_col=lon,
