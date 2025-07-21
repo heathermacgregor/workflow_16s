@@ -438,7 +438,7 @@ class MapPlotter:
                 
                 fig, _ = sample_map_categorical(
                     metadata=metadata,
-                    nfc_facilities_data=nfc_facility_data,
+                    nfc_facilities_data=_facility_data,
                     output_dir=self.output_dir,
                     color_col=col,
                     **kwargs,
@@ -534,6 +534,7 @@ class _DataLoader(_ProcessingMixin):
 
     meta: pd.DataFrame
     nfc_facilities: pd.DataFrame
+    meta_nfc_facilities: pd.DataFrame
     table: Table
 
     def _validate_mode(self) -> None:
@@ -578,7 +579,7 @@ class _DataLoader(_ProcessingMixin):
             
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            self.nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
+            self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
             
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
