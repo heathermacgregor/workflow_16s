@@ -247,11 +247,16 @@ maps:
     - "env_feature"
     - "env_material"
     - "country"
+    - "facility_match"
     
 violin_plots: # Violin plots of top important features
   enabled: False #True
   n: 50  # Number of features to plot per category
-
+  
+feature_maps:
+  enabled: True
+  n: 50
+  
 ml: # Machine learning
   enabled: False #True
   n_threads: 32
