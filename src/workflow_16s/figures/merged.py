@@ -977,7 +977,7 @@ def create_correlation_heatmap(
 # Simplified API functions using the new modular components
 def sample_map_categorical(
     metadata: pd.DataFrame, 
-    nfc_facilities_data: pd.DataFrame,
+    nfc_facilities_data: Optional[pd.DataFrame] = None,
     show: bool = False,
     output_dir: Union[str, Path, None] = None, 
     projection_type: str = DEFAULT_PROJECTION, 
