@@ -14,6 +14,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
 import pandas as pd
+import numpy as np
+from scipy.stats import spearmanr
+from statsmodels.stats.multitest import multipletests
 from biom.table import Table
 
 # ================================== LOCAL IMPORTS =================================== #
@@ -804,6 +807,8 @@ class _AnalysisManager(_ProcessingMixin):
         self.faprotax_enabled, self.fdb = faprotax_enabled, fdb
         self._faprotax_cache = {}
         self.nfc_facilities = nfc_facilities 
+        self.stats_facility: Dict[str, Any] = {}
+        self.stats_distance: Dict[str, Any] = {}
 
         self._run_alpha_diversity_analysis()  
         self._run_statistical_tests()
@@ -817,10 +822,264 @@ class _AnalysisManager(_ProcessingMixin):
         self._run_ml_feature_selection()
         self._compare_top_features()
 
+        # Run NFC facility statistical tests if applicable
+        if self.nfc_facilities is not None:
+            self._run_nfc_statistical_tests()
+
         if self.faprotax_enabled and self.top_features_group_1:
             self._annotate_top_features()
 
         self._generate_violin_plots(n=cfg.get("violin_plots", {}).get("n", 50))
+
+    def _run_nfc_statistical_tests(self) -> None:
+        """Run statistical tests for NFC-related columns if NFC facilities were calculated"""
+        # 1. Statistical tests for facility_match (categorical)
+        if "facility_match" in self.meta.columns:
+            logger.info("Running statistical tests for 'facility_match'")
+            self.stats_facility = self._run_statistical_tests_for_group(
+                group_column="facility_match",
+                group_values=[True, False]
+            )
+
+        # 2. Correlation analysis for distance_from_facility (continuous)
+        if "distance_from_facility" in self.meta.columns:
+            logger.info("Running correlation analysis for 'distance_from_facility'")
+            self.stats_distance = self._run_distance_correlation_analysis()
+
+    def _run_statistical_tests_for_group(
+        self,
+        group_column: str,
+        group_values: List[Any]
+    ) -> Dict[str, Any]:
+        """Helper to run statistical tests for a given group column"""
+        stats_cfg = self.cfg.get("stats", {})
+        if not stats_cfg.get("enabled", False):
+            return {}
+
+        KNOWN_TESTS = ['fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni']
+        default_table_type_tests = {
+            "raw": ["ttest"],
+            "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
+            "normalized": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+            "clr_transformed": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+            "presence_absence": ["fisher"]
+        }
+        
+        san = StatisticalAnalyzer(self.cfg, self.verbose)
+        san_cfg = san.TEST_CONFIG
+        
+        n = 0
+        table_cfg = stats_cfg.get("tables", {})
+        for table_type, levels in self.tables.items():
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
+                continue
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+
+            enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
+            enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
+            # Accumulate tasks: levels × tests for this table
+            n += len(enabled_levels) * len(enabled_tests)
+        
+        if not n:
+            return {}
+
+        group_stats = {}
+        with get_progress_bar() as progress:
+            stats_desc = f"Running statistics for '{group_column}'"
+            stats_task = progress.add_task(_format_task_desc(stats_desc), total=n)
+            
+            for table_type, levels in self.tables.items():
+                # Check that table type is enabled
+                tt_cfg = table_cfg.get(table_type, {})
+                if not tt_cfg.get('enabled', False):
+                    continue
+
+                # Get enabled levels for table type
+                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+
+                # Get enabled tests for table type
+                enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
+                enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
+                
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
+                    parent=stats_task,
+                    total=len(enabled_levels) * len(enabled_tests)
+                )
+
+                for level in enabled_levels:
+                    level_desc = f"{tt_desc} ({level.title()})"
+                    progress.update(tt_task, description=_format_task_desc(level_desc))
+
+                    # Create output directory 
+                    output_dir = self.output_dir / 'stats' / group_column / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+
+                    _init_dict_level(group_stats, table_type, level) 
+                    data_storage = group_stats[table_type][level]
+                    
+                    table = self.tables[table_type][level]
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                    
+                    for test in enabled_tests:
+                        test_desc = f"{level_desc} → {san_cfg[test]['name']}"
+                        progress.update(tt_task, description=_format_task_desc(test_desc))
+                        try:
+                            if debug_mode:
+                                time.sleep(3)
+                                return
+                            result = san_cfg[test]["func"](
+                                table=table_aligned,
+                                metadata=meta_aligned,
+                                group_column=group_column,
+                                group_column_values=group_values,
+                            )
+                            # Save results 
+                            result.to_csv(output_dir / f'{test}.tsv', sep='\t', index=True)
+                            data_storage[test] = result
+                            
+                            # Log number of significant features
+                            if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
+                                n_sig = sum(result["p_value"] < 0.05)
+                                logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test}")
+                                
+                                # Add debug info for first 5 features if none are significant
+                                if n_sig == 0 and self.verbose:
+                                    logger.debug(f"Top 5 features by p-value ({test}):")
+                                    top_p = result.nsmallest(5, "p_value")[["feature", "p_value", "effect_size"]]
+                                    for _, row in top_p.iterrows():
+                                        logger.debug(f"  {row['feature']}: p={row['p_value']:.3e}, effect={row['effect_size']:.3f}")
+                            
+                        except Exception as e:
+                            logger.error(f"Test '{test}' failed for {table_type}/{level}: {e}")
+                            data_storage[test] = None
+                            
+                        finally:
+                            progress.update(tt_task, advance=1)
+                            progress.update(stats_task, advance=1)
+                progress.remove_task(tt_task)
+                        
+        return group_stats
+
+    def _run_distance_correlation_analysis(self) -> Dict[str, Any]:
+        """Run correlation analysis between features and distance_from_facility"""
+        from scipy.stats import spearmanr
+        from statsmodels.stats.multitest import multipletests
+        
+        stats_cfg = self.cfg.get("stats", {})
+        if not stats_cfg.get("enabled", False):
+            return {}
+            
+        distance_correlations = {}
+        distance_col = "distance_from_facility"
+        
+        table_cfg = stats_cfg.get("tables", {})
+        KNOWN_METHODS = ["spearman"]
+        
+        n = 0
+        for table_type, levels in self.tables.items():
+            tt_cfg = table_cfg.get(table_type, {})
+            if not tt_cfg.get('enabled', False):
+                continue
+            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+            # Accumulate tasks: levels
+            n += len(enabled_levels)
+        if not n:
+            return {}
+
+        with get_progress_bar() as progress:
+            corr_desc = f"Running correlations for '{distance_col}'"
+            corr_task = progress.add_task(_format_task_desc(corr_desc), total=n)
+            
+            for table_type, levels in self.tables.items():
+                tt_cfg = table_cfg.get(table_type, {})
+                if not tt_cfg.get('enabled', False):
+                    continue
+                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
+                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
+                
+                tt_desc = f"{table_type.replace('_', ' ').title()}"
+                tt_task = progress.add_task(
+                    _format_task_desc(tt_desc),
+                    parent=corr_task,
+                    total=len(enabled_levels)
+                )
+
+                for level in enabled_levels:
+                    level_desc = f"{tt_desc} ({level.title()})"
+                    progress.update(tt_task, description=_format_task_desc(level_desc))
+
+                    # Create output directory 
+                    output_dir = self.output_dir / 'stats' / distance_col / table_type / level
+                    output_dir.mkdir(parents=True, exist_ok=True)
+
+                    _init_dict_level(distance_correlations, table_type, level) 
+                    data_storage = distance_correlations[table_type][level]
+                    
+                    table = self.tables[table_type][level]
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                    
+                    # Extract distance values
+                    distances = meta_aligned[distance_col].values
+                    
+                    # Compute correlations
+                    correlations = []
+                    p_values = []
+                    features = []
+                    
+                    # Convert table to DataFrame (samples x features)
+                    table_df = table_to_df(table_aligned)
+                    
+                    for feature in table_df.columns:
+                        # Skip if constant feature
+                        if table_df[feature].nunique() <= 1:
+                            continue
+                            
+                        # Compute Spearman correlation
+                        corr, pval = spearmanr(table_df[feature], distances, nan_policy='omit')
+                        correlations.append(corr)
+                        p_values.append(pval)
+                        features.append(feature)
+                    
+                    # Apply FDR correction
+                    if p_values:
+                        reject, pvals_adj, _, _ = multipletests(p_values, method='fdr_bh')
+                    else:
+                        reject, pvals_adj = [], []
+                    
+                    # Store results
+                    results = pd.DataFrame({
+                        'feature': features,
+                        'spearman_rho': correlations,
+                        'p_value': p_values,
+                        'p_value_adj': pvals_adj,
+                        'significant': reject
+                    })
+                    
+                    # Sort by absolute correlation strength
+                    results = results.iloc[np.argsort(-np.abs(results['spearman_rho']))]
+                    
+                    # Save to file
+                    results.to_csv(output_dir / 'spearman_correlations.tsv', sep='\t', index=False)
+                    data_storage['spearman'] = results
+                    
+                    # Log summary
+                    n_sig = sum(results['significant'])
+                    logger.debug(
+                        f"Distance correlation for {table_type}/{level}: "
+                        f"{n_sig} significant features (FDR < 0.05)"
+                    )
+                    
+                    progress.update(tt_task, advance=1)
+                    progress.update(corr_task, advance=1)
+                progress.remove_task(tt_task)
+                
+        return distance_correlations
 
     def _get_cached_faprotax(
         self, 
@@ -988,119 +1247,10 @@ class _AnalysisManager(_ProcessingMixin):
                 progress.remove_task(tt_task)
             
     def _run_statistical_tests(self) -> None:
-        stats_cfg = self.cfg.get("stats", {})
-        if not stats_cfg.get("enabled", False):
-            ("Statistical analysis disabled.")
-            return
-
-        KNOWN_TESTS = ['fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni']
-        default_table_type_tests = {
-            "raw": ["ttest"],
-            "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
-            "normalized": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
-            "clr_transformed": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
-            "presence_absence": ["fisher"]
-        }
-        
+        """Run statistical tests for the main group column"""
         group_col = self.cfg.get("group_column", DEFAULT_GROUP_COLUMN)
-        group_vals = self.cfg.get("group_column_values", [True, False])
-        san = StatisticalAnalyzer(self.cfg, self.verbose)
-        san_cfg = san.TEST_CONFIG
-        
-        n = 0
-        table_cfg = stats_cfg.get("tables", {})
-        for table_type, levels in self.tables.items():
-            tt_cfg = table_cfg.get(table_type, {})
-            if not tt_cfg.get('enabled', False):
-                continue
-            enabled_levels = tt_cfg.get("levels", list(levels.keys()))
-            enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
-
-            enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
-            enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
-            # Accumulate tasks: levels × tests for this table
-            n += len(enabled_levels) * len(enabled_tests)
-        
-        if not n:
-            return
-
-        with get_progress_bar() as progress:
-            stats_desc = f"Running statistics for '{group_col}'"
-            stats_task = progress.add_task(_format_task_desc(stats_desc), total=n)
-            
-            for table_type, levels in self.tables.items():
-                # Check that table type is enabled
-                tt_cfg = table_cfg.get(table_type, {})
-                if not tt_cfg.get('enabled', False):
-                    continue
-
-                # Get enabled levels for table type
-                enabled_levels = tt_cfg.get("levels", list(levels.keys()))
-                enabled_levels = [l for l in enabled_levels if l in list(levels.keys())]
-
-                # Get enabled tests for table type
-                enabled_tests = tt_cfg.get("tests", default_table_type_tests[table_type])
-                enabled_tests = [m for m in enabled_tests if m in KNOWN_TESTS]
-                
-                tt_desc = f"{table_type.replace('_', ' ').title()}"
-                tt_task = progress.add_task(
-                    _format_task_desc(tt_desc),
-                    parent=stats_task,
-                    total=len(enabled_levels) * len(enabled_tests)
-                )
-
-                for level in enabled_levels:
-                    level_desc = f"{tt_desc} ({level.title()})"
-                    progress.update(tt_task, description=_format_task_desc(level_desc))
-
-                    # Create output directory 
-                    output_dir = self.output_dir / 'stats' / table_type / level
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-                    _init_dict_level(self.stats, table_type, level) 
-                    data_storage = self.stats[table_type][level]
-                    
-                    table = self.tables[table_type][level]
-                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
-                    
-                    for test in enabled_tests:
-                        test_desc = f"{level_desc} → {san_cfg[test]['name']}"
-                        progress.update(tt_task, description=_format_task_desc(test_desc))
-                        try:
-                            if debug_mode:
-                                time.sleep(3)
-                                return
-                            result = san_cfg[test]["func"](
-                                table=table_aligned,
-                                metadata=meta_aligned,
-                                group_column=group_col,
-                                group_column_values=group_vals,
-                            )
-                            # Save results 
-                            result.to_csv(output_dir / f'{test}.tsv', sep='\t', index=True)
-                            data_storage[test] = result
-                            
-                            # Log number of significant features
-                            if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
-                                n_sig = sum(result["p_value"] < 0.05)
-                                logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test}")
-                                
-                                # Add debug info for first 5 features if none are significant
-                                if n_sig == 0 and self.verbose:
-                                    logger.debug(f"Top 5 features by p-value ({test}):")
-                                    top_p = result.nsmallest(5, "p_value")[["feature", "p_value", cfg["effect_col"]]]
-                                    for _, row in top_p.iterrows():
-                                        logger.debug(f"  {row['feature']}: p={row['p_value']:.3e}, effect={row[cfg['effect_col']]:.3f}")
-                            
-                        except Exception as e:
-                            logger.error(f"Test '{test}' failed for {table_type}/{level}: {e}")
-                            data_storage[test] = None
-                            
-                        finally:
-                            progress.update(tt_task, advance=1)
-                            progress.update(stats_task, advance=1)
-                progress.remove_task(tt_task)
-                        
+        group_vals = self.cfg.get("group_column_values", DEFAULT_GROUP_COLUMN_VALUES)
+        self.stats = self._run_statistical_tests_for_group(group_col, group_vals)
 
     def _identify_top_features(self, stats_results: Dict) -> None:
         if not stats_results:
@@ -1665,3 +1815,5 @@ class AmpliconData:
         self.alpha_diversity = analyzer.alpha_diversity
         self.top_features_group_1 = analyzer.top_features_group_1
         self.top_features_group_2 = analyzer.top_features_group_2
+        self.stats_facility = analyzer.stats_facility
+        self.stats_distance = analyzer.stats_distance
