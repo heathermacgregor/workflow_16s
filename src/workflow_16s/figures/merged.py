@@ -427,36 +427,39 @@ def _apply_common_layout(
 # ================================ VISUALIZATIONS ================================== #
 
 def create_geographical_map(
-    metadata: pd.DataFrame, 
+    metadata: pd.DataFrame,
     color_col: str = DEFAULT_COLOR_COL,
     lat_col: str = DEFAULT_LATITUDE_COL,
     lon_col: str = DEFAULT_LONGITUDE_COL,
     projection: str = DEFAULT_PROJECTION,
-    output_dir: Union[Path, None] = None, 
+    output_dir: Union[Path, None] = None,
     show: bool = False,
     verbose: bool = False,
     size: int = DEFAULT_SIZE_MAP,
-    opacity: float = DEFAULT_OPACITY_MAP
+    opacity: float = DEFAULT_OPACITY_MAP,
+    facilities_df: Optional[pd.DataFrame] = None
 ) -> Tuple[go.Figure, Dict]:
     """
-    Generate interactive geographical map of samples.
+    Generate interactive geographical map with distinct layers for samples and NFC facilities.
     
     Args:
-        metadata:   DataFrame containing geographic coordinates.
-        color_col:  Column to use for coloring points.
-        lat_col:    Column containing latitude values.
-        lon_col:    Column containing longitude values.
-        projection: Map projection type.
-        output_dir: Directory to save outputs.
-        show:       Display figure interactively.
-        verbose:    Enable debug logging.
-        size:       Marker size.
-        opacity:    Marker opacity.
+        metadata:    DataFrame containing geographic coordinates.
+        color_col:   Column to use for coloring sample points.
+        lat_col:     Column containing latitude values.
+        lon_col:     Column containing longitude values.
+        projection:  Map projection type.
+        output_dir:  Directory to save outputs.
+        show:        Display figure interactively.
+        verbose:     Enable debug logging.
+        size:        Sample marker size.
+        opacity:     Sample marker opacity.
+        facilities_df: DataFrame containing NFC facilities data (requires 'facility_latitude_deg' 
+                       and 'facility_longitude_deg' columns)
         
     Returns:
         Tuple containing figure and color mapping dictionary.
     """
-    # Preprocess data
+    # Preprocess sample data
     metadata = metadata.copy()
     metadata[color_col] = metadata[color_col].fillna('other').replace('', 'other')
     metadata = metadata.sort_values(color_col)
@@ -468,22 +471,56 @@ def create_geographical_map(
     
     # Create visualization
     colordict = _create_colordict(metadata[color_col])
-
     n_pts = metadata.shape[0]
 
-    fig = px.scatter_geo(
-        metadata,
-        lat=lat_col,
-        lon=lon_col,
-        color=color_col,
-        color_discrete_map=colordict,
-        hover_data={color_col: True, 'sample_count': ':.0f'}
+    # Create base map with samples
+    fig = go.Figure()
+    
+    # Add sample trace
+    fig.add_trace(
+        go.Scattergeo(
+            lon=metadata[lon_col],
+            lat=metadata[lat_col],
+            text=metadata[color_col],
+            marker=dict(
+                size=size,
+                opacity=opacity,
+                color=metadata[color_col].map(colordict),
+            ),
+            name='Samples',
+            hoverinfo='text',
+            hovertemplate='<b>%{text}</b><extra></extra>'
+        )
     )
 
+    # Add facilities layer if provided
+    if facilities_df is not None:
+        # Clean facilities data
+        facilities = facilities_df.dropna(subset=['facility_latitude_deg', 'facility_longitude_deg']).copy()
+        
+        # Add facility trace with distinct style
+        fig.add_trace(
+            go.Scattergeo(
+                lon=facilities['facility_longitude_deg'],
+                lat=facilities['facility_latitude_deg'],
+                text=facilities['facility'] + ', ' + facilities['country'],
+                marker=dict(
+                    size=12,
+                    color='black',
+                    symbol='star',
+                    line=dict(width=1, color='yellow')
+                ),
+                name='NFC Facilities',
+                hoverinfo='text',
+                hovertemplate='<b>%{text}</b><extra></extra>'
+            )
+        )
+
+    # Add sample count annotation
     fig.add_annotation(
         text=f"n = {n_pts}",
-        xref="paper", yref="paper",        # relative to full plot
-        x=0.99, y=0.01,                    # bottom‑right corner
+        xref="paper", yref="paper",
+        x=0.99, y=0.01,
         xanchor="right", yanchor="bottom",
         showarrow=False,
         font=dict(size=12, color="black"),
@@ -501,17 +538,24 @@ def create_geographical_map(
     )
     
     # Update layout
-    fig.update_layout(margin=dict(l=5, r=5, t=5, b=5))
-    fig.update_traces(marker=dict(size=size, opacity=opacity))
+    fig.update_layout(
+        margin=dict(l=5, r=5, t=5, b=5),
+        legend=dict(
+            title='Map Layers',
+            itemsizing='constant',
+            orientation='h',
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5
+        )
+    )
     
     # Save output
     if output_dir:
         file_stem = f"sample_map.{color_col}"
         output_dir.mkdir(parents=True, exist_ok=True)
-        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose=True)
-        _save_figure_and_legend(
-            fig, colordict, color_col, output_dir, file_stem, show, verbose
-        )
+        plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose)
         
     return fig, colordict
 
@@ -933,6 +977,7 @@ def create_correlation_heatmap(
 # Simplified API functions using the new modular components
 def sample_map_categorical(
     metadata: pd.DataFrame, 
+    nfc_facilities_data: pd.DataFrame,
     show: bool = False,
     output_dir: Union[str, Path, None] = None, 
     projection_type: str = DEFAULT_PROJECTION, 
@@ -951,6 +996,7 @@ def sample_map_categorical(
     
     return create_geographical_map(
         metadata=metadata,
+        facilities_data=nfc_facilities_data,
         color_col=color_col,
         lat_col=lat,
         lon_col=lon,
