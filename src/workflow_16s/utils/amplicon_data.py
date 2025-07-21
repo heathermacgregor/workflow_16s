@@ -579,7 +579,7 @@ class _DataLoader(_ProcessingMixin):
             
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
+            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
             
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
