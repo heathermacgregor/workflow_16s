@@ -239,7 +239,7 @@ def find_nearby_nfc_facilities(
     for db in databases:
         path = DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else DEFAULT_GEM_PATH
         dfs.append(process_and_geocode_db(database=db['name'], file_path=path))
-    facilities_df = pd.concat(dfs, ignore_index=True)
+    facilities_df = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
     logger.info(f"Merged facilities: {facilities_df.shape}")
 
     max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
