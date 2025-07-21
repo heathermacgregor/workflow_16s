@@ -268,7 +268,7 @@ def find_nearby_nfc_facilities(
     # Save full matched results
     matched_df[result_cols].to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
                       sep='\t', index=False)
-    return facilities_df, matched_df[result_cols]
+    return matched_df, facilities_df, matched_df[result_cols]
 
 
 def analyze_contamination_correlation(
