@@ -495,15 +495,14 @@ def create_geographical_map(
 
     # Add facilities layer if provided
     facilities_df = nfc_facilities_data
-    if facilities_df is not None:
+    if facilities_df is not None and color_col == 'nuclear_contamination_status':
         # Clean facilities data
         facilities = facilities_df.dropna(subset=['facility_latitude_deg', 'facility_longitude_deg']).copy()
-        # FIX: Handle text generation safely
         # Create text array without relying on index alignment
         facility_text = []
         for _, row in facilities.iterrows():
             try:
-                facility_text.append(f"{row['facility']}, {row['country']}")
+                facility_text.append(f"{row['facility']} \n{row['country']}  \n{row['facility_type']} \n{row['facility_capacity']} \n{row['facility_status']} \n{row['facility_start_year']}-{row['facility_end_year']}")
             except KeyError:
                 facility_text.append(f"{row['facility']}")
         # Add facility trace with distinct style
@@ -543,20 +542,6 @@ def create_geographical_map(
         showland=True, landcolor="#e8e8e8",
         showlakes=True, lakecolor="#fff",
         showrivers=True, rivercolor="#fff",
-    )
-    
-    # Update layout
-    fig.update_layout(
-        margin=dict(l=5, r=5, t=5, b=5),
-        legend=dict(
-            title='Map Layers',
-            itemsizing='constant',
-            orientation='h',
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5
-        )
     )
     
     # Save output
