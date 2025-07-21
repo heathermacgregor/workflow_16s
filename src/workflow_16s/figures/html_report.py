@@ -46,7 +46,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             for method, data in methods.items():
                 if data and 'figures' in data and data['figures']:
                     if table_type not in ordination_figures:
-                        ordination_figures[table_type] = {}
+                        ordination_f极
                     if level not in ordination_figures[table_type]:
                         ordination_figures[table_type][level] = {}
                     ordination_figures[table_type][level][method] = data['figures']
@@ -148,7 +148,7 @@ def _prepare_sections(
                 })
         elif sec == "shap":
             btns, tabs, pd = _shap_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
+                figures[sec], id_counter, sec_data["极
             )
             plot_data.update(pd)
             sec_data["subsections"].append({
@@ -261,7 +261,7 @@ def _figs_to_html(
             f'{buttons_html}</div>'
         )
     else:
-        buttons_html = f'<div class="tabs">{buttons_html}</div>'
+        buttons_html = f'<极 class="tabs">{buttons_html}</div>'
         
     return "\n".join(tabs), buttons_html, plot_data
 
@@ -529,7 +529,7 @@ def _prepare_ml_summary(
     
     return metrics_df, features_df, shap_reports
 
-def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
+def _prepare_shap_table(shap_reports:极) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section"""
     rows = []
     for (table_type, level, method), report in shap_reports.items():
@@ -728,6 +728,7 @@ def _violin_to_nested_html(
             f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
         )
         
+        # Generate feature tabs for this category
         feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
             features, id_counter, cat_id
         )
@@ -736,7 +737,7 @@ def _violin_to_nested_html(
         tabs_html.append(
             f'<div id="{cat_id}" class="tab-pane" '
             f'style="display:{"block" if cat_idx==0 else "none"}">'
-            f'{feature_btns}'
+            f'<div class="tabs">{feature_btns}</div>'
             f'{feature_tabs}'
             f'</div>'
         )
@@ -787,7 +788,7 @@ def _alpha_diversity_to_nested_html(
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</极
             f'{"".join(level_panes)}'
             f'</div>'
         )
