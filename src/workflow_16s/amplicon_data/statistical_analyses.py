@@ -12,6 +12,7 @@ from biom.table import Table
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s import constants
+from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.stats.tests import (
     fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 )
