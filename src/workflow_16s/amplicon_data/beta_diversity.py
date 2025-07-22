@@ -30,7 +30,9 @@ from workflow_16s.stats.beta_diversity import (
     tsne as calculate_tsne,
     umap as calculate_umap,
 )
-from workflow_16s.utils.data import update_table_and_meta
+from workflow_16s.utils.data import (
+    table_to_df, update_table_and_meta
+)
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
