@@ -1,101 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amplicon Data Report</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.plot.ly/plotly-{{ plotly_js_version }}.min.js"></script>
-    <style>
-        /* Basic styles for responsive plots and tooltips */
-        .plot-container {
-            width: 100%;
-            height: 600px; /* Default height, can be overridden by Plotly layout */
-            margin: 0 auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* Tooltip styles */
-        .tooltip {
-            position: relative;
-            display: inline-block;
-            cursor: help; /* Indicates interactivity */
-        }
-
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 200px;
-            background-color: #555;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px 0;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%; /* Position above the text */
-            left: 50%;
-            margin-left: -100px; /* Center the tooltip */
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .tooltip .tooltiptext::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #555 transparent transparent transparent;
-        }
-
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Amplicon Data Analysis Report</h1>
-    </header>
-
-    <nav>
-        <ul>
-            {% for section in sections %}
-                <li><a href="#{{ section.id }}">{{ section.title }}</a></li>
-            {% endfor %}
-        </ul>
-    </nav>
-
-    <main>
-        {% for section in sections %}
-            {{ section_htmls[loop.index0] }}
-        {% endfor %}
-
-        <div class="section" id="sec-ml">
-            <div class="section-header" onclick="toggleSection('sec-ml-content', this)">
-                <h2>Machine Learning Summary</h2>
-                <span class="toggle-icon">▼</span>
-            </div>
-            <div class="section-content" id="sec-ml-content">
-                {{ ml_section_html }}
-            </div>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{title}</title>
+        {plotly_js_tag}
+        <style>
+            {css_content}
+        </style>
+    </head>
+    <body>
+        <h1>{title}</h1>
+        <p>Generated: {generated_ts}</p>
+        <p>Sections: {section_list}</p>
+        <!-- Navigation Section -->
+        {nav_html}
+        <div class="section-controls">
+            <button class="section-button" onclick="toggleAllSections(true)">Expand All</button>
+            <button class="section-button" onclick="toggleAllSections(false)">Collapse All</button>
         </div>
-    </main>
-
-    <footer>
-        <p>Report generated on {{ current_date }}</p>
-    </footer>
-
-    <script>
-        // Global plot_data object will be populated by Python
-        window.plot_data = {{ plot_data | tojson }};
-        window.plotly_js_version = "{{ plotly_js_version }}";
-    </script>
-    <script src="tables.js"></script>
-</body>
+        <!-- Analysis Summary Section -->
+        <div class="section" id="analysis-summary">
+            <h2>Analysis Summary</h2>
+            {tables_html}
+        </div>
+        <!-- Figures Sections -->
+        {sections_html}
+        <!-- serialised figure data -->
+        <script id="plot-data" type="application/json">{plot_data_json}</script>
+        <script>
+            {table_js}
+        </script>
+    </body>
 </html>
