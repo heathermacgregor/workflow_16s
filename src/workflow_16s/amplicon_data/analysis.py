@@ -124,8 +124,7 @@ class AmpliconData:
             tables=self.tables,
             meta=self.meta,
             output_dir=Path(self.project_dir.final),
-            verbose=self.verbose,
-            nfc_facilities=self.nfc_facilities if self.nfc_facilities else None
+            verbose=self.verbose
         )
         
         # Collect results
