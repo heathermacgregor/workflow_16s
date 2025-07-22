@@ -233,7 +233,7 @@ def run_statistical_tests_for_group(
     group_stats = {}
     
     with get_progress_bar() as progress:
-        stats_desc = f"Running statistics for '{group_col}'"
+        stats_desc = f"Running statistics for '{group_column}'"
         stats_tasks = progress.add_task(
             _format_task_desc(stats_desc),
             total=len(tasks)
