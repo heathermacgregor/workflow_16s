@@ -75,7 +75,7 @@ class AlphaDiversity:
             
     def run_for_col(
         self,
-        group_column: str = self.group_column,
+        group_column: str = constants.DEFAULT_GROUP_COLUMN,
         output_dir: Optional[Path] = None,
     ) -> None:
         
