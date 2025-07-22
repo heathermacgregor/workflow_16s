@@ -6,6 +6,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+# Third‑Party Imports
+from biom.table import Table
+
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
