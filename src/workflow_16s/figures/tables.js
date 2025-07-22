@@ -1,571 +1,289 @@
-/* ======================= FIGURE FUNCTIONALITY ======================= */
-/* ---- data ---- */
-const plotData = JSON.parse(document.getElementById('plot-data').textContent);
+// tables.js
 
-/* ---- state ---- */
-const rendered = new Set();
-const MAX_WEBGL_CONTEXTS = 6;  // Conservative limit for most browsers
-const activeWebGLPlots = new Set();
-
-/* ---- helpers ---- */
-function purgePlot(plotId) {
-    const plotDiv = document.getElementById(plotId);
-    if (plotDiv && Plotly) {
-        Plotly.purge(plotDiv);
-    }
-    const container = document.getElementById(`container-${plotId}`);
-    if (container) container.innerHTML = '';
-    rendered.delete(plotId);
-    activeWebGLPlots.delete(plotId);
-}
-
-function enforceWebGLLimit() {
-    while (activeWebGLPlots.size > MAX_WEBGL_CONTEXTS) {
-        const oldest = activeWebGLPlots.values().next().value;
-        purgePlot(oldest);
-    }
-}
-
-function renderPlot(containerId, plotId) {
-    const container = document.getElementById(containerId);
-    if (!container) return console.error('Missing container', containerId);
-
-    container.innerHTML = '';
-    const div = document.createElement('div');
-    div.id = plotId;
-    div.className = 'plot-container';
-    container.appendChild(div);
-
-    const payload = plotData[plotId];
-    if (!payload) {
-        div.innerHTML = '<div class="error">Plot data unavailable</div>';
+// ================= PLOT INITIALIZATION ================= //
+function initializePlot(plotId) {
+    const plotInfo = window.plotData[plotId];
+    if (!plotInfo) {
+        console.error(`Plot data not found for: ${plotId}`);
         return;
     }
-
-    // Compute responsive width (min 500px, max 1000px)
-    const fullWidth = container.clientWidth || window.innerWidth;
-    const minWidth = fullWidth * 0.15;
-    const width = Math.max(minWidth, Math.min(1000, fullWidth * 0.95));
-    const height = payload.square ? width : Math.round(width * 0.6);
-
-    const is3D = payload.data?.some(d => d.type.includes('3d'));
-
-    try {
-        if (payload.type === 'plotly') {
-            if (payload.layout) {
-                payload.layout.showlegend = false;
-                payload.layout.width = width;
-                payload.layout.height = height;
-
-                if (is3D) {
-                    payload.layout.scene = payload.layout.scene || {};
-                    payload.layout.scene.aspectmode = 'data';
-                    payload.layout.uirevision = 'constant';
-                }
-            }
-
-            const config = {
-                responsive: true,
-                webglOptions: { preserveDrawingBuffer: false }
-            };
-
-            Plotly.newPlot(plotId, payload.data, payload.layout, config)
-                .then(() => {
-                    if (is3D) {
-                        activeWebGLPlots.add(plotId);
-                        enforceWebGLLimit();
-                    }
-                })
-                .catch(err => {
-                    div.innerHTML = `<div class="error">Plotly error: ${err}</div>`;
-                    console.error(err);
-                });
-        } else if (payload.type === 'image') {
+    
+    const container = document.getElementById(`container-${plotId}`);
+    if (!container) {
+        console.error(`Container not found for: ${plotId}`);
+        return;
+    }
+    
+    // Clear previous content
+    container.innerHTML = '';
+    
+    switch(plotInfo.type) {
+        case 'plotly':
+            Plotly.newPlot(container, plotInfo.data, plotInfo.layout);
+            break;
+            
+        case 'image':
             const img = document.createElement('img');
-            img.src = 'data:image/png;base64,' + payload.data;
+            img.src = `data:image/png;base64,${plotInfo.data}`;
             img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            div.appendChild(img);
-        } else if (payload.type === 'error') {
-            div.innerHTML = `<div class="error">${payload.error}</div>`;
-        } else {
-            div.innerHTML = '<div class="error">Unknown plot type</div>';
-        }
-    } catch (err) {
-        div.innerHTML = `<div class="error">Rendering error: ${err}</div>`;
-        console.error(err);
+            container.appendChild(img);
+            break;
+            
+        case 'error':
+            container.innerHTML = `<div class="error">Error loading plot: ${plotInfo.error}</div>`;
+            break;
+            
+        default:
+            container.innerHTML = `<div class="error">Unsupported plot type: ${plotInfo.type}</div>`;
     }
 }
 
-/* ---- tab logic ---- */
-function showTab(tabId) {
-    const pane = document.getElementById(tabId);
-    if (!pane) return;
-
-    const subsection = pane.closest('.subsection');
-    if (!subsection) return;
-
-    // Hide all other panes in this subsection
-    subsection.querySelectorAll('.tab-pane').forEach(p => {
-        p.style.display = 'none';
-    });
+// ================= TAB NAVIGATION FUNCTIONS ================= //
+function showTab(tabId, plotId) {
+    // Hide all tab panes in the same section
+    const section = document.getElementById(tabId).closest('.section-content');
+    if (!section) return;
     
-    // Remove active class from all buttons in this subsection
-    subsection.querySelectorAll('.tab-button').forEach(b => {
-        b.classList.remove('active');
-    });
-    
-    // Show this pane
-    pane.style.display = 'block';
-    
-    // Activate this button
-    const button = subsection.querySelector(`[data-tab="${tabId}"]`);
-    if (button) button.classList.add('active');
-
-    // Find the first feature tab in this pane
-    const firstFeatureTab = pane.querySelector('.tab-pane');
-    if (firstFeatureTab) {
-        const featureTabId = firstFeatureTab.id;
-        const plotId = firstFeatureTab.dataset.plotId;
-        
-        // Hide all feature tabs
-        pane.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
-        
-        // Show first feature tab
-        firstFeatureTab.style.display = 'block';
-        
-        // Activate its button
-        const featureButton = pane.querySelector(`[data-tab="${featureTabId}"]`);
-        if (featureButton) featureButton.classList.add('active');
-        
-        // Render plot if needed
-        if (plotId && !rendered.has(plotId)) {
-            renderPlot(`container-${plotId}`, plot极
-            rendered.add(plotId);
-        }
-    }
-}
-
-/* ---- nested tab management ---- */
-function showTable(tableId) {
-    const currentTable = document.querySelector('.table-pane[style*="display: block"]');
-    if (currentTable) {
-        currentTable.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
-            const plotId = pane.dataset.plotId;
-            if (rendered.has(plotId)) purgePlot(plotId);
-        });
-    }
-
-    document.querySelectorAll('.table-pane').forEach(pane => {
+    const tabPanes = section.querySelectorAll('.tab-pane');
+    tabPanes.forEach(pane => {
         pane.style.display = 'none';
     });
-    document.querySelectorAll('.table-button').forEach(btn => {
+    
+    // Remove active class from all tab buttons in the same section
+    const buttons = section.querySelectorAll('.tab-button');
+    buttons.forEach(btn => {
         btn.classList.remove('active');
     });
+    
+    // Show the selected tab pane
+    const selectedTab = document.getElementById(tabId);
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+        initializePlot(plotId);
+    }
+    
+    // Add active class to the clicked button
+    const clickedButton = document.querySelector(`[data-tab="${tabId}"]`);
+    if (clickedButton) {
+        clickedButton.classList.add('active');
+    }
+}
 
-    const newTable = document.getElementById(tableId);
-    if (newTable) {
-        newTable.style.display = 'block';
-        document.querySelector(`[data-table="${tableId}"]`).classList.add('active');
-
-        const activeLevel = newTable.querySelector('.level-pane[style*="display: block"]');
-        if (!activeLevel) {
-            const firstLevel = newTable.querySelector('.level-pane');
-            if (firstLevel) showLevel(firstLevel.id);
-        }
+function showTable(tableId) {
+    // Hide all table panes in the same section
+    const section = document.getElementById(tableId).closest('.section-content');
+    if (!section) return;
+    
+    const tablePanes = section.querySelectorAll('.table-pane');
+    tablePanes.forEach(pane => {
+        pane.style.display = 'none';
+    });
+    
+    // Remove active class from all table buttons in the same section
+    const buttons = section.querySelectorAll('.table-button');
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show the selected table pane
+    const selectedTable = document.getElementById(tableId);
+    if (selectedTable) {
+        selectedTable.style.display = 'block';
+    }
+    
+    // Add active class to the clicked button
+    const clickedButton = document.querySelector(`[data-table="${tableId}"]`);
+    if (clickedButton) {
+        clickedButton.classList.add('active');
     }
 }
 
 function showLevel(levelId) {
-    const levelPane = document.getElementById(levelId);
-    if (!levelPane) return;
-
-    const tablePane = levelPane.closest('.table-pane');
-    if (!tablePane) return;
-
-    const currentLevel = tablePane.querySelector('.level-pane[style*="display: block"]');
-    if (currentLevel) {
-        currentLevel.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
-            const plotId = pane.dataset.plotId;
-            if (rendered.has(plotId)) purgePlot(plotId);
-        });
-    }
-
-    tablePane.querySelectorAll('.level-pane').forEach(pane => {
+    // Hide all level panes in the same section
+    const section = document.getElementById(levelId).closest('.section-content');
+    if (!section) return;
+    
+    const levelPanes = section.querySelectorAll('.level-pane');
+    levelPanes.forEach(pane => {
         pane.style.display = 'none';
     });
-    tablePane.querySelectorAll('.level-button').forEach(btn => {
+    
+    // Remove active class from all level buttons in the same section
+    const buttons = section.querySelectorAll('.level-button');
+    buttons.forEach(btn => {
         btn.classList.remove('active');
     });
-
-    levelPane.style.display = 'block';
-    document.querySelector(`[data-level="${levelId}"]`).classList.add('active');
-
-    const activeMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
-    const activeMetric = levelPane.querySelector('.metric-pane[style*="display: block"]');
-
-    if (!activeMethod && !activeMetric) {
-        const firstMethod = levelPane.querySelector('.method-pane');
-        if (firstMethod) {
-            showMethod(firstMethod.id);
-        } else {
-            const firstMetric = levelPane.querySelector('.metric-pane');
-            if (firstMetric) {
-                const plotId = firstMetric.dataset.plotId;
-                if (plotId) showMetric(firstMetric.id, plotId);
-            }
-        }
+    
+    // Show the selected level pane
+    const selectedLevel = document.getElementById(levelId);
+    if (selectedLevel) {
+        selectedLevel.style.display = 'block';
+    }
+    
+    // Add active class to the clicked button
+    const clickedButton = document.querySelector(`[data-level="${levelId}"]`);
+    if (clickedButton) {
+        clickedButton.classList.add('active');
     }
 }
 
 function showMethod(methodId) {
-    const methodPane = document.getElementById(methodId);
-    if (!methodPane) return;
-
-    const levelPane = methodPane.closest('.level-pane');
-    if (!levelPane) return;
-
-    const currentMethod = levelPane.querySelector('.method-pane[style*="display: block"]');
-    if (currentMethod) {
-        currentMethod.querySelectorAll('.tab-pane[data-plot-id]').forEach(pane => {
-            const plotId = pane.dataset.plotId;
-            if (rendered.has(plotId)) purgePlot(plotId);
-        });
-    }
-
-    levelPane.querySelectorAll('.method-pane').forEach(pane => {
+    // Hide all method panes in the same section
+    const section = document.getElementById(methodId).closest('.section-content');
+    if (!section) return;
+    
+    const methodPanes = section.querySelectorAll('.method-pane');
+    methodPanes.forEach(pane => {
         pane.style.display = 'none';
     });
-    levelPane.querySelectorAll('.method-button').forEach(btn => {
+    
+    // Remove active class from all method buttons in the same section
+    const buttons = section.querySelectorAll('.method-button');
+    buttons.forEach(btn => {
         btn.classList.remove('active');
     });
-
-    methodPane.style.display = 'block';
-    document.querySelector(`[data-method="${methodId}"]`).classList.add('active');
-
-    const activeTab = methodPane.querySelector('.tab-pane[style*="display: block"]');
-    if (!activeTab) {
-        const firstTab = methodPane.querySelector('.tab-pane');
-        if (firstTab) showTab(firstTab.id, firstTab.dataset.plotId);
+    
+    // Show the selected method pane
+    const selectedMethod = document.getElementById(methodId);
+    if (selectedMethod) {
+        selectedMethod.style.display = 'block';
+    }
+    
+    // Add active class to the clicked button
+    const clickedButton = document.querySelector(`[data-method="${methodId}"]`);
+    if (clickedButton) {
+        clickedButton.classList.add('active');
     }
 }
 
-function showMetric(metricId, plotId) {
-    const container = document.getElementById(`container-${plotId}`);
-    if (container) {
-        container.innerHTML = '';
-    }
-
-    const metricPane = document.getElementById(metricId);
-    if (!metricPane) return;
-
-    const levelPane = metricPane.closest('.level-pane');
-    if (!levelPane) return;
-
-    levelPane.querySelectorAll('.metric-pane').forEach(pane => {
-        pane.style.display = 'none';
-    });
-    levelPane.querySelectorAll('.metric-button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    metricPane.style.display = 'block';
-    document.querySelector(`[data-metric="${metricId}"]`).classList.add('active');
-
-    if (!rendered.has(plotId)) {
-        renderPlot(`container-${plotId}`, plotId);
-        rendered.add(plotId);
+// ================= SECTION TOGGLING ================= //
+function toggleSection(sectionContentId, element) {
+    const content = document.getElementById(sectionContentId);
+    if (!content) return;
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        element.querySelector('.toggle-icon').textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        element.querySelector('.toggle-icon').textContent = '►';
     }
 }
 
-/* ---- section toggles ---- */
-function toggleAllSections(show) {
-    document.querySelectorAll('.section').forEach(s => {
-        s.style.display = show ? 'block' : 'none';
-    });
-}
-
-/* ======================= TABLE FUNCTIONALITY ======================= */
-
-
-function sortTable(tableId, columnIndex, isNumeric) {
-    const table = document.getElementById(tableId);
-    const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    const header = table.querySelectorAll('thead th')[columnIndex];
-    const isAscending = !header.classList.contains('asc');
-
-    // Clear previous sort indicators
-    table.querySelectorAll('thead th').forEach(th => {
-        th.classList.remove('asc', 'desc');
-    });
-
-    // Set new sort indicator
-    header.classList.add(isAscending ? 'asc' : 'desc');
-
-    rows.sort((a, b) => {
-        const aVal = a.cells[columnIndex].textContent.trim();
-        const bVal = b.cells[columnIndex].textContent.trim();
-
-        if (isNumeric) {
-            const numA = parseFloat(aVal) || 0;
-            const numB = parseFloat(bVal) || 0;
-            return isAscending ? numA - numB : numB - numA;
-        }
-        return isAscending ?
-            aVal.localeCompare(bVal) :
-            bVal.localeCompare(aVal);
-    });
-
-    // Clear and re-add sorted rows
-    tbody.innerHTML = '';
-    rows.forEach(row => tbody.appendChild(row));
-
-    // Reapply pagination
-    const select = table.closest('.table-container')
-        .querySelector('.rows-per-page');
-    changePageSize(tableId, select.value);
-}
-
-function setupTableSorting(tableId) {
+// ================= PAGINATION FOR TABLES ================= //
+function changePageSize(tableId, size) {
     const table = document.getElementById(tableId);
     if (!table) return;
-
-    const headers = table.querySelectorAll('thead th');
-
-    headers.forEach((header, index) => {
-        // Check if column is numeric
-        const firstRow = table.querySelector('tbody tr');
-        const isNumeric = firstRow && !isNaN(parseFloat(firstRow.cells[index].textContent));
-
-        header.style.cursor = 'pointer';
-        header.addEventListener('click', () => {
-            sortTable(tableId, index, isNumeric);
-        });
-    });
-}
-
-function setupTableResizing(tableId) {
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    const headers = table.querySelectorAll('thead th');
-    headers.forEach((header, index) => {
-        // Skip the last header
-        if (index === headers.length - 1) return;
-
-        // Create resizable handle
-        const handle = document.createElement('div');
-        handle.className = 'resizable-handle';
-        header.appendChild(handle);
-
-        let startX, startWidth;
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startX = e.clientX;
-            startWidth = header.offsetWidth;
-
-            const doDrag = (e) => {
-                const newWidth = startWidth + (e.clientX - startX);
-                if (newWidth < 10) return; // Minimum width
-                header.style.width = `${newWidth}px`;
-                // Adjust all cells in this column
-                const cells = table.querySelectorAll(`tbody tr > :nth-child(${index+1})`);
-                cells.forEach(cell => {
-                    cell.style.width = `${newWidth}px`;
-                });
-            };
-
-            const stopDrag = () => {
-                document.removeEventListener('mousemove', doDrag);
-                document.removeEventListener('mouseup', stopDrag);
-            };
-
-            document.addEventListener('mousemove', doDrag);
-            document.addEventListener('mouseup', stopDrag);
-        });
-    });
-}
-
-function paginateTable(tableId, pageSize) {
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    const rows = table.querySelectorAll('tbody tr');
-    const paginationDiv = document.getElementById(`pagination-${tableId}`);
-    const indicator = document.getElementById(`indicator-${tableId}`);
-    const totalPages = pageSize === -1 ? 1 : Math.ceil(rows.length / pageSize);
-
+    
+    const rows = table.getElementsByTagName('tbody')[0].rows;
+    const totalRows = rows.length;
+    const pageSize = size === '-1' ? totalRows : parseInt(size);
+    
     // Hide all rows
-    rows.forEach(row => row.style.display = 'none');
-
-    // Show rows for first page
-    const start = 0;
-    const end = pageSize === -1 ? rows.length : Math.min(start + pageSize, rows.length);
-    for (let i = start; i < end; i++) {
-        rows[i].style.display = '';
+    for (let i = 0; i < totalRows; i++) {
+        rows[i].style.display = 'none';
     }
-
-    // Generate pagination buttons
-    paginationDiv.innerHTML = '';
-    if (totalPages > 1) {
-        const prevButton = document.createElement('button');
-        prevButton.textContent = '◄';
-        prevButton.classList.add('pagination-btn');
-        prevButton.disabled = true;
-        prevButton.addEventListener('click', () => {
-            changePage(tableId, 0, pageSize); // Go to first page
-        });
-        paginationDiv.appendChild(prevButton);
-
-        for (let i = 0; i < totalPages; i++) {
-            const pageButton = document.createElement('button');
-            pageButton.textContent = i + 1;
-            pageButton.classList.add('pagination-btn');
-            if (i === 0) pageButton.classList.add('active');
-            pageButton.addEventListener('click', () => {
-                changePage(tableId, i, pageSize);
-            });
-            paginationDiv.appendChild(pageButton);
-        }
-
-        const nextButton = document.createElement('button');
-        nextButton.textContent = '►';
-        nextButton.classList.add('pagination-btn');
-        nextButton.disabled = totalPages <= 1;
-        nextButton.addEventListener('click', ()极
-            changePage(tableId, totalPages - 1, pageSize); // Go to last page
-        });
-        paginationDiv.appendChild(nextButton);
-    }
-
-    // Update indicator
-    if (indicator) {
-        indicator.textContent = `Page 1 of ${totalPages}`;
-    }
-}
-
-function changePage(tableId, pageNumber, pageSize) {
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    const rows = table.querySelectorAll('tbody tr');
-    const paginationDiv = document.getElementById(`pagination-${tableId}`);
-    const indicator = document.getElementById(`indicator-${tableId}`);
-    const totalPages = pageSize === -1 ? 1 : Math.ceil(rows.length / pageSize);
-
-    // Validate page number
-    pageNumber = Math.max(0, Math.min(pageNumber, totalPages - 1));
-
-    // Hide all rows
-    rows.forEach(row => row.style.display = 'none');
-
+    
     // Show rows for current page
-    const start = pageNumber * pageSize;
-    const end = pageSize === -1 ? rows.length : Math.min(start + pageSize, rows.length);
+    for (let i = 0; i < pageSize && i < totalRows; i++) {
+        rows[i].style.display = '';
+    }
+    
+    // Update pagination buttons
+    updatePaginationButtons(tableId, pageSize);
+}
+
+function updatePaginationButtons(tableId, pageSize) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const totalRows = table.getElementsByTagName('tbody')[0].rows.length;
+    const totalPages = Math.ceil(totalRows / pageSize);
+    const paginationContainer = document.getElementById(`pagination-${tableId}`);
+    const indicator = document.getElementById(`indicator-${tableId}`);
+    
+    if (!paginationContainer || !indicator) return;
+    
+    // Clear existing buttons
+    paginationContainer.innerHTML = '';
+    
+    // Create buttons
+    for (let i = 0; i < totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i + 1;
+        btn.onclick = () => goToPage(tableId, pageSize, i);
+        paginationContainer.appendChild(btn);
+    }
+    
+    // Update indicator
+    indicator.textContent = `Page 1 of ${totalPages}`;
+}
+
+function goToPage(tableId, pageSize, pageIndex) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const rows = table.getElementsByTagName('tbody')[0].rows;
+    const totalRows = rows.length;
+    const start = pageIndex * pageSize;
+    const end = Math.min(start + pageSize, totalRows);
+    
+    // Hide all rows
+    for (let i = 0; i < totalRows; i++) {
+        rows[i].style.display = 'none';
+    }
+    
+    // Show rows for current page
     for (let i = start; i < end; i++) {
         rows[i].style.display = '';
     }
-
-    // Update pagination UI
-    const buttons = paginationDiv.querySelectorAll('.pagination-btn');
-    buttons.forEach(button => button.classList.remove('active'));
-
-    // Only activate current page button if it exists
-    if (buttons[pageNumber + 1]) { // +1 to skip the prev button
-        buttons[pageNumber + 1].classList.add('active');
-    }
-
-    // Update button states
-    buttons[0].disabled = pageNumber === 0; // Prev button
-    buttons[buttons.length - 1].disabled = pageNumber === totalPages - 1; // Next button
-
+    
     // Update indicator
+    const indicator = document.getElementById(`indicator-${tableId}`);
     if (indicator) {
-        indicator.textContent = `Page ${pageNumber + 1} of ${totalPages}`;
+        indicator.textContent = `Page ${pageIndex + 1} of ${Math.ceil(totalRows / pageSize)}`;
     }
 }
 
-function changePageSize(tableId, newSize) {
-    const pageSize = newSize === '-1' ? 10000 : parseInt(newSize);
-    paginateTable(tableId, pageSize);
-}
-
-function initTables() {
-    document.querySelectorAll('.dynamic-table').forEach(table => {
-        const tableId = table.id;
-        setupTableSorting(tableId);
-        changePageSize(tableId, 10); // Initialize with 10 rows per page
-        setupTableResizing(tableId);  // Add this line
-    });
-}
-
-function toggleSection(contentId, header) {
-    const content = document.getElementById(contentId);
-    const section = header.parentElement;
-    const isCollapsing = !section.classList.contains('collapsed');
-    
-    // Toggle collapsed class
-    section.classList.toggle('collapsed');
-    
-    // Rotate toggle icon
-    const icon = header.querySelector('.toggle-icon');
-    if (isCollapsing) {
-        icon.textContent = '▶';
-    } else {
-        icon.textContent = '▼';
-    }
-}
-
-/* ---- initialization ---- */
+// ================= INITIALIZE ON LOAD ================= //
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize all first-level plots in subsections
-    document.querySelectorAll('.subsection').forEach(sub => {
-        const firstTab = sub.querySelector('.tab-pane');
-        const plotId = firstTab?.dataset.plotId;
-
-        if (firstTab && plotId && !rendered.has(plotId)) {
-            showTab(firstTab.id);
+    // Activate first tab in each tab container
+    document.querySelectorAll('.tabs').forEach(tabContainer => {
+        const firstButton = tabContainer.querySelector('.tab-button, .table-button, .level-button, .method-button');
+        if (firstButton) {
+            firstButton.classList.add('active');
+            
+            if (firstButton.classList.contains('tab-button')) {
+                const tabId = firstButton.getAttribute('data-tab');
+                const plotId = firstButton.getAttribute('data-plot-id');
+                showTab(tabId, plotId);
+            } else if (firstButton.classList.contains('table-button')) {
+                const tableId = firstButton.getAttribute('data-table');
+                showTable(tableId);
+            } else if (firstButton.classList.contains('level-button')) {
+                const levelId = firstButton.getAttribute('data-level');
+                showLevel(levelId);
+            } else if (firstButton.classList.contains('method-button')) {
+                const methodId = firstButton.getAttribute('data-method');
+                showMethod(methodId);
+            }
         }
     });
-
-    // Activate first table in each section
-    const activatedTables = new Set();
-    document.querySelectorAll('.table-pane').forEach(pane => {
-        const tableId = pane.id;
-        const tableButton = document.querySelector(`[data-table="${tableId}"]`);
-
-        if (tableButton && !activatedTables.has(tableId)) {
-            showTable(tableId);
-            activatedTables.add(tableId);
+    
+    // Initialize tables pagination
+    document.querySelectorAll('.dynamic-table').forEach(table => {
+        const tableId = table.getAttribute('id');
+        if (tableId) {
+            const select = table.closest('.table-container')?.querySelector('.rows-per-page');
+            if (select) {
+                changePageSize(tableId, select.value);
+            }
         }
     });
-
-    // Fallback: If no tables visible, show first level
-    document.querySelectorAll('.level-pane').forEach(pane => {
-        const levelId = pane.id;
-        const levelButton = document.querySelector(`[data-level="${levelId}"]`);
-
-        if (levelButton && pane.style.display !== 'block') {
-            showLevel(levelId);
-        }
+    
+    // Initialize first plots
+    document.querySelectorAll('.tab-pane[style*="block"]').forEach(pane => {
+        const plotId = pane.getAttribute('data-plot-id');
+        if (plotId) initializePlot(plotId);
     });
-
-    // Fallback: If no levels visible, show first method
-    document.querySelectorAll('.method-pane').forEach(pane => {
-        const methodId = pane.id;
-        const methodButton = document.querySelector(`[data-method="${methodId}"]`);
-
-        if (methodButton && pane.style.display !== 'block') {
-            showMethod(methodId);
-        }
-    });
-
-    // Initialize any tabular behavior
-    if (typeof initTables === 'function') {
-        initTables();
-    } else {
-        console.warn('initTables() is not defined');
-    }
 });
