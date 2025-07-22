@@ -21,6 +21,9 @@ from workflow_16s.figures.merged import (
     create_alpha_diversity_stats_plot, 
     plot_alpha_correlations
 )
+from workflow_16s.utils.data import (
+    table_to_df, update_table_and_meta
+)
 from workflow_16s.stats.tests import (
     alpha_diversity, analyze_alpha_diversity, analyze_alpha_correlations
 )
