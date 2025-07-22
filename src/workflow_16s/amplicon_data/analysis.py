@@ -27,7 +27,7 @@ from workflow_16s.amplicon_data.beta_diversity import Ordination
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
-from workflow_16s.amplicon_data.statistical_analyses import run_statistical_tests_for_group
+from workflow_16s.amplicon_data.statistical_analyses import run_statistical_tests_for_group, TopFeaturesAnalyzer
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
 )
