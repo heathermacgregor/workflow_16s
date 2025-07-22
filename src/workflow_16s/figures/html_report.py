@@ -474,47 +474,6 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
-def _prepare_nfc_stats_summary(stats: Dict) -> pd.DataFrame:
-    """Prepare summary table for NFC facility statistics"""
-    summary = []
-    for table_type, levels in stats.items():
-        for level, tests in levels.items():
-            for test, df in tests.items():
-                if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
-                    n_sig = sum(df["p_value"] < 0.05)
-                else:
-                    n_sig = 0
-                summary.append({
-                    "Table Type": table_type,
-                    "Test": test,
-                    "Level": level,
-                    "Significant Features": n_sig,
-                    "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
-                })
-    
-    return pd.DataFrame(summary)
-
-def _prepare_distance_summary(stats: Dict) -> pd.DataFrame:
-    """Prepare summary table for NFC distance correlations"""
-    rows = []
-    for table_type, levels in stats.items():
-        for level, methods in levels.items():
-            df = methods.get('spearman', pd.DataFrame())
-            if df.empty:
-                continue
-            # Sort by absolute correlation strength
-            df = df.iloc[np.abs(df['spearman_rho']).argsort()[::-1]]
-            # Take top 10 features
-            for i, row in df.head(10).iterrows():
-                rows.append({
-                    "Table Type": table_type,
-                    "Level": level,
-                    "Feature": row["feature"],
-                    "Spearman ρ": row["spearman_rho"],
-                    "Adjusted p-value": row.get("p_value_adj", "N/A")
-                })
-    return pd.DataFrame(rows)
-
 def _prepare_ml_summary(
     models: Dict, 
     top_group_1: List[Dict], 
@@ -979,22 +938,6 @@ def generate_html_report(
         amplicon_data.stats
     )
     
-    # NFC stats summary
-    nfc_stats_html = ""
-    if hasattr(amplicon_data, 'stats_facility') and amplicon_data.stats_facility:
-        facility_summary = _prepare_nfc_stats_summary(amplicon_data.stats_facility)
-        nfc_stats_html += f'''
-        <h4>Facility Match (Categorical)</h4>
-        {_add_table_functionality(facility_summary, 'nfc-facility-table')}
-        '''
-    
-    if hasattr(amplicon_data, 'stats_distance') and amplicon_data.stats_distance:
-        distance_summary = _prepare_distance_summary(amplicon_data.stats_distance)
-        nfc_stats_html += f'''
-        <h4>Distance from Facility (Continuous)</h4>
-        {_add_table_functionality(distance_summary, 'nfc-distance-table')}
-        '''
-    
     # ML summary (includes SHAP reports)
     ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
@@ -1017,8 +960,6 @@ def generate_html_report(
         <h3>Statistical Summary</h3>
         {_add_table_functionality(stats_df, 'stats-table')}
     </div>
-    
-    {f'<div class="subsection"><h3>NFC Facility Statistics</h3>{nfc_stats_html}</div>' if nfc_stats_html else ''}
     
     <div class="subsection">
         <h3>Machine Learning Results</h3>
