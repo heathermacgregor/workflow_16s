@@ -57,10 +57,10 @@ class _DataLoader(_ProcessingMixin):
         self._load_biom_table()
         self._filter_and_align()
 
-    meta: pd.DataFrame
-    nfc_facilities: pd.DataFrame
-    meta_nfc_facilities: pd.DataFrame
-    table: Table
+    self.meta: pd.DataFrame
+    self.nfc_facilities: pd.DataFrame
+    self.meta_nfc_facilities: pd.DataFrame
+    self.table: Table
 
     def _validate_mode(self) -> None:
         if self.mode not in self.MODE_CONFIG:
@@ -105,6 +105,8 @@ class _DataLoader(_ProcessingMixin):
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
             self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta)
+        else:
+            self.nfc_facilities, self.meta_nfc_facilities = None, None
             
     def _get_biom_paths(self) -> List[Path]:
         table_dir, _ = self.MODE_CONFIG[self.mode]
