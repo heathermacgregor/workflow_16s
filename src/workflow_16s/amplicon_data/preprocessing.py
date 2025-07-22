@@ -57,10 +57,10 @@ class _DataLoader(_ProcessingMixin):
         self._load_biom_table()
         self._filter_and_align()
 
-    self.meta: pd.DataFrame
-    self.nfc_facilities: pd.DataFrame
-    self.meta_nfc_facilities: pd.DataFrame
-    self.table: Table
+    meta: pd.DataFrame
+    nfc_facilities: pd.DataFrame
+    meta_nfc_facilities: pd.DataFrame
+    table: Table
 
     def _validate_mode(self) -> None:
         if self.mode not in self.MODE_CONFIG:
