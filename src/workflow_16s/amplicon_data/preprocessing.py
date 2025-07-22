@@ -45,13 +45,13 @@ class _DataLoader(_ProcessingMixin):
 
     def __init__(
         self, 
-        cfg: Dict, 
+        config: Dict, 
         project_dir: Any, 
         mode: str, 
         existing_subsets: Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
-        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = cfg, project_dir, mode, existing_subsets, verbose
+        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = config, project_dir, mode, existing_subsets, verbose
         self._validate_mode()
         self._load_metadata()
         self._load_biom_table()
@@ -163,7 +163,7 @@ class _TableProcessor(_ProcessingMixin):
     
     def __init__(
         self,
-        cfg: Dict,
+        config: Dict,
         table: Table,
         mode: str,
         meta: pd.DataFrame,
@@ -171,7 +171,7 @@ class _TableProcessor(_ProcessingMixin):
         project_dir: Any,
         verbose: bool,
     ) -> None:
-        self.cfg, self.mode, self.verbose = cfg, mode, verbose
+        self.cfg, self.mode, self.verbose = config, mode, verbose
         self.meta = meta
         self.output_dir = output_dir
         self.project_dir = project_dir
