@@ -88,9 +88,29 @@ function showPane(event) {
     button.classList.add('active');
     targetPane.classList.add('active');
 
+    // Activate first child pane in each nested level
+    activateFirstChildPanes(targetPane);
+
     // Initialize plots within the newly visible pane
     initializeVisiblePlots(targetPane);
 }
+
+function activateFirstChildPanes(container) {
+    const childSelectors = ['.level-pane', '.method-pane', '.tab-pane'];
+    for (const selector of childSelectors) {
+        const childPanes = container.querySelectorAll(selector);
+        if (childPanes.length > 0) {
+            // Deactivate all and activate first child
+            childPanes.forEach(pane => pane.classList.remove('active'));
+            const firstChild = childPanes[0];
+            firstChild.classList.add('active');
+            // Recurse into the activated child
+            activateFirstChildPanes(firstChild);
+            break; // Only activate one level at a time
+        }
+    }
+}
+
 
 // ========================== SECTION COLLAPSE/EXPAND ========================= //
 function toggleSection(event) {
