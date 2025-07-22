@@ -22,6 +22,7 @@ from biom.table import Table
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s import constants
+from workflow_16s.amplicon_data.alpha_diversity import AlphaDiversity
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
@@ -84,10 +85,10 @@ class AmpliconData:
 
     def _load_data(self):
         data_loader = _DataLoader(
-            cfg=self.config, 
-            project_dir=self.project_dir, 
+            config=self.config, 
             mode=self.mode, 
             existing_subsets=self.existing_subsets,
+            project_dir=self.project_dir, 
             verbose=self.verbose
         )
         self.meta = data_loader.meta
@@ -98,11 +99,11 @@ class AmpliconData:
     def _process_tables(self):
         processor = _TableProcessor(
             config=self.config,
-            table=self.table,
             mode=self.mode,
             meta=self.meta,
-            output_dir=Path(self.project_dir.final),
+            table=self.table,
             project_dir=self.project_dir,
+            output_dir=Path(self.project_dir.final),
             verbose=self.verbose
         )
         self.tables = processor.tables
@@ -158,6 +159,7 @@ class _AnalysisManager(_ProcessingMixin):
         
         self.stats: Dict[str, Any] = {}  # Nested dict: group -> 
         self.top_features: Dict[str, Dict[Any, List]] = {}  # Nested dict: group -> condition -> features
+        self.alpha_diversity: Dict = {}
 
         self.run()
         
@@ -166,7 +168,17 @@ class _AnalysisManager(_ProcessingMixin):
         self._identify_top_features()  
         if self.config.get('faprotax', False):
             self._annotate_top_features()
-          
+        self._run_alpha_diversity()
+        
+    def _run_alpha_diversity(self) -> None:
+        self.alpha_diversity = AlphaDiversity(
+            config=self.config,
+            meta=self.meta,
+            tables=self.tables
+        ).run(
+            output_dir=self.output_dir
+        )
+        
     def _run_statistical_tests(self) -> None:
         """Run statistical tests for primary and special cases"""
         # Primary group
