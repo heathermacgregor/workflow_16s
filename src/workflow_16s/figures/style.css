@@ -6,13 +6,9 @@ body                                { font-family: Arial, sans-serif; margin: 40
 .tabs[data-label]::before           { content: attr(data-label) ": "; font-weight: bold; margin-right: 6px; white-space: nowrap; }
 .tabs[data-label]                   { display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .tab-content                        { border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
-.method-pane                        { display: none; }
-.method-pane:first-child            { display: block; }
-.table-tabs, .level-tabs            { display: flex; flex-wrap: wrap; margin-bottom: 5px; }
-.table-pane                         { display: none; margin-left: 15px; }
-.table-pane:first-child             { display: block; }
-.level-pane                         { display: none; margin-left: 15px; }
-.level-pane:first-child             { display: block; }
+.method-pane, .table-pane, .level-pane, .tab-pane { display: none; }
+.method-pane.active, .table-pane.active, 
+.level-pane.active, .tab-pane.active { display: block; }
 :root                               { --indent-step: clamp(8px, 2.2vw, 24px); }
 .subsection  > .tab-content > .tabs { margin-left: 0; }
 .method-pane > .tabs                { margin-left: calc(var(--indent-step) * 1); }
@@ -86,7 +82,7 @@ th                                   { background-color: #f2f2f2; position: rela
 .section-header                     { cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #f5f5f5; 
                                       border-bottom: 1px solid #ddd; user-select: none; }
 .section-header:hover               { background-color: #e9e9e9; }
-.toggle-icon                        { font-size: 0.8em; transition: transform 0.3s ease; }
-.section-content                    { padding: 15px; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; max-height: 5000px; }
-.section.collapsed .section-content { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+.toggle-icon                        { font-size: 1.2em; transition: transform 0.3s ease; transform-origin: center; }
+.section-content                    { padding: 15px; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.4s ease-out; max-height: 5000px; }
+.section.collapsed .section-content { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0; overflow: hidden; }
 .section.collapsed .toggle-icon     { transform: rotate(-90deg); }
