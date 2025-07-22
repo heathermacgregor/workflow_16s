@@ -112,7 +112,7 @@ class AmpliconData:
         self.maps = Maps(
             config=self.config, 
             meta=self.meta,
-            output_dir=output_dir,
+            output_dir=Path(self.project_dir.final),
             verbose=self.verbose
         ).generate_sample_maps(
             nfc_facility_data=self.nfc_facilities
@@ -169,7 +169,8 @@ class _AnalysisManager(_ProcessingMixin):
         if self.config.get('faprotax', False):
             self._annotate_top_features()
         self._run_alpha_diversity()
-        
+
+    # ALPHA DIVERSITY
     def _run_alpha_diversity(self) -> None:
         self.alpha_diversity = AlphaDiversity(
             config=self.config,
@@ -177,8 +178,13 @@ class _AnalysisManager(_ProcessingMixin):
             tables=self.tables
         ).run(
             output_dir=self.output_dir
-        )
-        
+        ).results
+
+    # BETA DIVERSITY
+    def _run_beta_diversity(self) -> None:
+        logger.info("placeholder")
+
+    # STATISTICS
     def _run_statistical_tests(self) -> None:
         """Run statistical tests for primary and special cases"""
         # Primary group
@@ -191,7 +197,6 @@ class _AnalysisManager(_ProcessingMixin):
             output_dir=self.output_dir,
             verbose=self.verbose
         )
-        
         # Special case: NFC facility matching
         if 'facility_match' in self.meta.columns:
             self.stats['facility_match'] = run_statistical_tests_for_group(
@@ -211,7 +216,6 @@ class _AnalysisManager(_ProcessingMixin):
             group_column=self.group_column,
             group_values=self.group_column_values
         )
-        
         # Special case: NFC facility matching
         if 'facility_match' in self.meta.columns and 'facility_match' in self.stats:
             self._process_group_features(
@@ -229,7 +233,6 @@ class _AnalysisManager(_ProcessingMixin):
 
         # Initialize storage for this group
         self.top_features[group_column] = {}
-        
         # Analyze top features for both conditions in the group
         analyzer = TopFeaturesAnalyzer(self.config, self.verbose) 
         features_cond1, features_cond2 = analyzer.analyze(
@@ -247,6 +250,7 @@ class _AnalysisManager(_ProcessingMixin):
             f"{group_values[1]} ({len(features_cond2)})"
         )
 
+    # FUNCTIONAL ANNOTATION
     def _get_cached_faprotax(
         self, 
         taxon: str
