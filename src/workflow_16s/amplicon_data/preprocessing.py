@@ -14,6 +14,7 @@ from biom.table import Table
 
 # ================================== LOCAL IMPORTS =================================== #
 
+from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
 from workflow_16s.utils.data import (
     clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
