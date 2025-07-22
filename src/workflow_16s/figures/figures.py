@@ -511,3 +511,376 @@ def combine_figures_as_subplots(
     
     plotly_show_and_save(fig, show, output_path, ['png', 'html'], verbose)
     return fig
+
+
+def _validate_metadata(
+    metadata: pd.DataFrame, 
+    required_cols: List[str]
+) -> None:
+    """
+    Validate presence of required columns in metadata.
+    
+    Args:
+        metadata:      DataFrame containing sample metadata.
+        required_cols: List of column names required for visualization.
+        
+    Raises:
+        ValueError: If any required columns are missing.
+    """
+    missing = [col for col in required_cols if col not in metadata.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+
+def _prepare_visualization_data(
+    components: pd.DataFrame,
+    metadata: pd.DataFrame,
+    color_col: str,
+    symbol_col: str,
+    placeholder: str = 'unknown',
+    verbose: bool = False
+) -> pd.DataFrame:
+    """
+    Prepare merged component and metadata data for visualization.
+    
+    Args:
+        components:  DataFrame with ordination components.
+        metadata:    DataFrame with sample metadata.
+        color_col:   Column to use for point coloring.
+        symbol_col:  Column to use for point symbols.
+        placeholder: Value to use for missing metadata.
+        verbose:     Enable debug logging.
+        
+    Returns:
+        Merged DataFrame ready for visualization
+        
+    Raises:
+        ValueError: If no common samples exist between datasets
+    """
+    # Create copies to avoid modifying originals
+    comp_copy = components.copy()
+    meta_copy = metadata.copy()
+    
+    # Standardize indices to lowercase strings with whitespace trimming
+    comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
+    
+    # Handle metadata index - prefer '#sampleid' column if available
+    if '#sampleid' in meta_copy.columns:
+        meta_copy['#sampleid'] = meta_copy['#sampleid'].astype(str).str.strip().str.lower()
+        meta_copy.index = meta_copy['#sampleid']
+        if verbose:
+            logger.debug("Set metadata index from '#sampleid' column")
+    else:
+        if verbose:
+            logger.warning(
+                "Metadata missing '#sampleid' column - using existing index"
+            )
+        meta_copy.index = meta_copy.index.astype(str).str.strip().str.lower()
+    
+    # ------------------ DUPLICATE HANDLING ------------------ #
+    # Identify and remove duplicate indices
+    comp_duplicates = comp_copy.index.duplicated(keep='first')
+    meta_duplicates = meta_copy.index.duplicated(keep='first')
+    
+    if verbose:
+        if comp_duplicates.any():
+            dup_samples = comp_copy.index[comp_duplicates].unique()
+            logger.warning(
+                f"Found {len(dup_samples)} duplicate samples in components: "
+                f"{list(dup_samples)[:5]}{'...' if len(dup_samples) > 5 else ''}"
+            )
+        if meta_duplicates.any():
+            dup_samples = meta_copy.index[meta_duplicates].unique()
+            logger.warning(
+                f"Found {len(dup_samples)} duplicate samples in metadata: "
+                f"{list(dup_samples)[:5]}{'...' if len(dup_samples) > 5 else ''}"
+            )
+    
+    # Remove duplicates keeping first occurrence
+    comp_copy = comp_copy[~comp_duplicates]
+    meta_copy = meta_copy[~meta_duplicates]
+    # -------------------------------------------------------- #
+    
+    if verbose:
+        # Log sample IDs for debugging
+        logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
+        logger.debug(f"Metadata index (first 5): {meta_copy.index.tolist()[:5]}")
+    
+    # Find common samples
+    common_idx = comp_copy.index.intersection(meta_copy.index)
+    if verbose:
+        logger.info(
+            f"Found {len(common_idx)} common samples after duplicate removal"
+        )
+    
+    # Handle no common samples case with detailed diagnostics
+    if len(common_idx) == 0:
+        comp_samples = set(comp_copy.index)
+        meta_samples = set(meta_copy.index)
+        
+        comp_only = comp_samples - meta_samples
+        meta_only = meta_samples - comp_samples
+
+        logger.critical(
+            "CRITICAL ERROR: No common samples between components and metadata!"
+        )
+        logger.critical(
+            f"Components-only samples ({len(comp_only)}): "
+            f"{list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}"
+        )
+        logger.critical(
+            f"Metadata-only samples ({len(meta_only)}): "
+            f"{list(meta_only)[:5]}{'...' if len(meta_only) > 5 else ''}"
+        )
+        
+        # Look for partial matches
+        partial_matches = []
+        for comp_id in list(comp_samples)[:10]:  # Check first 10
+            for meta_id in meta_samples:
+                if comp_id in meta_id or meta_id in comp_id:
+                    partial_matches.append(f"{comp_id} ~ {meta_id}")
+                    break
+        
+        if partial_matches:
+            logger.critical(f"Possible partial matches: {partial_matches[:5]}")
+        
+        raise ValueError("No common samples between components and metadata")
+    
+    # Filter to common samples
+    meta_filtered = meta_copy.loc[common_idx].copy()
+    comp_filtered = comp_copy.loc[common_idx].copy()
+    
+    # ======== CRITICAL FIX: PREVENT DUPLICATE COLUMNS ======== #
+    # Remove existing color/symbol columns from components to prevent duplicates
+    for col in [color_col, symbol_col]:
+        if col in comp_filtered.columns:
+            if verbose:
+                logger.warning(
+                    f"Removing existing '{col}' column from components "
+                    f"to prevent duplication"
+                )
+            comp_filtered = comp_filtered.drop(columns=col)
+    # ========================================================= #
+    
+    # Handle missing metadata columns
+    for col in [color_col, symbol_col]:
+        if col not in meta_filtered.columns:
+            if verbose:
+                logger.warning(
+                    f"Column '{col}' missing from metadata. "
+                    f"Creating placeholder column."
+                )
+            meta_filtered[col] = placeholder
+    
+    # Merge components with metadata
+    merged = comp_filtered.join(
+        meta_filtered[[color_col, symbol_col]], 
+        how='inner'
+    )
+    
+    # Fill missing values in metadata columns
+    for col in [color_col, symbol_col]:
+        if col in merged.columns:
+            merged[col] = merged[col].fillna(placeholder)
+    
+    if verbose:
+        logger.debug(f"Merged data shape: {merged.shape}")
+        logger.debug(f"Final columns: {merged.columns.tolist()}")
+        
+        # Verify no duplicate indices in final output
+        if merged.index.duplicated().any():
+            dupes = merged.index[merged.index.duplicated()].tolist()
+            logger.error(
+                f"DUPLICATE INDEX IN FINAL OUTPUT: {dupes[:5]}{'...' if len(dupes)>5 else ''}"
+            )
+        else:
+            logger.debug("No duplicate indices in final merged data")
+            
+        # Verify no duplicate columns
+        duplicate_cols = [col for col in merged.columns if col in [color_col, symbol_col]]
+        if len(duplicate_cols) > 1:
+            logger.error(
+                f"DUPLICATE COLUMNS DETECTED: {duplicate_cols}"
+            )
+        else:
+            logger.debug(f"Single column for each: {color_col}, {symbol_col}")
+        merged = merged.loc[:, ~merged.columns.duplicated()]
+    return merged
+    
+
+def _create_colordict(
+    data: Union[pd.Series, pd.DataFrame], 
+    color_set: List[str] = largecolorset
+) -> Dict[str, str]:
+    """
+    Create consistent color mapping for categories.
+    
+    Args:
+        data:      Series or single-column DataFrame containing categorical values.
+        color_set: List of colors to use for mapping.
+        
+    Returns:
+        Dictionary mapping categories to colors.
+    """
+    # Handle DataFrame input (extract first column)
+    if isinstance(data, pd.DataFrame):
+        if data.shape[1] != 1:
+            #raise ValueError("Color data must be a single column")
+            data = data.iloc[:, 0]
+    
+    categories = sorted(data.astype(str).unique())
+    return {c: color_set[i % len(color_set)] for i, c in enumerate(categories)}
+
+
+def _save_figure_and_legend(
+    fig: go.Figure,
+    colordict: Dict[str, str],
+    color_col: str,
+    output_dir: Path,
+    file_stem: str,
+    show: bool,
+    verbose: bool
+) -> None:
+    """
+    Save figure and corresponding legend.
+    
+    Args:
+        fig:        Plotly figure to save.
+        colordict:  Color mapping dictionary.
+        color_col:  Name of the coloring column.
+        output_dir: Directory to save outputs.
+        file_stem:  Base filename without extension.
+        show:       Display figure interactively.
+        verbose:    Enable debug logging.
+    """
+    legend_fig = plot_legend(colordict)
+    combined_fig = attach_legend_to_figure(fig, legend_fig)
+    plotly_show_and_save(fig, show, output_dir / file_stem, ['png', 'html'], verbose)
+    #plot_legend(colordict, color_col, output_dir / f"{file_stem}.legend.png")
+
+
+def _pts_in_trace(trace):
+    for key in ("x", "y", "z", "values"):
+        arr = trace.get(key)
+        if arr is None:
+            continue
+        # 2‑D arrays → total cells
+        if (isinstance(arr, (list, tuple))
+                and arr
+                and isinstance(arr[0], (list, tuple))):
+            return sum(len(row) for row in arr)
+        try:
+            return len(arr)
+        except TypeError:
+            pass
+    return 0
+
+
+
+def _create_base_scatter_plot(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    color_col: str,
+    symbol_col: str,
+    colordict: Dict[str, str],
+    hover_data: List[str]
+) -> go.Figure:
+    """
+    Create standardized scatter plot configuration.
+    
+    Args:
+        data:       DataFrame containing visualization data.
+        x_col:      Column name for x-axis values.
+        y_col:      Column name for y-axis values.
+        color_col:  Column name for coloring points.
+        symbol_col: Column name for point symbols.
+        colordict:  Color mapping dictionary.
+        hover_data: Additional columns to show in hover info.
+        
+    Returns:
+        Configured Plotly scatter plot
+    """
+    fig = px.scatter(
+        data,
+        x=x_col,
+        y=y_col,
+        color=color_col,
+        symbol=symbol_col,
+        color_discrete_map=colordict,
+        hover_data=hover_data,
+        opacity=0.8,
+        size_max=10
+    )
+    n_pts = data.shape[0]
+    fig.add_annotation(
+        text=f"n = {n_pts}",
+        xref="paper", yref="paper",        # relative to full plot
+        x=0.99, y=0.01,                    # bottom‑right corner
+        xanchor="right", yanchor="bottom",
+        showarrow=False,
+        font=dict(size=18, color="black"),
+        bgcolor="rgba(255,255,255,0.4)",
+    )
+    return fig
+
+
+def _apply_common_layout(
+    fig: go.Figure,
+    x_title: str,
+    y_title: str,
+    title: str = None,
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH
+) -> go.Figure:
+    """
+    Apply consistent layout to figures.
+    
+    Args:
+        fig:     Plotly figure to configure.
+        x_title: Label for x-axis.
+        y_title: Label for y-axis.
+        title:   Overall plot title.
+        height:  Figure height in pixels.
+        width:   Figure width in pixels.
+        
+    Returns:
+        Configured Plotly figure.
+    """
+    layout_updates = {
+        'template': 'heather',
+        'height': height,
+        'width': width,
+        'plot_bgcolor': '#fff',
+        'font_size': 45,
+        'showlegend': False,
+        'xaxis': {
+            'showticklabels': False,
+            'zeroline': True,
+            'showline': True,
+            'linewidth': 2,
+            'linecolor': 'black',
+            'mirror': True
+        },
+        'yaxis': {
+            'showticklabels': False,
+            'zeroline': True,
+            'showline': True,
+            'linewidth': 2,
+            'linecolor': 'black',
+            'mirror': True
+        }
+    }
+    
+    if title:
+        layout_updates.update({
+            'title_text': title,
+            'title_x': 0.5
+        })
+    
+    fig.update_layout(
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+        **layout_updates
+    )
+    return fig
