@@ -36,11 +36,13 @@ class AlphaDiversity:
         self, 
         config: Dict,
         meta: pd.DataFrame,
-        tables: Dict[str, Dict[str, Table]]
+        tables: Dict[str, Dict[str, Table]],
+        verbose: bool = False
     ):
         self.config = config
         self.meta = meta
         self.tables = tables
+        self.verbose = verbose
         
         alpha_config = self.config.get('alpha_diversity', {})
         if not alpha_config.get('enabled', False):
@@ -62,24 +64,33 @@ class AlphaDiversity:
             return 
 
         self.results = {}
-        
+
     def run(
         self,
         output_dir: Optional[Path] = None,
     ) -> None:
+        self.run_for_col(self.group_column, output_dir)
+        if 'facility_match' in self.meta.columns:
+            self.run_for_col('facility_match', output_dir)
+            
+    def run_for_col(
+        self,
+        group_column: str = self.group_column,
+        output_dir: Optional[Path] = None,
+    ) -> None:
         
         with get_progress_bar() as progress:
-            alpha_desc = f"Running alpha diversity for '{self.group_column}'"
+            alpha_desc = f"Running alpha diversity for '{group_column}'"
             alpha_task = progress.add_task(_format_task_desc(alpha_desc), total=len(self.tasks))
             for table_type, level in self.tasks:
                 level_desc = (
                     f"{table_type.replace('_', ' ').title()} ({level.title()})"
                 )
                 progress.update(alpha_task, description=_format_task_desc(level_desc))
-                # Initialize data storage
-                _init_dict_level(results, table_type, level)
-                data_storage = self.results[table_type][level]
                 
+                # Initialize data storage
+                _init_dict_level(self.results, group_column, table_type, level)
+                data_storage = self.results[group_column][table_type][level]
                 if output_dir:
                     # Initialize output directory and path
                     output_dir = output_dir / 'alpha_diversity' / table_type / level
@@ -97,7 +108,7 @@ class AlphaDiversity:
                     stats_df = analyze_alpha_diversity(
                         alpha_diversity_df=alpha_df,
                         metadata=self.meta,
-                        group_column=self.group_column,
+                        group_column=group_column,
                         parametric=self.parametric
                     )
                         
@@ -110,11 +121,11 @@ class AlphaDiversity:
                             sep='\t', index=True
                         )
                         stats_df.to_csv(
-                            output_dir / f'stats_{self.group_column}.tsv', 
+                            output_dir / f'stats_{group_column}.tsv', 
                             sep='\t', index=True
                         )
                     
-                    if self.corr_config.get("enabled", False):
+                    if self.corr_config.get('enabled', False):
                         corr_results = analyze_alpha_correlations(
                             alpha_df,
                             self.meta,
@@ -127,7 +138,7 @@ class AlphaDiversity:
                             pd.DataFrame.from_dict(
                                 [corr_results], orient='index'
                             ).to_csv(
-                                output_dir / f'correlations_{group_col}.tsv', 
+                                output_dir / f'correlations_{group_column}.tsv', 
                                 sep='\t', index=True
                             )
 
@@ -145,13 +156,13 @@ class AlphaDiversity:
                             fig = create_alpha_diversity_boxplot(
                                 alpha_df=alpha_df,
                                 metadata=self.meta,
-                                group_column=self.group_column,
+                                group_column=group_column,
                                 metric=metric,
                                 output_dir=output_dir,
                                 show=False,
                                 verbose=self.verbose,
-                                add_points=plot_config.get('add_points', True),
-                                add_stat_annot=plot_config.get('add_stat_annot', True),
+                                add_points=self.plot_config.get('add_points', True),
+                                add_stat_annot=self.plot_config.get('add_stat_annot', True),
                                 test_type='parametric' if self.parametric else 'nonparametric'
                             )
                             fig_storage[metric] = fig
@@ -160,7 +171,7 @@ class AlphaDiversity:
                             stats_df=stats_df,
                             output_dir=output_dir,
                             verbose=self.verbose,
-                            effect_size_threshold=plot_config.get('effect_size_threshold', 0.5)
+                            effect_size_threshold=self.plot_config.get('effect_size_threshold', 0.5)
                         )
                         fig_storage['summary'] = stats_fig
                             
@@ -168,7 +179,7 @@ class AlphaDiversity:
                             corr_figures = plot_alpha_correlations(
                                 corr_results,
                                 output_dir=output_dir,
-                                top_n=corr_cfg.get('top_n_correlations', 10)
+                                top_n=self.corr_config.get('top_n_correlations', 10)
                             )
                             fig_storage['correlations'] = corr_figures
                             
