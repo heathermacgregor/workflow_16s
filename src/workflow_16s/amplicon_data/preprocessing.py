@@ -307,6 +307,7 @@ class _TableProcessor(_ProcessingMixin):
                 task = progress.add_task(
                     _format_task_desc("Exporting tables"), 
                     total=len(export_tasks)
+                )
                 for future in as_completed(futures):
                     table_type, level, out_path = futures[future]
                     try:
