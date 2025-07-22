@@ -17,14 +17,14 @@ from workflow_16s.utils.io import import_js_as_str
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 logger = logging.getLogger('workflow_16s')
-script_dir = Path(__file__).parent  
-tables_js_path = script_dir / "tables.js"  
-css_path = script_dir / "style.css"  
-html_template_path = script_dir / "template.html"  
+script_dir = Path(__file__).parent
+tables_js_path = script_dir / "tables.js"
+css_path = script_dir / "style.css"
+html_template_path = script_dir / "template.html"
 
 # ===================================== CLASSES ====================================== #
 class NumpySafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj) -> Any:  
+    def default(self, obj) -> Any:
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
@@ -38,7 +38,7 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
 # ================================== CORE HELPERS =================================== #
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures = {}
-    
+
     # Ordination figures
     ordination_figures = {}
     for table_type, levels in amplicon_data.ordination.items():
@@ -106,8 +106,8 @@ def _prepare_sections(
             continue
 
         sec_data = {
-            "id": f"sec-{uuid.uuid4().hex}", 
-            "title": sec.title(), 
+            "id": f"sec-{uuid.uuid4().hex}",
+            "title": sec.title(),
             "subsections": []
         }
 
@@ -121,7 +121,7 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
-        
+
         elif sec == "alpha_diversity":
             btns, tabs, pd = _alpha_diversity_to_nested_html(
                 figures[sec], id_counter, sec_data["id"]
@@ -132,7 +132,7 @@ def _prepare_sections(
                 "tabs_html": tabs,
                 "buttons_html": btns
             })
-        
+
         elif sec == "map":
             flat: Dict[str, Any] = {}
             _flatten(figures[sec], [], flat)
@@ -179,7 +179,7 @@ def _prepare_sections(
                     "tabs_html": tabs,
                     "buttons_html": btns
                 })
-        
+
         if sec_data["subsections"]:
             sections.append(sec_data)
 
@@ -194,10 +194,10 @@ def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
             out[" - ".join(new_keys)] = v
 
 def _figs_to_html(
-    figs: Dict[str, Any], 
-    counter: Iterator[int], 
-    prefix: str, 
-    *, 
+    figs: Dict[str, Any],
+    counter: Iterator[int],
+    prefix: str,
+    *,
     square: bool = False,
     row_label: Optional[str] = None
 ) -> Tuple[str, str, Dict]:
@@ -211,7 +211,7 @@ def _figs_to_html(
         btns.append(
             f'<button class="tab-button {"active" if idx==0 else ""}" '
             f'data-tab="{tab_id}" '
-            f'onclick="showTab(\'{tab_id}\', \'{plot_id}\')">{title}</button>'
+            f'onclick="showTab(event, \'{tab_id}\', \'{plot_id}\')">{title}</button>'
         )
 
         tabs.append(
@@ -224,7 +224,7 @@ def _figs_to_html(
         try:
             if fig is None:
                 raise ValueError("Figure object is None")
-                
+
             if hasattr(fig, "to_plotly_json"):
                 pj = fig.to_plotly_json()
                 pj.setdefault("layout", {})["showlegend"] = False
@@ -250,10 +250,10 @@ def _figs_to_html(
         except Exception as exc:
             logger.exception("Serializing figure failed")
             plot_data[plot_id] = {
-                "type": "error", 
+                "type": "error",
                 "error": str(exc)
             }
-            
+
     buttons_html = "\n".join(btns)
     if row_label:
         buttons_html = (
@@ -262,21 +262,21 @@ def _figs_to_html(
         )
     else:
         buttons_html = f'<div class="tabs">{buttons_html}</div>'
-        
+
     return "\n".join(tabs), buttons_html, plot_data
 
 def _section_html(sec: Dict) -> str:
     sub_html = "\n".join(
         f'<div class="subsection">\n'
         f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tab-content">\n'          
+        f'  <div class="tab-content">\n'
         f'    {sub["buttons_html"]}\n'
         f'    {sub["tabs_html"]}\n'
-        f'  </div>\n'                             
+        f'  </div>\n'
         f'</div>'
         for sub in sec["subsections"]
     )
-    
+
     return f'''
     <div class="section" id="{sec["id"]}">
         <div class="section-header" onclick="toggleSection('{sec["id"]}-content', this)">
@@ -289,47 +289,77 @@ def _section_html(sec: Dict) -> str:
     </div>
     '''
 
-def _alpha_correlations_to_nested_html(
+def _ordination_to_nested_html( # NEW FUNCTION
     figures: Dict[str, Any],
     id_counter: Iterator[int],
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     buttons_html, panes_html, plot_data = [], [], {}
-    
+
     for t_idx, (table_type, levels) in enumerate(figures.items()):
         table_id = f"{prefix}-table-{next(id_counter)}"
         is_active_table = t_idx == 0
-        
+
         buttons_html.append(
             f'<button class="table-button {"active" if is_active_table else ""}" '
             f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+            f'onclick="showTable(\'{table_id}\', this)">{table_type}</button>'
         )
-        
+
         level_btns, level_panes = [], []
-        for l_idx, (level, variables) in enumerate(levels.items()):
+        for l_idx, (level, methods) in enumerate(levels.items()):
             level_id = f"{table_id}-level-{next(id_counter)}"
             is_active_level = l_idx == 0 and is_active_table
-            
+
             level_btns.append(
                 f'<button class="level-button {"active" if is_active_level else ""}" '
                 f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+                f'onclick="showLevel(\'{level_id}\', this)">{level}</button>'
             )
-            
-            var_btns, var_tabs, var_plot_data = _figs_to_html(
-                variables, id_counter, level_id
-            )
-            plot_data.update(var_plot_data)
-            
+
+            method_btns, method_tabs, method_plot_data = [], [], {}
+            for m_idx, (method, plots) in enumerate(methods.items()):
+                method_id = f"{level_id}-method-{next(id_counter)}"
+                is_active_method = m_idx == 0 and is_active_level
+
+                # Flatten any list values in the plots dictionary
+                flattened_plots = {}
+                for plot_type, fig in plots.items():
+                    if isinstance(fig, list):
+                        for idx, sub_fig in enumerate(fig):
+                            flattened_plots[f"{plot_type} - {idx+1}"] = sub_fig
+                    else:
+                        flattened_plots[plot_type] = fig
+
+                plot_tabs_html, plot_btns_html, pd = _figs_to_html(
+                    flattened_plots, id_counter, method_id
+                )
+                method_plot_data.update(pd)
+
+
+                method_btns.append(
+                    f'<button class="method-button {"active" if is_active_method else ""}" '
+                    f'data-method="{method_id}" '
+                    f'onclick="showMethod(\'{method_id}\', this)">{method}</button>'
+                )
+
+                method_tabs.append(
+                    f'<div id="{method_id}" class="method-pane" '
+                    f'style="display:{"block" if is_active_method else "none"};">'
+                    f'<div class="tabs" data-label="plot_type">{plot_btns_html}</div>'
+                    f'{plot_tabs_html}'
+                    f'</div>'
+                )
+            plot_data.update(method_plot_data)
+
             level_panes.append(
                 f'<div id="{level_id}" class="level-pane" '
                 f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="variable">{var_btns}</div>'
-                f'{var_tabs}'
+                f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
+                f'{"".join(method_tabs)}'
                 f'</div>'
             )
-        
+
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_active_table else "none"};">'
@@ -337,23 +367,75 @@ def _alpha_correlations_to_nested_html(
             f'{"".join(level_panes)}'
             f'</div>'
         )
-    
+
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data
-    
+
+def _alpha_correlations_to_nested_html(
+    figures: Dict[str, Any],
+    id_counter: Iterator[int],
+    prefix: str,
+) -> Tuple[str, str, Dict]:
+    buttons_html, panes_html, plot_data = [], [], {}
+
+    for t_idx, (table_type, levels) in enumerate(figures.items()):
+        table_id = f"{prefix}-table-{next(id_counter)}"
+        is_active_table = t_idx == 0
+
+        buttons_html.append(
+            f'<button class="table-button {"active" if is_active_table else ""}" '
+            f'data-table="{table_id}" '
+            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+        )
+
+        level_btns, level_panes = [], []
+        for l_idx, (level, variables) in enumerate(levels.items()):
+            level_id = f"{table_id}-level-{next(id_counter)}"
+            is_active_level = l_idx == 0 and is_active_table
+
+            level_btns.append(
+                f'<button class="level-button {"active" if is_active_level else ""}" '
+                f'data-level="{level_id}" '
+                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+            )
+
+            var_btns, var_tabs, var_plot_data = _figs_to_html(
+                variables, id_counter, level_id
+            )
+            plot_data.update(var_plot_data)
+
+            level_panes.append(
+                f'<div id="{level_id}" class="level-pane" '
+                f'style="display:{"block" if is_active_level else "none"};">'
+                f'<div class="tabs" data-label="variable">{var_btns}</div>'
+                f'{var_tabs}'
+                f'</div>'
+            )
+
+        panes_html.append(
+            f'<div id="{table_id}" class="table-pane" '
+            f'style="display:{"block" if is_active_table else "none"};">'
+            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+            f'{"".join(level_panes)}'
+            f'</div>'
+        )
+
+    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
+    return buttons_row, "".join(panes_html), plot_data
+
 def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
     """Parse SHAP report string into structured feature data"""
     shap_data = {}
     sections = report.split("\n\n")
-    
+
     for section in sections:
         section = section.strip()
         if not section:
             continue
-        
+
         header, _, content = section.partition('\n')
         header = header.strip().strip('*').strip()
-        
+
         # Top features section
         if "Top features by average impact" in header:
             for line in content.split('\n'):
@@ -365,7 +447,7 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                         if feature not in shap_data:
                             shap_data[feature] = {}
                         shap_data[feature]['mean_shap'] = value
-        
+
         # Beeswarm interpretation
         elif "Beeswarm interpretation" in header:
             for line in content.split('\n'):
@@ -379,7 +461,7 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                             shap_data[feature] = {}
                         shap_data[feature]['beeswarm_interpretation'] = interpretation
                         shap_data[feature]['spearman_rho'] = rho
-        
+
         # Dependency plot interpretations
         elif "Dependency plot interpretations" in header:
             for line in content.split('\n'):
@@ -393,7 +475,7 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                             shap_data[feature] = {}
                         shap_data[feature]['dependency_relationship'] = relationship
                         shap_data[feature]['dependency_rho'] = rho
-        
+
         # Interaction summaries
         elif "Interaction summaries" in header:
             for line in content.split('\n'):
@@ -406,7 +488,7 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                         relationship = line.split('relationship: ')[1].split(' (ρ')[0] if 'relationship: ' in line else ''
                         rho_feat = line.split('ρ_feat→SHAP = ')[1].split(',')[0] if 'ρ_feat→SHAP = ' in line else ''
                         rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0] if 'ρ_partner→SHAP = ' in line else ''
-                        
+
                         if feature not in shap_data:
                             shap_data[feature] = {}
                         shap_data[feature]['partner_feature'] = partner
@@ -427,13 +509,13 @@ def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
     return aggregated
 
 def _prepare_features_table(
-    features: List[Dict], 
+    features: List[Dict],
     max_features: int,
     category: str
 ) -> pd.DataFrame:
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
-    
+
     df = pd.DataFrame(features[:max_features])
     df = df.rename(columns={
         "feature": "Feature",
@@ -443,16 +525,16 @@ def _prepare_features_table(
         "p_value": "P-value",
         "effect_dir": "Direction"
     })
-    
+
     if "faprotax_functions" in df.columns:
         df["Functions"] = df["faprotax_functions"].apply(
             lambda x: ", ".join(x) if isinstance(x, list) else ""
         )
-    
+
     df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
     df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
-    
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
+
+    return df[["Feature", "Taxonomic Level", "Test", "Effect Size",
                "P-value", "Direction", "Functions"]]
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
@@ -471,12 +553,12 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
                     "Significant Features": n_sig,
                     "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
                 })
-    
+
     return pd.DataFrame(summary)
 
 def _prepare_ml_summary(
-    models: Dict, 
-    top_group_1: List[Dict], 
+    models: Dict,
+    top_group_1: List[Dict],
     top_group_2: List[Dict]
 ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Dict]:
     if not models:
@@ -485,13 +567,13 @@ def _prepare_ml_summary(
     metrics_summary = []
     features_summary = []
     shap_reports = {}
-    
+
     for table_type, levels in models.items():
         for level, methods in levels.items():
             for method, result in methods.items():
                 if not result:
                     continue
-                
+
                 test_scores = result.get("test_scores", {})
                 metrics = {
                     "Table Type": table_type,
@@ -505,7 +587,7 @@ def _prepare_ml_summary(
                     "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
                 }
                 metrics_summary.append(metrics)
-                
+
                 feat_imp = result.get("feature_importances", {})
                 top_features = result.get("top_features", [])[:10]
                 for i, feat in enumerate(top_features, 1):
@@ -518,15 +600,15 @@ def _prepare_ml_summary(
                         "Feature": feat,
                         "Importance": f"{importance:.4f}"
                     })
-                
+
                 # Capture SHAP report if available
                 if "shap_report" in result:
                     key = (table_type, level, method)
                     shap_reports[key] = result["shap_report"]
-    
+
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
-    
+
     return metrics_df, features_df, shap_reports
 
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
@@ -551,27 +633,27 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "ρ (Partner)": values.get("rho_partner", "")
             }
             rows.append(row)
-    
+
     if not rows:
         return pd.DataFrame(columns=[
-            "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
-            "Beeswarm Interpretation", "Spearman's ρ", 
-            "Dependency plot interpretation Relationship", "Partner Feature", 
+            "Table Type", "Level", "Method", "Feature", "Mean |SHAP|",
+            "Beeswarm Interpretation", "Spearman's ρ",
+            "Dependency plot interpretation Relationship", "Partner Feature",
             "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
         ])
-    
+
     return pd.DataFrame(rows)
 
 def _format_ml_section(
-    ml_metrics: pd.DataFrame, 
+    ml_metrics: pd.DataFrame,
     ml_features: pd.DataFrame,
     shap_reports: Dict
 ) -> str:
     if ml_metrics is None or ml_metrics.empty:
         return "<p>No ML results available</p>"
-    
+
     ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
-    
+
     tooltip_map = {
         "MCC": "Balanced classifier metric (-1 to 1) that considers all confusion matrix values...",
         "ROC AUC": "Probability that random positive ranks higher than random negative...",
@@ -579,7 +661,7 @@ def _format_ml_section(
         "PR AUC": "Positive-class focused metric for imbalanced data..."
     }
     ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
-    
+
     enhanced_metrics = f"""
     <div class="table-container" id="container-ml-metrics-table">
         {ml_metrics_html}
@@ -600,9 +682,9 @@ def _format_ml_section(
         </div>
     </div>
     """
-    
+
     features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
-    
+
     # SHAP Analysis table
     shap_html = ""
     if shap_reports:
@@ -612,15 +694,15 @@ def _format_ml_section(
             <h3>SHAP Analysis</h3>
             <p>Comprehensive SHAP analysis for top features across all models:</p>
             """ + _add_table_functionality(shap_df, 'shap-table')
-    
+
     return f"""
     <div class="ml-section">
         <h3>Model Performance</h3>
         {enhanced_metrics}
-        
+
         <h3>Top Features by Importance</h3>
         {features_html}
-        
+
         {shap_html}
     </div>
     """
@@ -631,67 +713,67 @@ def _shap_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     buttons_html, panes_html, plot_data = [], [], {}
-    
+
     for table_type, levels in figures.items():
         table_id = f"{prefix}-table-{next(id_counter)}"
         is_first_table = not buttons_html
         buttons_html.append(
             f'<button class="table-button {"active" if is_first_table else ""}" '
             f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+            f'onclick="showTable(\'{table_id}\', this)">{table_type}</button>'
         )
-        
+
         level_btns, level_panes = [], []
         for l_idx, (level, methods) in enumerate(levels.items()):
             level_id = f"{table_id}-level-{next(id_counter)}"
-            
+
             level_btns.append(
-                f'<button class="level-button {"active" if l_idx == 0 else ""}" '
+                f'<button class="level-button {"active" if l_idx == 0 and is_first_table else ""}" '
                 f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+                f'onclick="showLevel(\'{level_id}\', this)">{level}</button>'
             )
-            
+
             method_btns, method_panes = [], []
             for m_idx, (method, plots) in enumerate(methods.items()):
                 method_id = f"{level_id}-method-{next(id_counter)}"
-                
+
                 # Flatten any list values in the plots dictionary
                 flattened_plots = {}
                 for plot_type, fig in plots.items():
                     if isinstance(fig, list):
                         # Convert list to dictionary with generated keys
                         for idx, sub_fig in enumerate(fig):
-                            flattened_plots[f"{plot_type} - Feature {idx}"] = sub_fig
+                            flattened_plots[f"{plot_type} - Feature {idx+1}"] = sub_fig
                     else:
                         flattened_plots[plot_type] = fig
-                
+
                 plot_btns, plot_tabs, pd = _figs_to_html(
                     flattened_plots, id_counter, method_id
                 )
                 plot_data.update(pd)
-                
+
                 method_btns.append(
-                    f'<button class="method-button {"active" if m_idx == 0 else ""}" '
+                    f'<button class="method-button {"active" if m_idx == 0 and l_idx == 0 and is_first_table else ""}" '
                     f'data-method="{method_id}" '
-                    f'onclick="showMethod(\'{method_id}\')">{method}</button>'
+                    f'onclick="showMethod(\'{method_id}\', this)">{method}</button>'
                 )
-                
+
                 method_panes.append(
                     f'<div id="{method_id}" class="method-pane" '
-                    f'style="display:{"block" if m_idx == 0 else "none"};">'
+                    f'style="display:{"block" if m_idx == 0 and l_idx == 0 and is_first_table else "none"};">'
                     f'{plot_btns}'
                     f'{plot_tabs}'
                     f'</div>'
                 )
-            
+
             level_panes.append(
                 f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if l_idx == 0 else "none"};">'
+                f'style="display:{"block" if l_idx == 0 and is_first_table else "none"};">'
                 f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
                 f'{"".join(method_panes)}'
                 f'</div>'
             )
-        
+
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_first_table else "none"};">'
@@ -699,7 +781,7 @@ def _shap_to_nested_html(
             f'{"".join(level_panes)}'
             f'</div>'
         )
-    
+
     buttons_row = (
         f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     )
@@ -714,25 +796,25 @@ def _violin_to_nested_html(
     tabs_html = []
     plot_data = {}
     cat_counter = itertools.count()
-    
+
     for category, features in figures_dict.items():
         if not features:
             continue
-            
+
         cat_idx = next(cat_counter)
         cat_id = f"{prefix}-cat-{cat_idx}"
-        
+
         buttons_html.append(
             f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
             f'data-tab="{cat_id}" '
-            f'onclick="showTab(\'{cat_id}\')">{category.title()}</button>'
+            f'onclick="showTab(event, \'{cat_id}\')">{category.title()}</button>'
         )
-        
+
         feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
             features, id_counter, cat_id
         )
         plot_data.update(feature_plot_data)
-        
+
         tabs_html.append(
             f'<div id="{cat_id}" class="tab-pane" '
             f'style="display:{"block" if cat_idx==0 else "none"}">'
@@ -740,8 +822,8 @@ def _violin_to_nested_html(
             f'{feature_tabs}'
             f'</div>'
         )
-    
-    return "\n".join(buttons_html), "\n".join(tabs_html), plot_data
+
+    return f'<div class="tabs" data-label="category">{"".join(buttons_html)}</div>', "\n".join(tabs_html), plot_data
 
 def _alpha_diversity_to_nested_html(
     figures: Dict[str, Any],
@@ -749,33 +831,33 @@ def _alpha_diversity_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     buttons_html, panes_html, plot_data = [], [], {}
-    
+
     for t_idx, (table_type, levels) in enumerate(figures.items()):
         table_id = f"{prefix}-table-{next(id_counter)}"
         is_active_table = t_idx == 0
-        
+
         buttons_html.append(
             f'<button class="table-button {"active" if is_active_table else ""}" '
             f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
+            f'onclick="showTable(\'{table_id}\', this)">{table_type}</button>'
         )
-        
+
         level_btns, level_panes = [], []
         for l_idx, (level, metrics) in enumerate(levels.items()):
             level_id = f"{table_id}-level-{next(id_counter)}"
             is_active_level = l_idx == 0 and is_active_table
-            
+
             level_btns.append(
                 f'<button class="level-button {"active" if is_active_level else ""}" '
                 f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
+                f'onclick="showLevel(\'{level_id}\', this)">{level}</button>'
             )
-            
+
             metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
                 metrics, id_counter, level_id
             )
             plot_data.update(metric_plot_data)
-            
+
             level_panes.append(
                 f'<div id="{level_id}" class="level-pane" '
                 f'style="display:{"block" if is_active_level else "none"};">'
@@ -783,7 +865,7 @@ def _alpha_diversity_to_nested_html(
                 f'{metric_tabs}'
                 f'</div>'
             )
-        
+
         panes_html.append(
             f'<div id="{table_id}" class="table-pane" '
             f'style="display:{"block" if is_active_table else "none"};">'
@@ -791,12 +873,12 @@ def _alpha_diversity_to_nested_html(
             f'{"".join(level_panes)}'
             f'</div>'
         )
-    
+
     buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data
-    
+
 def _add_header_tooltips(
-    table_html: str, 
+    table_html: str,
     tooltip_map: Dict[str, str]
 ) -> str:
     for header, tooltip_text in tooltip_map.items():
@@ -806,24 +888,35 @@ def _add_header_tooltips(
             f'</span>'
         )
         table_html = table_html.replace(
-            f'<th>{header}</th>', 
+            f'<th>{header}</th>',
             f'<th>{tooltip_html}</th>'
         )
     return table_html
-    
+
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     if df is None or df.empty:
         return "<p>No data available</p>"
-    
-    table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
-    
-    enhanced_html = f"""
-    <div class="table-container" id="container-{table_id}">
+
+    # Ensure the table_id is unique and valid for HTML
+    clean_table_id = "".join(c for c in table_id if c.isalnum() or c == '-')
+
+    table_html = df.to_html(index=False, classes='dynamic-table', table_id=clean_table_id)
+
+    # Add sorting indicators
+    # This is a basic addition; the actual sorting logic will be in JavaScript
+    table_html = table_html.replace('<th>', '<th class="sortable">')
+
+    # Add data attributes for sorting and resizing
+    # Thead has to be added if not present (to_html does this)
+    # The javascript will attach resize handles and sort events
+
+    return f"""
+    <div class="table-container" id="container-{clean_table_id}">
         {table_html}
         <div class="table-controls">
             <div class="pagination-controls">
                 <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('{table_id}', this.value)">
+                <select class="rows-per-page" onchange="changePageSize('{clean_table_id}', this.value)">
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -831,205 +924,17 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
                     <option value="100">100</option>
                     <option value="-1">All</option>
                 </select>
-                <div class="pagination-buttons" id="pagination-{table_id}"></div>
-                <span class="pagination-indicator" id="indicator-{table_id}"></span>
+                <div class="pagination-buttons" id="pagination-{clean_table_id}"></div>
+                <span class="pagination-indicator" id="indicator-{clean_table_id}"></span>
+            </div>
+            <div class="search-controls">
+                <input type="text" class="search-input" onkeyup="filterTable('{clean_table_id}', this.value)" placeholder="Search table...">
+            </div>
+            <div class="column-visibility-controls">
+                <button onclick="toggleColumnVisibilityDropdown(this)">Show/Hide Columns</button>
+                <div class="column-visibility-dropdown">
+                    </div>
             </div>
         </div>
     </div>
     """
-    return enhanced_html
-    
-def _ordination_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-table="{table_id}" '
-            f'onclick="showTable(\'{table_id}\')">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0 and is_active_table
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-level="{level_id}" '
-                f'onclick="showLevel(\'{level_id}\')">{level}</button>'
-            )
-            
-            method_btns, method_tabs, method_plot_data = _figs_to_html(
-                methods, id_counter, level_id
-            )
-            plot_data.update(method_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane" '
-                f'style="display:{"block" if is_active_level else "none"};">'
-                f'<div class="tabs" data-label="method">{method_btns}</div>'
-                f'{method_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane" '
-            f'style="display:{"block" if is_active_table else "none"};">'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data    
-    
-def generate_html_report(
-    amplicon_data: "AmpliconData",
-    output_path: Union[str, Path],
-    include_sections: Optional[List[str]] = None,
-    max_features: int = 20,
-    cfg: Optional[Dict] = None
-) -> None:
-    if cfg:
-        group_col = cfg.get("group_column", "nuclear_contamination_status")
-        group_col_values = cfg.get("group_column_values", [True, False])
-    else:
-        group_col = "nuclear_contamination_status"
-        group_col_values = [True, False]
-        
-    figures_dict = _extract_figures(amplicon_data)
-    
-    include_sections = include_sections or [
-        k for k, v in figures_dict.items() if v
-    ]
-    if 'violin' in figures_dict and 'violin' not in include_sections:
-        include_sections.append('violin')
-    
-    ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Top features tables (without SHAP data)
-    x = 1
-    group_1_name = f"{group_col}={group_col_values[x-1]}"
-    group_1_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
-        max_features,
-        group_1_name
-    )
-    x = 2
-    group_2_name = f"{group_col}={group_col_values[x-1]}"
-    group_2_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
-        max_features,
-        group_2_name
-    )
-    
-    # Stats summary
-    stats_df = _prepare_stats_summary(
-        amplicon_data.stats
-    )
-    
-    # ML summary (includes SHAP reports)
-    ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
-        amplicon_data.models,
-        amplicon_data.top_features_group_1,
-        amplicon_data.top_features_group_2
-    )
-    ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
-    
-    tables_html = f"""
-    <div class="subsection">
-        <h3>Top Features</h3>
-        <h4>Features associated with {group_1_name}</h4>
-        {_add_table_functionality(group_1_df, 'contam-table')}
-        
-        <h4>Features Associated with {group_2_name}</h4>
-        {_add_table_functionality(group_2_df, 'pristine-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Statistical Summary</h3>
-        {_add_table_functionality(stats_df, 'stats-table')}
-    </div>
-    
-    <div class="subsection">
-        <h3>Machine Learning Results</h3>
-        {ml_html}
-    </div>
-    """
-
-    id_counter = itertools.count()
-    sections, plot_data = _prepare_sections(
-        figures_dict, include_sections, id_counter
-    )
-    sections_html = "\n".join(_section_html(s) for s in sections)
-
-    nav_items = [
-        ("Analysis Summary", "analysis-summary"),
-        *[(sec['title'], sec['id']) for sec in sections]
-    ]
-    
-    nav_html = """
-    <div class="toc">
-        <h2>Table of Contents</h2>
-        <ul>
-    """
-    for title, section_id in nav_items:
-        nav_html += f'<li><a href="#{section_id}">{title}</a></li>\n'
-    nav_html += "        </ul>\n    </div>"
-
-    try:
-        plotly_ver = get_plotlyjs_version()
-    except Exception:
-        plotly_ver = "3.0.1"
-    plotly_js_tag = (
-        f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
-    )
-
-    payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("</", "<\\/")
-    try:
-        table_js = import_js_as_str(tables_js_path)
-    except Exception as e:
-        logger.error(f"Error reading JavaScript file: {e}")
-        table_js = ""
-    
-    try:
-        css_content = css_path.read_text(encoding='utf-8') 
-    except Exception as e:
-        logger.error(f"Error reading CSS file: {e}")
-        css_content = ""
-        
-    try:
-        html_template = html_template_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error(f"Error loading HTML template: {e}")
-        html_template = """<!DOCTYPE html>
-        <html>
-        <head><title>Error</title></head>
-        <body>Report generation failed: Missing template</body>
-        </html>"""
-
-    html = html_template.format(
-        title="16S Amplicon Analysis Report",
-        plotly_js_tag=plotly_js_tag,
-        generated_ts=ts,
-        section_list=", ".join(include_sections),
-        nav_html=nav_html,
-        tables_html=tables_html,
-        sections_html=sections_html,
-        plot_data_json=payload,
-        table_js=table_js,
-        css_content=css_content
-    )
-        
-    output_path.write_text(html, encoding="utf-8")
