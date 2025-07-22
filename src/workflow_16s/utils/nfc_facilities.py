@@ -133,6 +133,7 @@ def process_and_geocode_db(
         )
         for q in unique_queries:
             coords[q] = _geocode_query(q, user_agent)
+            time.sleep(1) 
             progress.update(task, advance=1)
 
     # Map coords back to DataFrame
