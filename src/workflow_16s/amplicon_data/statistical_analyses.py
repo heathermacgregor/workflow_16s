@@ -12,7 +12,6 @@ from biom.table import Table
 
 from workflow_16s import constants
 from workflow_16s.stats.tests import (
-    alpha_diversity, analyze_alpha_diversity, analyze_alpha_correlations,
     fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest
 )
 from workflow_16s.utils.data import update_table_and_meta
@@ -28,6 +27,16 @@ def get_enabled_tasks(
     config: Dict, 
     tables: Dict[str, Dict[str, Table]]
 ):
+    # Configuration setup
+    KNOWN_TESTS = {'fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni'}
+    DEFAULT_TESTS = {
+        "raw": ["ttest"],
+        "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
+        "normalized": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+        "clr_transformed": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
+        "presence_absence": ["fisher"]
+    }
+    
     stats_config = config.get('stats', {})
     table_config = stats_config.get('tables', {})
 
@@ -73,91 +82,10 @@ def log_test_results(
             p_val = row.get('p_value', float('nan'))
             effect = row.get('effect_size', float('nan'))
             logger.debug(f"  {feat}: p={p_val:.3e}, effect={effect:.3f}")
-            
-
-def run_statistical_tests_for_group(
-    config: Dict, 
-    tables: Dict[str, Dict[str, Table]], 
-    meta: pd.DataFrame(),
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Any],
-    output_dir: Optional[Path] = None,
-    verbose: bool = False
-):
-    stats_config = config.get('stats', {})
-    if not stats_config.get('enabled', False):
-        return {}
-
-    tasks = get_enabled_tasks(config, tables)
-    if not tasks:
-        return {}
-
-    analyzer = StatisticalAnalyzer(config, verbose)
-    analyzer_config = analyzer.TEST_CONFIG
-    
-    group_stats = {}
-    
-    with get_progress_bar() as progress:
-        stats_desc = f"Running statistics for '{group_col}'"
-        stats_tasks = progress.add_task(
-            _format_task_desc(),
-            total=len(tasks)
-        )
-
-        for table_type, level, test in tasks:
-            test_desc = (
-                f"{table_type.replace('_', ' ').title()} ({level.title()})"
-                f" → {analyzer_config[test]['name']}"
-            )
-            progress.update(stats_task, description=_format_task_desc(test_desc))
-
-            output_dir = self.output_dir / 'stats' / group_column / table_type / level
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Initialize data storage
-            _init_dict_level(group_stats, table_type, level)
-            data_storage = group_stats[table_type][level]
-
-            try:
-                # Prepare data
-                table = self.tables[table_type][level]
-                table_aligned, meta_aligned = update_table_and_meta(table, meta)
-                
-                # Run statistical test
-                result = analyzer_config[test]["func"](
-                    table=table_aligned,
-                    metadata=meta_aligned,
-                    group_column=group_column,
-                    group_column_values=group_column_values,
-                )
-                
-                # Save and store results
-                result.to_csv(output_dir / f'{test}.{group_column}.tsv', sep='\t', index=True)
-                data_storage[test] = result
-                
-                # Log significant features
-                if verbose:
-                    if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
-                        self._log_test_results(result, table_type, level, test)
-                
-            except Exception as e:
-                logger.error(
-                    f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
-                )
-                data_storage[test] = None
-                
-            finally:
-                progress.update(main_task, advance=1)
-                
-    progress.update(stats_task, description=_format_task_desc(stats_desc))    
-    
-    return group_stats
     
 
 class StatisticalAnalyzer:
-    """
-    Performs statistical tests on feature tables to identify significant differences.
-    """
+    """Performs statistical tests on feature tables to identify significant differences"""
     
     TEST_CONFIG = {
         "fisher": {
@@ -226,10 +154,7 @@ class StatisticalAnalyzer:
 
 
 class TopFeaturesAnalyzer:
-    """
-    Identifies top differentially abundant features based on statistical results.
-    """
-    
+    """Identifies top differentially abundant features based on statistical results"""
     def __init__(
         self, 
         cfg: Dict, 
@@ -283,96 +208,72 @@ class TopFeaturesAnalyzer:
         return group_1_features[:100], group_2_features[:100]
 
 
-def _run_statistical_tests_for_group(
-        self,
-        group_column: str,
-        group_values: List[Any]
-    ) -> Dict[str, Any]:
-    """Run statistical tests for a given group column"""
-    stats_cfg = self.cfg.get("stats", {})
-    if not stats_cfg.get("enabled", False):
+def run_statistical_tests_for_group(
+    config: Dict, 
+    tables: Dict[str, Dict[str, Table]], 
+    meta: pd.DataFrame,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
+    group_column_values: List[Any] = constants.DEFAULT_GROUP_COLUMN_VALUES,
+    output_dir: Optional[Path] = None,
+    verbose: bool = False
+):
+    # Check if statistical analysis is enabled
+    stats_config = config.get('stats', {})
+    if not stats_config.get('enabled', False):
         return {}
-
-    # Configuration setup
-    KNOWN_TESTS = {'fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni'}
-    DEFAULT_TESTS = {
-        "raw": ["ttest"],
-        "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
-        "normalized": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
-        "clr_transformed": ['ttest', 'mwu_bonferroni', 'kruskal_bonferroni'],
-        "presence_absence": ["fisher"]
-    }
-    
-    # Precompute enabled tasks
-    tasks = []
-    table_cfg = stats_cfg.get("tables", {})
-    for table_type, levels in self.tables.items():
-        tt_cfg = table_cfg.get(table_type, {})
-        if not tt_cfg.get('enabled', False):
-            continue
-            
-        enabled_levels = [l for l in tt_cfg.get("levels", levels.keys()) 
-                         if l in levels]
-        enabled_tests = [t for t in tt_cfg.get("tests", DEFAULT_TESTS[table_type])
-                         if t in KNOWN_TESTS]
-        
-        for level in enabled_levels:
-            for test in enabled_tests:
-                tasks.append((table_type, level, test))
-    
+    # Check which table_type/level/test combinations are enabled
+    tasks = get_enabled_tasks(config, tables)
     if not tasks:
         return {}
-    
-    # Initialize analyzer and results storage
-    san = StatisticalAnalyzer(self.cfg, self.verbose)
-    san_cfg = san.TEST_CONFIG
-    group_stats = {}
-    debug_mode = getattr(self, 'debug_mode', False)
 
+    analyzer = StatisticalAnalyzer(config, verbose)
+    analyzer_config = analyzer.TEST_CONFIG
+    
+    group_stats = {}
+    
     with get_progress_bar() as progress:
-        main_task = progress.add_task(
-            _format_task_desc(f"Running statistics for '{group_column}'"), 
+        stats_desc = f"Running statistics for '{group_col}'"
+        stats_tasks = progress.add_task(
+            _format_task_desc(stats_desc),
             total=len(tasks)
         )
-        
+
         for table_type, level, test in tasks:
-            # Setup description and directories
-            test_desc = (f"{table_type.replace('_', ' ').title()} "
-                         f"({level.title()}) → {san_cfg[test]['name']}")
-            progress.update(main_task, description=_format_task_desc(test_desc))
-            
-            output_dir = self.output_dir / 'stats' / group_column / table_type / level
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
+            test_desc = (
+                f"{table_type.replace('_', ' ').title()} ({level.title()})"
+                f" → {analyzer_config[test]['name']}"
+            )
+            progress.update(stats_task, description=_format_task_desc(test_desc))
+
             # Initialize data storage
             _init_dict_level(group_stats, table_type, level)
             data_storage = group_stats[table_type][level]
-            
-            # Handle debug mode
-            if debug_mode:
-                time.sleep(3)
-                return {}
-            
+            # Initialize output directory and path
+            output_dir = output_dir / 'stats' / group_column / table_type / level
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f'{test}.tsv'
+
             try:
                 # Prepare data
-                table = self.tables[table_type][level]
-                table_aligned, meta_aligned = update_table_and_meta(table, self.meta)
+                table = tables[table_type][level]
+                table_aligned, meta_aligned = update_table_and_meta(table, meta)
                 
                 # Run statistical test
-                result = san_cfg[test]["func"](
+                result = analyzer_config[test]["func"](
                     table=table_aligned,
                     metadata=meta_aligned,
                     group_column=group_column,
-                    group_column_values=group_values,
+                    group_column_values=group_column_values
                 )
                 
-                # Save and store results
-                result.to_csv(output_dir / f'{test}.tsv', sep='\t', index=True)
+                # Store and save results
                 data_storage[test] = result
+                result.to_csv(output_path, sep='\t', index=True)
                 
-                # Log significant features
-                if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
-                    self._log_test_results(result, table_type, level, test)
+                if verbose:
+                    # Log significant features
+                    if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
+                        self._log_test_results(result, table_type, level, test)
                 
             except Exception as e:
                 logger.error(
@@ -382,23 +283,8 @@ def _run_statistical_tests_for_group(
                 
             finally:
                 progress.update(main_task, advance=1)
-                    
+                
+    progress.update(stats_task, description=_format_task_desc(stats_desc))    
+    
     return group_stats
-
-def _log_test_results(self, result: pd.DataFrame, table_type: str, 
-                     level: str, test: str) -> None:
-    """Helper to log statistical test results"""
-    sig_mask = result["p_value"] < 0.05
-    n_sig = sig_mask.sum()
     
-    logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test}")
-    
-    if n_sig == 0 and self.verbose:
-        logger.debug(f"Top 5 features by p-value ({test}):")
-        top_features = result.nsmallest(5, "p_value")
-        
-        for _, row in top_features.iterrows():
-            feat = row.get('feature', 'N/A')
-            p_val = row.get('p_value', float('nan'))
-            effect = row.get('effect_size', float('nan'))
-            logger.debug(f"  {feat}: p={p_val:.3e}, effect={effect:.3f}")
