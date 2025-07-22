@@ -186,7 +186,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.beta_diversity = Ordination(
             config=self.config,
             meta=self.meta,
-            tables=self.tables
+            tables=self.tables,
             verbose=self.verbose
         ).run(
             output_dir=self.output_dir
