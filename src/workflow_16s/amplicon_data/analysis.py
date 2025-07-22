@@ -23,6 +23,7 @@ from biom.table import Table
 
 from workflow_16s import constants
 from workflow_16s.amplicon_data.alpha_diversity import AlphaDiversity
+from workflow_16s.amplicon_data.beta_diversity import Ordination
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
@@ -182,6 +183,14 @@ class _AnalysisManager(_ProcessingMixin):
     # BETA DIVERSITY
     def _run_beta_diversity(self) -> None:
         logger.info("placeholder")
+        self.beta_diversity = Ordination(
+            config=self.config,
+            meta=self.meta,
+            tables=self.tables
+            verbose=self.verbose
+        ).run(
+            output_dir=self.output_dir
+        ).results
 
     # STATISTICS
     def _run_statistical_tests(self) -> None:
