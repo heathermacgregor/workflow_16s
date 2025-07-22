@@ -18,6 +18,7 @@ from biom.table import Table
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s import constants
+from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.figures.beta_diversity import (
     pca as plot_pca,
     pcoa as plot_pcoa,
