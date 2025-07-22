@@ -42,7 +42,8 @@ from workflow_16s.qiime.workflows.execute_workflow import (
 )
 from workflow_16s.sequences.sequence_processing import process_sequences
 from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
-from workflow_16s.utils.amplicon_data import AmpliconData
+#from workflow_16s.utils.amplicon_data import AmpliconData
+from workflow_16s.amplicon_data.analysis import AmpliconData
 from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
