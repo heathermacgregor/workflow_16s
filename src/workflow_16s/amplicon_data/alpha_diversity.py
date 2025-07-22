@@ -188,7 +188,7 @@ class AlphaDiversity:
                     logger.error(
                         f"Alpha diversity analysis failed for {table_type}/{level}: {str(e)}"
                     )
-                    data_storage[test] = None
+                    data_storage['results'] = None
                     
                 finally:
                     progress.update(alpha_task, advance=1)
