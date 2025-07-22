@@ -284,7 +284,7 @@ def run_statistical_tests_for_group(
                 data_storage[test] = None
                 
             finally:
-                progress.update(main_task, advance=1)
+                progress.update(stats_task, advance=1)
                 
     progress.update(stats_task, description=_format_task_desc(stats_desc))    
     
