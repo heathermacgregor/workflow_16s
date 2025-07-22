@@ -115,7 +115,7 @@ class AmpliconData:
             output_dir=Path(self.project_dir.final),
             verbose=self.verbose
         ).generate_sample_maps(
-            nfc_facility_data=self.nfc_facilities
+            nfc_facility_data=self.nfc_facilities if self.nfc_facilities else None
         )
 
     def _run_analysis(self):
@@ -125,7 +125,7 @@ class AmpliconData:
             meta=self.meta,
             output_dir=Path(self.project_dir.final),
             verbose=self.verbose,
-            nfc_facilities=self.nfc_facilities
+            nfc_facilities=self.nfc_facilities if self.nfc_facilities else None
         )
         
         # Collect results
