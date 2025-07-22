@@ -15,6 +15,7 @@ from biom.table import Table
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s import constants
+from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.figures.merged import (
     create_alpha_diversity_boxplot, 
     create_alpha_diversity_stats_plot, 
