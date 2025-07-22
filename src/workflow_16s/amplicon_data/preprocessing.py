@@ -173,7 +173,7 @@ class _TableProcessor(_ProcessingMixin):
         project_dir: Any,
         verbose: bool,
     ) -> None:
-        self.cfg, self.mode, self.verbose = config, mode, verbose
+        self.config, self.mode, self.verbose = config, mode, verbose
         self.meta = meta
         self.output_dir = output_dir
         self.project_dir = project_dir
@@ -185,18 +185,18 @@ class _TableProcessor(_ProcessingMixin):
         self._save_tables()
 
     def _apply_preprocessing(self) -> None:
-        feat_cfg = self.cfg.get("features", {})
+        feat_config = self.config.get("features", {})
         table = self.tables["raw"][self.mode]
 
-        if feat_cfg.get("filter", True):
+        if feat_config.get("filter", True):
             table = filter(table)
             self.tables.setdefault("filtered", {})[self.mode] = table
 
-        if feat_cfg.get("normalize", True):
+        if feat_config.get("normalize", True):
             table = normalize(table, axis=1)
             self.tables.setdefault("normalized", {})[self.mode] = table
 
-        if feat_cfg.get("clr_transform", True):
+        if feat_config.get("clr_transform", True):
             table = clr(table)
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
@@ -244,7 +244,7 @@ class _TableProcessor(_ProcessingMixin):
                 progress.remove_task(table_task)
     
     def _create_presence_absence(self) -> None:
-        if not self.cfg.get("features", {}).get("presence_absence", False):
+        if not self.config.get("features", {}).get("presence_absence", False):
             return
         with get_progress_bar() as progress:
             pa_desc = "Converting to Presence/Absence"
@@ -283,20 +283,37 @@ class _TableProcessor(_ProcessingMixin):
         # Create directory if it doesn't exist
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
-
+    
+        # Prepare export tasks
         export_tasks = []
         for table_type, levels in self.tables.items():
             tdir = base / table_type
             tdir.mkdir(parents=True, exist_ok=True)
             for level, table in levels.items():
-                out = tdir / level / "feature-table.biom"
+                out = tdir / f"{level}.biom"  # Simplified filename
                 out.parent.mkdir(parents=True, exist_ok=True)
                 export_tasks.append((table, out))
-
-        with () as executor:
-            futures = []
-            for table, out in export_tasks:
-                futures.append(executor.submit(export_h5py, table, out))
-
-            for future in futures:
-                future.result()
+    
+        # Use ThreadPoolExecutor for parallel exports
+        max_workers = self.config.get("threads", 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            for table, out_path in export_tasks:
+                future = executor.submit(export_h5py, table, out_path)
+                futures[future] = (table_type, level, out_path)
+    
+            # Track progress
+            with get_progress_bar() as progress:
+                task = progress.add_task(
+                    _format_task_desc("Exporting tables"), 
+                    total=len(export_tasks)
+                for future in as_completed(futures):
+                    table_type, level, out_path = futures[future]
+                    try:
+                        future.result()
+                        if self.verbose:
+                            logger.debug(f"Exported {table_type}/{level} to {out_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to export {out_path}: {str(e)}")
+                    finally:
+                        progress.update(task, advance=1)
