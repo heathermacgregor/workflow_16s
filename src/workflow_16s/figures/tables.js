@@ -27,15 +27,25 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeVisiblePlots(container) {
-    container.querySelectorAll('.tab-pane').forEach(pane => {
-        if (pane.classList.contains('active')) {
-            const plotId = pane.getAttribute('data-plot-id');
-            if (plotId) {
-                initializePlot(plotId);
-            }
-        }
-    });
+  // build a NodeList of panes to check:
+  //  - the container itself (if it *is* a tab-, method- or level-pane)
+  //  - all nested tab-panes
+  const selfIsPane =
+    container.matches('.tab-pane[data-plot-id].active') ||
+    container.matches('.method-pane[data-plot-id].active') ||
+    container.matches('.level-pane[data-plot-id].active');
+
+  const panes = [
+    ...(selfIsPane ? [container] : []),
+    ...container.querySelectorAll('.tab-pane[data-plot-id].active')
+  ];
+
+  panes.forEach(pane => {
+    const plotId = pane.getAttribute('data-plot-id');
+    if (plotId) initializePlot(plotId);
+  });
 }
+
 
 // ============================ PLOT RENDERING ============================ //
 function initializePlot(plotId) {
