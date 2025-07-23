@@ -152,6 +152,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.verbose = verbose
 
         self.group_column = self.config.get('group_column', constants.DEFAULT_GROUP_COLUMN)
+        logger.info(self.group_column)
         self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
         
         self.stats: Dict[str, Any] = {}  # Nested dict: group -> 
@@ -208,7 +209,7 @@ class _AnalysisManager(_ProcessingMixin):
             verbose=self.verbose
         )
         # Special case: NFC facility matching
-        if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
+        if self.config.get('nfc_facilities', {}).get('enabled', False) and if 'facility_match' in self.meta.columns:
             logger.info('facility_match')
             self.stats['facility_match'] = run_statistical_tests_for_group(
                 config=self.config,
