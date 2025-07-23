@@ -100,7 +100,7 @@ class FeatureSelection:
 
         with get_progress_bar() as progress:
             cb_desc = "Running CatBoost feature selection"
-            cb_task = progress.add_task(_format_task_desc(cb_desc), total=self.tasks)
+            cb_task = progress.add_task(_format_task_desc(cb_desc), total=len(self.tasks))
 
             for table_type, level, method in tasks:
                 method_desc = (
