@@ -93,7 +93,7 @@ group_columns:
     type: "float"
 
 nfc_facilities:
-  enabled: True
+  enabled: False #True
   databases:
     - name: "GEM"
     - name: "NFCIS"
@@ -258,7 +258,7 @@ feature_maps:
   n: 50
   
 ml: # Machine learning
-  enabled: False #True
+  enabled: True
   n_threads: 32
   num_features: 500
   step_size: 100
