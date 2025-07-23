@@ -270,23 +270,14 @@ class _AnalysisManager(_ProcessingMixin):
     ) -> List[str]:
         if taxon not in self._faprotax_cache:
             self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
-                taxon, 
-              self.config.get('faprotax_db_path', ''),#constants.DEFAULT_FAPROTAX_DB), 
-              include_references=False
+                taxon, self.fdb, include_references=False
             )
         return self._faprotax_cache[taxon]
 
     def _annotate_top_features(self) -> None:
-        all_taxa = set()
-        for group_dict in self.top_features.values():
-            for features in group_dict.values():
-                for feature in features:
-                    all_taxa.add(feature["feature"])
-
-        if not all_taxa:
-            if self.verbose:
-                logger.info("No top features to annotate")
-            return
+        all_taxa = {
+            f["feature"] for f in self.top_features_group_1 + self.top_features_group_2
+        }
 
         with ThreadPoolExecutor() as executor:
             results = list(executor.map(self._get_cached_faprotax, all_taxa))
@@ -298,4 +289,3 @@ class _AnalysisManager(_ProcessingMixin):
             for condition, features in group_dict.items():
                 for feature in features:
                     feature["faprotax_functions"] = taxon_map.get(feature["feature"], [])
-
