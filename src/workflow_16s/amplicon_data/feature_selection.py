@@ -102,7 +102,7 @@ class FeatureSelection:
             cb_desc = "Running CatBoost feature selection"
             cb_task = progress.add_task(_format_task_desc(cb_desc), total=len(self.tasks))
 
-            for table_type, level, method in tasks:
+            for table_type, level, method in self.tasks:
                 method_desc = (
                     f"{table_type.replace('_', ' ').title()} ({level.title()})"
                     f" → {method.title()}"
