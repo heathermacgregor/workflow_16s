@@ -76,7 +76,7 @@ clean_fastqc:
 # DOWNSTREAM
 ##########################################################################################################################################
 
-group_column: "facility_match" #"nuclear_contamination_status" # The metadata column that defines categorical groups of samples
+group_column: "nuclear_contamination_status" # The metadata column that defines categorical groups of samples
 group_column_type: "bool"
 group_column_values: 
   - True
