@@ -156,6 +156,9 @@ class _AnalysisManager(_ProcessingMixin):
         self.beta_diversity: Dict = {}
         self.models: Dict[str, Any] = {}
 
+        self.nfc_facilities: pd.Dataframe = None
+        self.meta_nfc_facilities: pd.Dataframe = None
+
         self.run()
         
     def run(self) -> None:
