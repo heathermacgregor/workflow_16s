@@ -53,6 +53,10 @@ class Maps:
         nfc_facility_data: Optional[pd.DataFrame] = None,
         **kwargs
     ) -> Dict[str, Any]:
+        if 'nfc_facility_data' in kwargs:
+            if self.verbose:
+                logger.warning("Duplicate 'nfc_facility_data' argument in kwargs. Using explicit value.")
+            del kwargs['nfc_facility_data']
         if self.maps_config.get('enabled', False):
             return {}
         color_columns = self.color_columns
