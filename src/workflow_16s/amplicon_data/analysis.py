@@ -70,6 +70,9 @@ class AmpliconData:
         self.ordination: Dict[str, Any] = {}
         self.models: Dict[str, Any] = {}
         self.alpha_diversity: Dict[str, Any] = {}
+
+        self.nfc_facilities: pd.Dataframe = None
+        self.meta_nfc_facilities: pd.Dataframe = None
         
         logger.info("Running amplicon data analysis pipeline...")
         self._execute_pipeline()
@@ -78,7 +81,6 @@ class AmpliconData:
         """Execute the analysis pipeline in sequence."""
         self._load_data()
         self._process_tables()
-        self._generate_sample_maps()
         self._run_analysis()
         
         if self.verbose:
@@ -108,16 +110,6 @@ class AmpliconData:
             verbose=self.verbose
         )
         self.tables = processor.tables
-
-    def _generate_sample_maps(self):
-        self.maps = Maps(
-            config=self.config, 
-            meta=self.meta,
-            output_dir=Path(self.project_dir.final),
-            verbose=self.verbose
-        ).generate_sample_maps(
-            nfc_facility_data=self.nfc_facilities if self.nfc_facilities else None
-        )
 
     def _run_analysis(self):
         analyzer = _AnalysisManager(
