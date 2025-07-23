@@ -165,7 +165,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._generate_sample_maps()
         self._run_statistical_tests()
         self._identify_top_features()  
-        if self.config.get('faprotax', False):
+        if self.config.get('faprotax', {}).get('enabled', False):
             self._annotate_top_features()
         self._run_alpha_diversity()
         self._run_beta_diversity()
@@ -295,9 +295,10 @@ class _AnalysisManager(_ProcessingMixin):
         self, 
         taxon: str
     ) -> List[str]:
+        fdb = get_faprotax_parsed() if self.config.get('faprotax', {}).get('enabled', False) else None
         if taxon not in self._faprotax_cache:
             self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
-                taxon, self.fdb, include_references=False
+                taxon, fdb, include_references=False
             )
         return self._faprotax_cache[taxon]
 
