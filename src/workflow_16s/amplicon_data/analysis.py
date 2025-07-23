@@ -176,7 +176,7 @@ class _AnalysisManager(_ProcessingMixin):
                 Path(self.output_dir) / 'sample_maps',
                 self.verbose
             )
-            self.maps = plotter.generate_sample_map(
+            self.maps = plotter.generate_sample_maps(
                 self.meta, 
                 nfc_facility_data=self.nfc_facilities
             )
