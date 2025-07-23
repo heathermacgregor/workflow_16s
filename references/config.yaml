@@ -93,7 +93,7 @@ group_columns:
     type: "float"
 
 nfc_facilities:
-  enabled: False #True
+  enabled: True
   databases:
     - name: "GEM"
     - name: "NFCIS"
