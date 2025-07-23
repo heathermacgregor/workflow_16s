@@ -25,6 +25,7 @@ from workflow_16s import constants
 from workflow_16s.amplicon_data.alpha_diversity import AlphaDiversity
 from workflow_16s.amplicon_data.beta_diversity import Ordination
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
+from workflow_16s.amplicon_data.feature_selection import FeatureSelection
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
 from workflow_16s.amplicon_data.statistical_analyses import run_statistical_tests_for_group, TopFeaturesAnalyzer
@@ -145,11 +146,15 @@ class _AnalysisManager(_ProcessingMixin):
 
         self.group_column = self.config.get('group_column', constants.DEFAULT_GROUP_COLUMN)
         self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
+        
         self._faprotax_cache = {}
+
+        self.maps: Dict = {}
         self.stats: Dict[str, Any] = {}  # Nested dict: group -> 
         self.top_features: Dict[str, Dict[Any, List]] = {}  # Nested dict: group -> condition -> features
         self.alpha_diversity: Dict = {}
         self.beta_diversity: Dict = {}
+        self.models: Dict[str, Any] = {}
 
         self.run()
         
@@ -161,13 +166,14 @@ class _AnalysisManager(_ProcessingMixin):
             self._annotate_top_features()
         self._run_alpha_diversity()
         self._run_beta_diversity()
+        self._run_ml_feature_selection()
 
     # SAMPLE MAPS
     def _generate_sample_maps(self):
         if self.config["maps"].get("enabled", False):
             plotter = Maps(
                 self.config, 
-                Path(self.project_dir.final) / 'sample_maps',
+                Path(self.output_dir) / 'sample_maps',
                 self.verbose
             )
             self.maps = plotter.generate_sample_map(
@@ -189,7 +195,6 @@ class _AnalysisManager(_ProcessingMixin):
 
     # BETA DIVERSITY
     def _run_beta_diversity(self) -> None:
-        logger.info("placeholder")
         beta = Ordination(
             config=self.config,
             meta=self.meta,
@@ -200,6 +205,19 @@ class _AnalysisManager(_ProcessingMixin):
             output_dir=self.output_dir
         )
         self.beta_diversity = beta.results
+
+    # ML FEATURE SELECTION
+    def _run_ml_feature_selection(self) -> None:
+        ml = FeatureSelection(
+            config=self.config,
+            meta=self.meta,
+            tables=self.tables,
+            verbose=self.verbose
+        )
+        ml.run(
+            output_dir=self.output_dir
+        )
+        self.models = ml.models
 
     # STATISTICS
     def _run_statistical_tests(self) -> None:
