@@ -151,7 +151,7 @@ class _AnalysisManager(_ProcessingMixin):
         self.output_dir = output_dir
         self.verbose = verbose
 
-        self.group_column = self.config.get('group_column', constants.DEFAULT_GROUP_COLUMN)
+        self.group_column = self.config.get('group_column', 'nuclear_contamination_status')#constants.DEFAULT_GROUP_COLUMN)
         logger.info(self.group_column)
         self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
         
