@@ -95,10 +95,10 @@ class FeatureSelection:
         
         return tasks
       
-  def run(
-      self,
-      output_dir: Optional[Path] = None,
-  ) -> None:
+    def run(
+        self,
+        output_dir: Optional[Path] = None,
+    ) -> None:
 
         with get_progress_bar() as progress:
             cb_desc = "Running CatBoost feature selection"
