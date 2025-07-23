@@ -172,25 +172,29 @@ class _AnalysisManager(_ProcessingMixin):
 
     # ALPHA DIVERSITY
     def _run_alpha_diversity(self) -> None:
-        self.alpha_diversity = AlphaDiversity(
+        alpha = AlphaDiversity(
             config=self.config,
             meta=self.meta,
             tables=self.tables
-        ).run(
+        )
+        alpha.run(
             output_dir=self.output_dir
-        ).results
+        )
+        self.alpha_diversity = alpha.results
 
     # BETA DIVERSITY
     def _run_beta_diversity(self) -> None:
         logger.info("placeholder")
-        self.beta_diversity = Ordination(
+        beta = Ordination(
             config=self.config,
             meta=self.meta,
             tables=self.tables,
             verbose=self.verbose
-        ).run(
+        )
+        beta.run(
             output_dir=self.output_dir
-        ).results
+        )
+        self.beta_diversity = beta.results
 
     # STATISTICS
     def _run_statistical_tests(self) -> None:
