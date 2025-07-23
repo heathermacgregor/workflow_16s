@@ -271,7 +271,7 @@ class _AnalysisManager(_ProcessingMixin):
         if taxon not in self._faprotax_cache:
             self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
                 taxon, 
-              self.config.get('faprotax_db_path', constants.DEFAULT_FAPROTAX_DB), 
+              self.config.get('faprotax_db_path', ''),#constants.DEFAULT_FAPROTAX_DB), 
               include_references=False
             )
         return self._faprotax_cache[taxon]
