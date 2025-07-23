@@ -130,13 +130,10 @@ class AmpliconData:
         
         # Collect results
         self.stats = analyzer.stats
-        self.ordination = analyzer.ordination
-        self.models = analyzer.models
         self.alpha_diversity = analyzer.alpha_diversity
-        self.top_features_group_1 = analyzer.top_features_group_1
-        self.top_features_group_2 = analyzer.top_features_group_2
-        self.stats_facility = analyzer.stats_facility
-        self.stats_distance = analyzer.stats_distance
+        self.ordination = analyzer.beta_diversity
+        self.models = analyzer.models
+        self.top_features = analyzer.top_features
 
 
 class _AnalysisManager(_ProcessingMixin):
