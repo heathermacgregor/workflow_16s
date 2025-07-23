@@ -153,6 +153,7 @@ class _AnalysisManager(_ProcessingMixin):
 
         self.group_column = self.config.get('group_column', 'nuclear_contamination_status')#constants.DEFAULT_GROUP_COLUMN)
         logger.info(self.group_column)
+        logger.info('nuclear_contamination_status')
         self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
         
         self.stats: Dict[str, Any] = {}  # Nested dict: group -> 
@@ -199,11 +200,11 @@ class _AnalysisManager(_ProcessingMixin):
         """Run statistical tests for primary and special cases"""
         # Primary group
         logger.info(self.group_column)
-        self.stats[self.group_column] = run_statistical_tests_for_group(
+        self.stats['nuclear_contamination_status'] = run_statistical_tests_for_group(
             config=self.config,  
             tables=self.tables,
             meta=self.meta,
-            group_column=self.group_column,
+            group_column='nuclear_contamination_status',
             group_column_values=self.group_column_values,
             output_dir=self.output_dir,
             verbose=self.verbose
