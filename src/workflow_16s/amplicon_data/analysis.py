@@ -209,7 +209,7 @@ class _AnalysisManager(_ProcessingMixin):
             verbose=self.verbose
         )
         # Special case: NFC facility matching
-        if self.config.get('nfc_facilities', {}).get('enabled', False) and if 'facility_match' in self.meta.columns:
+        if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
             logger.info('facility_match')
             self.stats['facility_match'] = run_statistical_tests_for_group(
                 config=self.config,
