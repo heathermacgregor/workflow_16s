@@ -197,6 +197,7 @@ class _AnalysisManager(_ProcessingMixin):
     def _run_statistical_tests(self) -> None:
         """Run statistical tests for primary and special cases"""
         # Primary group
+        logger.info(self.group_column)
         self.stats[self.group_column] = run_statistical_tests_for_group(
             config=self.config,  
             tables=self.tables,
@@ -207,11 +208,12 @@ class _AnalysisManager(_ProcessingMixin):
             verbose=self.verbose
         )
         # Special case: NFC facility matching
-        if 'facility_match' in self.meta.columns:
+        if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
+            logger.info('facility_match')
             self.stats['facility_match'] = run_statistical_tests_for_group(
                 config=self.config,
                 tables=self.tables,
-                meta=self.meta,
+                meta=self.meta.dropna(subset=['facility_match']),
                 group_column='facility_match',
                 group_column_values=[True, False],  
                 output_dir=self.output_dir,
