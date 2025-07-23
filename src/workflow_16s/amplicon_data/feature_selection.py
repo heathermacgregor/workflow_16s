@@ -30,9 +30,7 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
-
-# Global lock for UMAP operations to prevent thread conflicts
-umap_lock = threading.Lock()
+debug_mode = True
 
 # ================================= DEFAULT VALUES =================================== #
 
@@ -157,10 +155,10 @@ class FeatureSelection:
                                 
                         data_storage[method] = model_result
                                     
-                        except Exception as e:
-                            logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
-                            data_storage = None
+                except Exception as e:
+                    logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
+                    data_storage = None
                                 
-                        finally:
-                            progress.update(cb_task, advance=1)
+                finally:
+                    progress.update(cb_task, advance=1)
             progress.update(cb_task, description=_format_task_desc(cb_desc))
