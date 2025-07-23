@@ -55,9 +55,11 @@ class Maps:
     ) -> Dict[str, Any]:
         if self.maps_config.get('enabled', False):
             return {}
-
+        color_columns = self.color_columns
+        if nfc_facility_data:
+            color_columns.append('facility_match')
         meta = self.meta
-        valid_columns = [col for col in self.color_columns if col in meta]
+        valid_columns = [col for col in color_columns if col in meta]
         missing = set(self.color_columns) - set(valid_columns)
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
