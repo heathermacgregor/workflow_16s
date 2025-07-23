@@ -162,12 +162,26 @@ class _AnalysisManager(_ProcessingMixin):
         self.run()
         
     def run(self) -> None:
+        self._generate_sample_maps()
         self._run_statistical_tests()
         self._identify_top_features()  
         if self.config.get('faprotax', False):
             self._annotate_top_features()
         self._run_alpha_diversity()
         self._run_beta_diversity()
+
+    # SAMPLE MAPS
+    def _generate_sample_maps(self):
+        if self.config["maps"].get("enabled", False):
+            plotter = Maps(
+                self.config, 
+                Path(self.project_dir.final) / 'sample_maps',
+                self.verbose
+            )
+            self.maps = plotter.generate_sample_map(
+                self.meta, 
+                nfc_facility_data=self.nfc_facilities
+            )
 
     # ALPHA DIVERSITY
     def _run_alpha_diversity(self) -> None:
@@ -276,7 +290,7 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _annotate_top_features(self) -> None:
         all_taxa = {
-            f["feature"] for f in self.top_features_group_1 + self.top_features_group_2
+            f["feature"] for f in self.top_features[self.group_column][self.group_column_values[0]] + self.top_features[self.group_column][self.group_column_values[1]]
         }
 
         with ThreadPoolExecutor() as executor:
