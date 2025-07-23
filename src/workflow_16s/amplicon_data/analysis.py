@@ -176,11 +176,11 @@ class _AnalysisManager(_ProcessingMixin):
         if self.config["maps"].get("enabled", False):
             plotter = Maps(
                 self.config, 
+                self.meta, 
                 Path(self.output_dir) / 'sample_maps',
                 self.verbose
             )
             self.maps = plotter.generate_sample_maps(
-                self.meta, 
                 nfc_facility_data=self.nfc_facilities
             )
 
