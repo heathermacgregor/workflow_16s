@@ -98,6 +98,7 @@ class Ordination:
             ],
         )
         self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)  # Uncommented and fixed
+        self.results = {}
         ordination_config = self.config.get('ordination', {})
         
         if not ordination_config.get('enabled', False):
@@ -106,7 +107,7 @@ class Ordination:
             return
             
         self.tasks = self.get_enabled_tasks()  # Fixed: call instance method
-        self.results = {}
+        
         
         if len(self.tasks) == 0:
             logger.info("No methods for beta diversity analysis (ordination) enabled")
