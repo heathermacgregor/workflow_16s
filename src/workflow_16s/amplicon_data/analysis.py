@@ -210,17 +210,17 @@ class _AnalysisManager(_ProcessingMixin):
             verbose=self.verbose
         )
         # Special case: NFC facility matching
-        if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
-            logger.info('facility_match')
-            self.stats['facility_match'] = run_statistical_tests_for_group(
-                config=self.config,
-                tables=self.tables,
-                meta=self.meta.dropna(subset=['facility_match']),
-                group_column='facility_match',
-                group_column_values=[True, False],  
-                output_dir=self.output_dir,
-                verbose=self.verbose
-            )
+        #if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
+        #    logger.info('facility_match')
+        #    self.stats['facility_match'] = run_statistical_tests_for_group(
+        #        config=self.config,
+        #        tables=self.tables,
+        #        meta=self.meta.dropna(subset=['facility_match']),
+        #        group_column='facility_match',
+        #        group_column_values=[True, False],  
+        #        output_dir=self.output_dir,
+        #        verbose=self.verbose
+        #    )
 
     def _identify_top_features(self) -> None:
         """Identify top features for each group condition"""
@@ -230,11 +230,11 @@ class _AnalysisManager(_ProcessingMixin):
             group_values=self.group_column_values
         )
         # Special case: NFC facility matching
-        if 'facility_match' in self.meta.columns and 'facility_match' in self.stats:
-            self._process_group_features(
-                group_column='facility_match',
-                group_values=[True, False]
-            )
+        #if 'facility_match' in self.meta.columns and 'facility_match' in self.stats:
+        #    self._process_group_features(
+        #        group_column='facility_match',
+        #        group_values=[True, False]
+        #    )
 
     def _process_group_features(self, group_column: str, group_values: List[Any]) -> None:
         """Helper to identify top features for a specific group"""
