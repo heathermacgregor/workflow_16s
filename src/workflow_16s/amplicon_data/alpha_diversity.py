@@ -47,6 +47,7 @@ class AlphaDiversity:
         self.meta = meta
         self.tables = tables
         self.verbose = verbose
+        self.results = None
         
         alpha_config = self.config.get('alpha_diversity', {})
         if not alpha_config.get('enabled', False):
