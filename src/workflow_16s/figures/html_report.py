@@ -61,7 +61,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
         for val, tables in vals.items():
             group_key = f"{col}={val}"
             alpha_figures.setdefault(group_key, {})
-            for table_type, levels in tables.ITEMS():
+            for table_type, levels in tables.items():
                 for level, data in levels.items():
                     if 'figures' in data and data['figures']:
                         if table_type not in alpha_figures[group_key]:
