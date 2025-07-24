@@ -87,10 +87,10 @@ dataset_column: "dataset_name"
 group_columns:
   - name: "nuclear_contamination_status"
     type: "bool"
-  - name: "facility_match"
-    type: "bool"
-  - name: "facility_distance_km"
-    type: "float"
+  #- name: "facility_match"
+  #  type: "bool"
+  #- name: "facility_distance_km"
+  #  type: "float"
 
 top_features:
   n: 30
