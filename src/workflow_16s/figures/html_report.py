@@ -930,8 +930,8 @@ def generate_html_report(
     # ML summary (includes SHAP reports)
     ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
-        amplicon_data.top_features[group_col_values[0]],
-        amplicon_data.top_features[group_col_values[1]]
+        amplicon_data.top_features[group_col][group_col_values[0]],
+        amplicon_data.top_features[group_col][group_col_values[1]]
     )
     ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
     
