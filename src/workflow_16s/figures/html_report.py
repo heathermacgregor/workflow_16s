@@ -454,20 +454,22 @@ def _prepare_features_table(
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
-    for table_type, tests in stats.items():
-        for test_name, levels in tests.items():
-            for level, df in levels.items():
-                if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
-                    n_sig = sum(df["p_value"] < 0.05)
-                else:
-                    n_sig = 0
-                summary.append({
-                    "Table Type": table_type,
-                    "Test": test_name,
-                    "Level": level,
-                    "Significant Features": n_sig,
-                    "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
-                })
+    for column, tables in stats.items():
+        for table_type, tests in tables.items():
+            for test_name, levels in tests.items():
+                for level, df in levels.items():
+                    if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
+                        n_sig = sum(df["p_value"] < 0.05)
+                    else:
+                        n_sig = 0
+                    summary.append({
+                        "Column": col,
+                        "Table Type": table_type,
+                        "Test": test_name,
+                        "Level": level,
+                        "Significant Features": n_sig,
+                        "Total Features": len(df) if isinstance(df, pd.DataFrame) else 0
+                    })
     
     return pd.DataFrame(summary)
 
