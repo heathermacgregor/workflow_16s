@@ -463,7 +463,7 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
                     else:
                         n_sig = 0
                     summary.append({
-                        "Column": col,
+                        "Column": column,
                         "Table Type": table_type,
                         "Test": test_name,
                         "Level": level,
