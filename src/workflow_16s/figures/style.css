@@ -2,6 +2,8 @@
 body                                { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
 .section                            { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
 .subsection                         { margin-left: 20px; margin-bottom: 20px; }
+
+/* Tab & Pane System */
 .tabs                               { display: flex; margin: 0 0 10px 0; flex-wrap: wrap; }
 .tabs[data-label]::before           { content: attr(data-label) ": "; font-weight: bold; margin-right: 6px; white-space: nowrap; }
 .tabs[data-label]                   { display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; }
@@ -9,17 +11,24 @@ body                                { font-family: Arial, sans-serif; margin: 40
 .method-pane, .table-pane, .level-pane, .tab-pane { display: none; }
 .method-pane.active, .table-pane.active, 
 .level-pane.active, .tab-pane.active { display: block; }
+/* Indentation Logic */
 :root                               { --indent-step: clamp(8px, 2.2vw, 24px); }
 .subsection  > .tab-content > .tabs { margin-left: 0; }
 .method-pane > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .table-pane  > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .level-pane  > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .plot-container                     {}
+/*  Error Message Styling */
 .error                              { color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }
+/* Section Controls */
 .section-controls                   { margin: 10px 0; }
 .section-button                     { background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; margin-right: 5px; }
 
 /* NAVIGATION STYLES */
+/* Table of Contents (TOC) */ 
+/* Creates a two-column sidebar or block for navigation. */ 
+
+/* Enhances TOC links with hover animations and responsive behavior for mobile devices. */ 
 .toc         { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
 .toc h2      { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
 .toc ul      { list-style-type: none; padding-left: 0; column-count: 2; column-gap: 30px; }
@@ -29,6 +38,13 @@ body                                { font-family: Arial, sans-serif; margin: 40
 @media (max-width: 768px) { .toc ul { column-count: 1; }}
 
 /* TABLE STYLES */
+/* Table Styles */
+/* Uniform table formatting.
+
+.dynamic-table adds sorting indicators (▲, ▼) for interactive columns.
+
+Resizable handles (.resizable-handle) allow drag-resizing of columns.
+*/
 table                                { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
 th, td                               { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th                                   { background-color: #f2f2f2; position: relative; }
@@ -49,6 +65,10 @@ th                                   { background-color: #f2f2f2; position: rela
 .resizable-handle                    { position: absolute; top: 0; right: 0; bottom: 0; width: 5px; background: transparent; cursor: col-resize; z-index: 10; }
 
 /* BUTTON STYLES */
+/* Buttons
+Generic button styling for UI interaction.
+
+.active buttons are styled distinctly for visibility.*/
 .tab-button, .method-button, 
 .table-button, .level-button, 
 .metric-button, .pagination-btn               { color: black; background-color: white; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; margin-right: 5px; 
@@ -58,6 +78,7 @@ th                                   { background-color: #f2f2f2; position: rela
 .metric-button.active, .pagination-btn.active { color: white; background-color: black; }
 
 /* ML section styling */
+/* Dedicated styling for presenting ML outputs: results, metrics, and tables with alternating row colors for readability. */
 .ml-section                                  { margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }
 .ml-section h3                               { margin-top: 0; }
 .figure-container                            { margin-top: 20px; text-align: center; }
@@ -79,6 +100,9 @@ th                                   { background-color: #f2f2f2; position: rela
 .tooltip:hover .tooltiptext  { visibility: visible; opacity: 1; }
 
 /* Collapsible sections */
+/* Enables toggleable/expandable sections using class collapsed.
+
+Includes a rotation animation for .toggle-icon to indicate collapse/expand visually. */
 .section-header                     { cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #f5f5f5; 
                                       border-bottom: 1px solid #ddd; user-select: none; }
 .section-header:hover               { background-color: #e9e9e9; }
