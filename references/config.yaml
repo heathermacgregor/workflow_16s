@@ -92,6 +92,9 @@ group_columns:
   - name: "facility_distance_km"
     type: "float"
 
+top_features:
+  n: 30
+  
 nfc_facilities:
   enabled: True
   use_local: True
