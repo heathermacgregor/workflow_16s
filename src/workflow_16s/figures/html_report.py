@@ -68,7 +68,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                             alpha_figures[group_key][table_type] = {}
                         alpha_figures[group_key][table_type][level] = data['figures']
     figures['alpha_diversity'] = alpha_figures
-
+    
     # Sample maps
     if amplicon_data.maps:
         figures['map'] = amplicon_data.maps
@@ -88,14 +88,15 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     # Violin plots
     violin_figures = {}
-    for col, vals in amplicon_data.top_features.items():
+    for col, features in amplicon_data.top_features.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
-            violin_figures.setdefault(group_key, {})
+            violin_figures.setdefault(col, {})
             for feature in features:
                 if feature.get('violin_figure'):
-                    violin_figures[group_key][feature['feature']] = feature['violin_figure']
+                    violin_figures[col][feature['feature']] = feature['violin_figure']
     figures['violin'] = violin_figures
+    logger.info(figures)
 
     return figures
 
