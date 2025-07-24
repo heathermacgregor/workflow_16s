@@ -455,9 +455,9 @@ def _prepare_features_table(
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
     for column, tables in stats.items():
-        for table_type, tests in tables.items():
-            for test_name, levels in tests.items():
-                for level, df in levels.items():
+        for table_type, levels in tables.items():
+            for level, tests in levels.items():
+                for test_name, df in tests.items():
                     if isinstance(df, pd.DataFrame) and "p_value" in df.columns:
                         n_sig = sum(df["p_value"] < 0.05)
                     else:
