@@ -307,7 +307,10 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
-        
+    for attr_name, attr_value in data.__dict__.items():
+        if not attr_name.startswith('__'):
+            print(f"{attr_name}: {type(attr_value)}")
+    
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
         amplicon_data=data,
