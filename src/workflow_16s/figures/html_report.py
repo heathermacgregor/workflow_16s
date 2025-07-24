@@ -84,12 +84,13 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     # Violin plots
     violin_figures = {}
-    for col in amplicon_data.top_features.keys():
-        for val in amplicon_data.top_features[col].keys():
-            for feature in amplicon_data.top_features[col][val]:
-                if 'violin_figure' in feature and feature['violin_figure']:
-                    violin_figures[f"{col}={val}"] = {}
-                    violin_figures[f"{col}={val}"][feature['feature']] = feat['violin_figure']
+    for col, vals in amplicon_data.top_features.items():
+        for val, features in vals.items():
+            group_key = f"{col}={val}"
+            violin_figures.setdefault(group_key, {})
+            for feature in features:
+                if feature.get('violin_figure'):
+                    violin_figures[group_key][feature['feature']] = feature['violin_figure']
     figures['violin'] = violin_figures
 
     return figures
@@ -205,9 +206,8 @@ def _figs_to_html(
     tabs, btns, plot_data = [], [], {}
 
     for idx, (title, fig) in enumerate(figs.items()):
-        pane_id  = f"{prefix}-pane-{next(counter)}"
-        plot_id = f"{prefix}-plot-{next(counter)}"
-
+        pane_id  = f"{prefix}-pane-{next(id_counter)}"
+        plot_id = f"{prefix}-plot-{next(id_counter) + 10000}" 
         btns.append(
             f'<button class="tab-button {"active" if idx==0 else ""}" '
             f'data-pane-target="#{pane_id}" '
@@ -907,15 +907,13 @@ def generate_html_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Top features tables (without SHAP data)
-    x = 1
-    group_1_name = f"{group_col}={group_col_values[x-1]}"
+    group_1_name = f"{group_col}={group_col_values[0]}"
+    group_2_name = f"{group_col}={group_col_values[1]}"
     group_1_df = _prepare_features_table(
         getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[0]],
         max_features,
         group_1_name
     )
-    x = 2
-    group_2_name = f"{group_col}={group_col_values[x-1]}"
     group_2_df = _prepare_features_table(
         getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[1]],
         max_features,
