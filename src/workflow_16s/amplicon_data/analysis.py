@@ -45,6 +45,45 @@ umap_lock = threading.Lock()
 
 # ================================= DEFAULT VALUES =================================== #
 
+def check_if_two_vals(group_column, meta):
+    meta_col_exists = (
+        'name' in group_column and
+        isinstance(group_column['name'], str) and
+        group_column['name'] in list(meta.columns)
+    )
+
+    config_is_bool = (
+        meta_col_exists and
+        'type' in group_column and
+        isinstance(group_column['type'], str) and
+        group_column.get('type', '') == 'bool'
+    )
+
+    config_has_two_vals = (
+        meta_col_exists and
+        'values' in group_column and 
+        isinstance(group_column['values'], list) and 
+        len(group_column['values']) == 2
+    )
+
+    meta_col_has_two_vals = (
+        meta_col_exists and
+        meta[group_column['name']].nunique() == 2
+    )
+
+    if config_is_bool:
+        return [True, False]
+
+    elif config_has_two_vals:
+        return group_column['values']
+
+    elif meta_col_has_two_vals:
+        return meta[group_column['name']].unique()
+
+    # Optional: add explicit fallback
+    return None
+
+
 class AmpliconData:
     """Main class for orchestrating 16S amplicon data analysis pipeline"""
     
@@ -229,9 +268,8 @@ class _AnalysisManager(_ProcessingMixin):
         """Run statistical tests for primary and special cases"""
         # Primary group
         for group_column in self.group_columns:
-            if group_column.get('type') == 'bool' or (
-                'values' in group_column and isinstance(group_column['values'], list) and len(group_column['values']) == 2):
-
+            group_column_values = check_if_two_vals(group_column, meta)
+            if group_column_values:
                 logger.info(group_column)
             
                 self.stats[group_column['name']] = run_statistical_tests_for_group(
