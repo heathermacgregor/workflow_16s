@@ -83,16 +83,12 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures['shap'] = shap_figures
 
     # Violin plots
-    group_1_name = DEFAULT_GROUP_COLUMN_VALUES[0]
-    group_2_name = DEFAULT_GROUP_COLUMN_VALUES[1]
-    violin_figures = {group_1_name: {}, group_2_name: {}}
-    print(amplicon_data.top_features.keys())
-    for feat in amplicon_data.top_features[DEFAULT_GROUP_COLUMN_VALUES[0]]:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
-    for feat in amplicon_data.top_features[DEFAULT_GROUP_COLUMN_VALUES[2]]:
-        if 'violin_figure' in feat and feat['violin_figure']:
-            violin_figures[group_2_name][feat['feature']] = feat['violin_figure']
+    for col in amplicon_data.top_features.keys():
+        for val in amplicon_data.top_features[col].keys():
+            for feature in amplicon_data.top_features[col][val]:
+                if 'violin_figure' in feature and feature['violin_figure']:
+                    violin_figures[f"{col}={val}"] = {}
+                    violin_figures[f"{col}={val}"][feature['feature']] = feat['violin_figure']
     figures['violin'] = violin_figures
 
     return figures
