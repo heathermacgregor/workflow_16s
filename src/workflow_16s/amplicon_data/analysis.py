@@ -268,7 +268,7 @@ class _AnalysisManager(_ProcessingMixin):
         """Run statistical tests for primary and special cases"""
         # Primary group
         for group_column in self.group_columns:
-            group_column_values = check_if_two_vals(group_column, meta)
+            group_column_values = check_if_two_vals(group_column, self.meta)
             if group_column_values:
                 logger.info(group_column)
             
