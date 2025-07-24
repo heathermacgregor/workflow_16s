@@ -83,6 +83,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures['shap'] = shap_figures
 
     # Violin plots
+    violin_figures = {}
     for col in amplicon_data.top_features.keys():
         for val in amplicon_data.top_features[col].keys():
             for feature in amplicon_data.top_features[col][val]:
