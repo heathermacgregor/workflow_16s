@@ -113,7 +113,7 @@ class FeatureSelection:
                 _init_dict_level(self.models, table_type, level)
                 data_storage = self.models[table_type][level]
                 # Initialize output directory and path
-                output_dir = output_dir / 'ml' / group_column / table_type / level 
+                output_dir = output_dir / 'ml' / self.group_column / table_type / level 
                 output_dir.mkdir(parents=True, exist_ok=True)
     
                 try:
