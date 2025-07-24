@@ -206,8 +206,8 @@ class TopFeaturesAnalyzer:
 
         group_1_features.sort(key=lambda d: (-d["effect"], d["p_value"]))
         group_2_features.sort(key=lambda d: (d["effect"], d["p_value"]))
-
-        return group_1_features[:100], group_2_features[:100]
+        n = self.cfg.get('top_features', {}).get('n', 20) # Number of top features
+        return group_1_features[:n], group_2_features[:n]
 
 
 def run_statistical_tests_for_group(
