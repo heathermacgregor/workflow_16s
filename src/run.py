@@ -307,10 +307,21 @@ def downstream(cfg, logger) -> None:
         existing_subsets=existing_subsets,
         verbose=False        
     )
+    def print_dict_structure(d, parent_key):
+        for k, v in d.items():
+            new_key = f"{parent_key}.{k}"
+            if isinstance(v, dict):
+                print_dict_structure(v, new_key)
+            else:
+                print(f"{new_key}: {type(v)}")
+    
+    # Assuming 'data' is the object to analyze
     for attr_name, attr_value in data.__dict__.items():
         if not attr_name.startswith('__'):
             print(f"{attr_name}: {type(attr_value)}")
-    
+            if isinstance(attr_value, dict):
+                print_dict_structure(attr_value, attr_name)
+        
     report_path = Path(project_dir.final) / "analysis_report.html"
     generate_html_report(
         amplicon_data=data,
