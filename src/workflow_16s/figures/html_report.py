@@ -910,14 +910,14 @@ def generate_html_report(
     x = 1
     group_1_name = f"{group_col}={group_col_values[x-1]}"
     group_1_df = _prepare_features_table(
-        getattr(amplicon_data, 'top_features', {})[group_col_values[0]],
+        getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[0]],
         max_features,
         group_1_name
     )
     x = 2
     group_2_name = f"{group_col}={group_col_values[x-1]}"
     group_2_df = _prepare_features_table(
-        getattr(amplicon_data, 'top_features', {})[group_col_values[1]],
+        getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[1]],
         max_features,
         group_2_name
     )
