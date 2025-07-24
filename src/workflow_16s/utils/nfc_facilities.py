@@ -6,6 +6,7 @@ import os
 import requests
 import time
 from math import radians, sin, cos, asin, sqrt
+from pathlib import Path
 from typing import Dict
 from functools import lru_cache
 
@@ -231,18 +232,26 @@ def match_facilities_to_locations(
 
 def find_nearby_nfc_facilities(
     cfg: Dict,
-    meta: pd.DataFrame
+    meta: pd.DataFrame,
+    output_dir: Optional[Union[str, Path]] = None
 ) -> pd.DataFrame:
     """
     Load facility databases, geocode, merge, and match to sample metadata.
     Returns DataFrame with specific metadata columns + facility details.
     """
     databases = cfg.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
-    dfs = []
-    for db in databases:
-        path = DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else DEFAULT_GEM_PATH
-        dfs.append(process_and_geocode_db(database=db['name'], file_path=path))
-    facilities_df = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
+    use_local = cfg.get("nfc_facilities", {}).get('use_local', False)
+    if output_dir:
+        tsv_path = Path(output_dir) / 'nfc_facilities.csv'
+    if use_local and tsv_path.exists():
+        facilities_df = pd.read_csv(tsv_path, sep='\t')
+    else:
+        dfs = []
+        for db in databases:
+            path = DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else DEFAULT_GEM_PATH
+            dfs.append(process_and_geocode_db(database=db['name'], file_path=path))
+        facilities_df = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
+        facilities_df.to_csv(tsv_path, sep='\t', index=True)
     logger.info(f"Merged facilities: {facilities_df.shape}")
 
     max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
