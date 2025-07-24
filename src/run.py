@@ -313,12 +313,12 @@ def downstream(cfg, logger) -> None:
             if isinstance(v, dict):
                 print_dict_structure(v, new_key)
             else:
-                print(f"{new_key}: {type(v)}")
+                logger.info(f"{new_key}: {type(v)}")
     
     # Assuming 'data' is the object to analyze
     for attr_name, attr_value in data.__dict__.items():
         if not attr_name.startswith('__'):
-            print(f"{attr_name}: {type(attr_value)}")
+            logger.info(f"{attr_name}: {type(attr_value)}")
             if isinstance(attr_value, dict):
                 print_dict_structure(attr_value, attr_name)
         
