@@ -86,6 +86,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     group_1_name = DEFAULT_GROUP_COLUMN_VALUES[0]
     group_2_name = DEFAULT_GROUP_COLUMN_VALUES[1]
     violin_figures = {group_1_name: {}, group_2_name: {}}
+    print(amplicon_data.top_features.keys())
     for feat in amplicon_data.top_features[DEFAULT_GROUP_COLUMN_VALUES[0]]:
         if 'violin_figure' in feat and feat['violin_figure']:
             violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
