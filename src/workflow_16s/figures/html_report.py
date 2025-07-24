@@ -22,6 +22,9 @@ tables_js_path = script_dir / "tables.js"
 css_path = script_dir / "style.css"  
 html_template_path = script_dir / "template.html"  
 
+DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
+DEFAULT_GROUP_COLUMN_VALUES = [True, False]
+
 # ===================================== CLASSES ====================================== #
 class NumpySafeJSONEncoder(json.JSONEncoder):
     def default(self, obj) -> Any:  
@@ -80,13 +83,13 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures['shap'] = shap_figures
 
     # Violin plots
-    group_1_name = group_col_values[0]
-    group_2_name = group_col_values[1]
+    group_1_name = DEFAULT_GROUP_COLUMN_VALUES[0]
+    group_2_name = DEFAULT_GROUP_COLUMN_VALUES[1]
     violin_figures = {group_1_name: {}, group_2_name: {}}
-    for feat in amplicon_data.top_features[group_col_values[0]]:
+    for feat in amplicon_data.top_features[_values[0]]:
         if 'violin_figure' in feat and feat['violin_figure']:
             violin_figures[group_1_name][feat['feature']] = feat['violin_figure']
-    for feat in amplicon_data.top_features[group_col_values[2]]:
+    for feat in amplicon_data.top_features[_values[2]]:
         if 'violin_figure' in feat and feat['violin_figure']:
             violin_figures[group_2_name][feat['feature']] = feat['violin_figure']
     figures['violin'] = violin_figures
