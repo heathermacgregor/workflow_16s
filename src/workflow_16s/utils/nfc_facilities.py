@@ -7,7 +7,7 @@ import requests
 import time
 from math import radians, sin, cos, asin, sqrt
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 from functools import lru_cache
 
 # Third-Party Imports
