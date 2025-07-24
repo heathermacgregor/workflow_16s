@@ -909,14 +909,14 @@ def generate_html_report(
     x = 1
     group_1_name = f"{group_col}={group_col_values[x-1]}"
     group_1_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
+        getattr(amplicon_data, 'top_features', {})[group_col_values[0]],
         max_features,
         group_1_name
     )
     x = 2
     group_2_name = f"{group_col}={group_col_values[x-1]}"
     group_2_df = _prepare_features_table(
-        getattr(amplicon_data, f'top_features_group_{x}', []),
+        getattr(amplicon_data, 'top_features', {})[group_col_values[1]],
         max_features,
         group_2_name
     )
@@ -929,8 +929,8 @@ def generate_html_report(
     # ML summary (includes SHAP reports)
     ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
         amplicon_data.models,
-        amplicon_data.top_features_group_1,
-        amplicon_data.top_features_group_2
+        amplicon_data.top_features[group_col_values[0]],
+        amplicon_data.top_features[group_col_values[1]]
     )
     ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
     
@@ -938,10 +938,10 @@ def generate_html_report(
     <div class="subsection">
         <h3>Top Features</h3>
         <h4>Features associated with {group_1_name}</h4>
-        {_add_table_functionality(group_1_df, 'contam-table')}
+        {_add_table_functionality(group_1_df, f'{group_col_values[0]}-table')}
         
         <h4>Features Associated with {group_2_name}</h4>
-        {_add_table_functionality(group_2_df, 'pristine-table')}
+        {_add_table_functionality(group_2_df, f'{group_col_values[1]}-table')}
     </div>
     
     <div class="subsection">
