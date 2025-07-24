@@ -304,13 +304,31 @@ class _AnalysisManager(_ProcessingMixin):
 
     def _annotate_top_features(self) -> None:
         all_taxa = {
-            f["feature"] for f in self.top_features[self.group_column][self.group_column_values[0]] + self.top_features[self.group_column][self.group_column_values[1]]
+            f["feature"] for f in self.top_features[self.group_column][self.group_column_values[0]] 
+            + self.top_features[self.group_column][self.group_column_values[1]]
         }
-
+        taxa_list = list(all_taxa)  # Convert to list for stable ordering
+    
+        # Initialize results array
+        results = [None] * len(taxa_list)
+        
         with ThreadPoolExecutor() as executor:
-            results = list(executor.map(self._get_cached_faprotax, all_taxa))
-
-        taxon_map = dict(zip(all_taxa, results))
+            future_to_index = {
+                executor.submit(self._get_cached_faprotax, taxon): idx
+                for idx, taxon in enumerate(taxa_list)
+            }
+            with get_progress_bar() as progress:
+                task = progress.add_task(
+                    description=_format_task_desc("Annotating top features"), 
+                    total=len(taxa_list)
+                )
+                for future in as_completed(future_to_index):
+                    idx = future_to_index[future]
+                    results[idx] = future.result()
+                    progress.update(task, advance=1)
+        
+        # Create final taxon map
+        taxon_map = dict(zip(taxa_list, results))
 
         # Annotate features across all groups and conditions
         for group_dict in self.top_features.values():
