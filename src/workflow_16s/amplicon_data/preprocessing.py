@@ -104,7 +104,7 @@ class _DataLoader(_ProcessingMixin):
             
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta, output_dir=self.project_dir)
+            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta, output_dir=self.project_dir.final)
         else:
             self.nfc_facilities, self.meta_nfc_facilities = None, None
             
