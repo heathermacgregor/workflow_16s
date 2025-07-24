@@ -157,7 +157,8 @@ class AmpliconData:
             tables=self.tables,
             meta=self.meta,
             output_dir=Path(self.project_dir.final),
-            verbose=self.verbose
+            verbose=self.verbose,
+            nfc_facilities=self.nfc_facilities,
         )
         
         # Collect results
@@ -176,6 +177,7 @@ class _AnalysisManager(_ProcessingMixin):
         meta: pd.DataFrame,
         output_dir: Optional[Path] = None,
         verbose: bool = False,
+        nfc_facilities: Optional[pd.DataFrame] = None
     ) -> None:
         self.config = config
         self.tables = tables
