@@ -29,6 +29,7 @@ from workflow_16s.amplicon_data.feature_selection import FeatureSelection
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
 from workflow_16s.amplicon_data.statistical_analyses import run_statistical_tests_for_group, TopFeaturesAnalyzer
+from workflow_16s.amplicon_data.top_features import top_features_plots
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
 )
@@ -195,8 +196,8 @@ class _AnalysisManager(_ProcessingMixin):
         self.maps: Dict = {}
         self.stats: Dict[str, Any] = {}  # Nested dict: group -> 
         self.top_features: Dict[str, Dict[Any, List]] = {}  # Nested dict: group -> condition -> features
-        self.alpha_diversity: Dict = {}
-        self.beta_diversity: Dict = {}
+        self.alpha_diversity: Dict = {} # Nested dict: group ->
+        self.beta_diversity: Dict = {} 
         self.models: Dict[str, Any] = {}
 
         self.nfc_facilities: pd.Dataframe = None
@@ -210,6 +211,7 @@ class _AnalysisManager(_ProcessingMixin):
         self._identify_top_features()  
         if self.config.get('faprotax', {}).get('enabled', False):
             self._annotate_top_features()
+        self._top_features_plots()
         self._run_alpha_diversity()
         self._run_beta_diversity()
         self._run_ml_feature_selection()
@@ -337,6 +339,21 @@ class _AnalysisManager(_ProcessingMixin):
             f"{group_values[0]} ({len(features_cond1)}), "
             f"{group_values[1]} ({len(features_cond2)})"
         )
+
+    # TOP FEATURES PLOTS
+    def _top_features_plots(
+        self
+    ):
+        if self.config.get('violin_plots', {}).get('enabled', False) or self.config.get('feature_maps', {}).get('enabled', False):
+            self.top_features = top_features_plots(
+                output_dir=self.output_dir,
+                config=self.config,
+                top_features=self.top_features,
+                tables=self.tables,
+                meta=self.meta,
+                nfc_facilities=self.nfc_facilities,
+                verbose=self.verbose
+            )
 
     # FUNCTIONAL ANNOTATION
     def _get_cached_faprotax(
