@@ -57,16 +57,15 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     # Alpha diversity figures
     alpha_figures = {}
-    for col, vals in amplicon_data.alpha_diversity.items():
-        for val, tables in vals.items():
-            group_key = f"{col}={val}"
+    for group_column, table_types in amplicon_data.alpha_diversity.items():
+        for table_type, levels in table_types.items():
+            group_key = f"{group_column}={table_type}"
             alpha_figures.setdefault(group_key, {})
-            for table_type, levels in tables.items():
-                for level, data in levels.items():
-                    if 'figures' in data and data['figures']:
-                        if table_type not in alpha_figures[group_key]:
-                            alpha_figures[group_key][table_type] = {}
-                        alpha_figures[group_key][table_type][level] = data['figures']
+            for level, data in levels.items():
+                if 'figures' in data and data['figures']:
+                    # Store figures directly under group_key -> level
+                    alpha_figures[group_key][level] = data['figures']
+                    
     figures['alpha_diversity'] = alpha_figures
     
     # Sample maps
