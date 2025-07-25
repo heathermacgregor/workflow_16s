@@ -211,8 +211,8 @@ def _figs_to_html(
     tabs, btns, plot_data = [], [], {}
 
     for idx, (title, fig) in enumerate(figs.items()):
-        pane_id  = f"{prefix}-pane-{next(id_counter)}"
-        plot_id = f"{prefix}-plot-{next(id_counter) + 10000}" 
+        pane_id  = f"{prefix}-pane-{next(counter)}"
+        plot_id = f"{prefix}-plot-{next(counter) + 10000}" 
         btns.append(
             f'<button class="tab-button {"active" if idx==0 else ""}" '
             f'data-pane-target="#{pane_id}" '
