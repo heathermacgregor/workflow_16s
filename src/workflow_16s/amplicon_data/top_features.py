@@ -113,4 +113,4 @@ def top_features_plots(
                     finally:
                         progress.update(groupval_task, advance=1)
         progress.update(groupval_task, description=_format_task_desc(groupval_desc))    
-        return data.top_features
+        return top_features
