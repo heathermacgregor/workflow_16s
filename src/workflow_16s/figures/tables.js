@@ -1,15 +1,118 @@
+// ============================= TAB MANAGER ============================= //
+class TabManager {
+    constructor() {
+        this.tabData = {};
+        this.rootContainer = null;
+    }
+    
+    init(data, containerId) {
+        this.tabData = data;
+        this.rootContainer = document.getElementById(containerId);
+        if (!this.rootContainer) return;
+        
+        this.rootContainer.innerHTML = this.generateTabHTML(this.tabData);
+    }
+    
+    generateTabHTML(data, path = []) {
+        const isLeaf = typeof data === 'object' && data.type;
+        const isBranch = !isLeaf;
+        const currentId = path.join('-') || 'root';
+        
+        if (isLeaf) {
+            const plotId = `plot-${currentId}`;
+            return `
+                <div class="tab-pane active" id="${currentId}">
+                    <div id="container-${plotId}" class="plot-container"></div>
+                </div>
+            `;
+        }
+        
+        // Generate tabs for children
+        const childKeys = Object.keys(data);
+        const tabs = childKeys.map(key => {
+            return `<button class="tab-button" data-target="${[...path, key].join('.')}">${key}</button>`;
+        }).join('');
+        
+        const panes = childKeys.map(key => {
+            const childPath = [...path, key];
+            return `
+                <div class="nested-pane">
+                    ${this.generateTabHTML(data[key], childPath)}
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div class="tabs">${tabs}</div>
+            <div class="panes-container">
+                ${panes}
+            </div>
+        `;
+    }
+}
+
 // ============================= INITIALIZATION ============================= //
 document.addEventListener('DOMContentLoaded', () => {
     // Parse plot data from the embedded JSON
     const plotDataElement = document.getElementById('plot-data');
     window.plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : {};
 
-    // Initialize all active plots
-    document.querySelectorAll('.tab-pane.active, .method-pane.active, .level-pane.active, .table-pane.active').forEach(activePane => {
-        // Activate first child panes for initially active panes
-        activateFirstChildPanes(activePane);
-        initializeVisiblePlots(activePane);
+    // Initialize Tab Managers
+    document.querySelectorAll('.tab-manager-container').forEach(container => {
+        const tabManager = new TabManager();
+        // Find section name from container ID
+        const section = container.id.replace('tabs-container-', '');
+        if (window.plotData[section]) {
+            tabManager.init(window.plotData[section], container.id);
+        }
     });
+    
+    // Tab click handler
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('tab-button')) {
+            const path = e.target.dataset.target.split('.');
+            const paneId = path.join('-');
+            const pane = document.getElementById(paneId);
+            if (pane) {
+                // Hide all siblings
+                const siblings = Array.from(pane.parentElement.children);
+                siblings.forEach(sibling => {
+                    if (sibling !== pane) {
+                        sibling.classList.remove('active');
+                        sibling.style.display = 'none';
+                    }
+                });
+                
+                // Show target pane
+                pane.style.display = 'block';
+                pane.classList.add('active');
+                
+                // Update active tab
+                const tabsContainer = e.target.parentElement;
+                tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                e.target.classList.add('active');
+                
+                // Initialize plot if not already initialized
+                const plotContainer = pane.querySelector('.plot-container');
+                if (plotContainer && !plotContainer.innerHTML.trim()) {
+                    const plotId = plotContainer.id.replace('container-', '');
+                    initializePlot(plotId);
+                }
+            }
+        }
+    });
+    
+    // Initialize all plots in visible panes
+    setTimeout(() => {
+        document.querySelectorAll('.plot-container').forEach(container => {
+            const plotId = container.id.replace('container-', '');
+            if (container.offsetParent !== null && !container.innerHTML.trim()) {
+                initializePlot(plotId);
+            }
+        });
+    }, 100);
     
     // Make all dynamic tables sortable and resizable
     document.querySelectorAll('.dynamic-table').forEach(table => {
@@ -28,33 +131,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-function initializeVisiblePlots(container) {
-  // build a NodeList of panes to check:
-  //  - the container itself (if it *is* a tab-, method- or level-pane)
-  //  - all nested tab-panes
-  const selfIsPane =
-    container.matches('.tab-pane[data-plot-id].active') ||
-    container.matches('.method-pane[data-plot-id].active') ||
-    container.matches('.level-pane[data-plot-id].active');
-
-  const panes = [
-    ...(selfIsPane ? [container] : []),
-    ...container.querySelectorAll('.tab-pane[data-plot-id].active')
-  ];
-
-  panes.forEach(pane => {
-    const plotId = pane.getAttribute('data-plot-id');
-    if (plotId) initializePlot(plotId);
-  });
-}
-
-
 // ============================ PLOT RENDERING ============================ //
 function initializePlot(plotId) {
-    const plotInfo = window.plotData[plotId];
+    // Extract the path from plotId (format: plot-key1-key2-...)
+    const path = plotId.replace('plot-', '').split('-');
+    
+    // Find the plot data by traversing the plotData structure
+    let plotInfo = window.plotData;
+    for (const key of path) {
+        if (plotInfo[key]) {
+            plotInfo = plotInfo[key];
+        } else {
+            console.error(`Plot data not found for path: ${path.join('.')}`);
+            return;
+        }
+    }
+    
+    // Ensure we have a leaf node with plot data
+    if (!plotInfo.type) {
+        console.error(`No plot type found for: ${plotId}`);
+        return;
+    }
+    
     const container = document.getElementById(`container-${plotId}`);
-    if (!plotInfo || !container) {
-        console.error(`Data or container not found for plot: ${plotId}`);
+    if (!container) {
+        console.error(`Container not found for plot: ${plotId}`);
         return;
     }
     
@@ -71,6 +172,7 @@ function initializePlot(plotId) {
         case 'image':
             const img = document.createElement('img');
             img.src = `data:image/png;base64,${plotInfo.data}`;
+            img.style.maxWidth = '100%';
             container.appendChild(img);
             break;
         case 'error':
@@ -80,50 +182,6 @@ function initializePlot(plotId) {
             container.innerHTML = `<div class="error">Unsupported plot type: ${plotInfo.type}</div>`;
     }
 }
-
-// ========================== DYNAMIC TAB/PANE LOGIC ========================== //
-function showPane(event) {
-    const button = event.currentTarget;
-    const targetSelector = button.getAttribute('data-pane-target');
-    const targetPane = document.querySelector(targetSelector);
-
-    if (!targetPane) return;
-
-    // Deactivate sibling buttons at the same level
-    const parent = button.parentElement;
-    parent.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-    
-    // Deactivate sibling panes at the same level
-    const paneContainer = targetPane.parentElement;
-    paneContainer.querySelectorAll('.tab-pane, .method-pane, .level-pane, .table-pane, .group-pane')
-        .forEach(pane => pane.classList.remove('active'));
-
-    // Activate clicked button and target pane
-    button.classList.add('active');
-    targetPane.classList.add('active');
-
-    // Activate first child pane in each nested level
-    activateFirstChildPanes(targetPane);
-
-    // Initialize plots within the newly visible pane
-    initializeVisiblePlots(targetPane);
-}
-
-function activateFirstChildPanes(container) {
-    const childSelectors = ['.level-pane', '.method-pane', '.tab-pane', '.table-pane', '.group-pane'];
-    for (const selector of childSelectors) {
-        const childPanes = container.querySelectorAll(selector);
-        if (childPanes.length > 0) {
-            // Deactivate all and activate the first child
-            childPanes.forEach(pane => pane.classList.remove('active'));
-            const firstChild = childPanes[0];
-            firstChild.classList.add('active');
-            // Recurse into the activated child
-            activateFirstChildPanes(firstChild);
-        }
-    }
-}
-
 
 // ========================== SECTION COLLAPSE/EXPAND ========================= //
 function toggleSection(event) {
