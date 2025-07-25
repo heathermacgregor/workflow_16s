@@ -89,15 +89,14 @@ function showPane(event) {
 
     if (!targetPane) return;
 
-    // Deactivate sibling buttons and panes
+    // Deactivate sibling buttons at the same level
     const parent = button.parentElement;
     parent.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
     
-    // NEW: Get pane container and deactivate direct child panes only
+    // Deactivate sibling panes at the same level
     const paneContainer = targetPane.parentElement;
-    paneContainer.querySelectorAll('.tab-pane, .method-pane, .level-pane, .table-pane').forEach(pane => {
-        pane.classList.remove('active');
-    });
+    paneContainer.querySelectorAll('.tab-pane, .method-pane, .level-pane, .table-pane, .group-pane')
+        .forEach(pane => pane.classList.remove('active'));
 
     // Activate clicked button and target pane
     button.classList.add('active');
@@ -111,17 +110,18 @@ function showPane(event) {
 }
 
 function activateFirstChildPanes(container) {
-    const childSelectors = ['.level-pane', '.method-pane', '.tab-pane'];
-    childSelectors.forEach(selector => {
+    const childSelectors = ['.level-pane', '.method-pane', '.tab-pane', '.table-pane', '.group-pane'];
+    for (const selector of childSelectors) {
         const childPanes = container.querySelectorAll(selector);
         if (childPanes.length > 0) {
+            // Deactivate all and activate the first child
             childPanes.forEach(pane => pane.classList.remove('active'));
             const firstChild = childPanes[0];
             firstChild.classList.add('active');
             // Recurse into the activated child
             activateFirstChildPanes(firstChild);
         }
-    });
+    }
 }
 
 
