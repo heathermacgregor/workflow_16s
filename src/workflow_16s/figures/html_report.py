@@ -100,13 +100,53 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     return figures
 
+def _convert_figure_to_serializable(fig):
+    """Convert figure object to serializable dict"""
+    try:
+        if fig is None:
+            return {"type": "error", "error": "Figure object is None"}
+            
+        if hasattr(fig, "to_plotly_json"):
+            pj = fig.to_plotly_json()
+            pj.setdefault("layout", {})["showlegend"] = False
+            return {
+                "type": "plotly",
+                "data": pj["data"],
+                "layout": pj["layout"],
+                "square": False
+            }
+        elif isinstance(fig, Figure):
+            buf = BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
+            buf.seek(0)
+            return {
+                "type": "image",
+                "data": base64.b64encode(buf.read()).decode()
+            }
+        else:
+            return {
+                "type": "error",
+                "error": f"Unsupported figure type {type(fig)}"
+            }
+    except Exception as exc:
+        logger.exception("Serializing figure failed")
+        return {"type": "error", "error": str(exc)}
+
+def _convert_figures_tree_to_serializable(tree):
+    """Recursively convert figures tree to serializable structure"""
+    if not isinstance(tree, dict):
+        return _convert_figure_to_serializable(tree)
+    
+    result = {}
+    for key, value in tree.items():
+        result[key] = _convert_figures_tree_to_serializable(value)
+    return result
+
 def _prepare_sections(
     figures: Dict,
     include_sections: List[str],
-    id_counter: Iterator[int],
-) -> Tuple[List[Dict], Dict]:
+) -> List[Dict]:
     sections = []
-    plot_data: Dict[str, Any] = {}
 
     for sec in include_sections:
         if sec not in figures:
@@ -115,172 +155,15 @@ def _prepare_sections(
         sec_data = {
             "id": f"sec-{uuid.uuid4().hex}", 
             "title": sec.title(), 
-            "subsections": []
+            "container_id": f"tabs-container-{sec}",
+            "figures": _convert_figures_tree_to_serializable(figures[sec])
         }
 
-        if sec == "ordination":
-            btns, tabs, pd = _ordination_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Ordination",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        
-        elif sec == "alpha_diversity":
-            btns, tabs, pd = _alpha_diversity_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Alpha Diversity",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        
-        elif sec == "map":
-            flat: Dict[str, Any] = {}
-            _flatten(figures[sec], [], flat)
-            if flat:
-                tabs, btns, pd = _figs_to_html(
-                    flat, id_counter, sec_data["id"]
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "Sample Maps",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-        elif sec == "shap":
-            btns, tabs, pd = _shap_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "SHAP Interpretability",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        elif sec == 'violin':
-            btns, tabs, pd = _violin_to_nested_html(
-                figures[sec], id_counter, sec_data["id"]
-            )
-            plot_data.update(pd)
-            sec_data["subsections"].append({
-                "title": "Violin Plots",
-                "tabs_html": tabs,
-                "buttons_html": btns
-            })
-        else:
-            flat: Dict[str, Any] = {}
-            _flatten(figures[sec], [], flat)
-            if flat:
-                tabs, btns, pd = _figs_to_html(
-                    flat, id_counter, sec_data["id"], row_label="color_col"
-                )
-                plot_data.update(pd)
-                sec_data["subsections"].append({
-                    "title": "All",
-                    "tabs_html": tabs,
-                    "buttons_html": btns
-                })
-        
-        if sec_data["subsections"]:
-            sections.append(sec_data)
+        sections.append(sec_data)
 
-    return sections, plot_data
-
-def _flatten(tree: Dict, keys: List[str], out: Dict) -> None:
-    for k, v in tree.items():
-        new_keys = keys + [k]
-        if isinstance(v, dict):
-            _flatten(v, new_keys, out)
-        else:
-            out[" - ".join(new_keys)] = v
-
-def _figs_to_html(
-    figs: Dict[str, Any], 
-    counter: Iterator[int], 
-    prefix: str, 
-    *, 
-    square: bool = False,
-    row_label: Optional[str] = None
-) -> Tuple[str, str, Dict]:
-    tabs, btns, plot_data = [], [], {}
-
-    for idx, (title, fig) in enumerate(figs.items()):
-        pane_id  = f"{prefix}-pane-{next(counter)}"
-        plot_id = f"{prefix}-plot-{next(counter) + 10000}" 
-        btns.append(
-            f'<button class="tab-button {"active" if idx==0 else ""}" '
-            f'data-pane-target="#{pane_id}" '
-            f'onclick="showPane(event)">{title}</button>'
-        )
-
-        tabs.append(
-            f'<div id="{pane_id}" class="tab-pane {"active" if idx==0 else ""}" '
-            f'data-plot-id="{plot_id}">'
-            f'<div id="container-{plot_id}" class="plot-container"></div></div>'
-        )
-
-        try:
-            if fig is None:
-                raise ValueError("Figure object is None")
-                
-            if hasattr(fig, "to_plotly_json"):
-                pj = fig.to_plotly_json()
-                pj.setdefault("layout", {})["showlegend"] = False
-                plot_data[plot_id] = {
-                    "type": "plotly",
-                    "data": pj["data"],
-                    "layout": pj["layout"],
-                    "square": square
-                }
-            elif isinstance(fig, Figure):
-                buf = BytesIO()
-                fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
-                buf.seek(0)
-                plot_data[plot_id] = {
-                    "type": "image",
-                    "data": base64.b64encode(buf.read()).decode()
-                }
-            else:
-                plot_data[plot_id] = {
-                    "type": "error",
-                    "error": f"Unsupported figure type {type(fig)}"
-                }
-        except Exception as exc:
-            logger.exception("Serializing figure failed")
-            plot_data[plot_id] = {
-                "type": "error", 
-                "error": str(exc)
-            }
-            
-    buttons_html = "\n".join(btns)
-    if row_label:
-        buttons_html = (
-            f'<div class="tabs" data-label="{row_label}">'
-            f'{buttons_html}</div>'
-        )
-    else:
-        buttons_html = f'<div class="tabs">{buttons_html}</div>'
-        
-    return "\n".join(tabs), buttons_html, plot_data
+    return sections
 
 def _section_html(sec: Dict) -> str:
-    sub_html = "\n".join(
-        f'<div class="subsection">\n'
-        f'  <h3>{sub["title"]}</h3>\n'
-        f'  <div class="tab-content">\n'          
-        f'    {sub["buttons_html"]}\n'
-        f'    {sub["tabs_html"]}\n'
-        f'  </div>\n'                             
-        f'</div>'
-        for sub in sec["subsections"]
-    )
-    
     return f'''
     <div class="section" id="{sec["id"]}">
         <div class="section-header" onclick="toggleSection(event)">
@@ -288,61 +171,13 @@ def _section_html(sec: Dict) -> str:
             <span class="toggle-icon">▼</span>
         </div>
         <div class="section-content" id="{sec["id"]}-content">
-            {sub_html}
+            <div class="subsection">
+                <div id="{sec["container_id"]}" class="tab-manager-container"></div>
+            </div>
         </div>
     </div>
     '''
 
-def _alpha_correlations_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-pane-target="#{table_id}" '
-            f'onclick="showPane(event)">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, variables) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-pane-target="#{level_id}" '
-                f'onclick="showPane(event)">{level}</button>'
-            )
-            
-            var_btns, var_tabs, var_plot_data = _figs_to_html(
-                variables, id_counter, level_id
-            )
-            plot_data.update(var_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane {"active" if is_active_level else ""}" >'
-                f'<div class="tabs" data-label="variable">{var_btns}</div>'
-                f'{var_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane {"active" if is_active_table else ""}" >'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data
-    
 def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
     """Parse SHAP report string into structured feature data"""
     shap_data = {}
@@ -629,192 +464,6 @@ def _format_ml_section(
     </div>
     """
 
-def _shap_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_first_table = t_idx == 0
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_first_table else ""}" '
-            f'data-pane-target="#{table_id}" '
-            f'onclick="showPane(event)">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_first_level = l_idx == 0
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_first_level else ""}" '
-                f'data-pane-target="#{level_id}" '
-                f'onclick="showPane(event)">{level}</button>'
-            )
-            
-            method_btns, method_panes = [], []
-            for m_idx, (method, plots) in enumerate(methods.items()):
-                method_id = f"{level_id}-method-{next(id_counter)}"
-                is_first_method = m_idx == 0
-                
-                # Flatten any list values in the plots dictionary
-                flattened_plots = {}
-                for plot_type, fig in plots.items():
-                    if isinstance(fig, list):
-                        # Convert list to dictionary with generated keys
-                        for idx, sub_fig in enumerate(fig):
-                            flattened_plots[f"{plot_type} - Feature {idx}"] = sub_fig
-                    else:
-                        flattened_plots[plot_type] = fig
-                
-                plot_btns, plot_tabs, pd = _figs_to_html(
-                    flattened_plots, id_counter, method_id
-                )
-                plot_data.update(pd)
-                
-                method_btns.append(
-                    f'<button class="method-button {"active" if is_first_method else ""}" '
-                    f'data-pane-target="#{method_id}" '
-                    f'onclick="showPane(event)">{method}</button>'
-                )
-                
-                method_panes.append(
-                    f'<div id="{method_id}" class="method-pane {"active" if is_first_method else ""}" >'
-                    f'<div class="tabs">{plot_btns}</div>'
-                    f'{plot_tabs}'
-                    f'</div>'
-                )
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane {"active" if is_first_level else ""}" >'
-                f'<div class="tabs" data-label="method">{"".join(method_btns)}</div>'
-                f'{"".join(method_panes)}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane {"active" if is_first_table else ""}" >'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = (
-        f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    )
-    return buttons_row, "".join(panes_html), plot_data
-
-def _violin_to_nested_html(
-    figures_dict: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str
-) -> Tuple[str, str, Dict]:
-    buttons_html = []
-    tabs_html = []
-    plot_data = {}
-    
-    for cat_idx, (category, features) in enumerate(figures_dict.items()):
-        if not features:
-            continue
-            
-        cat_id = f"{prefix}-cat-{cat_idx}"
-        
-        buttons_html.append(
-            f'<button class="tab-button {"active" if cat_idx==0 else ""}" '
-            f'data-pane-target="#{cat_id}" '
-            f'onclick="showPane(event)">{category.title()}</button>'
-        )
-        
-        feature_tabs, feature_btns, feature_plot_data = _figs_to_html(
-            features, id_counter, cat_id
-        )
-        plot_data.update(feature_plot_data)
-        
-        tabs_html.append(
-            f'<div id="{cat_id}" class="tab-pane {"active" if cat_idx==0 else ""}" >'
-            f'{feature_btns}'
-            f'{feature_tabs}'
-            f'</div>'
-        )
-    
-    return "\n".join(buttons_html), "\n".join(tabs_html), plot_data
-
-def _alpha_diversity_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-
-    # Iterate through each group_key (e.g., "nuclear_contamination_status=raw")
-    for group_idx, (group_key, table_types) in enumerate(figures.items()):
-        group_id = f"{prefix}-group-{next(id_counter)}"
-        is_active_group = group_idx == 0
-        
-        buttons_html.append(
-            f'<button class="group-button {"active" if is_active_group else ""}" '
-            f'data-pane-target="#{group_id}" '
-            f'onclick="showPane(event)">{group_key}</button>'
-        )
-        
-        table_btns, table_panes = [], []
-        # Iterate through table types (e.g., "raw", "filtered")
-        for table_idx, (table_type, levels) in enumerate(table_types.items()):
-            table_id = f"{group_id}-table-{next(id_counter)}"
-            is_active_table = table_idx == 0
-            
-            table_btns.append(
-                f'<button class="table-button {"active" if is_active_table else ""}" '
-                f'data-pane-target="#{table_id}" '
-                f'onclick="showPane(event)">{table_type}</button>'
-            )
-            
-            level_btns, level_panes = [], []
-            # Iterate through taxonomic levels (e.g., "genus")
-            for level_idx, (level, metrics) in enumerate(levels.items()):
-                level_id = f"{table_id}-level-{next(id_counter)}"
-                is_active_level = level_idx == 0
-                
-                level_btns.append(
-                    f'<button class="level-button {"active" if is_active_level else ""}" '
-                    f'data-pane-target="#{level_id}" '
-                    f'onclick="showPane(event)">{level}</button>'
-                )
-                
-                # Generate tabs for each diversity metric
-                metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
-                    metrics, id_counter, level_id
-                )
-                plot_data.update(metric_plot_data)
-                
-                level_panes.append(
-                    f'<div id="{level_id}" class="level-pane {"active" if is_active_level else ""}" >'
-                    f'<div class="tabs" data-label="metric">{metric_btns}</div>'
-                    f'{metric_tabs}'
-                    f'</div>'
-                )
-            
-            table_panes.append(
-                f'<div id="{table_id}" class="table-pane {"active" if is_active_table else ""}" >'
-                f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-                f'{"".join(level_panes)}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{group_id}" class="group-pane {"active" if is_active_group else ""}" >'
-            f'<div class="tabs" data-label="table_type">{"".join(table_btns)}</div>'
-            f'{"".join(table_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="group">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data
-    
 def _add_header_tooltips(
     table_html: str, 
     tooltip_map: Dict[str, str]
@@ -848,7 +497,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange='changePageSize('{table_id}', this.value)'>
+                <select class='rows-per-page' onchange='changePageSize("{table_id}", this.value)'>
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -862,56 +511,6 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         </div>
     </div>
     """
-    
-def _ordination_to_nested_html(
-    figures: Dict[str, Any],
-    id_counter: Iterator[int],
-    prefix: str,
-) -> Tuple[str, str, Dict]:
-    buttons_html, panes_html, plot_data = [], [], {}
-    
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
-        
-        buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-pane-target="#{table_id}" '
-            f'onclick="showPane(event)">{table_type}</button>'
-        )
-        
-        level_btns, level_panes = [], []
-        for l_idx, (level, methods) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0
-            
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-pane-target="#{level_id}" '
-                f'onclick="showPane(event)">{level}</button>'
-            )
-            
-            method_btns, method_tabs, method_plot_data = _figs_to_html(
-                methods, id_counter, level_id
-            )
-            plot_data.update(method_plot_data)
-            
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane {"active" if is_active_level else ""}" >'
-                f'<div class="tabs" data-label="method">{method_btns}</div>'
-                f'{method_tabs}'
-                f'</div>'
-            )
-        
-        panes_html.append(
-            f'<div id="{table_id}" class="table-pane {"active" if is_active_table else ""}" >'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
-            f'</div>'
-        )
-    
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
-    return buttons_row, "".join(panes_html), plot_data    
     
 def generate_html_report(
     amplicon_data: "AmpliconData",
@@ -985,10 +584,8 @@ def generate_html_report(
         {ml_html}
     </div>
     """
-    id_counter = itertools.count()
-    sections, plot_data = _prepare_sections(
-        figures_dict, include_sections, id_counter
-    )
+    
+    sections = _prepare_sections(figures_dict, include_sections)
     sections_html = "\n".join(_section_html(s) for s in sections)
 
     nav_items = [
@@ -1013,8 +610,28 @@ def generate_html_report(
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
 
+    # Prepare plot data dictionary
+    plot_data = {}
+    for sec in sections:
+        plot_data[sec['title'].lower()] = sec['figures']
+    
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")
+    
+    # Prepare tab manager initialization script
+    tab_manager_init = ""
+    for sec in sections:
+        tab_manager_init += f"""
+        (function() {{
+            const container = document.getElementById('{sec["container_id"]}');
+            const data = window.plotData['{sec["title"].lower()}'];
+            if (container && data) {{
+                const tabManager = new TabManager();
+                tabManager.init(data, '{sec["container_id"]}');
+            }}
+        }})();
+        """
+    
     try:
         table_js = import_js_as_str(tables_js_path)
     except Exception as e:
@@ -1047,7 +664,8 @@ def generate_html_report(
         sections_html=sections_html,
         plot_data_json=payload,
         table_js=table_js,
-        css_content=css_content
+        css_content=css_content,
+        tab_manager_init=tab_manager_init
     )
         
     output_path.write_text(html, encoding="utf-8")
