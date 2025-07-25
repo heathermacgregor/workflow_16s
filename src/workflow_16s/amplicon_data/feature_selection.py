@@ -30,7 +30,7 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
-debug_mode = True
+debug_mode = False
 
 # ================================= DEFAULT VALUES =================================== #
 
