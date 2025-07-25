@@ -8,12 +8,13 @@ body                                { font-family: Arial, sans-serif; margin: 40
 .tabs[data-label]::before           { content: attr(data-label) ": "; font-weight: bold; margin-right: 6px; white-space: nowrap; }
 .tabs[data-label]                   { display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .tab-content                        { border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
-.method-pane, .table-pane, .level-pane, .tab-pane { display: none; }
-.method-pane.active, .table-pane.active, 
+.group-pane, .method-pane, .table-pane, .level-pane, .tab-pane { display: none; }
+.group-pane.active, .method-pane.active, .table-pane.active, 
 .level-pane.active, .tab-pane.active { display: block; }
 /* Indentation Logic */
 :root                               { --indent-step: clamp(8px, 2.2vw, 24px); }
 .subsection  > .tab-content > .tabs { margin-left: 0; }
+.group-pane  > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .method-pane > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .table-pane  > .tabs                { margin-left: calc(var(--indent-step) * 1); }
 .level-pane  > .tabs                { margin-left: calc(var(--indent-step) * 1); }
@@ -69,11 +70,11 @@ th                                   { background-color: #f2f2f2; position: rela
 Generic button styling for UI interaction.
 
 .active buttons are styled distinctly for visibility.*/
-.tab-button, .method-button, 
+.tab-button, .group-button, .method-button, 
 .table-button, .level-button, 
 .metric-button, .pagination-btn               { color: black; background-color: white; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; margin-right: 5px; 
                                                 transition: all 0.3s ease; }
-.tab-button.active, .method-button.active, 
+.tab-button.active, .group-button.active, .method-button.active, 
 .table-button.active, .level-button.active, 
 .metric-button.active, .pagination-btn.active { color: white; background-color: black; }
 
