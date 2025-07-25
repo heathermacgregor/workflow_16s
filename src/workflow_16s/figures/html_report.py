@@ -835,15 +835,20 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     if df is None or df.empty:
         return "<p>No data available</p>"
     
-    table_html = df.to_html(index=False, classes=f'dynamic-table', table_id=table_id)
+    # Use unique table_id for all control elements
+    container_id = f"container-{table_id}"
+    pagination_id = f"pagination-{table_id}"
+    indicator_id = f"indicator-{table_id}"
     
-    enhanced_html = f"""
-    <div class="table-container" id="container-{table_id}">
+    table_html = df.to_html(index=False, classes='dynamic-table', table_id=table_id)
+    
+    return f"""
+    <div class='table-container' id='{container_id}'>
         {table_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
+        <div class='table-controls'>
+            <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('{table_id}', this.value)">
+                <select class='rows-per-page' onchange='changePageSize('{table_id}', this.value)'>
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -851,13 +856,12 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
                     <option value="100">100</option>
                     <option value="-1">All</option>
                 </select>
-                <div class="pagination-buttons" id="pagination-{table_id}"></div>
-                <span class="pagination-indicator" id="indicator-{table_id}"></span>
+                <div class='pagination-buttons' id='{pagination_id}'></div>
+                <span class='pagination-indicator' id='{indicator_id}'></span>
             </div>
         </div>
     </div>
     """
-    return enhanced_html
     
 def _ordination_to_nested_html(
     figures: Dict[str, Any],
