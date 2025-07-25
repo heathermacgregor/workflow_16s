@@ -87,7 +87,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     # Violin plots
     violin_figures = {}
-    for col, features in amplicon_data.top_features.items():
+    for col, vals in amplicon_data.top_features.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
             violin_figures.setdefault(col, {})
