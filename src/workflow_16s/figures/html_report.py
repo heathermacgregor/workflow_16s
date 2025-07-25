@@ -93,8 +93,9 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             group_key = f"{col}={val}"
             violin_figures.setdefault(col, {})
             for feature in features:
-                if feature.get('violin_figure'):
-                    violin_figures[col][feature['feature']] = feature['violin_figure']
+                if isinstance(feature, dict):
+                    if feature.get('violin_figure'):
+                        violin_figures[col][feature['feature']] = feature['violin_figure']
     figures['violin'] = violin_figures
     logger.info(figures)
 
