@@ -750,20 +750,22 @@ def _alpha_diversity_to_nested_html(
 ) -> Tuple[str, str, Dict]:
     buttons_html, panes_html, plot_data = [], [], {}
     
-    for t_idx, (table_type, levels) in enumerate(figures.items()):
-        table_id = f"{prefix}-table-{next(id_counter)}"
-        is_active_table = t_idx == 0
+    # Iterate through each group_key (e.g., "nuclear_contamination_status=raw")
+    for group_idx, (group_key, levels) in enumerate(figures.items()):
+        group_id = f"{prefix}-group-{next(id_counter)}"
+        is_active_group = group_idx == 0
         
         buttons_html.append(
-            f'<button class="table-button {"active" if is_active_table else ""}" '
-            f'data-pane-target="#{table_id}" '
-            f'onclick="showPane(event)">{table_type}</button>'
+            f'<button class="group-button {"active" if is_active_group else ""}" '
+            f'data-pane-target="#{group_id}" '
+            f'onclick="showPane(event)">{group_key}</button>'
         )
         
         level_btns, level_panes = [], []
-        for l_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{table_id}-level-{next(id_counter)}"
-            is_active_level = l_idx == 0
+        # Iterate through taxonomic levels (e.g., "genus")
+        for level_idx, (level, metrics) in enumerate(levels.items()):
+            level_id = f"{group_id}-level-{next(id_counter)}"
+            is_active_level = level_idx == 0
             
             level_btns.append(
                 f'<button class="level-button {"active" if is_active_level else ""}" '
@@ -771,6 +773,7 @@ def _alpha_diversity_to_nested_html(
                 f'onclick="showPane(event)">{level}</button>'
             )
             
+            # Generate tabs for each diversity metric
             metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
                 metrics, id_counter, level_id
             )
@@ -784,13 +787,13 @@ def _alpha_diversity_to_nested_html(
             )
         
         panes_html.append(
-            f'<div id="{table_id}" class="table-pane {"active" if is_active_table else ""}" >'
+            f'<div id="{group_id}" class="group-pane {"active" if is_active_group else ""}" >'
             f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
             f'{"".join(level_panes)}'
             f'</div>'
         )
     
-    buttons_row = f'<div class="tabs" data-label="table_type">{"".join(buttons_html)}</div>'
+    buttons_row = f'<div class="tabs" data-label="group">{"".join(buttons_html)}</div>'
     return buttons_row, "".join(panes_html), plot_data
     
 def _add_header_tooltips(
