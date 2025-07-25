@@ -75,7 +75,7 @@ def top_features_plots(
                             logger.warning(f"Feature '{feature_name}' not found in {table_type}/{level} table")
                             continue
     
-                        if data.config.get('violin_plots', {}).get('enabled', False):
+                        if config.get('violin_plots', {}).get('enabled', False):
                             # Create output directory
                             feature_output_dir = output_dir / col / val / table_type / level
                             feature_output_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +92,7 @@ def top_features_plots(
                                 logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
                                 feature['figures']['violin'] = None
     
-                        if data.config.get('feature_maps', {}).get('enabled', False):
+                        if config.get('feature_maps', {}).get('enabled', False):
                             try:
                                 # Generate feature abundance map
                                 fig_map = create_feature_abundance_map(
