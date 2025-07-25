@@ -68,7 +68,7 @@ def top_features_plots(
                         # Create normalized table index
                         table_normalized_index = table.index.astype(str).str.strip().str.lower()
                         # Map group values using normalized IDs
-                        table[group_col] = table_normalized_index.map(group_map)
+                        table[col] = table_normalized_index.map(group_map)
                                         
                         # Verify feature exists
                         if feature_name not in table.columns:
