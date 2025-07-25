@@ -25,14 +25,22 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
-def top_features_plots(data):
+def top_features_plots(
+    output_dir,
+    config,
+    top_features,
+    tables,
+    meta,
+    nfc_facilities,
+    verbose
+):
     # Create output directory for top features
-    output_dir = data.output_dir / 'top_features'
+    output_dir = output_dir / 'top_features'
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    n = data.config.get('violin_plots', {}).get('n', 50)
+    n = config.get('violin_plots', {}).get('n', 50)
 
-    for col, vals in data.top_features.items():
+    for col, vals in top_features.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
             with get_progress_bar() as progress:
@@ -46,13 +54,13 @@ def top_features_plots(data):
                         feature['figures'] = {}
                                         
                         # Get the table and convert to DataFrame
-                        biom_table = data.tables[table_type][level]
+                        biom_table = tables[table_type][level]
                         table = table_to_df(biom_table)[[feature_name]]
-                        meta_ids = data.meta['#sampleid'].astype(str).str.strip().str.lower()
+                        meta_ids = meta['#sampleid'].astype(str).str.strip().str.lower()
                         table_ids = table.index.astype(str).str.strip().str.lower()
                         shared_ids = set(table_ids) & set(meta_ids)
                     
-                        group_map = data.meta.assign(norm_id=meta_ids).set_index("norm_id")[col]
+                        group_map = meta.assign(norm_id=meta_ids).set_index("norm_id")[col]
                         # Create normalized table index
                         table_normalized_index = table.index.astype(str).str.strip().str.lower()
                         # Map group values using normalized IDs
@@ -84,13 +92,13 @@ def top_features_plots(data):
                             try:
                                 # Generate feature abundance map
                                 fig_map = create_feature_abundance_map(
-                                    metadata=data.meta,
+                                    metadata=meta,
                                     feature_abundance=table[[feature_name]],
                                     feature_name=feature_name,
-                                    nfc_facilities_data=data.nfc_facilities,
+                                    nfc_facilities_data=nfc_facilities,
                                     output_dir=feature_output_dir,
                                     show=False,
-                                    verbose=data.verbose
+                                    verbose=verbose
                                 )
                                 feature['figures']['abundance_map'] = fig_map
                             except Exception as e:
