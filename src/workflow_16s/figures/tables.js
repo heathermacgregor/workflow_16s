@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize all active plots
     document.querySelectorAll('.tab-pane.active, .method-pane.active, .level-pane.active, .table-pane.active').forEach(activePane => {
+        // Activate first child panes for initially active panes
+        activateFirstChildPanes(activePane);
         initializeVisiblePlots(activePane);
     });
     
@@ -90,7 +92,10 @@ function showPane(event) {
     // Deactivate sibling buttons and panes
     const parent = button.parentElement;
     parent.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-    parent.parentElement.querySelectorAll(':scope > .table-pane, :scope > .level-pane, :scope > .method-pane, :scope > .tab-pane').forEach(pane => {
+    
+    // NEW: Get pane container and deactivate direct child panes only
+    const paneContainer = targetPane.parentElement;
+    paneContainer.querySelectorAll('.tab-pane, .method-pane, .level-pane, .table-pane').forEach(pane => {
         pane.classList.remove('active');
     });
 
@@ -107,18 +112,16 @@ function showPane(event) {
 
 function activateFirstChildPanes(container) {
     const childSelectors = ['.level-pane', '.method-pane', '.tab-pane'];
-    for (const selector of childSelectors) {
+    childSelectors.forEach(selector => {
         const childPanes = container.querySelectorAll(selector);
         if (childPanes.length > 0) {
-            // Deactivate all and activate first child
             childPanes.forEach(pane => pane.classList.remove('active'));
             const firstChild = childPanes[0];
             firstChild.classList.add('active');
             // Recurse into the activated child
             activateFirstChildPanes(firstChild);
-            break; // Only activate one level at a time
         }
-    }
+    });
 }
 
 
