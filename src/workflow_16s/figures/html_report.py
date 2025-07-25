@@ -58,13 +58,13 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     # Alpha diversity figures
     alpha_figures = {}
     for group_column, table_types in amplicon_data.alpha_diversity.items():
+        alpha_figures.setdefault(group_column, {})
         for table_type, levels in table_types.items():
-            group_key = f"{group_column}={table_type}"
-            alpha_figures.setdefault(group_key, {})
+            alpha_figures[group_column].setdefault(table_type, {})
             for level, data in levels.items():
                 if 'figures' in data and data['figures']:
                     # Store figures directly under group_key -> level
-                    alpha_figures[group_key][level] = data['figures']
+                    alpha_figures[group_column][table_type][level] = data['figures']
                     
     figures['alpha_diversity'] = alpha_figures
     
@@ -749,9 +749,9 @@ def _alpha_diversity_to_nested_html(
     prefix: str,
 ) -> Tuple[str, str, Dict]:
     buttons_html, panes_html, plot_data = [], [], {}
-    
+
     # Iterate through each group_key (e.g., "nuclear_contamination_status=raw")
-    for group_idx, (group_key, levels) in enumerate(figures.items()):
+    for group_idx, (group_key, table_types) in enumerate(figures.items()):
         group_id = f"{prefix}-group-{next(id_counter)}"
         is_active_group = group_idx == 0
         
@@ -761,35 +761,54 @@ def _alpha_diversity_to_nested_html(
             f'onclick="showPane(event)">{group_key}</button>'
         )
         
-        level_btns, level_panes = [], []
-        # Iterate through taxonomic levels (e.g., "genus")
-        for level_idx, (level, metrics) in enumerate(levels.items()):
-            level_id = f"{group_id}-level-{next(id_counter)}"
-            is_active_level = level_idx == 0
+        table_btns, table_panes = [], []
+        # Iterate through table types (e.g., "raw", "filtered")
+        for table_idx, (table_type, levels) in enumerate(table_types.items()):
+            table_id = f"{group_id}-table-{next(id_counter)}"
+            is_active_table = table_idx == 0
             
-            level_btns.append(
-                f'<button class="level-button {"active" if is_active_level else ""}" '
-                f'data-pane-target="#{level_id}" '
-                f'onclick="showPane(event)">{level}</button>'
+            table_btns.append(
+                f'<button class="table-button {"active" if is_active_table else ""}" '
+                f'data-pane-target="#{table_id}" '
+                f'onclick="showPane(event)">{table_type}</button>'
             )
             
-            # Generate tabs for each diversity metric
-            metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
-                metrics, id_counter, level_id
-            )
-            plot_data.update(metric_plot_data)
+            level_btns, level_panes = [], []
+            # Iterate through taxonomic levels (e.g., "genus")
+            for level_idx, (level, metrics) in enumerate(levels.items()):
+                level_id = f"{table_id}-level-{next(id_counter)}"
+                is_active_level = level_idx == 0
+                
+                level_btns.append(
+                    f'<button class="level-button {"active" if is_active_level else ""}" '
+                    f'data-pane-target="#{level_id}" '
+                    f'onclick="showPane(event)">{level}</button>'
+                )
+                
+                # Generate tabs for each diversity metric
+                metric_btns, metric_tabs, metric_plot_data = _figs_to_html(
+                    metrics, id_counter, level_id
+                )
+                plot_data.update(metric_plot_data)
+                
+                level_panes.append(
+                    f'<div id="{level_id}" class="level-pane {"active" if is_active_level else ""}" >'
+                    f'<div class="tabs" data-label="metric">{metric_btns}</div>'
+                    f'{metric_tabs}'
+                    f'</div>'
+                )
             
-            level_panes.append(
-                f'<div id="{level_id}" class="level-pane {"active" if is_active_level else ""}" >'
-                f'<div class="tabs" data-label="metric">{metric_btns}</div>'
-                f'{metric_tabs}'
+            table_panes.append(
+                f'<div id="{table_id}" class="table-pane {"active" if is_active_table else ""}" >'
+                f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
+                f'{"".join(level_panes)}'
                 f'</div>'
             )
         
         panes_html.append(
             f'<div id="{group_id}" class="group-pane {"active" if is_active_group else ""}" >'
-            f'<div class="tabs" data-label="level">{"".join(level_btns)}</div>'
-            f'{"".join(level_panes)}'
+            f'<div class="tabs" data-label="table_type">{"".join(table_btns)}</div>'
+            f'{"".join(table_panes)}'
             f'</div>'
         )
     
@@ -915,55 +934,53 @@ def generate_html_report(
     ts = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Top features tables (without SHAP data)
-    group_1_name = f"{group_col}={group_col_values[0]}"
-    group_2_name = f"{group_col}={group_col_values[1]}"
-    group_1_df = _prepare_features_table(
-        getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[0]],
-        max_features,
-        group_1_name
-    )
-    group_2_df = _prepare_features_table(
-        getattr(amplicon_data, 'top_features', {})[group_col][group_col_values[1]],
-        max_features,
-        group_2_name
-    )
-    
-    # Stats summary
-    stats_df = _prepare_stats_summary(
-        amplicon_data.stats
-    )
-    
-    # ML summary (includes SHAP reports)
-    ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
-        amplicon_data.models,
-        amplicon_data.top_features[group_col][group_col_values[0]],
-        amplicon_data.top_features[group_col][group_col_values[1]]
-    )
-    ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics is not None else "<p>No ML results available</p>"
-    
+
     tables_html = f"""
     <div class="subsection">
         <h3>Top Features</h3>
-        <h4>Features associated with {group_1_name}</h4>
-        {_add_table_functionality(group_1_df, f'{group_col_values[0]}-table')}
-        
-        <h4>Features Associated with {group_2_name}</h4>
-        {_add_table_functionality(group_2_df, f'{group_col_values[1]}-table')}
-    </div>
+    """
     
+    # Loop through top_features
+    for col, val_dict in amplicon_data.top_features.items():
+        for val, features in val_dict.items():
+            group_key = f"{col}={val}"
+            df = _prepare_features_table(features, max_features, group_key)  # Use loop variable
+            tables_html += f"""
+            <h4>Features associated with {group_key}</h4>
+            {_add_table_functionality(df, f'{group_key}-table')}
+            """
+    
+    # Stats summary
+    stats_df = _prepare_stats_summary(amplicon_data.stats)
+    
+    # ML summary (with safety checks)
+    if group_col in amplicon_data.top_features:
+        group_data = amplicon_data.top_features[group_col]
+        group1_data = group_data.get(group_col_values[0], None)
+        group2_data = group_data.get(group_col_values[1], None)
+        
+        ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
+            amplicon_data.models,
+            group1_data,
+            group2_data
+        )
+    else:
+        ml_metrics = None
+    
+    ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics else "<p>No ML results</p>"
+    
+    # Append final sections
+    tables_html += f"""
+    </div>
     <div class="subsection">
         <h3>Statistical Summary</h3>
         {_add_table_functionality(stats_df, 'stats-table')}
     </div>
-    
     <div class="subsection">
         <h3>Machine Learning Results</h3>
         {ml_html}
     </div>
     """
-
     id_counter = itertools.count()
     sections, plot_data = _prepare_sections(
         figures_dict, include_sections, id_counter
