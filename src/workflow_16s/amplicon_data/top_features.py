@@ -18,6 +18,10 @@ from workflow_16s.stats.tests import (
 )
 from workflow_16s.utils.data import update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+from workflow_16s.utils.data import (
+    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
+    update_table_and_meta, to_biom
+)
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
