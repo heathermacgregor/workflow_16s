@@ -77,7 +77,7 @@ def top_features_plots(
     
                         if config.get('violin_plots', {}).get('enabled', False):
                             # Create output directory
-                            feature_output_dir = output_dir / col / val / table_type / level
+                            feature_output_dir = output_dir / col / str(val) / table_type / level
                             feature_output_dir.mkdir(parents=True, exist_ok=True)
                             try:
                                 # Generate violin plot
