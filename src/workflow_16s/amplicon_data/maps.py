@@ -57,7 +57,7 @@ class Maps:
             if self.verbose:
                 logger.warning("Duplicate 'nfc_facility_data' argument in kwargs. Using explicit value.")
             del kwargs['nfc_facility_data']
-        if self.maps_config.get('enabled', False):
+        if not self.maps_config.get('enabled', False):
             return {}
         color_columns = self.color_columns
         if nfc_facility_data:
