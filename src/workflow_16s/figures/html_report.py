@@ -40,6 +40,7 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # ========================== PLOTLY SELECTOR INTEGRATION ========================== #
+
 def _generate_plotly_selector_html(figures_dict: Dict[str, Any], 
                                  container_id: str = "plotly-container",
                                  section_title: str = "Plots") -> str:
@@ -91,15 +92,8 @@ def _generate_plotly_selector_html(figures_dict: Dict[str, Any],
     figures_json = {}
     for key, fig in flat_figures.items():
         serialized = _convert_figure_to_serializable(fig)
-        if serialized['type'] == 'plotly':
-            # Store as Plotly JSON for the selector
-            figures_json[key] = json.dumps({
-                'data': serialized['data'],
-                'layout': serialized['layout']
-            })
-        else:
-            # For non-Plotly figures, we'll handle them differently
-            figures_json[key] = json.dumps(serialized)
+        # Use custom encoder for all figures
+        figures_json[key] = json.dumps(serialized, cls=NumpySafeJSONEncoder)  # Add encoder here
     
     # Create the selector options HTML
     selector_options = create_selector_options(figures_dict)
