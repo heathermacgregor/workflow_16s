@@ -218,7 +218,8 @@ class _AnalysisManager(_ProcessingMixin):
 
     # SAMPLE MAPS
     def _generate_sample_maps(self):
-        if self.config["maps"].get("enabled", False):
+        if self.config.get("maps", {}).get("enabled", False):
+            logger.info("Sample maps enabled")
             plotter = Maps(
                 self.config, 
                 self.meta, 
@@ -345,7 +346,8 @@ class _AnalysisManager(_ProcessingMixin):
         self
     ):
         if self.config.get('violin_plots', {}).get('enabled', False) or self.config.get('feature_maps', {}).get('enabled', False):
-            self.top_features = top_features_plots(
+            logger.info("Top features plots")
+            plots = top_features_plots(
                 output_dir=self.output_dir,
                 config=self.config,
                 top_features=self.top_features,
@@ -354,6 +356,7 @@ class _AnalysisManager(_ProcessingMixin):
                 nfc_facilities=self.nfc_facilities,
                 verbose=self.verbose
             )
+            self.top_features = plots
 
     # FUNCTIONAL ANNOTATION
     def _get_cached_faprotax(
