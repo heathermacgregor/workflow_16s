@@ -132,15 +132,19 @@ def _convert_figure_to_serializable(fig):
         logger.exception("Serializing figure failed")
         return {"type": "error", "error": str(exc)}
 
-def _convert_figures_tree_to_serializable(tree):
-    """Recursively convert figures tree to serializable structure"""
+def _flatten_figures_tree(tree, prefix="", delimiter=" - "):
+    """Flatten a nested figures tree into a list of (path, figure) tuples"""
+    flat = []
     if not isinstance(tree, dict):
-        return _convert_figure_to_serializable(tree)
+        return [("", tree)]
     
-    result = {}
     for key, value in tree.items():
-        result[key] = _convert_figures_tree_to_serializable(value)
-    return result
+        new_prefix = f"{prefix}{delimiter}{key}" if prefix else key
+        if isinstance(value, dict):
+            flat.extend(_flatten_figures_tree(value, new_prefix, delimiter))
+        else:
+            flat.append((new_prefix, value))
+    return flat
 
 def _prepare_sections(
     figures: Dict,
@@ -152,11 +156,21 @@ def _prepare_sections(
         if sec not in figures:
             continue
 
+        # Flatten the figures tree for this section
+        flat_figures = _flatten_figures_tree(figures[sec])
+        figure_data = {}
+        plot_ids = []
+        
+        for path, fig in flat_figures:
+            plot_id = f"plot-{uuid.uuid4().hex}"
+            figure_data[plot_id] = _convert_figure_to_serializable(fig)
+            plot_ids.append((path, plot_id))
+
         sec_data = {
             "id": f"sec-{uuid.uuid4().hex}", 
             "title": sec.title(), 
-            "container_id": f"tabs-container-{sec}",
-            "figures": _convert_figures_tree_to_serializable(figures[sec])
+            "plot_ids": plot_ids,
+            "figures": figure_data
         }
 
         sections.append(sec_data)
@@ -164,6 +178,15 @@ def _prepare_sections(
     return sections
 
 def _section_html(sec: Dict) -> str:
+    # Generate dropdown options
+    options = []
+    for i, (path, plot_id) in enumerate(sec["plot_ids"]):
+        selected = "selected" if i == 0 else ""
+        options.append(f'<option value="{plot_id}" {selected}>{path}</option>')
+    
+    # First plot ID for initial display
+    first_plot_id = sec["plot_ids"][0][1] if sec["plot_ids"] else ""
+    
     return f'''
     <div class="section" id="{sec["id"]}">
         <div class="section-header" onclick="toggleSection(event)">
@@ -172,7 +195,14 @@ def _section_html(sec: Dict) -> str:
         </div>
         <div class="section-content" id="{sec["id"]}-content">
             <div class="subsection">
-                <div id="{sec["container_id"]}" class="tab-manager-container"></div>
+                <div class="figure-selector">
+                    <select class="figure-dropdown" onchange="showFigure(this, '{sec["id"]}-container')">
+                        {''.join(options)}
+                    </select>
+                </div>
+                <div id="{sec["id"]}-container" class="figure-container">
+                    {f'<div id="container-{first_plot_id}" class="plot-container"></div>' if first_plot_id else ''}
+                </div>
             </div>
         </div>
     </div>
@@ -497,7 +527,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange='changePageSize('{table_id}' this.value)'>
+                <select class='rows-per-page' onchange='changePageSize("{table_id}", this.value)'>
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -613,7 +643,7 @@ def generate_html_report(
     # Prepare plot data dictionary
     plot_data = {}
     for sec in sections:
-        plot_data[sec['title'].lower()] = sec['figures']
+        plot_data.update(sec["figures"])
     
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")
