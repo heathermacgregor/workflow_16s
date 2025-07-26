@@ -1,20 +1,50 @@
 // ============================= INITIALIZATION ============================= //
 document.addEventListener('DOMContentLoaded', () => {
-    // Parse plot data from the embedded JSON
+    // Parse plot data from the embedded JSON (legacy support)
     const plotDataElement = document.getElementById('plot-data');
     window.plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : {};
     
-    // Initialize dropdowns
-    document.querySelectorAll('.figure-dropdown').forEach(dropdown => {
-        // Show first option by default
+    // Initialize legacy dropdowns (backward compatibility)
+    document.querySelectorAll('.figure-dropdown:not(.plotly-selector-container .figure-dropdown)').forEach(dropdown => {
         const firstOption = dropdown.options[0];
         if (firstOption) {
             showFigure(dropdown, dropdown.dataset.containerId || dropdown.closest('.figure-container').id);
         }
     });
     
-    // Initialize all dynamic tables
-    document.querySelectorAll('.dynamic-table').forEach(table => {
+    // Initialize all dynamic tables with improved performance
+    initializeTables();
+    
+    // Initialize Plotly selectors
+    initializePlotlySelectors();
+});
+
+// ========================== PLOTLY SELECTOR INITIALIZATION ========================== //
+function initializePlotlySelectors() {
+    document.querySelectorAll('.plotly-selector-container').forEach(container => {
+        const selector = container.querySelector('.figure-dropdown');
+        const plotDiv = container.querySelector('.plotly-selector-plot');
+        
+        if (selector && selector.options.length > 0) {
+            // Trigger initial plot display
+            const firstOption = selector.options[0];
+            if (firstOption) {
+                selector.value = firstOption.value;
+                // The plot will be displayed by the embedded script in each selector
+            }
+        }
+    });
+}
+
+// ============================ IMPROVED TABLE INITIALIZATION ============================ //
+function initializeTables() {
+    const tables = document.querySelectorAll('.dynamic-table');
+    
+    // Use requestAnimationFrame to prevent blocking
+    const initTable = (index) => {
+        if (index >= tables.length) return;
+        
+        const table = tables[index];
         makeTableSortable(table);
         makeTableResizable(table);
         
@@ -27,10 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePagination(tableId, parseInt(select.value, 10), 0);
             }
         }
-    });
-});
+        
+        // Process next table asynchronously
+        requestAnimationFrame(() => initTable(index + 1));
+    };
+    
+    initTable(0);
+}
 
-// ============================ PLOT RENDERING ============================ //
+// ============================ LEGACY PLOT RENDERING ============================ //
 function showFigure(dropdown, containerId) {
     const plotId = dropdown.value;
     const container = document.getElementById(containerId);
@@ -60,19 +95,24 @@ function initializePlot(plotId) {
 
     switch(plotInfo.type) {
         case 'plotly':
-            Plotly.newPlot(container, plotInfo.data, plotInfo.layout, { responsive: true });
+            Plotly.newPlot(container, plotInfo.data, plotInfo.layout, { 
+                responsive: true,
+                displayModeBar: false
+            });
             break;
         case 'image':
             const img = document.createElement('img');
             img.src = `data:image/png;base64,${plotInfo.data}`;
             img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.alt = 'Generated plot';
             container.appendChild(img);
             break;
         case 'error':
-            container.innerHTML = `<div class="error">Error: ${plotInfo.error}</div>`;
+            container.innerHTML = `<div class="error-message">Error: ${plotInfo.error}</div>`;
             break;
         default:
-            container.innerHTML = `<div class="error">Unsupported plot type: ${plotInfo.type}</div>`;
+            container.innerHTML = `<div class="error-message">Unsupported plot type: ${plotInfo.type}</div>`;
     }
 }
 
@@ -81,6 +121,16 @@ function toggleSection(event) {
     const header = event.currentTarget;
     const section = header.closest('.section');
     section.classList.toggle('collapsed');
+    
+    // Trigger resize event for any Plotly plots in the section
+    setTimeout(() => {
+        const plotlyDivs = section.querySelectorAll('.js-plotly-plot');
+        plotlyDivs.forEach(div => {
+            if (window.Plotly) {
+                Plotly.Plots.resize(div);
+            }
+        });
+    }, 400); // Wait for CSS transition to complete
 }
 
 function toggleAllSections(expand) {
@@ -91,84 +141,154 @@ function toggleAllSections(expand) {
             section.classList.add('collapsed');
         }
     });
+    
+    // Trigger resize for visible plots after expansion
+    if (expand) {
+        setTimeout(() => {
+            document.querySelectorAll('.js-plotly-plot').forEach(div => {
+                if (window.Plotly) {
+                    Plotly.Plots.resize(div);
+                }
+            });
+        }, 500);
+    }
 }
 
-// ============================== TABLE SORTING =============================== //
+// ============================== IMPROVED TABLE SORTING =============================== //
 function makeTableSortable(table) {
     const headers = table.querySelectorAll('th');
+    
     headers.forEach((header, index) => {
-        header.addEventListener('click', () => {
-            const sortDir = header.classList.contains('asc') ? 'desc' : 'asc';
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-
-            const sortedRows = rows.sort((a, b) => {
-                const aText = a.cells[index].textContent.trim();
-                const bText = b.cells[index].textContent.trim();
-
-                const aNum = parseFloat(aText);
-                const bNum = parseFloat(bText);
-
-                if (!isNaN(aNum) && !isNaN(bNum)) {
-                    return aNum > bNum ? 1 : -1;
-                }
-                return aText.localeCompare(bText, undefined, { numeric: true });
+        // Skip if header already has click listener
+        if (header.dataset.sortable === 'true') return;
+        header.dataset.sortable = 'true';
+        
+        header.addEventListener('click', (e) => {
+            // Don't sort if clicking on resize handle
+            if (e.target.classList.contains('resizable-handle')) return;
+            
+            const currentSort = header.dataset.sortDirection || 'none';
+            const newSort = currentSort === 'asc' ? 'desc' : 'asc';
+            
+            sortTableByColumn(table, index, newSort);
+            
+            // Update header indicators
+            headers.forEach(h => {
+                h.classList.remove('asc', 'desc');
+                h.dataset.sortDirection = 'none';
             });
-
-            if (sortDir === 'desc') {
-                sortedRows.reverse();
+            
+            header.classList.add(newSort);
+            header.dataset.sortDirection = newSort;
+            
+            // Reset pagination to first page after sorting
+            const container = table.closest('.table-container');
+            const select = container?.querySelector('.rows-per-page');
+            if (select && table.id) {
+                updatePagination(table.id, parseInt(select.value), 0);
             }
-
-            // Re-append sorted rows
-            tbody.innerHTML = '';
-            tbody.append(...sortedRows);
-            
-            // Update header classes
-            headers.forEach(h => h.classList.remove('asc', 'desc'));
-            header.classList.add(sortDir);
-            
-            // Reset pagination to first page
-            const select = table.closest('.table-container').querySelector('.rows-per-page');
-            updatePagination(table.id, parseInt(select.value), 0);
         });
     });
 }
 
-// ============================ TABLE COLUMN RESIZING =========================== //
+function sortTableByColumn(table, columnIndex, direction) {
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    const sortedRows = rows.sort((a, b) => {
+        const aCell = a.cells[columnIndex];
+        const bCell = b.cells[columnIndex];
+        
+        if (!aCell || !bCell) return 0;
+        
+        const aText = aCell.textContent.trim();
+        const bText = bCell.textContent.trim();
+        
+        // Try numeric comparison first
+        const aNum = parseFloat(aText);
+        const bNum = parseFloat(bText);
+        
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        
+        // Fall back to string comparison
+        const result = aText.localeCompare(bText, undefined, { 
+            numeric: true, 
+            sensitivity: 'base' 
+        });
+        
+        return direction === 'asc' ? result : -result;
+    });
+    
+    // Use DocumentFragment for efficient DOM manipulation
+    const fragment = document.createDocumentFragment();
+    sortedRows.forEach(row => fragment.appendChild(row));
+    tbody.appendChild(fragment);
+}
+
+// ============================ IMPROVED TABLE COLUMN RESIZING =========================== //
 function makeTableResizable(table) {
     const headers = table.querySelectorAll('th');
+    
     headers.forEach(header => {
+        // Skip if already has resize handle
+        if (header.querySelector('.resizable-handle')) return;
+        
         const handle = document.createElement('div');
         handle.className = 'resizable-handle';
         header.appendChild(handle);
 
-        let startX, startWidth;
+        let startX, startWidth, isResizing = false;
 
         const onMouseMove = (e) => {
-            const newWidth = startWidth + (e.clientX - startX);
-            if (newWidth > 40) { // Minimum width
-                header.style.width = `${newWidth}px`;
-            }
+            if (!isResizing) return;
+            
+            const newWidth = Math.max(50, startWidth + (e.clientX - startX));
+            header.style.width = `${newWidth}px`;
+            
+            // Prevent text selection during resize
+            e.preventDefault();
         };
 
         const onMouseUp = () => {
+            if (!isResizing) return;
+            
+            isResizing = false;
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
         };
 
         handle.addEventListener('mousedown', (e) => {
             e.stopPropagation(); // Prevent sorting
+            e.preventDefault();
+            
+            isResizing = true;
             startX = e.clientX;
             startWidth = header.offsetWidth;
+            
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
         });
     });
 }
 
-// ============================ TABLE PAGINATION ============================== //
+// ============================ IMPROVED TABLE PAGINATION ============================== //
 function changePageSize(tableId, size) {
-    updatePagination(tableId, parseInt(size, 10), 0);
+    const sizeInt = parseInt(size, 10);
+    updatePagination(tableId, sizeInt, 0);
+    
+    // Store preference in localStorage if available
+    try {
+        localStorage.setItem(`pageSize_${tableId}`, size);
+    } catch (e) {
+        // Ignore localStorage errors
+    }
 }
 
 function goToPage(tableId, pageSize, pageIndex) {
@@ -185,34 +305,144 @@ function updatePagination(tableId, pageSize, pageIndex) {
     const isPaginated = pageSize > 0 && totalRows > pageSize;
     
     const totalPages = isPaginated ? Math.ceil(totalRows / pageSize) : 1;
-    pageIndex = Math.min(pageIndex, totalPages - 1);
+    const currentPage = Math.min(Math.max(0, pageIndex), totalPages - 1);
 
-    const start = isPaginated ? pageIndex * pageSize : 0;
-    const end = isPaginated ? start + pageSize : totalRows;
+    const start = isPaginated ? currentPage * pageSize : 0;
+    const end = isPaginated ? Math.min(start + pageSize, totalRows) : totalRows;
 
-    // Show/hide rows
+    // Show/hide rows efficiently
     rows.forEach((row, i) => {
         row.style.display = (i >= start && i < end) ? '' : 'none';
     });
 
     // Update controls
-    const container = table.closest('.table-container');
+    updatePaginationControls(tableId, totalPages, currentPage, totalRows, start, end);
+}
+
+function updatePaginationControls(tableId, totalPages, currentPage, totalRows, start, end) {
+    const container = document.getElementById(tableId)?.closest('.table-container');
+    if (!container) return;
+    
     const paginationContainer = container.querySelector(`#pagination-${tableId}`);
     const indicator = container.querySelector(`#indicator-${tableId}`);
     
     if (!paginationContainer || !indicator) return;
 
+    // Clear previous buttons
     paginationContainer.innerHTML = '';
-    if (isPaginated) {
-        for (let i = 0; i < totalPages; i++) {
-            const btn = document.createElement('button');
-            btn.textContent = i + 1;
-            btn.className = 'pagination-btn' + (i === pageIndex ? ' active' : '');
-            btn.onclick = () => goToPage(tableId, pageSize, i);
-            paginationContainer.appendChild(btn);
-        }
-        indicator.textContent = `Page ${pageIndex + 1} of ${totalPages}`;
+    
+    if (totalPages > 1) {
+        // Create pagination buttons with smart truncation
+        createPaginationButtons(paginationContainer, tableId, totalPages, currentPage);
+        indicator.textContent = `Showing ${start + 1}-${end} of ${totalRows} rows`;
     } else {
         indicator.textContent = `Showing all ${totalRows} rows`;
     }
 }
+
+function createPaginationButtons(container, tableId, totalPages, currentPage) {
+    const maxVisibleButtons = 7;
+    
+    // Previous button
+    if (currentPage > 0) {
+        const prevBtn = createPaginationButton('‹', () => goToPage(tableId, getPageSize(tableId), currentPage - 1));
+        prevBtn.title = 'Previous page';
+        container.appendChild(prevBtn);
+    }
+    
+    // Calculate visible page range
+    let startPage = Math.max(0, currentPage - Math.floor(maxVisibleButtons / 2));
+    let endPage = Math.min(totalPages - 1, startPage + maxVisibleButtons - 1);
+    
+    // Adjust start if we're near the end
+    if (endPage - startPage < maxVisibleButtons - 1) {
+        startPage = Math.max(0, endPage - maxVisibleButtons + 1);
+    }
+    
+    // First page + ellipsis
+    if (startPage > 0) {
+        container.appendChild(createPaginationButton(1, () => goToPage(tableId, getPageSize(tableId), 0)));
+        if (startPage > 1) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.className = 'pagination-ellipsis';
+            container.appendChild(ellipsis);
+        }
+    }
+    
+    // Page buttons
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = createPaginationButton(i + 1, () => goToPage(tableId, getPageSize(tableId), i));
+        if (i === currentPage) {
+            btn.classList.add('active');
+        }
+        container.appendChild(btn);
+    }
+    
+    // Ellipsis + last page
+    if (endPage < totalPages - 1) {
+        if (endPage < totalPages - 2) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.className = 'pagination-ellipsis';
+            container.appendChild(ellipsis);
+        }
+        container.appendChild(createPaginationButton(totalPages, () => goToPage(tableId, getPageSize(tableId), totalPages - 1)));
+    }
+    
+    // Next button
+    if (currentPage < totalPages - 1) {
+        const nextBtn = createPaginationButton('›', () => goToPage(tableId, getPageSize(tableId), currentPage + 1));
+        nextBtn.title = 'Next page';
+        container.appendChild(nextBtn);
+    }
+}
+
+function createPaginationButton(text, onClick) {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.className = 'pagination-btn';
+    btn.onclick = onClick;
+    return btn;
+}
+
+function getPageSize(tableId) {
+    const container = document.getElementById(tableId)?.closest('.table-container');
+    const select = container?.querySelector('.rows-per-page');
+    return select ? parseInt(select.value, 10) : 10;
+}
+
+// ============================ UTILITY FUNCTIONS ============================== //
+
+// Debounce function for performance optimization
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Handle window resize for responsive tables
+window.addEventListener('resize', debounce(() => {
+    // Resize Plotly plots
+    document.querySelectorAll('.js-plotly-plot').forEach(div => {
+        if (window.Plotly) {
+            Plotly.Plots.resize(div);
+        }
+    });
+}, 250));
+
+// Export functions for external access
+window.TableUtils = {
+    toggleSection,
+    toggleAllSections,
+    changePageSize,
+    goToPage,
+    showFigure,
+    initializePlot
+};
