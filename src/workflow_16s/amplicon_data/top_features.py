@@ -22,7 +22,7 @@ from workflow_16s.utils.data import (
     clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
     update_table_and_meta, to_biom
 )
-
+from workflow_16s.figures.merged import create_feature_abundance_map, violin_feature
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
