@@ -52,13 +52,13 @@ def top_features_plots(
                 groupval_desc = f"Processing '{col}'={val} features"
                 groupval_task = progress.add_task(_format_task_desc(groupval_desc), total=len(features))
                 for i, feature in enumerate(features[:n]):
-                    print(feature)
-                    print(type(feature))
+                    logger.info(feature)
+                    logger.info(type(feature))
                     table_type = feature['table_type']
                     level = feature['level']
                     feature_name = feature['feature']
                     try:
-                        top_features[col][val][features[i]]['figures'] = {}
+                        features[i]['figures'] = {}
                         logger.info(top_features[col][val][features[i]])                
                         # Get the table and convert to DataFrame
                         biom_table = tables[table_type][level]
@@ -90,10 +90,10 @@ def top_features_plots(
                                     output_dir=feature_output_dir,
                                     status_col=col
                                 )
-                                top_features[col][val][features[i]]['figures']['violin'] = fig
+                                features[i]['figures']['violin'] = fig
                             except Exception as e:
                                 logger.error(f"Failed violin plot for {feature_name} at {level} level: {e}")
-                                top_features[col][val][features[i]]['figures']['violin'] = None
+                                features[i]['figures']['violin'] = None
     
                         if config.get('feature_maps', {}).get('enabled', False):
                             try:
@@ -107,16 +107,16 @@ def top_features_plots(
                                     show=False,
                                     verbose=verbose
                                 )
-                                top_features[col][val][features[i]]['figures']['abundance_map'] = fig_map
+                                features[i]['figures']['abundance_map'] = fig_map
                             except Exception as e:
                                 logger.error(f"Failed feature map for {feature_name} at {level} level: {e}")
-                                top_features[col][val][features[i]]['figures']['abundance_map'] = None
+                                features[i]['figures']['abundance_map'] = None
                               
                     except Exception as e:
                         logger.error(
                             f"Failed plots for {feature_name} at {table_type}/{level}: {str(e)}"
                         )
-                        top_features[col][val][features[i]]['figures'] = None
+                        features[i]['figures'] = None
                     finally:
                         progress.update(groupval_task, advance=1)
         progress.update(groupval_task, description=_format_task_desc(groupval_desc))    
