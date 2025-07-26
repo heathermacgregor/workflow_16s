@@ -126,7 +126,7 @@ class FeatureSelection:
                         )
                         data_storage[method] = None
                     else:
-                        table = self.table[table_type][level]
+                        table = self.tables[table_type][level]
                         X = table_to_df(table)
                         X.index = X.index.str.lower()
                         y = self.meta.set_index("#sampleid")[[self.group_column]]
