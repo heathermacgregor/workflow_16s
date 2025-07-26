@@ -438,17 +438,15 @@ th {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: center;
     color: #3498db;
-    font-weight: bold;
 }
 
 .section-content {
     padding: 25px;
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
-                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                opacity 0.3s ease;
+                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     max-height: 5000px;
-    opacity: 1;
+    background: white;
 }
 
 .section.collapsed .section-content {
@@ -457,7 +455,6 @@ th {
     padding-bottom: 0;
     border-top: 0;
     overflow: hidden;
-    opacity: 0;
 }
 
 .section.collapsed .toggle-icon {
@@ -478,7 +475,7 @@ th {
 
 .selector-controls {
     margin-bottom: 0;
-    padding: 20px 25px;
+    padding: 20px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #dee2e6;
     display: flex;
@@ -490,18 +487,17 @@ th {
 .selector-label {
     font-weight: 600;
     margin: 0;
-    color: #2c3e50;
-    font-size: 15px;
+    color: #495057;
+    font-size: 16px;
 }
 
 .plotly-selector-container .figure-dropdown {
     padding: 10px 16px;
-    border: 2px solid #dee2e6;
+    border: 1px solid #dee2e6;
     border-radius: 8px;
     background: white;
     min-width: 280px;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -509,7 +505,7 @@ th {
 
 .plotly-selector-container .figure-dropdown:hover {
     border-color: #3498db;
-    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.2);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
 }
 
 .plotly-selector-container .figure-dropdown:focus {
@@ -522,46 +518,51 @@ th {
     width: 100%;
     min-height: 600px;
     background: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
     padding: 20px;
 }
 
 .plotly-selector-plot img {
     max-width: 100%;
     height: auto;
+    border: 1px solid #e0e0e0;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 /* ============================== LEGACY FIGURE SELECTOR STYLES ============================== */
 .figure-selector {
     margin-bottom: 20px;
-    padding: 15px;
     background: #f8f9fa;
+    padding: 15px;
     border-radius: 8px;
     border: 1px solid #dee2e6;
 }
 
-.figure-dropdown:not(.plotly-selector-container .figure-dropdown) {
+.figure-dropdown {
     width: 100%;
     padding: 12px 16px;
     font-size: 16px;
-    border: 2px solid #dee2e6;
+    border: 1px solid #dee2e6;
     border-radius: 8px;
     background: white;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.figure-dropdown:not(.plotly-selector-container .figure-dropdown):hover {
+.figure-dropdown:hover {
     border-color: #3498db;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
 }
 
-.figure-container:not(.plotly-selector-container .figure-container) {
+.figure-dropdown:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.figure-container {
     width: 100%;
     min-height: 500px;
     border: 1px solid #e0e0e0;
@@ -585,27 +586,19 @@ th {
 /* ============================== RESPONSIVE DESIGN ============================== */
 @media (max-width: 1024px) {
     .plotly-selector-container .figure-dropdown {
-        min-width: 250px;
+        min-width: 240px;
     }
     
     .selector-controls {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start;
         gap: 10px;
-    }
-    
-    .selector-label {
-        text-align: center;
     }
 }
 
 @media (max-width: 768px) {
     body {
         margin: 15px;
-    }
-    
-    .section {
-        margin-bottom: 20px;
     }
     
     .section-header {
@@ -623,7 +616,7 @@ th {
     
     .plotly-selector-container .figure-dropdown {
         min-width: 200px;
-        font-size: 13px;
+        font-size: 14px;
     }
     
     .plotly-selector-plot {
@@ -633,17 +626,13 @@ th {
     
     .table-controls {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start;
         gap: 15px;
     }
     
     .pagination-controls {
         justify-content: center;
-        flex-wrap: wrap;
-    }
-    
-    .ml-section {
-        padding: 20px;
+        width: 100%;
     }
     
     th, td {
@@ -662,13 +651,17 @@ th {
     }
     
     .toc a {
-        padding: 10px 12px;
+        padding: 8px 12px;
         font-size: 14px;
     }
     
-    .plotly-selector-plot {
-        min-height: 300px;
-        padding: 10px;
+    .plotly-selector-container .figure-dropdown {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .selector-controls {
+        padding: 15px;
     }
     
     .pagination-btn {
@@ -678,25 +671,25 @@ th {
     }
 }
 
-/* ============================== LOADING AND TRANSITIONS ============================== */
-.plot-loading {
+/* ============================== LOADING STATES ============================== */
+.loading {
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     min-height: 200px;
     color: #6c757d;
-    font-size: 16px;
+    font-style: italic;
 }
 
-.plot-loading::before {
+.loading::after {
     content: '';
     width: 20px;
     height: 20px;
+    margin-left: 10px;
     border: 2px solid #e9ecef;
     border-top: 2px solid #3498db;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-right: 10px;
 }
 
 @keyframes spin {
@@ -717,81 +710,48 @@ th {
     border: 0;
 }
 
-/* Focus indicators */
-button:focus,
-select:focus,
-.section-header:focus {
+button:focus, select:focus {
     outline: 2px solid #3498db;
     outline-offset: 2px;
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-    .section {
-        border: 2px solid #000;
-    }
-    
-    .toc a {
-        border: 1px solid #000;
-    }
-    
-    .pagination-btn {
-        border: 2px solid #000;
-    }
-}
-
-/* Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-    
-    .toggle-icon {
-        transition: none;
-    }
-    
-    .section-content {
-        transition: none;
-    }
+.pagination-btn:focus {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
 }
 
 /* ============================== PRINT STYLES ============================== */
 @media print {
     body {
         margin: 0;
-        font-size: 12pt;
-        line-height: 1.4;
+        background: white;
     }
     
     .section {
-        page-break-inside: avoid;
         box-shadow: none;
-        border: 1px solid #000;
+        border: 1px solid #ccc;
+        page-break-inside: avoid;
     }
     
     .section-header {
-        background: #f0f0f0 !important;
+        background: #f5f5f5 !important;
     }
     
-    .toc {
-        page-break-after: always;
-    }
-    
-    .pagination-controls,
-    .section-controls {
+    .toggle-icon {
         display: none;
     }
     
     .section.collapsed .section-content {
         max-height: none !important;
-        padding: 15px !important;
-        opacity: 1 !important;
+        padding: 20px !important;
+        display: block !important;
     }
     
-    .plotly-selector-plot,
-    .figure-container {
-        page-break-inside: avoid;
+    .pagination-controls {
+        display: none;
+    }
+    
+    .dynamic-table tbody tr {
+        display: table-row !important;
     }
 }
