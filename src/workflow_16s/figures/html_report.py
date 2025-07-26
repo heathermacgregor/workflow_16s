@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 from plotly.offline import get_plotlyjs_version
+import plotly.io as pio
 
 from workflow_16s.utils.io import import_js_as_str
 
@@ -37,6 +38,124 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         if isinstance(obj, np.bool_):
             return bool(obj)
         return super().default(obj)
+
+# ========================== PLOTLY SELECTOR INTEGRATION ========================== #
+def _generate_plotly_selector_html(figures_dict: Dict[str, Any], 
+                                 container_id: str = "plotly-container",
+                                 section_title: str = "Plots") -> str:
+    """
+    Generate HTML with interactive selection UI for nested dictionary of Plotly figures.
+    Integrated version for the amplicon analysis report.
+    """
+    
+    def flatten_dict(d: Dict, parent_key: str = '', sep: str = ' > ') -> Dict[str, Any]:
+        """Flatten nested dictionary and create display labels"""
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict) and not hasattr(v, 'to_plotly_json'):
+                items.extend(flatten_dict(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
+    
+    def create_selector_options(d: Dict, parent_key: str = '', level: int = 0) -> str:
+        """Create hierarchical option elements for the selector"""
+        options_html = ""
+        indent = "  " * level
+        
+        for key, value in d.items():
+            full_key = f"{parent_key} > {key}" if parent_key else key
+            
+            if isinstance(value, dict) and not hasattr(value, 'to_plotly_json'):
+                # Create optgroup for nested dictionaries
+                options_html += f'{indent}<optgroup label="{key}">\n'
+                options_html += create_selector_options(value, full_key, level + 1)
+                options_html += f'{indent}</optgroup>\n'
+            else:
+                # Create option for figure
+                options_html += f'{indent}<option value="{full_key}">{key}</option>\n'
+        
+        return options_html
+    
+    # Flatten the dictionary to get all figures with their paths
+    flat_figures = flatten_dict(figures_dict)
+    
+    if not flat_figures:
+        return f'<div id="{container_id}">No valid figures found in {section_title.lower()}.</div>'
+    
+    # Get the first figure to display initially
+    first_key = list(flat_figures.keys())[0]
+    
+    # Convert all figures to JSON using existing conversion function
+    figures_json = {}
+    for key, fig in flat_figures.items():
+        serialized = _convert_figure_to_serializable(fig)
+        if serialized['type'] == 'plotly':
+            # Store as Plotly JSON for the selector
+            figures_json[key] = json.dumps({
+                'data': serialized['data'],
+                'layout': serialized['layout']
+            })
+        else:
+            # For non-Plotly figures, we'll handle them differently
+            figures_json[key] = json.dumps(serialized)
+    
+    # Create the selector options HTML
+    selector_options = create_selector_options(figures_dict)
+    
+    # Generate the HTML with integrated styling
+    html_template = f"""
+<div id="{container_id}" class="plotly-selector-container">
+    <div class="selector-controls">
+        <label for="{container_id}-selector" class="selector-label">Select {section_title}:</label>
+        <select id="{container_id}-selector" class="figure-dropdown">
+{selector_options}        </select>
+    </div>
+    <div id="{container_id}-plot" class="plotly-selector-plot"></div>
+</div>
+
+<script>
+(function() {{
+    // Store figures data for {container_id}
+    const figuresData_{container_id.replace('-', '_')} = {json.dumps(figures_json)};
+    
+    // Get DOM elements
+    const selector = document.getElementById('{container_id}-selector');
+    const plotDiv = document.getElementById('{container_id}-plot');
+    
+    // Function to display a plot
+    function displayPlot_{container_id.replace('-', '_')}(figureKey) {{
+        if (figuresData_{container_id.replace('-', '_')}[figureKey]) {{
+            const figureData = JSON.parse(figuresData_{container_id.replace('-', '_')}[figureKey]);
+            
+            if (figureData.type === 'plotly') {{
+                // Handle Plotly figures
+                Plotly.newPlot(plotDiv, figureData.data, figureData.layout, {{responsive: true}});
+            }} else if (figureData.type === 'image') {{
+                // Handle matplotlib/image figures
+                plotDiv.innerHTML = `<img src="data:image/png;base64,${{figureData.data}}" style="max-width: 100%; height: auto;" alt="Plot">`;
+            }} else if (figureData.type === 'error') {{
+                // Handle errors
+                plotDiv.innerHTML = `<div class="error-message">Error loading figure: ${{figureData.error}}</div>`;
+            }}
+        }}
+    }}
+    
+    // Event listener for selector change
+    selector.addEventListener('change', function() {{
+        displayPlot_{container_id.replace('-', '_')}(this.value);
+    }});
+    
+    // Display initial plot
+    if (selector.value) {{
+        displayPlot_{container_id.replace('-', '_')}(selector.value);
+    }}
+}})();
+</script>
+"""
+    
+    return html_template
 
 # ================================== CORE HELPERS =================================== #
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
@@ -153,24 +272,21 @@ def _prepare_sections(
     sections = []
 
     for sec in include_sections:
-        if sec not in figures:
+        if sec not in figures or not figures[sec]:
             continue
 
-        # Flatten the figures tree for this section
-        flat_figures = _flatten_figures_tree(figures[sec])
-        figure_data = {}
-        plot_ids = []
-        
-        for path, fig in flat_figures:
-            plot_id = f"plot-{uuid.uuid4().hex}"
-            figure_data[plot_id] = _convert_figure_to_serializable(fig)
-            plot_ids.append((path, plot_id))
+        # Use the new Plotly selector for this section
+        container_id = f"plotly-selector-{sec}"
+        section_html = _generate_plotly_selector_html(
+            figures[sec], 
+            container_id, 
+            sec.title()
+        )
 
         sec_data = {
             "id": f"sec-{uuid.uuid4().hex}", 
             "title": sec.title(), 
-            "plot_ids": plot_ids,
-            "figures": figure_data
+            "html_content": section_html  # Store the complete HTML
         }
 
         sections.append(sec_data)
@@ -178,15 +294,7 @@ def _prepare_sections(
     return sections
 
 def _section_html(sec: Dict) -> str:
-    # Generate dropdown options
-    options = []
-    for i, (path, plot_id) in enumerate(sec["plot_ids"]):
-        selected = "selected" if i == 0 else ""
-        options.append(f'<option value="{plot_id}" {selected}>{path}</option>')
-    
-    # First plot ID for initial display
-    first_plot_id = sec["plot_ids"][0][1] if sec["plot_ids"] else ""
-    
+    """Generate section HTML using the integrated Plotly selector"""
     return f'''
     <div class="section" id="{sec["id"]}">
         <div class="section-header" onclick="toggleSection(event)">
@@ -195,14 +303,7 @@ def _section_html(sec: Dict) -> str:
         </div>
         <div class="section-content" id="{sec["id"]}-content">
             <div class="subsection">
-                <div class="figure-selector">
-                    <select class="figure-dropdown" onchange="showFigure(this, '{sec["id"]}-container')">
-                        {''.join(options)}
-                    </select>
-                </div>
-                <div id="{sec["id"]}-container" class="figure-container">
-                    {f'<div id="container-{first_plot_id}" class="plot-container"></div>' if first_plot_id else ''}
-                </div>
+                {sec["html_content"]}
             </div>
         </div>
     </div>
@@ -527,7 +628,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange='changePageSize("{table_id}", this.value)'>
+                <select class='rows-per-page' onchange='changePageSize('{table_id}', this.value)'>
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -541,7 +642,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         </div>
     </div>
     """
-    
+
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -640,13 +741,8 @@ def generate_html_report(
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
 
-    # Prepare plot data dictionary
-    plot_data = {}
-    for sec in sections:
-        plot_data.update(sec["figures"])
-    
-    payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
-    payload = payload.replace("</", "<\\/")
+    # Note: We no longer need to prepare a separate plot_data dictionary 
+    # since the Plotly selector handles its own data internally
     
     try:
         table_js = import_js_as_str(tables_js_path)
@@ -656,6 +752,59 @@ def generate_html_report(
     
     try:
         css_content = css_path.read_text(encoding='utf-8') 
+        # Add additional CSS for the Plotly selector
+        additional_css = """
+        
+        /* Plotly Selector Styles */
+        .plotly-selector-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+        }
+        
+        .selector-controls {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .selector-label {
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .plotly-selector-container .figure-dropdown {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-width: 250px;
+            font-size: 14px;
+        }
+        
+        .plotly-selector-plot {
+            width: 100%;
+            min-height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
+        }
+        
+        .error-message {
+            padding: 20px;
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        """
+        css_content += additional_css
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
         css_content = ""
@@ -678,9 +827,101 @@ def generate_html_report(
         nav_html=nav_html,
         tables_html=tables_html,
         sections_html=sections_html,
-        plot_data_json=payload,
+        plot_data_json="{}",  # Empty since selectors handle their own data
         table_js=table_js,
         css_content=css_content
     )
         
     output_path.write_text(html, encoding="utf-8")
+
+# ========================== ADDITIONAL UTILITY FUNCTIONS ========================== #
+
+def create_standalone_plotly_selector(figures_dict: Dict[str, Any], 
+                                    title: str = "Interactive Plotly Dashboard",
+                                    output_path: Optional[Union[str, Path]] = None) -> str:
+    """
+    Create a standalone HTML page with just the Plotly selector.
+    Useful for testing or creating focused figure viewers.
+    """
+    
+    selector_html = _generate_plotly_selector_html(figures_dict, "main-dashboard", title)
+    
+    try:
+        plotly_ver = get_plotlyjs_version()
+    except Exception:
+        plotly_ver = "3.0.1"
+    
+    complete_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>
+    <style>
+        body {{
+            margin: 20px;
+            background-color: #ffffff;
+            font-family: Arial, sans-serif;
+        }}
+        
+        .plotly-selector-container {{
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        
+        .selector-controls {{
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .selector-label {{
+            font-weight: bold;
+            margin: 0;
+        }}
+        
+        .figure-dropdown {{
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-width: 250px;
+            font-size: 14px;
+        }}
+        
+        .plotly-selector-plot {{
+            width: 100%;
+            min-height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }}
+        
+        .error-message {{
+            padding: 20px;
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }}
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #333;">{title}</h1>
+    {selector_html}
+</body>
+</html>
+"""
+    
+    if output_path:
+        Path(output_path).write_text(complete_html, encoding="utf-8")
+        logger.info(f"Standalone Plotly selector saved to {output_path}")
+    
+    return complete_html
