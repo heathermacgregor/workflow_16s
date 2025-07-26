@@ -230,7 +230,7 @@ class _AnalysisManager(_ProcessingMixin):
                 nfc_facility_data=self.nfc_facilities
             )
             logger.info(maps)
-            self.maps = maps
+            plotter.maps = maps
 
     # ALPHA DIVERSITY
     def _run_alpha_diversity(self) -> None:
