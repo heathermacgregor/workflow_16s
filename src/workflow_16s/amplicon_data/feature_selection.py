@@ -145,7 +145,7 @@ class FeatureSelection:
                             n_top_features=self.n_top_features,
                             step_size=self.step_size,
                             use_permutation_importance=use_permutation_importance,
-                            thread_count=n_threads,
+                            thread_count=self.n_threads,
                             progress=progress, 
                             task_id=cb_task,
                         )
