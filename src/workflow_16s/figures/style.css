@@ -1,110 +1,574 @@
-/* BASE STYLES */
-body                                { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-.section                            { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
-.subsection                         { margin-left: 20px; margin-bottom: 20px; }
-
-/*  Error Message Styling */
-.error                              { color: #d32f2f; padding: 10px; border: 1px solid #ffcdd2; background: #ffebee; }
-/* Section Controls */
-.section-controls                   { margin: 10px 0; }
-.section-button                     { background: #f0f0f0; border: 1px solid #ddd; padding: 5px 10px; cursor: pointer; border-radius: 4px; margin-right: 5px; }
-
-/* NAVIGATION STYLES */
-/* Table of Contents (TOC) */ 
-/* Creates a two-column sidebar or block for navigation. */ 
-
-/* Enhances TOC links with hover animations and responsive behavior for mobile devices. */ 
-.toc         { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
-.toc h2      { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-.toc ul      { list-style-type: none; padding-left: 0; column-count: 2; column-gap: 30px; }
-.toc li      { margin-bottom: 10px; break-inside: avoid; }
-.toc a       { display: block; padding: 8px 15px; background-color: #e9ecef; border-radius: 4px; color: #495057; text-decoration: none; transition: all 0.3s ease; font-weight: 500; }
-.toc a:hover { background-color: #3498db; color: white; transform: translateX(5px); }
-@media (max-width: 768px) { .toc ul { column-count: 1; }}
-
-/* TABLE STYLES */
-/* Table Styles */
-/* Uniform table formatting.
-
-.dynamic-table adds sorting indicators (▲, ▼) for interactive columns.
-
-Resizable handles (.resizable-handle) allow drag-resizing of columns.
-*/
-table                                { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-th, td                               { border: 1px solid #ddd; padding: 8px; text-align: left; }
-th                                   { background-color: #f2f2f2; position: relative; }
-.feature-table tr:nth-child(even)    { background-color: #f9f9f9; }
-.table-container                     { margin: 20px 0; overflow-x: auto; }
-.table-controls                      { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
-.pagination-controls                 { display: flex; align-items: center; gap: 10px; }
-.pagination-controls select          { padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
-.pagination-controls button          { padding: 5px 10px; background: #f0f0f0; border: 1px solid #ddd; cursor: pointer; border-radius: 4px; min-width: 32px; }
-.pagination-controls button:disabled { background: #ddd; cursor: not-allowed; }
-.pagination-indicator                { margin-left: 10px; font-weight: bold; }
-.dynamic-table                       { table-layout: fixed; }
-.dynamic-table th                    { cursor: pointer; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dynamic-table th:hover              { background-color: #e6e6e6; }
-.dynamic-table th.asc::after         { content: " ▲"; font-size: 0.8em; position: absolute; right: 8px; }
-.dynamic-table th.desc::after        { content: " ▼"; font-size: 0.8em; position: absolute; right: 8px; }
-.dynamic-table td                    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.resizable-handle                    { position: absolute; top: 0; right: 0; bottom: 0; width: 5px; background: transparent; cursor: col-resize; z-index: 10; }
-
-/* ML section styling */
-/* Dedicated styling for presenting ML outputs: results, metrics, and tables with alternating row colors for readability. */
-.ml-section                                  { margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }
-.ml-section h3                               { margin-top: 0; }
-.figure-container                            { margin-top: 20px; text-align: center; }
-.figure-container img                        { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }
-.ml-metrics-table, .ml-features-table        { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-.ml-metrics-table th, .ml-metrics-table td,
-.ml-features-table th, .ml-features-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-.ml-metrics-table th, .ml-features-table th  { background-color: #f2f2f2; }
-.ml-metrics-table tr:nth-child(even)         { background-color: #f9f9f9; }
-.ml-features-table tr:nth-child(even)        { background-color: #f9f9f9; }
-
-/* Tooltip styles */
-.tooltip                     { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed #3498db; }
-.tooltip .tooltiptext        { visibility: hidden; width: 280px; background-color: #222; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 1000; 
-                               bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; font-size: 14px; line-height: 1.5; 
-                               box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
-.tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; 
-                               border-color: #222 transparent transparent transparent; }
-.tooltip:hover .tooltiptext  { visibility: visible; opacity: 1; }
-
-/* Collapsible sections */
-/* Enables toggleable/expandable sections using class collapsed.
-
-Includes a rotation animation for .toggle-icon to indicate collapse/expand visually. */
-.section-header                     { cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px; background-color: #f5f5f5; 
-                                      border-bottom: 1px solid #ddd; user-select: none; }
-.section-header:hover               { background-color: #e9e9e9; }
-.toggle-icon                        { font-size: 1.2em; transition: transform 0.3s ease; transform-origin: center; }
-.section-content                    { padding: 15px; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.4s ease-out; max-height: 5000px; }
-.section.collapsed .section-content { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0; overflow: hidden; }
-.section.collapsed .toggle-icon     { transform: rotate(-90deg); }
-
-/* Figure selector styles */
-.figure-selector {
-    margin-bottom: 20px;
+/* ================================ BASE STYLES ================================ */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 40px;
+    line-height: 1.6;
+    color: #333;
+    background-color: #fafafa;
 }
 
-.figure-dropdown {
+.section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.subsection {
+    margin-left: 20px;
+    margin-bottom: 20px;
+    padding: 0 15px;
+}
+
+/* ============================== ERROR MESSAGES ============================== */
+.error, .error-message {
+    color: #d32f2f;
+    padding: 15px;
+    border: 1px solid #ffcdd2;
+    background: #ffebee;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-weight: 500;
+}
+
+/* ============================== SECTION CONTROLS ============================== */
+.section-controls {
+    margin: 15px 0;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.section-button {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.section-button:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* ================================ NAVIGATION STYLES ================================ */
+.toc {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.toc h2 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 12px;
+    font-size: 1.4em;
+    font-weight: 600;
+}
+
+.toc ul {
+    list-style-type: none;
+    padding-left: 0;
+    column-count: 2;
+    column-gap: 30px;
+    margin: 0;
+}
+
+.toc li {
+    margin-bottom: 12px;
+    break-inside: avoid;
+}
+
+.toc a {
+    display: block;
+    padding: 12px 18px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 8px;
+    color: #495057;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.toc a:hover {
+    background: #3498db;
+    color: white;
+    transform: translateX(8px) scale(1.02);
+    border-color: #2980b9;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+@media (max-width: 768px) {
+    .toc ul {
+        column-count: 1;
+    }
+    
+    body {
+        margin: 20px;
+    }
+}
+
+/* ================================ TABLE STYLES ================================ */
+table {
+    border-collapse: collapse;
     width: 100%;
-    padding: 10px;
-    font-size: 16px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: white;
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+th, td {
+    border: 1px solid #e0e0e0;
+    padding: 12px 16px;
+    text-align: left;
+}
+
+th {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    position: relative;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.feature-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.table-container {
+    margin: 20px 0;
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.table-controls {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pagination-controls select {
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
     cursor: pointer;
 }
 
+.pagination-controls button, .pagination-btn {
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    border-radius: 6px;
+    min-width: 40px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.pagination-controls button:hover, .pagination-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+}
+
+.pagination-controls button:disabled, .pagination-btn:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pagination-controls button.active, .pagination-btn.active {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+.pagination-indicator {
+    margin-left: 15px;
+    font-weight: 600;
+    color: #495057;
+    font-size: 14px;
+}
+
+.pagination-ellipsis {
+    padding: 8px 4px;
+    color: #6c757d;
+    font-weight: bold;
+}
+
+/* ============================== DYNAMIC TABLE STYLES ============================== */
+.dynamic-table {
+    table-layout: fixed;
+}
+
+.dynamic-table th {
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.dynamic-table th:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.dynamic-table th.asc::after {
+    content: " ▲";
+    font-size: 0.8em;
+    position: absolute;
+    right: 8px;
+    color: #3498db;
+    font-weight: bold;
+}
+
+.dynamic-table th.desc::after {
+    content: " ▼";
+    font-size: 0.8em;
+    position: absolute;
+    right: 8px;
+    color: #3498db;
+    font-weight: bold;
+}
+
+.dynamic-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resizable-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 8px;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 10;
+    border-right: 2px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.resizable-handle:hover {
+    border-right-color: #3498db;
+}
+
+/* ============================== ML SECTION STYLES ============================== */
+.ml-section {
+    margin-top: 30px;
+    padding: 25px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.ml-section h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    font-size: 1.3em;
+    font-weight: 600;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 8px;
+}
+
 .figure-container {
+    margin-top: 20px;
+    text-align: center;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.figure-container img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+}
+
+.ml-metrics-table, .ml-features-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.ml-metrics-table th, .ml-metrics-table td,
+.ml-features-table th, .ml-features-table td {
+    border: 1px solid #e0e0e0;
+    padding: 12px 16px;
+    text-align: left;
+}
+
+.ml-metrics-table th, .ml-features-table th {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-weight: 600;
+    color: #495057;
+}
+
+.ml-metrics-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.ml-features-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+/* ============================== TOOLTIP STYLES ============================== */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    border-bottom: 2px dashed #3498db;
+    transition: border-color 0.2s ease;
+}
+
+.tooltip:hover {
+    border-bottom-color: #2980b9;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 320px;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+    text-align: left;
+    border-radius: 8px;
+    padding: 16px;
+    position: absolute;
+    z-index: 1000;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.tooltip .tooltiptext::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -8px;
+    border-width: 8px;
+    border-style: solid;
+    border-color: #2c3e50 transparent transparent transparent;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(-5px);
+}
+
+/* ============================== COLLAPSIBLE SECTIONS ============================== */
+.section-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    user-select: none;
+    transition: all 0.3s ease;
+}
+
+.section-header:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.section-header h2 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.4em;
+    font-weight: 600;
+}
+
+.toggle-icon {
+    font-size: 1.4em;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+    color: #3498db;
+    font-weight: bold;
+}
+
+.section-content {
+    padding: 25px;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
+    max-height: 5000px;
+    opacity: 1;
+}
+
+.section.collapsed .section-content {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top: 0;
+    overflow: hidden;
+    opacity: 0;
+}
+
+.section.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+/* ============================== PLOTLY SELECTOR STYLES ============================== */
+.plotly-selector-container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    font-family: inherit;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.selector-controls {
+    margin-bottom: 0;
+    padding: 20px 25px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.selector-label {
+    font-weight: 600;
+    margin: 0;
+    color: #2c3e50;
+    font-size: 15px;
+}
+
+.plotly-selector-container .figure-dropdown {
+    padding: 10px 16px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    min-width: 280px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.plotly-selector-container .figure-dropdown:hover {
+    border-color: #3498db;
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.2);
+}
+
+.plotly-selector-container .figure-dropdown:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.plotly-selector-plot {
+    width: 100%;
+    min-height: 600px;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.plotly-selector-plot img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ============================== LEGACY FIGURE SELECTOR STYLES ============================== */
+.figure-selector {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.figure-dropdown:not(.plotly-selector-container .figure-dropdown) {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 16px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.figure-dropdown:not(.plotly-selector-container .figure-dropdown):hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.figure-container:not(.plotly-selector-container .figure-container) {
     width: 100%;
     min-height: 500px;
-    border: 1px solid #eee;
-    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
     padding: 20px;
     background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .plot-container {
@@ -114,4 +578,220 @@ Includes a rotation animation for .toggle-icon to indicate collapse/expand visua
     display: flex;
     justify-content: center;
     align-items: center;
+    background: white;
+    border-radius: 6px;
+}
+
+/* ============================== RESPONSIVE DESIGN ============================== */
+@media (max-width: 1024px) {
+    .plotly-selector-container .figure-dropdown {
+        min-width: 250px;
+    }
+    
+    .selector-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .selector-label {
+        text-align: center;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        margin: 15px;
+    }
+    
+    .section {
+        margin-bottom: 20px;
+    }
+    
+    .section-header {
+        padding: 15px 20px;
+    }
+    
+    .section-content {
+        padding: 20px;
+    }
+    
+    .subsection {
+        margin-left: 10px;
+        padding: 0 10px;
+    }
+    
+    .plotly-selector-container .figure-dropdown {
+        min-width: 200px;
+        font-size: 13px;
+    }
+    
+    .plotly-selector-plot {
+        min-height: 400px;
+        padding: 15px;
+    }
+    
+    .table-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .ml-section {
+        padding: 20px;
+    }
+    
+    th, td {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        margin: 10px;
+    }
+    
+    .toc {
+        padding: 15px;
+    }
+    
+    .toc a {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    .plotly-selector-plot {
+        min-height: 300px;
+        padding: 10px;
+    }
+    
+    .pagination-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-width: 32px;
+    }
+}
+
+/* ============================== LOADING AND TRANSITIONS ============================== */
+.plot-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: #6c757d;
+    font-size: 16px;
+}
+
+.plot-loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e9ecef;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ============================== ACCESSIBILITY IMPROVEMENTS ============================== */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus indicators */
+button:focus,
+select:focus,
+.section-header:focus {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .section {
+        border: 2px solid #000;
+    }
+    
+    .toc a {
+        border: 1px solid #000;
+    }
+    
+    .pagination-btn {
+        border: 2px solid #000;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .toggle-icon {
+        transition: none;
+    }
+    
+    .section-content {
+        transition: none;
+    }
+}
+
+/* ============================== PRINT STYLES ============================== */
+@media print {
+    body {
+        margin: 0;
+        font-size: 12pt;
+        line-height: 1.4;
+    }
+    
+    .section {
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+    
+    .section-header {
+        background: #f0f0f0 !important;
+    }
+    
+    .toc {
+        page-break-after: always;
+    }
+    
+    .pagination-controls,
+    .section-controls {
+        display: none;
+    }
+    
+    .section.collapsed .section-content {
+        max-height: none !important;
+        padding: 15px !important;
+        opacity: 1 !important;
+    }
+    
+    .plotly-selector-plot,
+    .figure-container {
+        page-break-inside: avoid;
+    }
 }
