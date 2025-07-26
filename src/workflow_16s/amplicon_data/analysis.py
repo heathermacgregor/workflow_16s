@@ -226,9 +226,11 @@ class _AnalysisManager(_ProcessingMixin):
                 Path(self.output_dir) / 'sample_maps',
                 self.verbose
             )
-            self.maps = plotter.generate_sample_maps(
+            maps = plotter.generate_sample_maps(
                 nfc_facility_data=self.nfc_facilities
             )
+            logger.info(maps)
+            self.maps = maps
 
     # ALPHA DIVERSITY
     def _run_alpha_diversity(self) -> None:
