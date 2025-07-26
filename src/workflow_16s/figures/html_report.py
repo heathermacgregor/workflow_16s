@@ -497,7 +497,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange='changePageSize("{table_id}", this.value)'>
+                <select class='rows-per-page' onchange='changePageSize('{table_id}' this.value)'>
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
@@ -618,20 +618,6 @@ def generate_html_report(
     payload = json.dumps(plot_data, cls=NumpySafeJSONEncoder, ensure_ascii=False)
     payload = payload.replace("</", "<\\/")
     
-    # Prepare tab manager initialization script
-    tab_manager_init = ""
-    for sec in sections:
-        tab_manager_init += f"""
-        (function() {{
-            const container = document.getElementById('{sec["container_id"]}');
-            const data = window.plotData['{sec["title"].lower()}'];
-            if (container && data) {{
-                const tabManager = new TabManager();
-                tabManager.init(data, '{sec["container_id"]}');
-            }}
-        }})();
-        """
-    
     try:
         table_js = import_js_as_str(tables_js_path)
     except Exception as e:
@@ -664,8 +650,7 @@ def generate_html_report(
         sections_html=sections_html,
         plot_data_json=payload,
         table_js=table_js,
-        css_content=css_content,
-        tab_manager_init=tab_manager_init
+        css_content=css_content
     )
         
     output_path.write_text(html, encoding="utf-8")
