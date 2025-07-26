@@ -42,8 +42,8 @@ def top_features_plots(
     output_dir = output_dir / 'top_features'
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    n = config.get('violin_plots', {}).get('n', 50)
-
+    n = config.get('violin_plots', {}).get('n', 30)
+    logger.info(top_features)
     for col, vals in top_features.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
