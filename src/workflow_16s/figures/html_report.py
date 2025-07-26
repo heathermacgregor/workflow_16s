@@ -1,4 +1,522 @@
-# ===================================== IMPORTS ====================================== #
+try:
+        css_content = css_path.read_text(encoding='utf-8') 
+    except Exception as e:
+        logger.error(f"Error reading CSS file: {e}")
+        css_content = ""
+        
+    try:
+        html_template = html_template_path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.error(f"Error loading HTML template: {e}")
+        html_template = """<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title}</title>
+            {plotly_js_tag}
+            <style>{css_content}</style>
+        </head>
+        <body>
+            <h1>16S Amplicon Analysis Report</h1>
+            <p>Generated: {generated_ts}</p>
+            <p>Sections: {section_list}</p>
+            
+            {nav_html}
+            
+            <div id="analysis-summary" class="section">
+                <div class="section-header" onclick="toggleSection(event)">
+                    <h2>Analysis Summary</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="subsection">
+                        <h3>Report Overview</h3>
+                        <p>This report contains comprehensive analysis results for 16S amplicon sequencing data.</p>
+                    </div>
+                    {tables_html}
+                </div>
+            </div>
+            
+            {sections_html}
+            
+            <script>{table_js}</script>
+        </body>
+        </html>"""
+
+    # Enhanced HTML formatting with better error handling
+    try:
+        html = html_template.format(
+            title="16S Amplicon Analysis Report",
+            plotly_js_tag=plotly_js_tag,
+            generated_ts=ts,
+            section_list=", ".join(include_sections),
+            nav_html=nav_html,
+            tables_html=tables_html,
+            sections_html=sections_html,
+            plot_data_json="{}",  # Empty since selectors handle their own data
+            table_js=table_js,
+            css_content=css_content
+        )
+    except KeyError as e:
+        logger.error(f"Template formatting error - missing key: {e}")
+        # Fallback to basic template
+        html = f"""<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>16S Amplicon Analysis Report</title>
+            {plotly_js_tag}
+            <style>{css_content}</style>
+        </head>
+        <body>
+            <h1>16S Amplicon Analysis Report</h1>
+            <p>Generated: {ts}</p>
+            {nav_html}
+            <div id="analysis-summary" class="section">
+                <div class="section-header" onclick="toggleSection(event)">
+                    <h2>Analysis Summary</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content">
+                    {tables_html}
+                </div>
+            </div>
+            {sections_html}
+            <script>{table_js}</script>
+        </body>
+        </html>"""
+        
+    output_path.write_text(html, encoding="utf-8")
+    logger.info(f"HTML report generated successfully: {output_path}")
+
+# ========================== ENHANCED UTILITY FUNCTIONS ========================== #
+
+def validate_figures_dict(figures_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate and clean figures dictionary, removing invalid entries.
+    """
+    def is_valid_figure(obj):
+        """Check if object is a valid figure"""
+        if obj is None:
+            return False
+        # Check for Plotly figures
+        if hasattr(obj, 'to_plotly_json'):
+            return True
+        # Check for matplotlib figures
+        if isinstance(obj, Figure):
+            return True
+        return False
+    
+    def clean_dict(d: Dict) -> Dict:
+        """Recursively clean dictionary of invalid figures"""
+        cleaned = {}
+        for key, value in d.items():
+            if isinstance(value, dict):
+                cleaned_sub = clean_dict(value)
+                if cleaned_sub:  # Only include non-empty subdicts
+                    cleaned[key] = cleaned_sub
+            elif is_valid_figure(value):
+                cleaned[key] = value
+        return cleaned
+    
+    return clean_dict(figures_dict)
+
+def create_standalone_plotly_selector(figures_dict: Dict[str, Any], 
+                                    title: str = "Interactive Plotly Dashboard",
+                                    output_path: Optional[Union[str, Path]] = None) -> str:
+    """
+    Create a standalone HTML page with just the Plotly selector.
+    Enhanced version with improved error handling and styling.
+    """
+    
+    # Validate figures first
+    figures_dict = validate_figures_dict(figures_dict)
+    
+    if not figures_dict:
+        error_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title}</title>
+        </head>
+        <body>
+            <h1>{title}</h1>
+            <div class="error-message">No valid figures found in the provided dictionary.</div>
+        </body>
+        </html>
+        """
+        if output_path:
+            Path(output_path).write_text(error_html, encoding="utf-8")
+        return error_html
+    
+    selector_html = _generate_plotly_selector_html(figures_dict, "main-dashboard", title)
+    
+    try:
+        plotly_ver = get_plotlyjs_version()
+    except Exception:
+        plotly_ver = "latest"
+        logger.warning("Could not determine Plotly version, using 'latest'")
+    
+    complete_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>
+    <style>
+        {_get_standalone_css()}
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1 style="text-align: center; color: #2c3e50; margin-bottom: 30px;">{title}</h1>
+        {selector_html}
+    </div>
+</body>
+</html>
+"""
+    
+    if output_path:
+        try:
+            Path(output_path).write_text(complete_html, encoding="utf-8")
+            logger.info(f"Standalone Plotly selector saved to {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to save standalone selector: {e}")
+    
+    return complete_html
+
+def _get_standalone_css() -> str:
+    """
+    Get CSS styles for standalone Plotly selector page.
+    """
+    return """
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .plotly-selector-container {
+            width: 100%;
+            margin: 0;
+            font-family: inherit;
+            background: white;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        
+        .selector-controls {
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .selector-label {
+            font-weight: 600;
+            margin: 0;
+            font-size: 18px;
+            color: white;
+        }
+        
+        .figure-dropdown {
+            padding: 12px 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.9);
+            min-width: 300px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .figure-dropdown:hover {
+            background: white;
+            border-color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .figure-dropdown:focus {
+            outline: none;
+            border-color: white;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+        }
+        
+        .plotly-selector-plot {
+            width: 100%;
+            min-height: 600px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+        }
+        
+        .plotly-selector-plot img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            padding: 20px;
+            border: 2px solid #fadbd8;
+            background: #fdedec;
+            border-radius: 8px;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .plot-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #7f8c8d;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .plot-loading::before {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border: 3px solid #ecf0f1;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .selector-controls {
+                padding: 20px;
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+            
+            .figure-dropdown {
+                min-width: auto;
+                width: 100%;
+            }
+            
+            .plotly-selector-plot {
+                padding: 20px;
+                min-height: 400px;
+            }
+        }
+    """
+
+def generate_section_report(section_name: str, 
+                          figures_dict: Dict[str, Any],
+                          output_path: Union[str, Path],
+                          title: Optional[str] = None) -> None:
+    """
+    Generate a focused report for a specific section with its figures.
+    Useful for creating section-specific reports or debugging.
+    """
+    if not title:
+        title = f"{section_name.title()} Analysis Report"
+    
+    # Validate and clean figures
+    cleaned_figures = validate_figures_dict(figures_dict)
+    
+    if not cleaned_figures:
+        logger.warning(f"No valid figures found for section: {section_name}")
+        error_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title}</title>
+        </head>
+        <body>
+            <h1>{title}</h1>
+            <div class="error-message">No valid figures found for {section_name}.</div>
+        </body>
+        </html>
+        """
+        Path(output_path).write_text(error_html, encoding="utf-8")
+        return
+    
+    # Use the standalone selector for single sections
+    html_content = create_standalone_plotly_selector(
+        cleaned_figures, 
+        title, 
+        output_path
+    )
+    
+    logger.info(f"Section report generated for '{section_name}': {output_path}")
+
+def create_figure_inventory(figures_dict: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Create an inventory/summary of all figures in the nested dictionary.
+    Useful for debugging and understanding the figure structure.
+    """
+    def flatten_with_info(d: Dict, parent_key: str = '', sep: str = ' > ') -> List[Dict]:
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict) and not hasattr(v, 'to_plotly_json'):
+                items.extend(flatten_with_info(v, new_key, sep))
+            else:
+                # Determine figure type and status
+                fig_type = "Unknown"
+                status = "Invalid"
+                error_msg = ""
+                
+                try:
+                    if v is None:
+                        fig_type = "None"
+                        error_msg = "Figure object is None"
+                    elif hasattr(v, 'to_plotly_json'):
+                        fig_type = "Plotly"
+                        status = "Valid"
+                        # Try to serialize to check for issues
+                        _ = v.to_plotly_json()
+                    elif isinstance(v, Figure):
+                        fig_type = "Matplotlib"
+                        status = "Valid"
+                    else:
+                        fig_type = str(type(v).__name__)
+                        error_msg = f"Unsupported figure type: {type(v)}"
+                except Exception as e:
+                    status = "Error"
+                    error_msg = str(e)
+                
+                items.append({
+                    "Path": new_key,
+                    "Key": k,
+                    "Type": fig_type,
+                    "Status": status,
+                    "Error": error_msg
+                })
+        return items
+    
+    inventory_data = flatten_with_info(figures_dict)
+    df = pd.DataFrame(inventory_data)
+    
+    if df.empty:
+        return pd.DataFrame(columns=["Path", "Key", "Type", "Status", "Error"])
+    
+    return df
+
+# ========================== EXAMPLE USAGE AND TESTING ========================== #
+
+def create_test_figures() -> Dict[str, Any]:
+    """
+    Create sample figures for testing the selector functionality.
+    """
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
+        # Create sample data
+        np.random.seed(42)
+        x = np.linspace(0, 10, 100)
+        y1 = np.sin(x) + np.random.normal(0, 0.1, 100)
+        y2 = np.cos(x) + np.random.normal(0, 0.1, 100)
+        
+        # Create test figures
+        test_figures = {
+            "Plotly Examples": {
+                "Basic Plots": {
+                    "Sine Wave": go.Figure(data=go.Scatter(x=x, y=y1, name="sin(x)")),
+                    "Cosine Wave": go.Figure(data=go.Scatter(x=x, y=y2, name="cos(x)"))
+                },
+                "Statistical": {
+                    "Histogram": go.Figure(data=go.Histogram(x=np.random.normal(0, 1, 1000))),
+                    "Box Plot": go.Figure(data=go.Box(y=np.random.normal(0, 1, 100)))
+                }
+            },
+            "Matplotlib Examples": {
+                "Line Plot": plt.figure(figsize=(8, 6)),
+                "Scatter Plot": plt.figure(figsize=(8, 6))
+            }
+        }
+        
+        # Configure matplotlib figures
+        plt.figure(test_figures["Matplotlib Examples"]["Line Plot"].number)
+        plt.plot(x, y1, label='sin(x)')
+        plt.plot(x, y2, label='cos(x)')
+        plt.legend()
+        plt.title('Line Plot Example')
+        
+        plt.figure(test_figures["Matplotlib Examples"]["Scatter Plot"].number)
+        plt.scatter(y1, y2, alpha=0.6)
+        plt.xlabel('sin(x)')
+        plt.ylabel('cos(x)')
+        plt.title('Scatter Plot Example')
+        
+        return test_figures
+        
+    except ImportError as e:
+        logger.warning(f"Could not create test figures: {e}")
+        return {}
+
+if __name__ == "__main__":
+    # Example usage and testing
+    test_figures = create_test_figures()
+    
+    if test_figures:
+        # Create inventory
+        inventory = create_figure_inventory(test_figures)
+        print("Figure Inventory:")
+        print(inventory.to_string(index=False))
+        print()
+        
+        # Create standalone selector
+        standalone_html = create_standalone_plotly_selector(
+            test_figures, 
+            "Test Dashboard",
+            "test_dashboard.html"
+        )
+        print("Standalone dashboard created: test_dashboard.html")
+        
+        # Create section report
+        generate_section_report(
+            "plotly_examples",
+            test_figures.get("Plotly Examples", {}),
+            "plotly_section_report.html"
+        )
+        print("Section report created: plotly_section_report.html")
+        # ===================================== IMPORTS ====================================== #
 import base64
 import itertools
 import json
