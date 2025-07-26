@@ -1,6 +1,7 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
+import copy
 import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -41,22 +42,24 @@ def top_features_plots(
     # Create output directory for top features
     output_dir = output_dir / 'top_features'
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    top_features_c = copy.deepcopy(top_features)
     n = config.get('violin_plots', {}).get('n', 30)
-    logger.info(top_features)
-    for col, vals in top_features.items():
+    for col, vals in top_features_c.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
+            logger.info(group_key)
             with get_progress_bar() as progress:
                 groupval_desc = f"Processing '{col}'={val} features"
                 groupval_task = progress.add_task(_format_task_desc(groupval_desc), total=len(features))
                 for feature in features[:n]:
+                    print(feature)
+                    print(type(feature))
                     table_type = feature['table_type']
                     level = feature['level']
                     feature_name = feature['feature']
                     try:
                         feature['figures'] = {}
-                                        
+                        print(feature)                
                         # Get the table and convert to DataFrame
                         biom_table = tables[table_type][level]
                         table = table_to_df(biom_table)[[feature_name]]
