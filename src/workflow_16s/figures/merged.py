@@ -837,7 +837,7 @@ def create_violin_plot(
         x=status_col,
         box=True,
         points="all",
-        title=f"{feature.replace('_', ' ').title()} Distribution",
+        title=title='<br>'.join(textwrap.wrap(f"{feature.replace('_', ' ').title()} Distribution", width=40)),
         hover_data=['index']#, 'dataset_name']
     )
     
@@ -845,8 +845,7 @@ def create_violin_plot(
     fig.update_layout(
         template='heather',
         xaxis_title=xaxis_title,
-        yaxis_title=feature.replace('_', ' ').title(),
-        height=600,
+        yaxis_title="Abundance (CLR)",
         width=800
     )
 
@@ -1270,7 +1269,7 @@ def create_alpha_diversity_boxplot(
             title=f"{metric.replace('_', ' ').title()} by {group_column}",
             yaxis_title=metric.replace('_', ' ').title(),
             xaxis_title=group_column,
-            template="plotly_white",
+            template="heather",
             showlegend=False
         )
         fig = _apply_common_layout(
@@ -1313,7 +1312,7 @@ def create_alpha_diversity_boxplot(
                     y=1.05,
                     xref="paper",
                     yref="paper",
-                    text=f"{test_name} p={p_val:.4f}",
+                    text=f"{test_name} p = {p_val:.4f}",
                     showarrow=False,
                     font=dict(size=14)
                 )
