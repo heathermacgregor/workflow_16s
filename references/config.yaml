@@ -97,7 +97,7 @@ top_features:
   
 nfc_facilities:
   enabled: True
-  use_local: True
+  use_local: False
   databases:
     - name: "GEM"
     - name: "NFCIS"
@@ -159,13 +159,13 @@ alpha_diversity: # Alpha diversity
       enabled: True
       levels:  
         - 'genus'
-        #- 'family'
-        #- 'class'
+        - 'family'
+        - 'class'
     normalized:
       enabled: True
       levels: 
         - 'genus'
-        #- 'family'
+        - 'family'
   metrics:  
     - 'shannon'
     - 'observed_features'
@@ -179,7 +179,7 @@ alpha_diversity: # Alpha diversity
     #- 'dominance'
   
 ordination: # Beta diversity + ordination
-  enabled: False #True
+  enabled: True
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
   tables:
@@ -192,8 +192,8 @@ ordination: # Beta diversity + ordination
         #- "tsne"
         #- "umap"
       levels:
-        #- 'genus'
-        #- 'family'
+        - 'genus'
+        - 'family'
         - 'class'
     filtered:
       enabled: True
@@ -204,7 +204,7 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        #- 'genus'
+        - 'genus'
         - 'phylum'
     normalized:
       enabled: True
@@ -215,7 +215,7 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        #- 'genus'
+        - 'genus'
         - 'phylum'
     clr_transformed:
       enabled: True
@@ -226,7 +226,7 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        #- 'genus'
+        - 'genus'
         - 'phylum'
     presence_absence:
       enabled: True
@@ -237,7 +237,7 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        #- 'genus'
+        - 'genus'
         - 'phylum'
 
 faprotax: # Functional prediction
@@ -272,73 +272,73 @@ ml: # Machine learning
     enabled: True
   tables:
     raw:
-      enabled: False
+      enabled: True
       levels:
         - 'genus'
-        #- 'family'
-        #- 'order'
-        #- 'class'
+        - 'family'
+        - 'order'
+        - 'class'
         - 'phylum'
       methods:
         - 'rfe'
-        #- 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - 'select_k_best'
+        - 'chi_squared'
+        - 'lasso'
+        - 'shap'
     filtered:
-      enabled: False
+      enabled: True
       levels:
         - 'genus'
-        #- 'family'
-        #- 'order'
-        #- 'class'
+        - 'family'
+        - 'order'
+        - 'class'
         - 'phylum'
       methods:
         - 'rfe'
-        #- 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - 'select_k_best'
+        - 'chi_squared'
+        - 'lasso'
+        - 'shap'
     normalized:
       enabled: True
       levels:
-        #- 'genus'
-        #- 'family'
-        #- 'order'
-        #- 'class'
+        - 'genus'
+        - 'family'
+        - 'order'
+        - 'class'
         - 'phylum'
       methods:
         - 'rfe'
-        #- 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - 'select_k_best'
+        - 'chi_squared'
+        - 'lasso'
+        - 'shap'
     clr_transformed:
-      enabled: False #True
+      enabled: True
       levels:
         - 'genus'
-        #- 'family'
-        #- 'order'
-        #- 'class'
+        - 'family'
+        - 'order'
+        - 'class'
         - 'phylum'
       methods:
         - 'rfe'
-        #- 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - 'select_k_best'
+        - 'chi_squared'
+        - 'lasso'
+        - 'shap'
     presence_absence:
-      enabled: False #True
+      enabled: True
       levels:
         - 'genus'
-        #- 'family'
-        #- 'order'
-        #- 'class'
+        - 'family'
+        - 'order'
+        - 'class'
         - 'phylum'
       methods:
         - 'rfe'
-        #- 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - 'select_k_best'
+        - 'chi_squared'
+        - 'lasso'
+        - 'shap'
   
