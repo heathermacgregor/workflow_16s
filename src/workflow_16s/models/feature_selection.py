@@ -1324,7 +1324,7 @@ def catboost_feature_selection(
         shap_figs = {}
     
     # Return comprehensive results
-    logger.info(model.classes_)
+    logger.info(best_model.classes_)
     return {
         'method': method,
         'model': best_model,
