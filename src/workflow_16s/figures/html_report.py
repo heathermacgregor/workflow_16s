@@ -633,7 +633,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange='changePageSize('{table_id}', this.value)'>
+                <select class='rows-per-page' onchange="changePageSize('{table_id}', this.value)">
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
