@@ -619,16 +619,21 @@ def _add_header_tooltips(
         )
     return table_html
     
+def _sanitize_table_id(table_id: str) -> str:
+    """Replace problematic characters in table IDs for CSS compatibility"""
+    return table_id.replace('=', '_eq_').replace(' ', '_')
+
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     if df is None or df.empty:
         return "<p>No data available</p>"
     
-    # Use unique table_id for all control elements
-    container_id = f"container-{table_id}"
-    pagination_id = f"pagination-{table_id}"
-    indicator_id = f"indicator-{table_id}"
+    # Sanitize table ID
+    sanitized_id = _sanitize_table_id(table_id)
+    container_id = f"container-{sanitized_id}"
+    pagination_id = f"pagination-{sanitized_id}"
+    indicator_id = f"indicator-{sanitized_id}"
     
-    table_html = df.to_html(index=False, classes='dynamic-table', table_id=table_id)
+    table_html = df.to_html(index=False, classes='dynamic-table', table_id=sanitized_id)
     
     return f"""
     <div class='table-container' id='{container_id}'>
@@ -636,7 +641,7 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         <div class='table-controls'>
             <div class='pagination-controls'>
                 <span>Rows per page:</span>
-                <select class='rows-per-page' onchange="changePageSize('{table_id}', this.value)">
+                <select class='rows-per-page' onchange="changePageSize('{sanitized_id}', this.value)">
                     <option value="5">5</option>
                     <option value="10" selected>10</option>
                     <option value="20">20</option>
