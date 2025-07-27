@@ -320,11 +320,14 @@ function updatePagination(tableId, pageSize, pageIndex) {
 }
 
 function updatePaginationControls(tableId, totalPages, currentPage, totalRows, start, end) {
-    const container = document.getElementById(tableId)?.closest('.table-container');
+    // Escape special characters in tableId
+    const escapedTableId = CSS.escape(tableId);
+    
+    const container = document.getElementById(escapedTableId)?.closest('.table-container');
     if (!container) return;
     
-    const paginationContainer = container.querySelector(`#pagination-${tableId}`);
-    const indicator = container.querySelector(`#indicator-${tableId}`);
+    const paginationContainer = container.querySelector(`#pagination-${CSS.escape(tableId)}`);
+    const indicator = container.querySelector(`#indicator-${CSS.escape(tableId)}`);
     
     if (!paginationContainer || !indicator) return;
 
