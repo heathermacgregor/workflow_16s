@@ -1,4 +1,5 @@
 # ===================================== IMPORTS ====================================== #
+
 import base64
 import itertools
 import json
@@ -17,7 +18,9 @@ import plotly.io as pio
 from workflow_16s.utils.io import import_js_as_str
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger('workflow_16s')
+
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
 css_path = script_dir / "style.css"  
@@ -27,6 +30,7 @@ DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
 DEFAULT_GROUP_COLUMN_VALUES = [True, False]
 
 # ===================================== CLASSES ====================================== #
+
 class NumpySafeJSONEncoder(json.JSONEncoder):
     def default(self, obj) -> Any:  
         if isinstance(obj, np.integer):
