@@ -490,7 +490,9 @@ def _prepare_ml_summary(
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else None
     features_df = pd.DataFrame(features_summary) if features_summary else None
-    
+    # Return with explicit empty checks
+    metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
+    features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
     return metrics_df, features_df, shap_reports
 
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
