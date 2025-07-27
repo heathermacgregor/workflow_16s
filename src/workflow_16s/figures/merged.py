@@ -13,6 +13,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import seaborn as sns
 
+import textwrap
+
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s.figures.figures import (
@@ -837,7 +839,7 @@ def create_violin_plot(
         x=status_col,
         box=True,
         points="all",
-        title=title='<br>'.join(textwrap.wrap(f"{feature} Distribution", width=40)),
+        title='<br>'.join(textwrap.wrap(f"{feature} Distribution", width=40)),
         hover_data=['index']#, 'dataset_name']
     )
     
