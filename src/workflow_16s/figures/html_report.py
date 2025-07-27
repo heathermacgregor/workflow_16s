@@ -100,13 +100,13 @@ def _generate_plotly_selector_html(figures_dict: Dict[str, Any],
     
     # Generate the HTML with integrated styling
     html_template = f"""
-<div id="{container_id}" class="plotly-selector-container">
-    <div class="selector-controls">
-        <label for="{container_id}-selector" class="selector-label">Select {section_title}:</label>
-        <select id="{container_id}-selector" class="figure-dropdown">
+<div id='{container_id}' class='plotly-selector-container'>
+    <div class='selector-controls'>
+        <label for='{container_id}-selector' class='selector-label'>Select {section_title}:</label>
+        <select id='{container_id}-selector' class='figure-dropdown'>
 {selector_options}        </select>
     </div>
-    <div id="{container_id}-plot" class="plotly-selector-plot"></div>
+    <div id='{container_id}-plot' class="plotly-selector-plot"></div>
 </div>
 
 <script>
@@ -195,7 +195,18 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                         shap_figures[table_type] = {}
                     if level not in shap_figures[table_type]:
                         shap_figures[table_type][level] = {}
-                    shap_figures[table_type][level][method] = model_result['figures']
+                    
+                    # Handle dependency plots as a list
+                    transformed_figures = {}
+                    for fig_key, fig_value in model_result['figures'].items():
+                        if fig_key == 'shap_dependency' and isinstance(fig_value, list):
+                            # Store each dependency plot individually
+                            for i, dep_fig in enumerate(fig_value):
+                                transformed_figures[f'shap_dependency_{i}'] = dep_fig
+                        else:
+                            transformed_figures[fig_key] = fig_value
+                    
+                    shap_figures[table_type][level][method] = transformed_figures
     figures['shap'] = shap_figures
 
     # Violin plots
