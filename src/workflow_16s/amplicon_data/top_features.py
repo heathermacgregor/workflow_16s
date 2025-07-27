@@ -47,7 +47,7 @@ def top_features_plots(
     for col, vals in top_features_c.items():
         for val, features in vals.items():
             group_key = f"{col}={val}"
-            logger.info(f"Processing top features for group: {group_key}")
+            #logger.info(f"Processing top features for group: {group_key}")
             
             with get_progress_bar() as progress:
                 groupval_desc = f"Processing '{col}'={val} features"
