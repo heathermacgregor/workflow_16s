@@ -224,7 +224,6 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                     if feature.get('violin_figure'):
                         violin_figures[col][feature['feature']] = feature['violin_figure']
     figures['violin'] = violin_figures
-    logger.info(figures)
 
     return figures
 
