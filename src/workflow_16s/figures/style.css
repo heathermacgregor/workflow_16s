@@ -17,6 +17,15 @@ body {
     overflow: hidden;
 }
 
+.section h2 {
+    padding-left: 20px; /* or any value you want */
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: #333;
+}
+
 .subsection {
     margin-left: 20px;
     margin-bottom: 20px;
@@ -54,25 +63,31 @@ body {
 }
 
 .section-button:hover {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    background: #e6e6e6;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* ================================ NAVIGATION STYLES ================================ */
 .toc {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: rgba(232, 232, 232, 0.3);
+    backdrop-filter: blur(8px);
     border: 1px solid #dee2e6;
-    border-radius: 12px;
-    padding: 25px;
-    margin-bottom: 30px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 40px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.3s ease;
+}
+
+.toc:hover {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
 .toc h2 {
     margin-top: 0;
-    color: #2c3e50;
-    border-bottom: 3px solid #3498db;
+    color: #000000;
+    border-bottom: 3px solid #000000;
     padding-bottom: 12px;
     font-size: 1.4em;
     font-weight: 600;
@@ -81,7 +96,7 @@ body {
 .toc ul {
     list-style-type: none;
     padding-left: 0;
-    column-count: 2;
+    column-count: 4;
     column-gap: 30px;
     margin: 0;
 }
@@ -96,7 +111,7 @@ body {
     padding: 12px 18px;
     background: rgba(255,255,255,0.8);
     border-radius: 8px;
-    color: #495057;
+    color: #000000;
     text-decoration: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 500;
@@ -104,11 +119,11 @@ body {
 }
 
 .toc a:hover {
-    background: #3498db;
-    color: white;
+    background: #ffffff;
+    color: #000000;
     transform: translateX(8px) scale(1.02);
-    border-color: #2980b9;
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    border-color: #000000;
+    box-shadow: 0 4px 12px rgba(53, 53, 53, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -139,7 +154,7 @@ th, td {
 }
 
 th {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(11deg, #f8f9fa 0%, #e9ecef 100%);
     position: relative;
     font-weight: 600;
     color: #495057;
@@ -211,7 +226,7 @@ th {
 }
 
 .pagination-controls button.active, .pagination-btn.active {
-    background: #3498db;
+    background: #000000;
     color: white;
     border-color: #2980b9;
     box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
@@ -254,7 +269,7 @@ th {
     font-size: 0.8em;
     position: absolute;
     right: 8px;
-    color: #3498db;
+    color: #000000;
     font-weight: bold;
 }
 
@@ -263,7 +278,7 @@ th {
     font-size: 0.8em;
     position: absolute;
     right: 8px;
-    color: #3498db;
+    color: #000000;
     font-weight: bold;
 }
 
@@ -287,7 +302,7 @@ th {
 }
 
 .resizable-handle:hover {
-    border-right-color: #3498db;
+    border-right-color: #000000;
 }
 
 /* ============================== ML SECTION STYLES ============================== */
@@ -302,10 +317,10 @@ th {
 
 .ml-section h3 {
     margin-top: 0;
-    color: #2c3e50;
+    color: #000000;
     font-size: 1.3em;
     font-weight: 600;
-    border-bottom: 2px solid #3498db;
+    border-bottom: 2px solid #000000;
     padding-bottom: 8px;
 }
 
@@ -363,7 +378,7 @@ th {
     position: relative;
     display: inline-block;
     cursor: help;
-    border-bottom: 2px dashed #3498db;
+    border-bottom: 2px dashed #000000;
     transition: border-color 0.2s ease;
 }
 
@@ -374,7 +389,7 @@ th {
 .tooltip .tooltiptext {
     visibility: hidden;
     width: 320px;
-    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    background: linear-gradient(135deg, #000000 0%, #34495e 100%);
     color: white;
     text-align: left;
     border-radius: 8px;
@@ -400,7 +415,7 @@ th {
     margin-left: -8px;
     border-width: 8px;
     border-style: solid;
-    border-color: #2c3e50 transparent transparent transparent;
+    border-color: #000000 transparent transparent transparent;
 }
 
 .tooltip:hover .tooltiptext {
@@ -428,7 +443,7 @@ th {
 
 .section-header h2 {
     margin: 0;
-    color: #2c3e50;
+    color: #000000;
     font-size: 1.4em;
     font-weight: 600;
 }
@@ -437,7 +452,7 @@ th {
     font-size: 1.4em;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: center;
-    color: #3498db;
+    color: #000000;
 }
 
 .section-content {
@@ -464,7 +479,7 @@ th {
 /* ============================== PLOTLY SELECTOR STYLES ============================== */
 .plotly-selector-container {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
     font-family: inherit;
     background: white;
@@ -504,13 +519,13 @@ th {
 }
 
 .plotly-selector-container .figure-dropdown:hover {
-    border-color: #3498db;
+    border-color: #000000;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
 }
 
 .plotly-selector-container .figure-dropdown:focus {
     outline: none;
-    border-color: #3498db;
+    border-color: #000000;
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
@@ -552,13 +567,13 @@ th {
 }
 
 .figure-dropdown:hover {
-    border-color: #3498db;
+    border-color: #000000;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
 }
 
 .figure-dropdown:focus {
     outline: none;
-    border-color: #3498db;
+    border-color: #000000;
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
@@ -636,7 +651,7 @@ th {
     }
     
     th, td {
-        padding: 8px 12px;
+        padding: 12px 16px 12px 12px; /* top, right, bottom, left */
         font-size: 14px;
     }
 }
@@ -687,7 +702,7 @@ th {
     height: 20px;
     margin-left: 10px;
     border: 2px solid #e9ecef;
-    border-top: 2px solid #3498db;
+    border-top: 2px solid #000000;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -711,12 +726,12 @@ th {
 }
 
 button:focus, select:focus {
-    outline: 2px solid #3498db;
+    outline: 2px solid #000000;
     outline-offset: 2px;
 }
 
 .pagination-btn:focus {
-    outline: 2px solid #3498db;
+    outline: 2px solid #000000;
     outline-offset: 2px;
 }
 
