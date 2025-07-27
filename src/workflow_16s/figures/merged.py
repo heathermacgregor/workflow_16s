@@ -837,7 +837,7 @@ def create_violin_plot(
         x=status_col,
         box=True,
         points="all",
-        title=title='<br>'.join(textwrap.wrap(f"{feature.replace('_', ' ').title()} Distribution", width=40)),
+        title=title='<br>'.join(textwrap.wrap(f"{feature} Distribution", width=40)),
         hover_data=['index']#, 'dataset_name']
     )
     
