@@ -694,9 +694,10 @@ def generate_html_report(
         )
     else:
         ml_metrics = None
-    
-    ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics else "<p>No ML results</p>"
-    
+    if ml_metrics is not None and not ml_metrics.empty:
+        ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports) if ml_metrics else "<p>No ML results</p>"
+    else:
+        ml_html = "<p>No ML results</p>"
     # Append final sections
     tables_html += f"""
     </div>
