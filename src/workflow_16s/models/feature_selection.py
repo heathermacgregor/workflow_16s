@@ -1326,6 +1326,7 @@ def catboost_feature_selection(
     # Return comprehensive results
     logger.info(model.classes_)
     return {
+        'method': method,
         'model': best_model,
         'feature_importances': feat_imp.to_dict(),
         'top_features': top_features,
