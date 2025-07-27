@@ -219,7 +219,6 @@ class _AnalysisManager(_ProcessingMixin):
     # SAMPLE MAPS
     def _generate_sample_maps(self):
         if self.config.get("maps", {}).get("enabled", False):
-            logger.info("Sample maps enabled")
             plotter = Maps(
                 self.config, 
                 self.meta, 
@@ -229,7 +228,6 @@ class _AnalysisManager(_ProcessingMixin):
             maps = plotter.generate_sample_maps(
                 nfc_facility_data=self.nfc_facilities
             )
-            logger.info(maps)
             plotter.maps = maps
 
     # ALPHA DIVERSITY
@@ -276,9 +274,7 @@ class _AnalysisManager(_ProcessingMixin):
         # Primary group
         for group_column in self.group_columns:
             group_column_values = check_if_two_vals(group_column, self.meta)
-            if group_column_values:
-                logger.info(group_column)
-            
+            if group_column_values:            
                 self.stats[group_column['name']] = run_statistical_tests_for_group(
                     config=self.config,  
                     tables=self.tables,
@@ -291,7 +287,6 @@ class _AnalysisManager(_ProcessingMixin):
                     
         # Special case: NFC facility matching
         if self.config.get('nfc_facilities', {}).get('enabled', False) and 'facility_match' in self.meta.columns:
-            logger.info('facility_match')
             self.stats['facility_match'] = run_statistical_tests_for_group(
                 config=self.config,
                 tables=self.tables,
@@ -348,7 +343,6 @@ class _AnalysisManager(_ProcessingMixin):
         self
     ):
         if self.config.get('violin_plots', {}).get('enabled', False) or self.config.get('feature_maps', {}).get('enabled', False):
-            logger.info("Top features plots")
             plots = top_features_plots(
                 output_dir=self.output_dir,
                 config=self.config,
