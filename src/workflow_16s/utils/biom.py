@@ -17,17 +17,8 @@ from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
-# ================================= DEFAULT VALUES =================================== #
-
-levels = {
-    'phylum': 1, 
-    'class': 2, 
-    'order': 3, 
-    'family': 4, 
-    'genus': 5
-}
+# Local Imports
+from workflow_16s import constants
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -48,8 +39,7 @@ def export_h5py(
 def convert_to_biom(
     table: Union[pd.DataFrame, Table]
 ) -> Table:
-    """
-    Convert pandas DataFrame to BIOM Table.
+    """Convert pandas DataFrame to BIOM Table.
     
     Args:
         table: Input DataFrame containing feature counts.
@@ -77,8 +67,7 @@ def collapse_taxa(
     target_level: str, 
     verbose: bool = True
 ) -> Table:
-    """
-    Collapse feature table to specified taxonomic level.
+    """Collapse feature table to specified taxonomic level.
     
     Args:
         table:        Input BIOM Table or DataFrame.
@@ -94,12 +83,12 @@ def collapse_taxa(
     table = table.copy()
     table = convert_to_biom(table)
         
-    if target_level not in levels:
+    if target_level not in constants.levels:
         raise ValueError(
             f"Invalid `target_level`: {target_level}. "
-            f"Expected one of {list(levels.keys())}")
+            f"Expected one of {list(constants.levels.keys())}")
 
-    level_idx = levels[target_level]
+    level_idx = constants.levels[target_level]
 
     # Create taxonomy mapping
     id_map = {}
@@ -125,8 +114,7 @@ def presence_absence(
     table: Union[Table, pd.DataFrame], 
     target_level: str, 
 ) -> Table:
-    """
-    Convert table to presence/absence format and filter by abundance.
+    """Convert table to presence/absence format and filter by abundance.
     
     Args:
         table:        Input BIOM Table or DataFrame.
@@ -169,8 +157,7 @@ def filter_presence_absence(
     prevalence_threshold: float = 0.05, 
     group_threshold: float = 0.05
 ) -> Table:
-    """
-    Filter presence/absence table based on prevalence and group differences.
+    """Filter presence/absence table based on prevalence and group differences.
     
     Args:
         table:                Input BIOM Table.
