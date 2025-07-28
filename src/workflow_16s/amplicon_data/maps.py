@@ -8,8 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # Third‑Party Imports
 import pandas as pd
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.figures.merged import sample_map_categorical
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
@@ -18,7 +17,7 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 logger = logging.getLogger("workflow_16s")
 
-# ================================= DEFAULT VALUES =================================== #
+# =================================== FUNCTIONS ====================================== #
 
 class Maps:
     """Generates sample map plots and stores them internally"""
@@ -29,10 +28,9 @@ class Maps:
         output_dir: Path, 
         verbose: bool = False
     ):
-        self.config = config
+        self.config, self.verbose = config, verbose
         self.meta = meta
         self.output_dir = output_dir
-        self.verbose = verbose
       
         self.maps_config = self.config['maps']
         self.color_columns = self.maps_config.get(
@@ -55,7 +53,10 @@ class Maps:
     ) -> Dict[str, Any]:
         if 'nfc_facility_data' in kwargs:
             if self.verbose:
-                logger.warning("Duplicate 'nfc_facility_data' argument in kwargs. Using explicit value.")
+                logger.warning(
+                    "Duplicate 'nfc_facility_data' argument in kwargs. "
+                    "Using explicit value."
+                )
             del kwargs['nfc_facility_data']
         if not self.maps_config.get('enabled', False):
             return {}
@@ -79,7 +80,10 @@ class Maps:
 
             for col in valid_columns:
                 col_desc = f"Plotting sample maps → {col}"
-                progress.update(plot_task, description=_format_task_desc(col_desc))
+                progress.update(
+                    plot_task, 
+                    description=_format_task_desc(col_desc)
+                )
                 
                 self.figures[col], _ = sample_map_categorical(
                     metadata=meta,
@@ -90,6 +94,9 @@ class Maps:
                 )
                 
                 progress.update(plot_task, advance=1)
-            progress.update(plot_task, description=_format_task_desc(plot_desc))
+            progress.update(
+                plot_task, 
+                description=_format_task_desc(plot_desc)
+            )
         return self.figures
       
