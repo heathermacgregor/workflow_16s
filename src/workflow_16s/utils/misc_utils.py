@@ -5,7 +5,7 @@ from typing import Any, Union
 import requests
 
 # Local Imports
-from workflow_16 import constants
+from workflow_16s import constants
 
 # ==================================== FUNCTIONS ===================================== #
 
