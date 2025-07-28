@@ -301,12 +301,6 @@ def downstream(config, logger, project_dir, existing_subsets) -> None:
         if config.get("downstream", {}).get("find_subsets", False):
             existing_subsets = get_existing_subsets(config, logger)
             logger.info(f"Found {len(existing_subsets)} completed subsets")
-        else:
-            logger.error(
-                "No existing subsets from upstream processing and finding subsets "
-                "in downstream processing is disabled."
-            )
-            raise
             
     mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
     verbose = False
