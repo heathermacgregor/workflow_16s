@@ -25,7 +25,6 @@ from Bio import SeqIO
 
 # Local Imports
 import workflow_16s.custom_tmp_config
-from workflow_16s import constants
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
