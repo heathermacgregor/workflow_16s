@@ -1,25 +1,12 @@
 # ===================================== IMPORTS ====================================== #
 
-import os
+# Standard Library Imports
 import yaml
 from pathlib import Path
 from typing import Dict, Union
 
-# ================================= GLOBAL VARIABLES ================================= #
-
-DEFAULT_CONFIG_PATH = (
-    Path(
-        os.path.abspath(
-            os.path.join(
-                os.path.dirname(
-                    os.path.abspath(__file__)
-                ), "..", ".."
-            )
-        )
-    ) 
-    / "references" 
-    / "config.yaml"
-)
+# Local Imports
+from workflow_16s import constants
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -39,14 +26,14 @@ def resolve_relative_paths(config: Dict, config_dir: Path) -> Dict:
 
 
 def get_config(
-    file_path: Union[str, Path] = DEFAULT_CONFIG_PATH
+    config_path: Union[str, Path] = constants.DEFAULT_CONFIG_PATH
 ) -> Dict:
     # Load the YAML configuration file
-    with open(file_path, "r") as file:
+    with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     
     # Resolve any relative paths in the config
-    config_dir = Path(os.path.dirname(os.path.abspath(file_path)))
+    config_dir = Path(config_path).resolve().parent
     config = resolve_relative_paths(config, config_dir)
     
     return config
