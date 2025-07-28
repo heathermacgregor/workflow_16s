@@ -8,7 +8,6 @@ import random
 import re
 import subprocess
 import sys
-import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -21,22 +20,15 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from tqdm import tqdm
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
-from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
 import workflow_16s.custom_tmp_config
+from workflow_16s import constants
+from workflow_16s.ena.api import SequenceFetcher as SeqFetcher
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
-
-# Initialize logger
 logger = logging.getLogger("workflow_16s")
 
 # ==================================== CLASSES ====================================== #
@@ -86,7 +78,7 @@ class PrimerChecker:
                 for run_id, files in dataset.items()
             }
             
-            for future in tqdm(
+            for future in (
                 as_completed(futures), 
                 total=len(futures), 
                 desc="Checking common primers".ljust(35), 
@@ -182,16 +174,7 @@ class PrimerChecker:
 class BLASTAnalyzer:
     """Performs BLAST analysis with in-memory processing and optimized parsing."""
     
-    DEFAULT_REGIONS = {
-        'V1-V2': (100, 400),
-        'V2-V3': (200, 500),
-        'V3-V4': (350, 800),
-        'V4': (515, 806),
-        'V4-V5': (515, 950),
-        'V5-V7': (830, 1190),
-        'V6-V8': (900, 1400),
-        'V7-V9': (1100, 1500)
-    }
+    DEFAULT_REGIONS = constants.DEFAULT_REGIONS
 
     def __init__(
         self,
@@ -321,14 +304,7 @@ class BLASTAnalyzer:
 class Analyzer:
     """Coordinates analysis components with optimized parallel execution."""
     
-    DEFAULT_PRIMER_REGIONS = {
-        "V1-V2": ("AGAGTTTGATCMTGGCTCAG", "TGCTGCCTCCCGTAGGAGT"),
-        "V2-V3": ("ACTCCTACGGGAGGCAGCAG", "TTACCGCGGCTGCTGGCAC"),
-        "V3-V4": ("CCTACGGGNGGCWGCAG", "GACTACHVGGGTATCTAATCC"),
-        "V4": ("GTGCCAGCMGCCGCGGTAA", "GGACTACHVGGGTWTCTAAT"),
-        "V4-V5": ("GTGYCAGCMGCCGCGGTAA", "CCGYCAATTYMTTTRAGTTT"),
-        "V6-V8": ("AAACTYAAAKGAATTGACGG", "ACGGGCGGTGTGTACAAG")
-    }
+    DEFAULT_PRIMER_REGIONS = constants.DEFAULT_PRIMER_REGIONS
 
     def __init__(
         self,
@@ -371,7 +347,7 @@ class Analyzer:
             
             # Collect results
             primer_results = primer_future.result()
-            for future in tqdm(as_completed(blast_futures), total=len(blast_futures)):
+            for future in (as_completed(blast_futures), total=len(blast_futures)):
                 run_id = blast_futures[future]
                 try:
                     blast_df = future.result()
@@ -477,6 +453,7 @@ class Validate16S:
         """Determine validation status based on metrics."""
         return metrics.get('valid_rate', 0) >= self.min_valid_rate
 
+
 # ==================================== FUNCTIONS ===================================== #
 
 def estimate_16s_subfragment(
@@ -502,7 +479,7 @@ def estimate_16s_subfragment(
             executor.submit(validator.validate, files[0]): run_id
             for run_id, files in run_files.items()
         }
-        for future in tqdm(as_completed(futures), total=len(futures)):
+        for future in (as_completed(futures), total=len(futures)):
             run_id = futures[future]
             try:
                 is_valid, metrics = future.result()
@@ -512,14 +489,15 @@ def estimate_16s_subfragment(
                 valid_results[run_id] = False
     
     # Filter invalid runs
-    valid_runs = {run: files for run, files in run_files.items() if valid_results.get(run, False)}
-    
+    valid_runs = {
+        run: files 
+        for run, files in run_files.items() if valid_results.get(run, False)
+    }
     # Region analysis
     region_results = analyzer._process_multiple_runs(
         valid_runs,
         output_dir / "region_results.tsv"
     )
-    
     return region_results
 
 
@@ -545,7 +523,7 @@ def validate_16s(
             executor.submit(validator.validate, files[0]): run_id
             for run_id, files in run_files.items()
         }
-        for future in tqdm(as_completed(futures), total=len(futures)):
+        for future in (as_completed(futures), total=len(futures)):
             run_id = futures[future]
             try:
                 is_valid, metrics = future.result()
@@ -553,9 +531,11 @@ def validate_16s(
             except Exception as e:
                 logger.error(f"Validation failed for {run_id}: {e}")
                 valid_results[run_id] = False
-    
     # Filter invalid runs
-    valid_runs = {run: files for run, files in run_files.items() if valid_results.get(run, False)}
+    valid_runs = {
+        run: files 
+        for run, files in run_files.items() if valid_results.get(run, False)
+    }
     return valid_runs
     
 
