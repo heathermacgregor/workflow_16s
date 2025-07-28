@@ -5,7 +5,6 @@ import glob
 import os
 import shutil
 import sys
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -19,24 +18,11 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
 from api.api import (
-    classify_taxonomy,
-    collapse_to_genus,
-    denoise_sequences,
-    filter_samples_for_denoising,
-    import_seqs_from_manifest,
-    trim_sequences,
+    classify_taxonomy, collapse_to_genus, denoise_sequences,
+    filter_samples_for_denoising, import_seqs_from_manifest, trim_sequences
 )
 from api.api_io import construct_file_path, load_with_print, output_files_exist
 from utils import get_average_lengths, get_truncation_lengths
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
-#import workflow_16s.custom_tmp_config
-
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
 
 # ================================== DEFAULT VALUES ================================== #
 
@@ -50,8 +36,7 @@ DEFAULT_CLASSIFY_METHOD = 'sklearn'
 # ==================================== CLASSES ====================================== #
 
 class Dataset:
-    """
-    16S rRNA sequencing data processing workflow for per-dataset microbiome 
+    """16S rRNA sequencing data processing workflow for per-dataset microbiome 
     analysis.
 
     Attributes:
@@ -454,10 +439,8 @@ class Dataset:
                     shutil.rmtree(dir_path)
 
 
-
 class WorkflowRunner:
-    """
-    Orchestrate workflow execution with cleanup handling.
+    """Orchestrate workflow execution with cleanup handling.
 
     Attributes:
         args:     Dictionary of workflow parameters.
