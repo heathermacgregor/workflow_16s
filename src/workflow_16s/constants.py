@@ -32,6 +32,7 @@ DEFAULT_TIME_REMAINING_STYLE: str = "thistle1"
 # ==================================================================================== #
 # Go up two levels 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "references" / "config.yaml"
+DEFAULT_CONFIG_PATH = DEFAULT_CONFIG
 DEFAULT_MODE = 'genus'
 DEFAULT_FEATURE_TYPE = 'ASV'
 
