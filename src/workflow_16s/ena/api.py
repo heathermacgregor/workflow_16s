@@ -1,6 +1,6 @@
 from __future__ import print_function  # For Python 2/3 compatibility
 
-# =============================== IMPORTS =================================== #
+# ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
 import ftplib
@@ -23,35 +23,16 @@ import requests
 import urllib3
 from Bio import SeqIO
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 import workflow_16s.custom_tmp_config
-from workflow_16s.utils.progress import get_progress_bar
+from workflow_16s import constants
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
-# ============================= PROGRESS BARS ============================== #
-
-from tqdm import tqdm
-from rich.progress import (
-    Progress,
-    BarColumn,
-    TextColumn,
-    MofNCompleteColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    TaskProgressColumn,
-    SpinnerColumn,
-)
-
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_PROGRESS_TEXT_N = 65
-DEFAULT_N = DEFAULT_PROGRESS_TEXT_N
-
-# ================================ FUNCTIONS ================================ #
+# ===================================== FUNCTIONS ===================================== #
 
 class MetadataFetcher:
     """
@@ -76,18 +57,6 @@ class MetadataFetcher:
     ):
         self.base_url = base_url
         self.session = self._create_session(retries, backoff_factor)
-        """
-        self.progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40, complete_style="red", finished_style="green"),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
-        )
-        """
         self.progress = get_progress_bar()
         self._auto_start = auto_start_progress
         if self._auto_start:
@@ -204,16 +173,18 @@ class MetadataFetcher:
     ) -> pd.DataFrame:
         """Get combined study and sample metadata."""
         with self.track():
-            parent_desc = (f"Processing {ena_study_accession}",)
+            parent_desc = f"Processing {ena_study_accession}"
             parent_task = self.progress.add_task(
-                f"[white]{parent_desc:<{DEFAULT_N}}", total=3
+                _format_task_desc(parent_desc), total=3
             )
 
             try:
                 # Get study metadata
-                study_desc = "Fetching study metadata..."
+                study_desc = "Fetching study metadata"
                 study_task = self.progress.add_task(
-                    f"[white]{study_desc:<{DEFAULT_N}}", parent=parent_task, total=1
+                    _format_task_desc(study_desc), 
+                    parent=parent_task, 
+                    total=1
                 )
                 study_df = self.get_study_metadata(ena_study_accession)
                 self.progress.update(study_task, completed=1)
@@ -222,11 +193,11 @@ class MetadataFetcher:
 
                 # Get sample metadata
                 samples = study_df["sample_accession"].dropna().unique().tolist()
-                sample_desc = "Fetching sample metadata..."
+                sample_desc = "Fetching sample metadata"
                 sample_task = self.progress.add_task(
-                    f"[white]{sample_desc:<{DEFAULT_N}}",
+                    _format_task_desc(sample_desc),
                     parent=parent_task,
-                    total=len(samples),
+                    total=len(samples)
                 )
                 sample_df = self.get_sample_metadata_concurrent(
                     sample_task, samples, max_workers
@@ -236,9 +207,11 @@ class MetadataFetcher:
                 self.progress.advance(parent_task)
 
                 # Merge study and sample metadata
-                merge_desc = "Merging study and sample metadata..."
+                merge_desc = "Merging study and sample metadata"
                 merge_task = self.progress.add_task(
-                    f"[white]{merge_desc:<{DEFAULT_N}}", parent=parent_task, total=1
+                    _format_task_desc(merge_desc), 
+                    parent=parent_task, 
+                    total=1
                 )
                 merged_df = study_df.merge(
                     sample_df,
@@ -293,18 +266,6 @@ class SequenceFetcher:
         self.retries = retries
         self.initial_delay = initial_delay
         self.max_workers = max_workers
-        """
-        self.progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TextColumn("[white]•"),
-            TimeElapsedColumn(),
-            TextColumn("[white]•"),
-            TimeRemainingColumn(),
-        )
-        """
         self.progress = get_progress_bar()
 
     def get_run_fastq(
@@ -361,9 +322,10 @@ class SequenceFetcher:
         """
         results = {}
         with self.progress:
-            main_desc = "Downloading sequencing data..."
+            main_desc = "Downloading sequencing data"
             main_task = self.progress.add_task(
-                f"[white]{main_desc:<{DEFAULT_N}}", total=len(metadata)
+                _format_task_desc(main_desc), 
+                total=len(metadata)
             )
 
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -372,8 +334,7 @@ class SequenceFetcher:
                         self.process_run,
                         row.run_accession,
                         str(row.fastq_ftp).split(";"),
-                    ): row.run_accession
-                    for row in metadata.itertuples()
+                    ): row.run_accession for row in metadata.itertuples()
                 }
 
                 for future in as_completed(futures):
@@ -417,7 +378,7 @@ class PooledSamplesProcessor:
             run_accession = file_name.split(".")[0]
 
             with gzip.open(file_path, "rt", encoding="utf-8") as handle:
-                for record in SeqIO.parse(handle, "fastq"):   # tqdm removed
+                for record in SeqIO.parse(handle, "fastq"):   
                     barcode = str(record.seq)[:10]
                     if site_id := self.lookup_dict.get((run_accession, barcode)):
                         self.site_records[site_id].append(record)
@@ -512,9 +473,9 @@ class PooledSamplesProcessor:
         fastq_files = list(organized_dir.glob("*.fastq.gz"))
 
         with self.progress:
-            main_desc = "Processing pooled files..."
+            main_desc = "Processing pooled files"
             main_task = self.progress.add_task(
-                f"[white]{main_desc:<{DEFAULT_N}}",
+                _format_task_desc(main_desc),
                 total=len(fastq_files),
             )
 
