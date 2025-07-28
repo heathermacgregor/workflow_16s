@@ -90,13 +90,13 @@ class AmpliconData:
     
     def __init__(
         self, 
-        cfg: Dict, 
+        config: Dict, 
         project_dir: Any, 
         mode: str = constants.DEFAULT_MODE, 
         existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
         verbose: bool = False
     ):
-        self.config = cfg
+        self.config = config
         self.project_dir = project_dir
         self.mode = mode
         self.existing_subsets = existing_subsets
