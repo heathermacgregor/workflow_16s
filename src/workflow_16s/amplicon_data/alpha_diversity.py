@@ -12,8 +12,7 @@ import pandas as pd
 import numpy as np
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.figures.merged import (
@@ -21,19 +20,17 @@ from workflow_16s.figures.merged import (
     create_alpha_diversity_stats_plot, 
     plot_alpha_correlations
 )
-from workflow_16s.utils.data import (
-    table_to_df, update_table_and_meta
-)
 from workflow_16s.stats.tests import (
     alpha_diversity, analyze_alpha_diversity, analyze_alpha_correlations
 )
+from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
-# ================================= DEFAULT VALUES =================================== #
+# =================================== FUNCTIONS ====================================== #
 
 class AlphaDiversity:
     def __init__(
@@ -54,8 +51,12 @@ class AlphaDiversity:
             logger.debug("Alpha diversity analysis disabled.")
             return 
 
-        self.group_column = self.config.get('group_column', constants.DEFAULT_GROUP_COLUMN)
-        self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
+        self.group_column = self.config.get(
+            'group_column', constants.DEFAULT_GROUP_COLUMN
+        )
+        self.group_column_values = self.config.get(
+            'group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES
+        )
         
         self.metrics = alpha_config.get('metrics', constants.DEFAULT_ALPHA_METRICS)
         self.parametric = alpha_config.get('parametric', False)
@@ -86,12 +87,18 @@ class AlphaDiversity:
         
         with get_progress_bar() as progress:
             alpha_desc = f"Running alpha diversity for '{group_column}'"
-            alpha_task = progress.add_task(_format_task_desc(alpha_desc), total=len(self.tasks))
+            alpha_task = progress.add_task(
+                _format_task_desc(alpha_desc), 
+                total=len(self.tasks)
+            )
             for table_type, level in self.tasks:
                 level_desc = (
                     f"{table_type.replace('_', ' ').title()} ({level.title()})"
                 )
-                progress.update(alpha_task, description=_format_task_desc(level_desc))
+                progress.update(
+                    alpha_task, 
+                    description=_format_task_desc(level_desc)
+                )
                 
                 # Initialize data storage
                 _init_dict_level(self.results, group_column, table_type, level)
@@ -196,7 +203,10 @@ class AlphaDiversity:
                     
                 finally:
                     progress.update(alpha_task, advance=1)
-        progress.update(alpha_task, description=_format_task_desc(alpha_desc))    
+        progress.update(
+            alpha_task, 
+            description=_format_task_desc(alpha_desc)
+        )    
         return self.results
         
     def get_enabled_tasks(self):
