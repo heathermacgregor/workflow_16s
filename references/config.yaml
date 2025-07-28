@@ -80,7 +80,7 @@ group_column: "nuclear_contamination_status" # The metadata column that defines 
 group_column_type: "bool"
 group_column_values: 
   - True
-  - False
+  - False 
 
 metadata_id_column: '#sampleid'
 dataset_column: "dataset_name"
@@ -275,10 +275,6 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
@@ -289,10 +285,6 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
@@ -303,10 +295,6 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
@@ -317,10 +305,6 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
@@ -331,10 +315,6 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
