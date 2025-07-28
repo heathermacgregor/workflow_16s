@@ -9,8 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.stats.tests import (
@@ -23,7 +22,7 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 logger = logging.getLogger("workflow_16s")
 
-# ================================= DEFAULT VALUES =================================== #
+# =================================== FUNCTIONS ====================================== #
 
 def get_enabled_tasks(
     config: Dict, 
@@ -156,7 +155,7 @@ class StatisticalAnalyzer:
 
 
 class TopFeaturesAnalyzer:
-    """Identifies top differentially abundant features based on statistical results"""
+    """Identifies top differentially abundant features based on statistical results."""
     def __init__(
         self, 
         cfg: Dict, 
