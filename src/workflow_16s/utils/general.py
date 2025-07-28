@@ -19,6 +19,14 @@ logger = logging.getLogger('workflow_16s')
 
 # =================================== DATA UTILS ===================================== #
 
+def print_dict_structure(d, parent_key):
+    for k, v in d.items():
+        new_key = f"{parent_key}.{k}"
+        if isinstance(v, dict):
+            print_dict_structure(v, new_key)
+        else:
+            logger.info(f"{new_key}: {type(v)}")
+
 # TODO: Delete if unused
 def get_first_existing_col(
     df: pd.DataFrame, 
