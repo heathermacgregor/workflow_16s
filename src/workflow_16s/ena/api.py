@@ -34,8 +34,7 @@ logger = logging.getLogger("workflow_16s")
 # ===================================== FUNCTIONS ===================================== #
 
 class MetadataFetcher:
-    """
-    Fetches metadata from the ENA database for a given ENA project accession.
+    """Fetches metadata from the ENA database for a given ENA project accession.
 
     Args:
         base_url:             Base URL for the ENA API. Defaults to
@@ -135,8 +134,7 @@ class MetadataFetcher:
     def get_sample_metadata_concurrent(
         self, sample_task: int, ena_sample_accessions: List[str], max_workers: int = 5
     ) -> pd.DataFrame:
-        """
-        Fetch metadata for multiple samples concurrently.
+        """Fetch metadata for multiple samples concurrently.
 
         Args:
             sample_task:           Progress task ID for tracking sample
@@ -240,8 +238,7 @@ class MetadataFetcher:
 
 
 class SequenceFetcher:
-    """
-    Fetches sequencing data from the ENA database for given accessions.
+    """Fetches sequencing data from the ENA database for given accessions.
 
     Args:
         fastq_dir:     Directory to save downloaded FASTQ files.
@@ -310,8 +307,7 @@ class SequenceFetcher:
     def download_run_fastq_concurrent(
         self, metadata: pd.DataFrame
     ) -> Dict[str, List[str]]:
-        """
-        Download sequencing data concurrently.
+        """Download sequencing data concurrently.
 
         Args:
             metadata: DataFrame containing run accessions and FTP URLs.
@@ -409,7 +405,7 @@ class PooledSamplesProcessor:
 
     @staticmethod
     def merge_files(input_files: List[Union[str, Path]], output_file: Union[str, Path]):
-        """Merge multiple FASTQ.gz files"""
+        """Merge multiple FASTQ.gz files."""
         with gzip.open(output_file, "wb") as wfd:
             for f in input_files:
                 with gzip.open(f, "rb") as fd:
