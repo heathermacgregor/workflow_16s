@@ -97,7 +97,7 @@ top_features:
   
 nfc_facilities:
   enabled: True
-  use_local: False
+  use_local: True
   databases:
     - name: "GEM"
     - name: "NFCIS"
