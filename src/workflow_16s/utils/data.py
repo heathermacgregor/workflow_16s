@@ -285,9 +285,9 @@ def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
 
 def filter(
     table: Union[dict, Table, pd.DataFrame],
-    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
-    min_samples: int = DEFAULT_MIN_SAMPLES,
-    min_counts: int = DEFAULT_MIN_COUNTS,
+    min_rel_abundance: float = constants.DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = constants.DEFAULT_MIN_SAMPLES,
+    min_counts: int = constants.DEFAULT_MIN_COUNTS,
 ) -> Table:
     """Filter features and samples with strict type enforcement.
     
