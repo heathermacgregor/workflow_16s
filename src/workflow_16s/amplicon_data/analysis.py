@@ -5,8 +5,7 @@ import glob
 import logging
 import os
 import time
-import warnings
-import threading  # Added for thread locking
+import threading  
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from copy import deepcopy
 from pathlib import Path
@@ -28,7 +27,9 @@ from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixi
 from workflow_16s.amplicon_data.feature_selection import FeatureSelection
 from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.preprocessing import _DataLoader, _TableProcessor
-from workflow_16s.amplicon_data.statistical_analyses import run_statistical_tests_for_group, TopFeaturesAnalyzer
+from workflow_16s.amplicon_data.statistical_analyses import (
+    run_statistical_tests_for_group, TopFeaturesAnalyzer
+)
 from workflow_16s.amplicon_data.top_features import top_features_plots
 from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
@@ -36,11 +37,9 @@ from workflow_16s.function.faprotax import (
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
 
-# ========================== INITIALISATION & CONFIGURATION ========================== #
+# ==================================== FUNCTIONS ===================================== #
 
 logger = logging.getLogger("workflow_16s")
-warnings.filterwarnings("ignore")
-
 # Global lock for UMAP operations to prevent thread conflicts
 umap_lock = threading.Lock()
 
@@ -86,7 +85,7 @@ def check_if_two_vals(group_column, meta):
 
 
 class AmpliconData:
-    """Main class for orchestrating 16S amplicon data analysis pipeline"""
+    """Main class for orchestrating 16S amplicon data analysis pipeline."""
     
     def __init__(
         self, 
@@ -188,8 +187,12 @@ class _AnalysisManager(_ProcessingMixin):
 
         self.group_columns = self.config.get('group_columns', [])            
 
-        self.group_column = self.config.get('group_column', constants.DEFAULT_GROUP_COLUMN)
-        self.group_column_values = self.config.get('group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES)
+        self.group_column = self.config.get(
+            'group_column', constants.DEFAULT_GROUP_COLUMN
+        )
+        self.group_column_values = self.config.get(
+            'group_column_values', constants.DEFAULT_GROUP_COLUMN_VALUES
+        )
         
         self._faprotax_cache = {}
 
