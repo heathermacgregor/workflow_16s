@@ -36,20 +36,12 @@ from api.api_io import (
     save_with_print,
 )
 
-project_root = str(Path(__file__).resolve().parent.parent.parent) # Adjust .parent count
+project_root = str(Path(__file__).resolve().parents[2])
+print(f"Added to path: {project_root}") # Check this points to the correct folder
 sys.path.append(project_root)
-
-print(f"Added to path: {project_root}")  # Check this points to the folder with workflow_16s
-print(sys.path)  # Ensure the path appears in the list
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
-#import workflow_16s.custom_tmp_config
+print(sys.path) # Ensure the path appears in the list
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
 
 # ================================= DEFAULT VALUES =================================== #
 
