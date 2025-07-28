@@ -1,12 +1,15 @@
 """
 16S rRNA Analysis Pipeline 
-Full Implementation
-Comprehensive workflow for microbial community analysis from raw data to processed 
-results.
+----------------------------------------------------------------------------------------
+Comprehensive workflow for analysis of 16S rRNA amplicon sequencing (microbial 
+community) data from raw data to processed results.
+Primarily set up to analyze how contamination from nuclear fuel cycle (NFC) activities
+affects microbial community composition.
 """
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
+import argparse
 import itertools
 import logging
 import os
@@ -14,7 +17,6 @@ import re
 import shutil
 import subprocess
 import sys
-import warnings
 from collections import Counter
 from pathlib import Path
 from pprint import pprint
@@ -24,13 +26,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import numba
 
-os.environ['NUMBA_NUM_THREADS'] = '8'  # Match your n_jobs setting
-numba.config.NUMBA_NUM_THREADS = 8
-
 # ================================== LOCAL IMPORTS =================================== #
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
+
+from workflow_16s import constants
 from workflow_16s import ena
 from workflow_16s.config import get_config
 from workflow_16s.figures.html_report import generate_html_report
@@ -41,61 +42,44 @@ from workflow_16s.qiime.workflows.execute_workflow import (
     execute_per_dataset_qiime_workflow as execute_qiime
 )
 from workflow_16s.sequences.sequence_processing import process_sequences
-from workflow_16s.utils import df_utils, dir_utils, file_utils, misc_utils
-#from workflow_16s.utils.amplicon_data import AmpliconData
+from workflow_16s.utils.dir_utils import SubDirs
+from workflow_16s.utils.file_utils import load_datasets_list, load_datasets_info
+from workflow_16s.utils.general import print_data_dicts
 from workflow_16s.amplicon_data.analysis import AmpliconData
 from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
 
-# ================================ CUSTOM TMP CONFIG ================================= #
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 import workflow_16s.custom_tmp_config
 
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-
-warnings.filterwarnings("ignore") # Suppress warnings
 pd.set_option('display.max_colwidth', None)
 pd.set_option('future.no_silent_downcasting', True)
 
-# ================================= DEFAULT VALUES =================================== #
+os.environ['NUMBA_NUM_THREADS'] = '8'  # Match your n_jobs setting
+numba.config.NUMBA_NUM_THREADS = 8
 
-DEFAULT_CONFIG = (
-    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
-    / "references"
-    / "config.yaml"
-)
-DEFAULT_PER_DATASET = (
-    Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))) 
-    / "src" / "workflow_16s" / "qiime" / "workflows" / "per_dataset_run.py"
-)
-DEFAULT_CLASSIFIER = "silva-138-99-515-806"
-DEFAULT_N = 20
-DEFAULT_MAX_WORKERS_ENA = 16
-DEFAULT_MAX_WORKERS_SEQKIT = 8
-ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
+# =================================== MAIN WORKFLOW ================================== #        
 
-# =================================== MAIN WORKFLOW ================================== #
-
-def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
-    """
-    Identify existing subsets with required QIIME outputs without running upstream 
-    processing.
+def get_existing_subsets(config, logger) -> Dict[str, Dict[str, Path]]:
+    """Without running upstream processing, identify existing subsets that have
+    required QIIME outputs.
     
     Args:
-        cfg:    Configuration dictionary from the workflow.
-        logger: Logger instance for logging messages.
+        config: Configuration dictionary.
+        logger: Logger instance.
         
     Returns:
         Dictionary mapping subset IDs to dictionaries of file paths.
     """
-    project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    classifier = cfg["qiime2"]["per_dataset"]["taxonomy"].get(
-        "classifier", DEFAULT_CLASSIFIER
+    project_dir = SubDirs(config["project_dir"])
+    classifier = config["qiime2"]["per_dataset"]["taxonomy"].get(
+        "classifier", constants.DEFAULT_CLASSIFIER
     )
-    datasets = load_datasets_list(cfg["dataset_list"])
-    datasets_info = load_datasets_info(cfg["dataset_info"])
+    datasets = load_datasets_list(config["dataset_list"])
+    datasets_info = load_datasets_info(config["dataset_info"])
     existing_subsets = {}
 
     # Define required files and their keys
@@ -105,7 +89,7 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
         "rep_seqs": "rep-seqs/dna-sequences.fasta",
         "taxonomy": f"{classifier}/taxonomy/taxonomy.tsv",
     }
-    if cfg["target_subfragment_mode"] == "any":
+    if config["target_subfragment_mode"] == "any":
         required_files["table_6"] = "table_6/feature-table.biom"
 
     # Process each dataset to get expected subsets
@@ -115,7 +99,7 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
             dataset_info = dataset_first_match(dataset, datasets_info)
 
             # Generate potential subsets
-            subsets = SubsetDataset(cfg)
+            subsets = SubsetDataset(config)
             subsets.process(dataset, dataset_info)
             
             for subset in subsets.success:
@@ -154,34 +138,43 @@ def get_existing_subsets(cfg, logger) -> Dict[str, Dict[str, Path]]:
         except Exception as e:
             logger.error(f"❌ Error processing dataset {dataset} for existing subsets: {str(e)}")
     
-    logger.info(f"Found {len(existing_subsets)} completed subsets with all required outputs")
+    logger.info(f"Found {len(existing_subsets)} completed subsets")
     return existing_subsets
     
+
+def upstream(config, logger, project_dir) -> Union[List, None]:
+    """Run the "upstream" part of the workflow (raw data to feature tables).
     
-def upstream(cfg, logger) -> None:
-    """Orchestrate entire analysis workflow."""
+    Args:
+        config: Configuration dictionary.
+        logger: Logger instance.
+    """
+    qiime_config = config.get("qiime2", {})
+    qiime_per_dataset_config = qiime_config.get("per_dataset", {})
+    qiime_hard_rerun = qiime_per_dataset_config.get("hard_rerun", False)
+    classifier = qiime_per_dataset_config.get("taxonomy", {}).get(
+        "classifier", constants.DEFAULT_CLASSIFIER
+    )
+
     success_subsets, fail_subsets = [], []
     qiime_outputs = {}
     try:
-        qiime_hard_rerun = cfg["qiime2"]["per_dataset"].get("hard_rerun", False)
-        classifier = cfg["qiime2"]["per_dataset"]["taxonomy"]["classifier"]
-        project_dir = dir_utils.SubDirs(cfg["project_dir"])
-        datasets = file_utils.load_datasets_list(cfg["dataset_list"])
-        datasets_info = file_utils.load_datasets_info(cfg["dataset_info"])
+        datasets = load_datasets_list(config["dataset_list"])
+        datasets_info = load_datasets_info(config["dataset_info"])
         
         for dataset in datasets:
             try:
-                # Partition datasets by processing requirements 
+                # Partition datasets into subsets by processing requirements 
                 dataset_info = dataset_first_match(dataset, datasets_info)
 
-                subsets = SubsetDataset(cfg)
+                subsets = SubsetDataset(config)
                 subsets.process(dataset, dataset_info)
 
                 for subset in subsets.success:
                     try:
                         sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
-                        # Subset identifier:
-                        # dataset.instrument_platform.library_layout.target_subfragment.FWD_SEQ_REV_SEQ
+                        # Subset identifier: dataset, instrument_platform, library_layout,
+                        # target_subfragment, FWD_SEQ_REV_SEQ
                         subset_id = (
                             subset["dataset"] + '.' 
                             + subset["instrument_platform"].lower() + '.' 
@@ -219,7 +212,7 @@ def upstream(cfg, logger) -> None:
                                 continue
 
                         seq_paths, seq_stats = process_sequences(
-                            cfg=cfg,
+                            config=config,
                             subset=subset,
                             subset_dirs=subset_dirs,
                             info=dataset_info,
@@ -231,14 +224,14 @@ def upstream(cfg, logger) -> None:
 
                         qiime_dir = subset_dirs["qiime"]
                         qiime_outputs = execute_qiime(
-                            cfg, subset, qiime_dir, metadata_path, manifest_path
+                            config, subset, qiime_dir, metadata_path, manifest_path
                         )
 
                         qiime_outputs[subset["dataset"]] = qiime_outputs
                         success_subsets.append(subset["dataset"])
 
                         # Check if clean_fastq is enabled
-                        clean_fastq = cfg.get("clean_fastq", {}).get("enabled", True)
+                        clean_fastq = config.get("clean_fastq", {}).get("enabled", True)
                         dataset_type = dataset_info.get('dataset_type', '').upper()
                         if clean_fastq and dataset_type == 'ENA':
                             dir_types = ["raw_seqs", "trimmed_seqs"]
@@ -267,8 +260,9 @@ def upstream(cfg, logger) -> None:
             f"📢 Processing complete! Succeeded for {n_success_subsets} of {n_total_subsets} subsets"
         )
         if fail_subsets:
-            fail_subsets_report = '\n'.join(["ℹ️ Failure details:"] + [f"    • {dataset}: {error}" 
-                                                                      for dataset, error in fail_subsets])
+            fail_subsets_report = '\n'.join(
+                ["ℹ️ Failure details:"] + [f"    • {dataset}: {error}" for dataset, error in fail_subsets]
+            )
             logger.info(fail_subsets_report)
 
         metadata_dfs = [import_metadata_tsv(i['metadata']) 
@@ -278,7 +272,7 @@ def upstream(cfg, logger) -> None:
         completeness = metadata_df.sort_index(axis=1).notna().mean() * 100
         logger.info(f"\n{completeness}")
 
-        table_type = 'table_6' if cfg['target_subfragment_mode'] == 'any' else 'table'
+        table_type = 'table_6' if config['target_subfragment_mode'] == 'any' else 'table'
         table_dfs = [import_table_biom(i[table_type]) 
                      for i in qiime_outputs.values()]
         table_df = pd.concat(table_dfs)
@@ -292,55 +286,83 @@ def upstream(cfg, logger) -> None:
         )
         raise
 
-def downstream(cfg, logger) -> None:
-    project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    if not cfg.get("upstream", {}).get("enabled", False):
-        existing_subsets = None
-        if cfg.get("downstream", {}).get("find_subsets", False):
-            existing_subsets = get_existing_subsets(cfg, logger)
+def downstream(config, logger, project_dir, existing_subsets) -> None:
+    """Run the "downstream" part of the workflow (feature table analysis).
+
+    Args:
+        config:           Configuration dictionary.
+        logger:           Logger instance.
+        existing_subsets: Successful subsets from "upstream" processing,
+        if it was performed, otherwise None.
+    """
+    # Get existing subsets
+    if existing_subsets == None:
+        if config.get("downstream", {}).get("find_subsets", False):
+            existing_subsets = get_existing_subsets(config, logger)
             logger.info(f"Found {len(existing_subsets)} completed subsets")
+        else:
+            logger.error(
+                "No existing subsets from upstream processing and finding subsets "
+                "in downstream processing is disabled."
+            )
+            raise
             
-    data = AmpliconData(
-        cfg=cfg,
-        project_dir=project_dir,
-        mode='genus' if cfg["target_subfragment_mode"] == 'any' else 'asv',
-        existing_subsets=existing_subsets,
-        verbose=False        
-    )
-    def print_dict_structure(d, parent_key):
-        for k, v in d.items():
-            new_key = f"{parent_key}.{k}"
-            if isinstance(v, dict):
-                print_dict_structure(v, new_key)
-            else:
-                logger.info(f"{new_key}: {type(v)}")
-    
-    # Assuming 'data' is the object to analyze
-    for attr_name, attr_value in data.__dict__.items():
-        if not attr_name.startswith('__'):
-            logger.info(f"{attr_name}: {type(attr_value)}")
-            if isinstance(attr_value, dict):
-                print_dict_structure(attr_value, attr_name)
+    mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
+    verbose = False
+    try:
+        amplicon_data = AmpliconData(
+            config=config,
+            project_dir=project_dir,
+            mode=mode,
+            existing_subsets=existing_subsets,
+            verbose=verbose        
+        )
+    except Exception as e:
+        logger.error(f"Failed processing amplicon data: {str(e)}")
+    finally:
+        if verbose:
+            print_data_dicts(data)
         
-    report_path = Path(project_dir.final) / "analysis_report.html"
-    generate_html_report(
-        amplicon_data=data,
-        output_path=report_path
-    )
-    logger.info(f"HTML report generated at: {report_path}")
+    output_path = Path(project_dir.final) / "analysis_report.html"
+    try:
+        generate_html_report(
+            amplicon_data=amplicon_data,
+            output_path=output_path
+        )
+        logger.info(f"HTML report generated at: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed generating HTML report: {str(e)}")
     
 
-def main(config_path: Path = DEFAULT_CONFIG) -> None:
-    """Orchestrate entire analysis workflow."""    
-    cfg = get_config(config_path)
-    project_dir = dir_utils.SubDirs(cfg["project_dir"])
-    logger = setup_logging(project_dir.logs)
+class Workflow16S:
+    def __init__(self, config_path: Path = constants.DEFAULT_CONFIG):
+        self.config = get_config(config_path)
+        self.project_dir = SubDirs(self.config["project_dir"])
+        self.logger = setup_logging(self.project_dir.logs)
 
-    if cfg.get("upstream", {}).get("enabled", False):
-        upstream(cfg, logger)
-    if cfg.get("downstream", {}).get("enabled", False):
-        downstream(cfg, logger)
+    def run(self):
+        if self.config.get("upstream", {}).get("enabled", False):
+            success_subsets = upstream(self.config, self.logger, self.project_dir)
+        else:
+            success_subsets = None
+        if self.config.get("downstream", {}).get("enabled", False):
+            downstream(self.config, self.logger, self.project_dir, success_subsets)
+            
+
+def main(config_path: Path = constants.DEFAULT_CONFIG) -> None:
+    """Run the entire workflow."""    
+    workflow = Workflow16S(config_path)
+    workflow.run()
 
 
 if __name__ == "__main__":
-    main()
+    # Get custom config.yaml file from system arguments
+    parser = argparse.ArgumentParser(description="Run 16S workflow.")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=constants.DEFAULT_CONFIG,
+        help="Path to the configuration file.",
+    )
+    args = parser.parse_args()
+    main(args.config)
