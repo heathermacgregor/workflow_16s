@@ -2,25 +2,13 @@
 
 # Standard Library Imports
 import argparse
-import os
-import sys
-import warnings
+import os, sys
 from pathlib import Path
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from per_dataset import Dataset, WorkflowRunner
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
-#import workflow_16s.custom_tmp_config
-
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
-
-# Suppress warnings
-warnings.filterwarnings("ignore")
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -72,9 +60,9 @@ def parse_instrument_platform(value):
 def main(args):
     """Main workflow execution function with error handling."""
     try:
-        print("Starting 16S processing workflow...")
+        print("Starting 16S processing workflow")
         completed = WorkflowRunner(vars(args)).execute()
-        print(f"Workflow completed successfully: {completed}")
+        print(f"Workflow completed: {completed}")
         return 0
     except Exception as e:
         print(f"Workflow failed: {str(e)}")
@@ -90,8 +78,8 @@ if __name__ == "__main__":
         epilog='QIIME 2 per-dataset amplicon data processing script.'
     )
     
-    # Input/Output parameters
-    io_group = parser.add_argument_group("Input/Output")
+    # Input/Output Parameters
+    io_group = parser.add_argument_group("Input/Output Parameters")
     io_group.add_argument(
         "--manifest_tsv",
         type=validate_file, # Check that the file exists and is readable
@@ -111,7 +99,7 @@ if __name__ == "__main__":
         help="Path to the output directory for QIIME2 processing results",
     )
 
-    # Sequencing parameters
+    # Sequencing Parameters
     seq_group = parser.add_argument_group("Sequencing Parameters")
     seq_group.add_argument(
         "--library_layout",
@@ -122,11 +110,10 @@ if __name__ == "__main__":
     seq_group.add_argument(
         "--instrument_platform",
         required=True,
-        #type=parse_instrument_platform,
         help="Sequencing platform used (e.g., Illumina, 454, Ion_Torrent, Oxford_Nanopore — case-insensitive)",
     )
     
-    # Primer parameters
+    # Primer Parameters
     primer_group = parser.add_argument_group("Primer Parameters")
     primer_group.add_argument(
         "--fwd_primer", 
@@ -139,7 +126,7 @@ if __name__ == "__main__":
         help="Reverse primer sequence (5' to 3')"
     )
 
-    # Classification parameters
+    # Classification Parameters
     class_group = parser.add_argument_group("Classification Parameters")
     class_group.add_argument(
         "--classifier",
@@ -165,7 +152,7 @@ if __name__ == "__main__":
         help="Confidence threshold for retaining taxonomy assignments",
     )
 
-    # Processing parameters
+    # Processing Parameters
     proc_group = parser.add_argument_group("Processing Parameters")
     proc_group.add_argument(
         "--denoise_algorithm",
@@ -182,7 +169,6 @@ if __name__ == "__main__":
     proc_group.add_argument(
         "--chimera_method",
         default="consensus",
-        #choices=[],
         help="Method for chimera detection",
     )
     proc_group.add_argument(
