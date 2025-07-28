@@ -9,8 +9,7 @@ from typing import List, Optional, Tuple, Union
 import pandas as pd
 from biom import Table 
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s.utils.data import table_to_df
 
 # ================================== LOGGER SETUP ==================================== #
