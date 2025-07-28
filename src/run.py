@@ -26,17 +26,18 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import numba
 
-# ================================== LOCAL IMPORTS =================================== #
-
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(parent_dir)
+# Local Imports
+parent_dir = Path(__file__).resolve().parents[1]
+sys.path.append(str(parent_dir))
 
 from workflow_16s import constants
 from workflow_16s import ena
+
 from workflow_16s.config import get_config
-from workflow_16s.figures.html_report import generate_html_report
-from workflow_16s.figures.html_report_test import Section
 from workflow_16s.logger import setup_logging 
+
+from workflow_16s.amplicon_data.analysis import AmpliconData
+from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.qiime.workflows.execute_workflow import (
     execute_per_dataset_qiime_workflow as execute_qiime
@@ -45,7 +46,6 @@ from workflow_16s.sequences.sequence_processing import process_sequences
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.file_utils import load_datasets_list, load_datasets_info
 from workflow_16s.utils.general import print_data_dicts
-from workflow_16s.amplicon_data.analysis import AmpliconData
 from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
@@ -173,6 +173,7 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
                 for subset in subsets.success:
                     try:
                         sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
+                        
                         # Subset identifier: dataset, instrument_platform, library_layout,
                         # target_subfragment, FWD_SEQ_REV_SEQ
                         subset_id = (
