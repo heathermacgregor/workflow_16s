@@ -1,6 +1,8 @@
 # workflow_16s
 
-A modular, extensible **16S rRNA microbiome analysis pipeline** supporting preprocessing, taxonomy assignment, diversity analysis, machine learning, and visualization—designed for reproducible research.
+A modular, extensible **16S rRNA microbiome analysis pipeline** supporting preprocessing, taxonomy assignment, diversity analysis, machine learning, and visualization. Designed for reproducible research.
+
+> See an example output file [here](https://heathermacgregor.github.io/workflow_16s/info/Example_Report.html).
 
 ---
 
