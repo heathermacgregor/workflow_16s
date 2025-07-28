@@ -214,7 +214,7 @@ def merge_table_with_meta(
 def update_table_and_meta(
     table: Table,
     meta: pd.DataFrame,
-    sample_col: str = DEFAULT_META_ID_COL
+    sample_col: str = constants.DEFAULT_META_ID_COLUMN
 ) -> Tuple[Table, pd.DataFrame]:
     """Align BIOM table with metadata using sample IDs.
     
