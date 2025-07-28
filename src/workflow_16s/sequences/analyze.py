@@ -347,7 +347,7 @@ class Analyzer:
             
             # Collect results
             primer_results = primer_future.result()
-            for future in (as_completed(blast_futures), total=len(blast_futures)):
+            for future in tqdm(as_completed(blast_futures), total=len(blast_futures)):
                 run_id = blast_futures[future]
                 try:
                     blast_df = future.result()
@@ -479,7 +479,7 @@ def estimate_16s_subfragment(
             executor.submit(validator.validate, files[0]): run_id
             for run_id, files in run_files.items()
         }
-        for future in (as_completed(futures), total=len(futures)):
+        for future in tqdm(as_completed(futures), total=len(futures)):
             run_id = futures[future]
             try:
                 is_valid, metrics = future.result()
@@ -523,7 +523,7 @@ def validate_16s(
             executor.submit(validator.validate, files[0]): run_id
             for run_id, files in run_files.items()
         }
-        for future in (as_completed(futures), total=len(futures)):
+        for future in tqdm(as_completed(futures), total=len(futures)):
             run_id = futures[future]
             try:
                 is_valid, metrics = future.result()
