@@ -15,8 +15,7 @@ import pandas as pd
 import numpy as np
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.figures.merged import (
@@ -30,24 +29,19 @@ from workflow_16s.stats.beta_diversity import (
     tsne as calculate_tsne,
     umap as calculate_umap,
 )
-from workflow_16s.utils.data import (
-    table_to_df, update_table_and_meta
-)
+from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
-
 # Global lock for UMAP operations to prevent thread conflicts
 umap_lock = threading.Lock()
 
-# ================================= DEFAULT VALUES =================================== #
+# =================================== FUNCTIONS ====================================== #
 
 class Ordination:
-    """
-    Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures.
-    """
+    """Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures."""
     
     TEST_CONFIG = {
         "pca": {
@@ -85,10 +79,8 @@ class Ordination:
         tables: Dict[str, Dict[str, Table]],
         verbose: bool = False
     ):
-        self.config = config
-        self.meta = meta
-        self.tables = tables
-        self.verbose = verbose
+        self.config, self.verbose = config, verbose
+        self.meta, self.tables = meta, tables
         self.color_columns = config['maps'].get(
             "color_columns",
             [
@@ -97,18 +89,16 @@ class Ordination:
                 "env_feature", "env_material", "country"
             ],
         )
-        self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)  # Uncommented and fixed
+        self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)  
         self.results = {}
-        ordination_config = self.config.get('ordination', {})
         
+        ordination_config = self.config.get('ordination', {})
         if not ordination_config.get('enabled', False):
             logger.info("Beta diversity analysis (ordination) disabled")
             self.tasks = []
             return
             
-        self.tasks = self.get_enabled_tasks()  # Fixed: call instance method
-        
-        
+        self.tasks = self.get_enabled_tasks()          
         if len(self.tasks) == 0:
             logger.info("No methods for beta diversity analysis (ordination) enabled")
 
@@ -141,8 +131,8 @@ class Ordination:
             ]
             
             for level in enabled_levels:
-                for method in enabled_methods:  # Fixed: use singular 'method'
-                    tasks.append((table_type, level, method))  # Fixed: append method not methods
+                for method in enabled_methods:  
+                    tasks.append((table_type, level, method))  
         
         return tasks
 
@@ -167,7 +157,7 @@ class Ordination:
             
         with get_progress_bar() as progress:
             stats_desc = f"Running beta diversity"
-            stats_task = progress.add_task(  # Fixed variable name consistency
+            stats_task = progress.add_task(  
                 _format_task_desc(stats_desc),
                 total=len(self.tasks)
             )
@@ -183,7 +173,7 @@ class Ordination:
                 for table_type, level, method in self.tasks:
                     method_desc = (
                         f"{table_type.replace('_', ' ').title()} ({level.title()})"
-                        f" → {self.TEST_CONFIG[method]['name']}"  # Fixed: use self.TEST_CONFIG
+                        f" → {self.TEST_CONFIG[method]['name']}"  
                     )
                     
                     # Create progress task for this method
@@ -198,13 +188,13 @@ class Ordination:
                     
                     # Align table and metadata
                     table = self.tables[table_type][level]
-                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)  # Fixed: call instance method
+                    table_aligned, meta_aligned = update_table_and_meta(table, self.meta)  
                         
                     future = executor.submit(
                         self._run_single_ordination,
                         table=table_aligned,
                         meta=meta_aligned,
-                        symbol_col=self.group_column,  # Fixed: use defined group column
+                        symbol_col=self.group_column,  
                         table_type=table_type,
                         level=level,
                         method=method,
@@ -230,7 +220,7 @@ class Ordination:
                             errors[key] = str(e)
                             logger.error(f"Ordination failed for {key}: {str(e)}")
                         finally:
-                            progress.update(stats_task, advance=1)  # Fixed: use stats_task
+                            progress.update(stats_task, advance=1)  
                 except TimeoutError:
                     logger.warning("Ordination timeout - proceeding with completed results")
                 
@@ -242,7 +232,7 @@ class Ordination:
     ):
         try:
             progress.update(method_task, description=_format_task_desc(method_desc))
-            result, figures = self._run_test(  # Fixed: call _run_test
+            result, figures = self._run_test(  
                 table=table,
                 metadata=meta,
                 symbol_col=symbol_col,
@@ -269,7 +259,7 @@ class Ordination:
             # Special handling for PCoA
             if method == "pcoa":
                 method_params["metric"] = self.config['ordination']['tables'][table_type].get("pcoa_metric", "braycurtis")
-                logger.debug(f"Using PCoA metric: {method_params['metric']}")  # Reduced log level
+                logger.debug(f"Using PCoA metric: {method_params['metric']}")  
             
             # Special handling for UMAP/TSNE thread safety
             if method in ["tsne", "umap"]:
