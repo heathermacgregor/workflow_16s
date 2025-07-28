@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
 from workflow_16s.utils.data import (
@@ -26,7 +25,6 @@ from workflow_16s.utils.io import (
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
 
-
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
@@ -34,9 +32,7 @@ logger = logging.getLogger("workflow_16s")
 # ================================= DEFAULT VALUES =================================== #
 
 class _DataLoader(_ProcessingMixin):
-    """
-    Loads and processes microbiome data from BIOM files and metadata.
-    """
+    """Loads and processes microbiome data from BIOM files and metadata."""
     
     MODE_CONFIG = {
         "asv": ("table", "asv"), 
@@ -51,12 +47,15 @@ class _DataLoader(_ProcessingMixin):
         existing_subsets: Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
-        self.cfg, self.project_dir, self.mode, self.existing_subsets, self.verbose = config, project_dir, mode, existing_subsets, verbose
+        self.cfg, self.project_dir, self.mode = config, project_dir, mode
+        self.existing_subsets, self.verbose = existing_subsets, verbose
+        
         self._validate_mode()
         self._load_metadata()
         self._load_biom_table()
         self._filter_and_align()
-
+        
+    # Type hints
     meta: pd.DataFrame
     nfc_facilities: pd.DataFrame
     meta_nfc_facilities: pd.DataFrame
@@ -78,7 +77,9 @@ class _DataLoader(_ProcessingMixin):
         for bi in self._get_biom_paths_glob():
             ds_dir = bi.parent if bi.is_file() else bi
             tail = ds_dir.parts[-6:-1]
-            mp = Path(self.project_dir.metadata_per_dataset).joinpath(*tail, "sample-metadata.tsv")
+            mp = Path(self.project_dir.metadata_per_dataset).joinpath(
+                *tail, "sample-metadata.tsv"
+            )
             if mp.exists():
                 paths.append(mp)
         if self.verbose:
@@ -104,7 +105,11 @@ class _DataLoader(_ProcessingMixin):
             
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(cfg=self.cfg, meta=self.meta, output_dir=self.project_dir.final)
+            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(
+                cfg=self.cfg,
+                meta=self.meta, 
+                output_dir=self.project_dir.final
+            )
         else:
             self.nfc_facilities, self.meta_nfc_facilities = None, None
             
@@ -151,17 +156,17 @@ class _DataLoader(_ProcessingMixin):
         )
         ftype = "genera" if self.mode == "genus" else "ASVs"
         logger.info(
-            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples × {self.meta.shape[1]:>5} cols"
+            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples "
+            f"× {self.meta.shape[1]:>5} cols"
         )
         logger.info(
-            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples × {self.table.shape[0]:>5} {ftype}"
+            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples "
+            f"× {self.table.shape[0]:>5} {ftype}"
         )
 
 
 class _TableProcessor(_ProcessingMixin):
-    """
-    Processes feature tables through various transformations and taxonomical collapses.
-    """
+    """Processes feature tables through various transformations and taxonomical collapses."""
     
     def __init__(
         self,
@@ -174,11 +179,11 @@ class _TableProcessor(_ProcessingMixin):
         verbose: bool,
     ) -> None:
         self.config, self.mode, self.verbose = config, mode, verbose
+        self.project_dir, self.output_dir = project_dir, output_dir
         self.meta = meta
-        self.output_dir = output_dir
-        self.project_dir = project_dir
-        self.levels = ["phylum", "class", "order", "family", "genus"]
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
+        self.levels = ["phylum", "class", "order", "family", "genus"]
+        
         self._apply_preprocessing()
         self._collapse_taxa()
         self._create_presence_absence()
@@ -232,9 +237,13 @@ class _TableProcessor(_ProcessingMixin):
                             progress, table_task
                         )
                         duration = time.perf_counter() - start_time
-                        logger.debug(f"Collapsed {table_type} to {level} in {duration:.2f}s")
+                        logger.debug(
+                            f"Collapsed {table_type} to {level} in {duration:.2f}s"
+                        )
                     except Exception as e:
-                        logger.error(f"Taxonomic collapse failed for {table_type}/{level}: {e}")
+                        logger.error(
+                            f"Taxonomic collapse failed for {table_type}/{level}: {e}"
+                        )
                         processed[level] = None
                     finally:
                         progress.update(table_task, advance=1)
@@ -266,7 +275,9 @@ class _TableProcessor(_ProcessingMixin):
                     processed[level] = presence_absence(collapsed_table)
                     duration = time.perf_counter() - start_time
                     if self.verbose:
-                        logger.debug(f"Created Presence/Absence table for {level} in {duration:.2f}s")
+                        logger.debug(
+                            f"Created Presence/Absence table for {level} in {duration:.2f}s"
+                        )
                 except Exception as e:
                     logger.error(f"Presence/Absence failed for {level}: {e}")
                     processed[level] = None
@@ -313,7 +324,9 @@ class _TableProcessor(_ProcessingMixin):
                     try:
                         future.result()
                         if self.verbose:
-                            logger.debug(f"Exported {table_type}/{level} to {out_path}")
+                            logger.debug(
+                                f"Exported {table_type}/{level} to {out_path}"
+                            )
                     except Exception as e:
                         logger.error(f"Failed to export {out_path}: {str(e)}")
                     finally:
