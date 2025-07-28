@@ -22,45 +22,29 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from tqdm import tqdm
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
+from workflow_16s import constants
 from workflow_16s.utils.data import merge_table_with_meta, table_to_df
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
-debug_mode = False
-
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_N_CLUSTERS = 10
-DEFAULT_RANDOM_STATE = 0
-
-DEFAULT_GROUP_COLUMN = 'nuclear_contamination_status'
-DEFAULT_GROUP_COLUMN_VALUES = [True, False]
-
-DEFAULT_ALPHA_METRICS = [
-    'ace', 'chao1', 'gini_index', 'goods_coverage', 'observed_features', 
-    'pielou_evenness', 'shannon', 'simpson' 
-]
-PHYLO_METRICS = ['faith_pd', 'pd_whole_tree']
 
 # ==================================== FUNCTIONS ===================================== #
 
 def alpha_diversity(
     table: Union[Dict, Any, pd.DataFrame],
-    metrics: List[str] = DEFAULT_ALPHA_METRICS,
+    metrics: List[str] = constants.DEFAULT_ALPHA_METRICS,
     tree: Optional[Any] = None,
     pseudo_count: float = 1e-12
 ) -> pd.DataFrame:
-    """
-    Calculate alpha diversity metrics for each sample.
+    """Calculate alpha diversity metrics for each sample.
     
     Args:
         table:        Input abundance table (samples x features).
         metrics:      List of alpha diversity metrics to compute.
         tree:         Phylogenetic tree (required for phylogenetic metrics).
-        pseudo_count: Small value to avoid log(0) (default: 1e-12).
+        pseudo_count: Small value to avoid log(0) (: 1e-12).
         
     Returns:
         DataFrame with alpha diversity values (samples x metrics).
@@ -216,8 +200,7 @@ def analyze_alpha_diversity(
     group_column: str = 'nuclear_contamination_status',
     parametric: bool = False
 ) -> pd.DataFrame:
-    """
-    Analyze relationship between alpha diversity metrics and a grouping variable.
+    """Analyze relationship between alpha diversity metrics and a grouping variable.
     
     Args:
         alpha_diversity_df: DataFrame from alpha_diversity() (samples x metrics).
@@ -333,8 +316,7 @@ def analyze_alpha_correlations(
     max_categories: int = 20,
     min_samples: int = 5
 ) -> Dict[str, pd.DataFrame]:
-    """
-    Analyze relationships between alpha diversity metrics and metadata columns.
+    """Analyze relationships between alpha diversity metrics and metadata columns.
     
     Args:
         alpha_df:       DataFrame of alpha diversity metrics.
@@ -455,13 +437,12 @@ def analyze_alpha_correlations(
 def k_means(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    n_clusters: int = DEFAULT_N_CLUSTERS, 
-    random_state: int = DEFAULT_RANDOM_STATE,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
+    n_clusters: int = constants.DEFAULT_N_CLUSTERS, 
+    random_state: int = constants.DEFAULT_RANDOM_STATE,
     verbose: bool = False
 ) -> pd.Series:
-    """
-    Apply K-means clustering and return cluster labels.
+    """Apply K-means clustering and return cluster labels.
 
     Args:
         table:
@@ -492,13 +473,12 @@ def k_means(
 def ttest(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
+    group_column_values: List[Union[bool, int, str]] = constants.DEFAULT_GROUP_COLUMN_VALUES,
     equal_var: bool = False,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Performs independent t-tests for two groups.
+    """Performs independent t-tests for two groups.
     
     Args:
         table:               Input abundance table (samples x features).
@@ -542,7 +522,7 @@ def ttest(
         pooled_std = np.sqrt(((n1-1)*std1**2 + (n2-1)*std2**2) / (n1 + n2 - 2))
         cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
 
-        if debug_mode:
+        if constants.debug_mode:
             print(f"{feature}: {t_stat}, {p_val}, {mean_diff}, {cohen_d}")
             
         results.append({
@@ -576,12 +556,11 @@ def ttest(
 def mwu_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = DEFAULT_GROUP_COLUMN_VALUES,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
+    group_column_values: List[Union[bool, int, str]] = constants.DEFAULT_GROUP_COLUMN_VALUES,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Performs Mann-Whitney U tests with Bonferroni correction for two groups.
+    """Performs Mann-Whitney U tests with Bonferroni correction for two groups.
     
     Args:
         table:               Input abundance table (samples x features).
@@ -625,7 +604,7 @@ def mwu_bonferroni(
         r = 1 - (2 * u_stat) / (n1 * n2)
         median_diff = group1_values.median() - group2_values.median()
 
-        if debug_mode:
+        if constants.debug_mode:
             print(f"{feature}: {u_stat}, {p_val}, {median_diff}, {r}")
             
         results.append({
@@ -661,12 +640,11 @@ def mwu_bonferroni(
 def kruskal_bonferroni(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
     group_column_values: List[Union[bool, int, str]] = None,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Performs Kruskal-Wallis H-test with Bonferroni correction for ≥3 groups.
+    """Performs Kruskal-Wallis H-test with Bonferroni correction for ≥3 groups.
     
     Args:
         table:               Input abundance table (samples x features).
@@ -713,7 +691,7 @@ def kruskal_bonferroni(
         n_total = sum(len(g) for g in groups)
         epsilon_sq = h_stat / (n_total - 1)
         
-        if debug_mode:
+        if constants.debug_mode:
             print(f"{feature}: {h_stat}, {p_val}, {epsilon_sq}")
             
         results.append({
@@ -749,12 +727,11 @@ def kruskal_bonferroni(
 def anova(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
-    group_column: str = DEFAULT_GROUP_COLUMN,
+    group_column: str = constants.DEFAULT_GROUP_COLUMN,
     group_column_values: List[Union[bool, int, str]] = None,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Performs one-way ANOVA for ≥3 groups.
+    """Performs one-way ANOVA for ≥3 groups.
     
     Args:
         table:               Input abundance table (samples x features).
@@ -840,11 +817,10 @@ def fisher_exact_bonferroni(
     group_column_values: List[Union[bool, int, str]],
     alpha: float = 0.01,
     min_samples: int = 5,
-    debug_mode: bool = False,
+    debug_mode: bool = constants.debug_mode,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Performs Fisher's Exact Tests with Bonferroni correction for 
+    """Performs Fisher's Exact Tests with Bonferroni correction for 
     presence-absence data.
     
     Args:
@@ -921,7 +897,7 @@ def fisher_exact_bonferroni(
             f'absent_{group_column_values[1]}': d
         })
         
-        if debug_mode:
+        if constants.debug_mode:
             print(
                 f"{feature}: OR={odds_ratio:.3f}, "
                 f"p={p_val:.4f}, "
@@ -954,9 +930,8 @@ def spearman_correlation(
     continuous_column: str,
     alpha: float = 0.01
 ) -> pd.DataFrame:
-    """
-    Calculate Spearman correlations between features and a continuous 
-    metadata variable.
+    """Calculate Spearman correlations between features and a 
+    continuous metadata variable.
     
     Args:
         table:             Input abundance table.
@@ -1002,8 +977,7 @@ def calculate_distance_matrix(
     table: Union[Dict, Table, pd.DataFrame],
     metric: str = 'braycurtis'
 ) -> DistanceMatrix:
-    """
-    Calculate distance matrix from abundance table.
+    """Calculate distance matrix from abundance table.
     
     Args:
         table:  Input abundance table.
@@ -1022,10 +996,9 @@ def run_ordination(
     table: Union[Dict, Table, pd.DataFrame],
     method: str = 'pca',
     n_components: int = 2,
-    random_state: int = DEFAULT_RANDOM_STATE
+    random_state: int = constants.DEFAULT_RANDOM_STATE
 ) -> pd.DataFrame:
-    """
-    Perform dimensionality reduction.
+    """Perform dimensionality reduction.
     
     Args:
         table:        Input abundance table.
@@ -1055,10 +1028,10 @@ def run_ordination(
         results = model.fit_transform(scaled)
     else:
         raise ValueError(f"Unknown method: {method}")
+        
     df = pd.DataFrame(
         results, 
         index=df.index, 
         columns=[f"{method.upper()}{i+1}" for i in range(n_components)]
     )
-    print('df')
     return df
