@@ -12,24 +12,19 @@ from biom import Table as BiomTable
 from scipy import stats
 from skbio.stats.composition import clr
 
+# Local Imports
+from workflow_16s import constants
+
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
-
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_MIN_REL_ABUNDANCE: float = 1
-DEFAULT_MIN_SAMPLES: int = 10
-DEFAULT_MIN_COUNTS: int = 1000
-DEFAULT_PSEUDOCOUNT: float = 1e-5
 
 # ================================ TABLE CONVERSION ================================== #
 
 def table_to_dataframe(
     table: Union[Dict, BiomTable, pd.DataFrame]
 ) -> pd.DataFrame:
-    """
-    Convert various table formats to samples × features DataFrame.
+    """Convert various table formats to samples × features DataFrame.
     
     Handles:
     - Pandas DataFrame (returns unchanged)
@@ -93,8 +88,7 @@ def merge_table_with_metadata(
     metadata_id_column: Optional[str] = '#sampleid',
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Merge feature table with metadata column using direct ID matching.
+    """Merge feature table with metadata column using direct ID matching.
     
     Features:
     - Automatic orientation detection
@@ -103,14 +97,14 @@ def merge_table_with_metadata(
     - Transposition when needed
     
     Args:
-        table:              Feature table (Samples × features) or (features × Samples).
+        table:              Feature table (samples × features) or (features × samples).
         metadata:           Metadata table.
         group_column:       Metadata column to add.
         metadata_id_column: Column in metadata containing sample IDs.
         verbose:            Enable debug output.
         
     Returns:
-        Table with added group_column (Samples × features+1).
+        Table with added group_column (samples × features+1).
         
     Raises:
         ValueError: For duplicate IDs or mismatched samples.
@@ -209,12 +203,11 @@ def merge_table_with_metadata(
 
 def filter_table(
     table: Union[dict, BiomTable, pd.DataFrame],
-    min_rel_abundance: float = DEFAULT_MIN_REL_ABUNDANCE,
-    min_samples: int = DEFAULT_MIN_SAMPLES,
-    min_counts: int = DEFAULT_MIN_COUNTS,
+    min_rel_abundance: float = constants.DEFAULT_MIN_REL_ABUNDANCE,
+    min_samples: int = constants.DEFAULT_MIN_SAMPLES,
+    min_counts: int = constants.DEFAULT_MIN_COUNTS,
 ) -> BiomTable:
-    """
-    Filter features and samples with strict type enforcement.
+    """Filter features and samples with strict type enforcement.
     
     Applies two-step filtering:
     1. Feature filtering (min_rel_abundance and min_samples)
@@ -237,11 +230,10 @@ def filter_table(
 
 def filter_features(
     table: BiomTable, 
-    min_rel_abundance: float, 
-    min_samples: int
+    min_rel_abundance: float = constants.DEFAULT_MIN_REL_ABUNDANCE, 
+    min_samples: int = constants.DEFAULT_MIN_SAMPLES
 ) -> BiomTable:
-    """
-    Filter features based on prevalence and abundance.
+    """Filter features based on prevalence and abundance.
     
     Args:
         table:             BIOM Table to filter.
@@ -272,10 +264,9 @@ def filter_features(
 
 def filter_samples(
     table: BiomTable, 
-    min_counts: int
+    min_counts: int = constants.DEFAULT_MIN_COUNTS
 ) -> BiomTable:
-    """
-    Filter samples based on minimum total counts.
+    """Filter samples based on minimum total counts.
     
     Args:
         table:      BIOM Table to filter.
@@ -306,8 +297,7 @@ def normalize_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
     axis: int = 1
 ) -> BiomTable:
-    """
-    Normalize table to relative abundance with strict type enforcement.
+    """Normalize table to relative abundance with strict type enforcement.
     
     Args:
         table: Input table.
@@ -331,10 +321,9 @@ def normalize_table(
 
 def clr_transform_table(
     table: Union[dict, BiomTable, pd.DataFrame], 
-    pseudocount: float = DEFAULT_PSEUDOCOUNT
+    pseudocount: float = constants.DEFAULT_PSEUDOCOUNT
 ) -> BiomTable:
-    """
-    Apply centered log-ratio (CLR) transformation to table.
+    """Apply centered log-ratio (CLR) transformation to table.
     
     Args:
         table:       Input table.
