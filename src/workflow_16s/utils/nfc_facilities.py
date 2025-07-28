@@ -18,42 +18,14 @@ from sklearn.metrics import confusion_matrix, classification_report
 from scipy.spatial import cKDTree
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
+from workflow_16s import constants
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 _session = requests.Session() # Create a single requests session for reuse
-
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_N: int = 65  # Length of description for progress bar
-
-DEFAULT_NFCIS_PATH = '/usr2/people/macgregor/amplicon/NFCISFacilityList.xlsx'
-DEFAULT_NFCIS_COLUMNS = {
-    'country': "Country",
-    'facility': "Facility Name",
-    'facility_type': "Facility Type",
-    'facility_capacity': "Design Capacity",
-    'facility_status': "Facility Status",
-    'facility_start_year': "Start of Operation",
-    'facility_end_year': "End of Operation"
-}
-
-DEFAULT_GEM_PATH = '/usr2/people/macgregor/amplicon/workflow_16s/references/gem_nuclearpower_2024-07.tsv'
-DEFAULT_GEM_COLUMNS = {
-    'country': "Country/Area",
-    'facility': "Project Name",
-    'facility_type': "Reactor Type",
-    'facility_capacity': " Capacity (MW) ",
-    'facility_status': "Status",
-    'facility_start_year': "Start Year",
-    'facility_end_year': "Retirement Year"
-}
-
-DEFAULT_USER_AGENT = "workflow_16s/1.0"
 
 # ==================================== FUNCTIONS ===================================== #  
 
@@ -76,17 +48,17 @@ def _geocode_query(query: str, user_agent: str) -> (float, float):
 
 def process_and_geocode_db(
     database: str = "GEM",
-    file_path: str = DEFAULT_GEM_PATH,
-    user_agent: str = DEFAULT_USER_AGENT
+    file_path: str = constants.DEFAULT_GEM_PATH,
+    user_agent: str = constants.DEFAULT_USER_AGENT
 ):
     """
     Process a data file (Excel or TSV) and add latitude/longitude coordinates
     """
     # Select parameters
     if database == "GEM":
-        skip_rows, skip_first_col, column_names = 0, False, DEFAULT_GEM_COLUMNS
+        skip_rows, skip_first_col, column_names = 0, False, constants.DEFAULT_GEM_COLUMNS
     elif database == "NFCIS":
-        skip_rows, skip_first_col, column_names = 8, True, DEFAULT_NFCIS_COLUMNS
+        skip_rows, skip_first_col, column_names = 8, True, constants.DEFAULT_NFCIS_COLUMNS
     else:
         raise ValueError(f"Unknown database: {database}")
 
@@ -160,8 +132,7 @@ def match_facilities_to_locations(
     samples: pd.DataFrame,
     max_distance_km: float = 50
 ) -> pd.DataFrame:
-    """
-    Match locations to nearby facilities within a specified distance threshold.
+    """Match locations to nearby facilities within a specified distance threshold.
     Handles missing coordinates by preserving original rows.
     """
     # Copy samples to preserve order and index
@@ -226,7 +197,6 @@ def match_facilities_to_locations(
         'country': 'facility_country'
     })
     
-    
     return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
 
 
@@ -248,7 +218,7 @@ def find_nearby_nfc_facilities(
     else:
         dfs = []
         for db in databases:
-            path = DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else DEFAULT_GEM_PATH
+            path = constants.DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else constants.DEFAULT_GEM_PATH
             dfs.append(process_and_geocode_db(database=db['name'], file_path=path))
         facilities_df = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
         facilities_df.to_csv(tsv_path, sep='\t', index=True)
