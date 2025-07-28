@@ -12,130 +12,21 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 from scipy.spatial.distance import cdist
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local imports
+import workflow_16s.custom_tmp_config  
+import workflow_16s.sequences.analyze as seq_analyze
+from workflow_16s import constants
 from workflow_16s.ena.metadata import ENAMetadata
 from workflow_16s.utils import dir_utils, file_utils, misc_utils
-import workflow_16s.sequences.analyze as seq_analyze
-
-# ================================ CUSTOM TMP CONFIG ================================= #
-
-import workflow_16s.custom_tmp_config  
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
-# Suppress warnings
-warnings.filterwarnings("ignore")
-
-# Initialize logger
 logger = logging.getLogger("workflow_16s")
-
-# ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_16S_PRIMERS = {
-    "V1-V2": {
-        "fwd": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "AGAGTTTGATCMTGGCTCAG",
-            "ref": None,
-        },
-        "rev": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "TGCTGCCTCCCGTAGGAGT",
-            "ref": None,
-        },
-    },
-    "V2-V3": {
-        "fwd": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "ACTCCTACGGGAGGCAGCAG",
-            "ref": None,
-        },
-        "rev": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "TTACCGCGGCTGCTGGCAC",
-            "ref": None,
-        },
-    },
-    "V3-V4": {
-        "fwd": {
-            "name": "Bakt_341F",
-            "full_name": "S-D-Bact-0341-b-S-17",
-            "position": (341, 357),
-            "seq": "CCTACGGGNGGCWGCAG",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/21472016/",
-        },
-        "rev": {
-            "name": "Bakt_805R",
-            "full_name": "S-D-Bact-0785-a-A-21",
-            "position": (785, 805),
-            "seq": "GACTACHVGGGTATCTAATCC",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/21472016/",
-        },
-    },
-    "V4": {
-        "fwd": {
-            "name": "U515F",
-            "full_name": "S-*-Univ-0515-a-S-19",
-            "position": (515, 533),
-            "seq": "GTGCCAGCMGCCGCGGTAA",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/21349862/",
-        },
-        "rev": {
-            "name": "806R",
-            "full_name": "S-D-Bact-0787-b-A-20",
-            "position": (787, 808),
-            "seq": "GGACTACHVGGGTWTCTAAT",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/21349862/",
-        },
-    },
-    "V4-V5": {
-        "fwd": {
-            "name": "515F-Y",
-            "full_name": None,
-            "position": (515, 533),
-            "seq": "GTGYCAGCMGCCGCGGTAA",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/26271760/",
-        },
-        "rev": {
-            "name": "926R",
-            "full_name": "S-D-Bact-0907-a-A-19",
-            "position": (907, 926),
-            "seq": "CCGYCAATTYMTTTRAGTTT",
-            "ref": "https://pubmed.ncbi.nlm.nih.gov/26271760/",
-        },
-    },
-    "V6-V8": {
-        "fwd": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "AAACTYAAAKGAATTGACGG",
-            "ref": None,
-        },
-        "rev": {
-            "name": None,
-            "full_name": None,
-            "position": (0, 0),
-            "seq": "ACGGGCGGTGTGTACAAG",
-            "ref": None,
-        },
-    },
-}
 
 # ==================================== FUNCTIONS ===================================== #
 
 def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Parses pooled samples in the 'sample_description' column into separate columns.
+    """Parses pooled samples in the 'sample_description' column into separate columns.
     
     Args:
         df:
@@ -188,9 +79,8 @@ def parse_sample_pooling(df: pd.DataFrame) -> pd.DataFrame:
 def calculate_distances(
     df1: pd.DataFrame, df2: pd.DataFrame
 ) -> pd.DataFrame:
-    """
-    Calculate Euclidean distances between two DataFrames based on longitude
-    and latitude.
+    """Calculate Euclidean distances between two DataFrames based on 
+    longitude and latitude.
     """
     df1[["longitude_deg", "latitude_deg"]] = df1[
         ["longitude_deg", "latitude_deg"]
@@ -211,10 +101,8 @@ def calculate_distances(
 
 # ========================== CORE PROCESSING CLASS ========================== #
 
-
 class SubsetDataset:
-    """
-    Central processing unit for dataset analysis with automated and manual
+    """Central processing unit for dataset analysis with automated and manual
     modes.
 
     Features:
@@ -298,7 +186,7 @@ class SubsetDataset:
         else:
             raise ValueError("No valid target subfragment identified")
 
-        if target_subfragment not in DEFAULT_16S_PRIMERS:
+        if target_subfragment not in constants.DEFAULT_16S_PRIMERS:
             raise ValueError(
                 f"Target subfragment '{target_subfragment}' not found in "
                 "DEFAULT_16S_PRIMERS. Update configuration or primers "
@@ -517,7 +405,7 @@ class SubsetDataset:
             raise
 
         try:
-            primers = DEFAULT_16S_PRIMERS[target_subfragment]
+            primers = constants.DEFAULT_16S_PRIMERS[target_subfragment]
             fwd_primer = primers["fwd"]["seq"]
             rev_primer = primers["rev"]["seq"]
         except KeyError:
