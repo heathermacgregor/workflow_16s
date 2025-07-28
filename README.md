@@ -99,5 +99,6 @@ bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
 ```
 
 ## To-Do
-- Add **batch correction methods** that are appropriate for microbial community data (e.g. [ConQuR](https://github.com/wdl2459/ConQuR))
-- Add compatibility for ASV mode (only genus mode is currently supported)
+- Add to HTML report sections on the original datasets, linking to ENA BioProjects when relevant.
+- Add **batch correction methods** that are appropriate for microbial community data (e.g. [ConQuR](https://github.com/wdl2459/ConQuR)).
+- Add support for ASV mode (only genus mode is currently available).
