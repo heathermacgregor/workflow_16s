@@ -19,6 +19,14 @@ logger = logging.getLogger('workflow_16s')
 
 # =================================== DATA UTILS ===================================== #
 
+def print_data_dicts(data):
+    for attr_name, attr_value in data.__dict__.items():
+        if not attr_name.startswith('__'):
+            logger.info(f"{attr_name}: {type(attr_value)}")
+            if isinstance(attr_value, dict):
+                print_dict_structure(attr_value, attr_name)
+                
+
 def print_dict_structure(d, parent_key):
     for k, v in d.items():
         new_key = f"{parent_key}.{k}"
