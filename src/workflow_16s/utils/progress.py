@@ -1,41 +1,20 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
-import warnings
 from datetime import timedelta
 from typing import Any, Optional
 
 # Third-Party Imports
 from rich.progress import (
-    BarColumn,
-    Column,
-    Progress,
-    ProgressColumn,
-    SpinnerColumn,
-    Task,
-    TaskID,
-    TextColumn,
-    track, 
+    BarColumn, Column, Progress, ProgressColumn, SpinnerColumn, Task, TaskID,
+    TextColumn, track
 )
 from rich.text import Text
 
-# ========================== INITIALIZATION & CONFIGURATION ========================== #
+# Local Imports
+from workflow_16s import constants
 
-warnings.filterwarnings("ignore") # Suppress warnings
-
-# ================================= GLOBAL VARIABLES ================================= #
-
-DEFAULT_PROGRESS_TEXT_N = 65
-DEFAULT_N = 65
-DEFAULT_DESCRIPTION_STYLE = "white"
-DEFAULT_BAR_COLUMN_COMPLETE_STYLE = "honeydew2"
-DEFAULT_FINISHED_STYLE = "dark_cyan" 
-DEFAULT_PROGRESS_PERCENTAGE_STYLE = "honeydew2"
-DEFAULT_M_OF_N_COMPLETE_STYLE = "honeydew2"
-DEFAULT_TIME_ELAPSED_STYLE = "light_sky_blue1"
-DEFAULT_TIME_REMAINING_STYLE = "thistle1"
-
-# ============================== CUSTOM PROGRESS COLUMN ============================== #
+# ============================== CUSTOM PROGRESS COLUMNS ============================= #
 
 class MofNCompleteColumn(ProgressColumn):
     """Renders completed count/total (e.g., '3/10') with bold styling"""
@@ -44,7 +23,7 @@ class MofNCompleteColumn(ProgressColumn):
         """Render the progress count as 'completed/total'"""
         return Text(
             f"{task.completed}/{task.total}".rjust(10),
-            style=DEFAULT_M_OF_N_COMPLETE_STYLE,
+            style=constants.DEFAULT_M_OF_N_COMPLETE_STYLE,
             justify="right"
         )
         
@@ -56,16 +35,14 @@ class TimeElapsedColumn(ProgressColumn):
         """Show time elapsed."""
         elapsed = task.finished_time if task.finished else task.elapsed
         if elapsed is None:
-            return Text("-:--:--", style=DEFAULT_TIME_ELAPSED_STYLE)
+            return Text("-:--:--", style=constants.DEFAULT_TIME_ELAPSED_STYLE)
         delta = timedelta(seconds=max(0, int(elapsed)))
-        return Text(str(delta), style=DEFAULT_TIME_ELAPSED_STYLE)
+        return Text(str(delta), style=constants.DEFAULT_TIME_ELAPSED_STYLE)
         
 
 class TimeRemainingColumn(ProgressColumn):
     """Renders estimated time remaining."""
-
-    # Only refresh twice a second to prevent jitter
-    max_refresh = 0.5
+    max_refresh = 0.5 # Only refresh twice a second to prevent jitter
 
     def __init__(
         self,
@@ -82,10 +59,10 @@ class TimeRemainingColumn(ProgressColumn):
         """Show time remaining."""
         if self.elapsed_when_finished and task.finished:
             task_time = task.finished_time
-            style = DEFAULT_TIME_ELAPSED_STYLE
+            style = constants.DEFAULT_TIME_ELAPSED_STYLE
         else:
             task_time = task.time_remaining
-            style = DEFAULT_TIME_REMAINING_STYLE
+            style = constants.DEFAULT_TIME_REMAINING_STYLE
 
         if task.total is None:
             return Text("", style=style)
@@ -103,42 +80,44 @@ class TimeRemainingColumn(ProgressColumn):
             formatted = f"{hours:d}:{minutes:02d}:{seconds:02d}"
 
         return Text(formatted, style=style)
-        
+
+
+# ===================================== FUNCTIONS ==================================== #
 
 def get_progress_bar(transient: bool = False) -> Progress:
     """Return a customized progress bar with consistent styling"""
     return Progress(
         SpinnerColumn(
             "dots", 
-            style=DEFAULT_BAR_COLUMN_COMPLETE_STYLE, 
+            style=constants.DEFAULT_BAR_COLUMN_COMPLETE_STYLE, 
             speed=0.75
         ),
         TextColumn(
-            "{task.description}".ljust(DEFAULT_PROGRESS_TEXT_N), 
-            style=DEFAULT_DESCRIPTION_STYLE,
+            "{task.description}".ljust(constants.DEFAULT_PROGRESS_TEXT_N), 
+            style=constants.DEFAULT_DESCRIPTION_STYLE,
             justify="left"
         ),
         MofNCompleteColumn(),
         BarColumn(
-            bar_width=40,
+            bar_width=constants.DEFAULT_BAR_WIDTH,
             style="black", # Background color
-            complete_style=DEFAULT_BAR_COLUMN_COMPLETE_STYLE,
-            finished_style=DEFAULT_FINISHED_STYLE
+            complete_style=constants.DEFAULT_BAR_COLUMN_COMPLETE_STYLE,
+            finished_style=constants.DEFAULT_FINISHED_STYLE
         ),
         TextColumn(
             "{task.percentage:>3.0f}%".rjust(5), 
-            style=DEFAULT_PROGRESS_PERCENTAGE_STYLE,
+            style=constants.DEFAULT_PROGRESS_PERCENTAGE_STYLE,
             justify="right"
         ),
         TextColumn(
             "E".rjust(2), 
-            style=DEFAULT_TIME_ELAPSED_STYLE,
+            style=constants.DEFAULT_TIME_ELAPSED_STYLE,
             justify="right"
         ),
         TimeElapsedColumn(),
         TextColumn(
             "R".rjust(2), 
-            style=DEFAULT_TIME_REMAINING_STYLE,
+            style=constants.DEFAULT_TIME_REMAINING_STYLE,
             justify="right"
         ),
         TimeRemainingColumn(),
@@ -146,5 +125,6 @@ def get_progress_bar(transient: bool = False) -> Progress:
         expand=False
     )
 
+
 def _format_task_desc(desc: str):
-    return f"[white]{str(desc):<{DEFAULT_N}}"
+    return f"[white]{str(desc):<{constants.DEFAULT_N}}"
