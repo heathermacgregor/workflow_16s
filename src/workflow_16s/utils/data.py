@@ -15,45 +15,15 @@ from pandarallel import pandarallel
 from scipy.sparse import issparse
 from skbio.stats.composition import clr as CLR
 
-# ================================== LOCAL IMPORTS =================================== #
-
-from workflow_16s.utils.progress import get_progress_bar
+# Local Imports
+from workflow_16s import constants
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
-
-DEFAULT_N: int = 65 # Length of description for progress bar
-
-DEFAULT_META_ID_COL = '#sampleid'
-DEFAULT_GROUP_COL = 'nuclear_contamination_status'
-
-DEFAULT_MIN_REL_ABUNDANCE: float = 1
-DEFAULT_MIN_SAMPLES: int = 10
-DEFAULT_MIN_COUNTS: int = 1000
-DEFAULT_PSEUDOCOUNT: float = 1e-5
-
-DEFAULT_PREVALENCE_THRESHOLD: float = 0.05
-DEFAULT_GROUP_THRESHOLD: float = 0.05
-
-TAXONOMIC_LEVELS = {
-    "phylum": 1,
-    "class": 2,
-    "order": 3,
-    "family": 4,
-    "genus": 5,
-    "species": 6
-}
-
-levels = {
-    'phylum': 1, 
-    'class': 2, 
-    'order': 3, 
-    'family': 4, 
-    'genus': 5
-}
 
 FEATURE_PATTERNS = {
     "taxonomic": re.compile(
@@ -67,8 +37,7 @@ FEATURE_PATTERNS = {
 # ================================ TABLE CONVERSION ================================== #
 
 def table_to_df(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
-    """
-    Convert various table formats to samples × features DataFrame.
+    """Convert various table formats to samples × features DataFrame.
     
     Handles:
     - Pandas DataFrame (returns unchanged)
@@ -93,11 +62,9 @@ def table_to_df(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     raise TypeError("Input must be BIOM Table, dict, or DataFrame.")
 
 
-def to_biom(
-    table: Union[dict, Table, pd.DataFrame]
-) -> Table:
-    """
-    Convert various table formats to BIOM Table with features × samples orientation.
+def to_biom(table: Union[dict, Table, pd.DataFrame]) -> Table:
+    """Convert various table formats to BIOM Table with features × samples 
+    orientation.
     
     Args:
         table: Input table in various formats.
@@ -129,12 +96,11 @@ def to_biom(
 def merge_table_with_meta(
     table: pd.DataFrame,
     meta: pd.DataFrame,
-    group_col: str = DEFAULT_GROUP_COL,
-    meta_id_col: Optional[str] = DEFAULT_META_ID_COL,
+    group_col: str = constants.DEFAULT_GROUP_COLUMN,
+    meta_id_col: Optional[str] = constants.DEFAULT_META_ID_COLUMN,
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Merge feature table with metadata column using direct ID matching.
+    """Merge feature table with metadata column using direct ID matching.
     
     Features:
     - Automatic orientation detection
@@ -250,8 +216,7 @@ def update_table_and_meta(
     meta: pd.DataFrame,
     sample_col: str = DEFAULT_META_ID_COL
 ) -> Tuple[Table, pd.DataFrame]:
-    """
-    Align BIOM table with metadata using sample IDs.
+    """Align BIOM table with metadata using sample IDs.
     
     Args:
         table:         BIOM feature table.
@@ -278,8 +243,7 @@ def _normalize_metadata(
     meta: pd.DataFrame, 
     sample_col: str
 ) -> pd.DataFrame:
-    """
-    Normalize sample IDs and remove duplicates.
+    """Normalize sample IDs and remove duplicates.
     
     Args:
         metadata_df: Sample metadata DataFrame.
@@ -294,8 +258,7 @@ def _normalize_metadata(
 
 
 def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
-    """
-    Create lowercase to original-case ID mapping for BIOM table samples.
+    """Create lowercase to original-case ID mapping for BIOM table samples.
     
     Args:
         table: BIOM feature table.
@@ -326,8 +289,7 @@ def filter(
     min_samples: int = DEFAULT_MIN_SAMPLES,
     min_counts: int = DEFAULT_MIN_COUNTS,
 ) -> Table:
-    """
-    Filter features and samples with strict type enforcement.
+    """Filter features and samples with strict type enforcement.
     
     Applies two-step filtering:
     1. Feature filtering (min_rel_abundance and min_samples)
@@ -353,8 +315,7 @@ def filter_features(
     min_rel_abundance: float, 
     min_samples: int
 ) -> Table:
-    """
-    Filter features based on prevalence and abundance.
+    """Filter features based on prevalence and abundance.
     
     Args:
         table:             BIOM Table to filter.
@@ -387,8 +348,7 @@ def filter_samples(
     table: Table, 
     min_counts: int
 ) -> Table:
-    """
-    Filter samples based on minimum total counts.
+    """Filter samples based on minimum total counts.
     
     Args:
         table:      BIOM Table to filter.
@@ -419,8 +379,7 @@ def normalize(
     table: Union[dict, Table, pd.DataFrame], 
     axis: int = 1
 ) -> Table:
-    """
-    Normalize table to relative abundance with strict type enforcement.
+    """Normalize table to relative abundance with strict type enforcement.
     
     Args:
         table: Input table.
@@ -445,10 +404,9 @@ def normalize(
 
 def clr(
     table: Union[dict, Table, pd.DataFrame], 
-    pseudocount: float = DEFAULT_PSEUDOCOUNT
+    pseudocount: float = constants.DEFAULT_PSEUDOCOUNT
 ) -> Table:
-    """
-    Apply centered log-ratio (CLR) transformation to table.
+    """Apply centered log-ratio (CLR) transformation to table.
     
     Args:
         table:       Input table.
@@ -482,9 +440,11 @@ def clr(
 
 
 # TODO: Integrate into workflow
-def classify_feature_format(cols: Iterable[str], verbose: bool = False) -> Dict[str, int]:
-    """
-    Classify feature IDs into taxonomic, hash, sequence, or unknown types.
+def classify_feature_format(
+    cols: Iterable[str], 
+    verbose: bool = False
+) -> Dict[str, int]:
+    """Classify feature IDs into taxonomic, hash, sequence, or unknown types.
     
     Uses regex patterns to identify:
     - Taxonomic strings (e.g., 'd__Bacteria;p__Firmicutes')
@@ -532,7 +492,7 @@ def classify_feature_format(cols: Iterable[str], verbose: bool = False) -> Dict[
         with get_progress_bar() as progress:
             task_desc = "Classifying feature IDs..."
             task = progress.add_task(
-                f"[white]{task_desc:<{DEFAULT_N}}", 
+                _format_task_desc(task_desc), 
                 total=len(map(str, cols))
             )
             for col in map(str, cols):
@@ -558,7 +518,7 @@ def classify_feature_format(cols: Iterable[str], verbose: bool = False) -> Dict[
         
     return counts
 
-DEFAULT_WORKERS_TRIM_ASVS: int = 8
+
 # TODO: Integrate into workflow
 def trim_and_merge_asvs(
     asv_table: pd.DataFrame,
@@ -568,8 +528,7 @@ def trim_and_merge_asvs(
     verbose: bool = False,
     progress: bool = True
 ) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
-    """
-    Trim ASV sequences and merge identical trimmed variants with Rich progress tracking.
+    """Trim ASV sequences and merge identical trimmed variants with Rich progress tracking.
     
     Args:
         asv_table:        Feature table (features x samples).
@@ -602,7 +561,7 @@ def trim_and_merge_asvs(
         # Task 1: Sequence trimming
         task_desc = "Trimming sequences"
         trim_task = progress_bar.add_task(
-            f"[white]{task_desc:<{DEFAULT_N}}", 
+            _format_task_desc(task_desc), 
             total=len(asv_seqs),
             visible=progress
         )
@@ -634,7 +593,7 @@ def trim_and_merge_asvs(
         # Task 2: BIOM table creation
         task_desc = "Creating BIOM table"
         table_task = progress_bar.add_task(
-            f"[white]{task_desc:<{DEFAULT_N}}", 
+            _format_task_desc(task_desc), 
             total=1,
             visible=progress
         )
@@ -652,7 +611,7 @@ def trim_and_merge_asvs(
         # Task 3: Collapsing features
         task_desc = "Collapsing sequences"
         collapse_task = progress_bar.add_task(
-            f"[white]{task_desc:<{DEFAULT_N}}", 
+            _format_task_desc(task_desc), 
             total=1,
             visible=progress
         )
@@ -689,8 +648,7 @@ def collapse_taxa(
     task_id=None,
     verbose: bool = False
 ) -> Table:
-    """
-    Collapse feature table to specified taxonomic level.
+    """Collapse feature table to specified taxonomic level.
     
     Args:
         table:        Input BIOM Table or DataFrame.
@@ -708,26 +666,26 @@ def collapse_taxa(
     table = table.copy()
     table = to_biom(table)
         
-    if target_level not in levels:
+    if target_level not in constants.levels:
         raise ValueError(
             f"Invalid `target_level`: {target_level}. "
-            f"Expected one of {list(levels.keys())}")
+            f"Expected one of {list(constants.levels.keys())}")
 
-    level_idx = levels[target_level]
+    level_idx = constants.levels[target_level]
 
     # Create taxonomy mapping
     id_map = {}
     sub_desc = "Feature:"
     sub_task = progress.add_task(
-        f"[white]{sub_desc:<{DEFAULT_N}}",
+        _format_task_desc(sub_desc),
         parent=task_id,
         total=len(table.ids(axis='observation').astype(str))
     )
     for taxon in table.ids(axis='observation').astype(str):
         try:
             new_desc = f"Feature: {taxon}"
-            if len(new_desc) > DEFAULT_N:
-                new_desc = f"{new_desc[:DEFAULT_N-3]}..."
+            if len(new_desc) > constants.DEFAULT_N:
+                new_desc = f"{new_desc[:constants.DEFAULT_N-3]}..."
             progress.update(sub_task, description=new_desc)
             parts = taxon.split(';')
             truncated = ';'.join(
@@ -751,8 +709,7 @@ def collapse_taxa(
   
 
 def presence_absence(table: Union[Table, pd.DataFrame]) -> Table:
-    """
-    Convert table to presence/absence format and filter by abundance.
+    """Convert table to presence/absence format and filter by abundance.
     
     Args:
         table: Input BIOM Table or DataFrame.
@@ -786,12 +743,11 @@ def presence_absence(table: Union[Table, pd.DataFrame]) -> Table:
 def filter_presence_absence(
     table: Table, 
     metadata: pd.DataFrame, 
-    col: str = DEFAULT_GROUP_COL, 
-    prevalence_threshold: float = DEFAULT_PREVALENCE_THRESHOLD, 
-    group_threshold: float = DEFAULT_GROUP_THRESHOLD
+    col: str = constants.DEFAULT_GROUP_COLUMN, 
+    prevalence_threshold: float = constants.DEFAULT_PREVALENCE_THRESHOLD, 
+    group_threshold: float = constants.DEFAULT_GROUP_THRESHOLD
 ) -> Table:
-    """
-    Filter presence/absence table based on prevalence and group differences.
+    """Filter presence/absence table based on prevalence and group differences.
     
     Args:
         table:                Input BIOM Table.
@@ -818,7 +774,7 @@ def filter_presence_absence(
     if group_threshold:
         groups = df_with_meta.groupby(col)
         if True not in groups.groups or False not in groups.groups:
-            raise ValueError(f"Metadata column '{col}' must have True/False groups")
+            raise ValueError(f"Metadata column `{col}` must have True/False groups")
         sum_per_group = groups.sum(numeric_only=True)
         n_samples = groups.size()
         percentages = sum_per_group.div(n_samples, axis=0)
