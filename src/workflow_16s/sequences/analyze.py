@@ -78,7 +78,7 @@ class PrimerChecker:
                 for run_id, files in dataset.items()
             }
             
-            for future in (
+            for future in tqdm(
                 as_completed(futures), 
                 total=len(futures), 
                 desc="Checking common primers".ljust(35), 
