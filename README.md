@@ -51,6 +51,8 @@ Originally used for the “nuclear contamination” study, the pipeline is fully
 
 ## Configuration
 
+See a breakdown of the default example [here](https://github.com/heathermacgregor/workflow_16s/blob/main/info/config.md).
+
 ### Key YAML Settings
 
 - **Hardware**: CPU thread limits (`cpu.limit`).
