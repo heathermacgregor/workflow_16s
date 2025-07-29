@@ -289,125 +289,140 @@ import pandas as pd
 import numpy as np
 import re
 
+# Precompile regex patterns for efficiency
+NUM_PATTERN = re.compile(r'[-+]?\d*\.\d+|[-+]?\d+')
+LETTER_PATTERN = re.compile(r'[NnSsEeWw]')
+
 def extract_lat_lon(s):
+    """
+    Extract latitude and longitude from a string using precompiled regex patterns.
+    
+    Args:
+        s (str): Input string containing coordinate information
+        
+    Returns:
+        tuple: (latitude, longitude) as floats, or (None, None) if extraction fails
+    """
     if not isinstance(s, str):
         return None, None
         
-    pattern = r'[-+]?\d*\.\d+|[-+]?\d+'
-    matches = list(re.finditer(pattern, s))
+    # Find all number matches
+    matches = list(NUM_PATTERN.finditer(s))
     if len(matches) < 2:
         return None, None
         
     try:
         num1 = float(matches[0].group())
         num2 = float(matches[1].group())
-    except ValueError:
+    except (ValueError, TypeError):
         return None, None
         
-    def get_letter_around(match, full_string):
+    # Check for directional letters near the numbers
+    letters = []
+    for match in matches[:2]:
         start, end = match.span()
-        window_start = max(0, start - 3)
-        window_end = min(len(full_string), end + 3)
-        window = full_string[window_start:window_end]
-        if re.search(r'[Nn]', window):
-            return 'N'
-        elif re.search(r'[Ss]', window):
-            return 'S'
-        elif re.search(r'[Ee]', window):
-            return 'E'
-        elif re.search(r'[Ww]', window):
-            return 'W'
-        return None
-        
-    letter1 = get_letter_around(matches[0], s)
-    letter2 = get_letter_around(matches[1], s)
+        window = s[max(0, start-3):min(len(s), end+3)]
+        letter_match = LETTER_PATTERN.search(window)
+        letters.append(letter_match.group().upper() if letter_match else None)
     
+    # Process coordinates based on directional letters
     coords = {}
-    if letter1 == 'N':
-        coords['lat'] = num1
-    elif letter1 == 'S':
-        coords['lat'] = -num1
-    elif letter1 == 'E':
-        coords['lon'] = num1
-    elif letter1 == 'W':
-        coords['lon'] = -num1
-        
-    if letter2 == 'N':
-        coords['lat'] = num2 if 'lat' not in coords else coords['lat']
-    elif letter2 == 'S':
-        coords['lat'] = -num2 if 'lat' not in coords else coords['lat']
-    elif letter2 == 'E':
-        coords['lon'] = num2 if 'lon' not in coords else coords['lon']
-    elif letter2 == 'W':
-        coords['lon'] = -num2 if 'lon' not in coords else coords['lon']
-        
+    for i, (num, letter) in enumerate(zip([num1, num2], letters)):
+        if not letter:
+            continue
+        if letter in ['N', 'S']:
+            coords['lat'] = num if letter == 'N' else -num
+        else:  # E or W
+            coords['lon'] = num if letter == 'E' else -num
+    
+    # Return results based on what we found
     if 'lat' in coords and 'lon' in coords:
         return coords['lat'], coords['lon']
-        
     if 'lat' in coords:
         return coords['lat'], num2
-    elif 'lon' in coords:
+    if 'lon' in coords:
         return num1, coords['lon']
-        
+    
     return num1, num2
 
 def fill_missing_coordinates(df):
+    """
+    Fill missing latitude/longitude values by extracting from alternative columns.
+    
+    Args:
+        df (pd.DataFrame): Input dataframe with location information
+        
+    Returns:
+        pd.DataFrame: DataFrame with filled coordinates
+    """
+    # Ensure required columns exist
     if 'latitude_deg' not in df.columns:
         df['latitude_deg'] = np.nan
     if 'longitude_deg' not in df.columns:
         df['longitude_deg'] = np.nan
         
-    lat_single_columns = ['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1']
-    lon_single_columns = ['lon', 'lon_study', 'longitude_deg.1']
-    pair_columns = [
+    # Define potential source columns
+    lat_sources = ['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1']
+    lon_sources = ['lon', 'lon_study', 'longitude_deg.1']
+    pair_sources = [
         'lat_lon', 'location', 'location_ena', 'location_start', 'location_end',
         'location_start_study', 'location_end_study'
     ]
     
-    existing_lat_single = [col for col in lat_single_columns if col in df.columns]
-    existing_lon_single = [col for col in lon_single_columns if col in df.columns]
-    existing_pair = [col for col in pair_columns if col in df.columns]
+    # Filter to existing columns only
+    existing_lat = [col for col in lat_sources if col in df.columns]
+    existing_lon = [col for col in lon_sources if col in df.columns]
+    existing_pair = [col for col in pair_sources if col in df.columns]
     
+    # Identify rows needing processing
     missing_mask = df['latitude_deg'].isna() | df['longitude_deg'].isna()
-    missing_indices = df.index[missing_mask]
+    missing_count = missing_mask.sum()
     
-    for idx in missing_indices:
-        row = df.loc[idx].copy()
-        original_lat = row['latitude_deg']
-        original_lon = row['longitude_deg']
+    if not missing_count:
+        return df  # Return early if nothing to process
+    
+    print(f"Processing {missing_count} rows with missing coordinates...")
+    
+    # Process missing rows
+    for idx in df.index[missing_mask]:
+        row = df.loc[idx]
+        new_lat, new_lon = row['latitude_deg'], row['longitude_deg']
         
+        # First try pair columns (contain both coordinates)
         for col in existing_pair:
-            if pd.notna(row[col]) and row[col] != '':
-                s = str(row[col])
-                lat_val, lon_val = extract_lat_lon(s)
-                if pd.isna(original_lat) and lat_val is not None:
-                    row['latitude_deg'] = lat_val
-                if pd.isna(original_lon) and lon_val is not None:
-                    row['longitude_deg'] = lon_val
-                    
-        if pd.isna(row['latitude_deg']):
-            for col in existing_lat_single:
+            if pd.isna(new_lat) or pd.isna(new_lon):
                 if pd.notna(row[col]) and row[col] != '':
-                    try:
-                        lat_val = float(row[col])
-                        row['latitude_deg'] = lat_val
-                        break
-                    except (ValueError, TypeError):
-                        pass
-                        
-        if pd.isna(row['longitude_deg']):
-            for col in existing_lon_single:
-                if pd.notna(row[col]) and row[col] != '':
-                    try:
-                        lon_val = float(row[col])
-                        row['longitude_deg'] = lon_val
-                        break
-                    except (ValueError, TypeError):
-                        pass
-                        
-        df.loc[idx] = row
+                    lat_val, lon_val = extract_lat_lon(str(row[col]))
+                    if pd.isna(new_lat) and lat_val is not None:
+                        new_lat = lat_val
+                    if pd.isna(new_lon) and lon_val is not None:
+                        new_lon = lon_val
         
+        # Then try single-value columns
+        if pd.isna(new_lat):
+            for col in existing_lat:
+                if pd.notna(row[col]) and row[col] != '':
+                    try:
+                        new_lat = float(row[col])
+                        break
+                    except (ValueError, TypeError):
+                        continue
+        
+        if pd.isna(new_lon):
+            for col in existing_lon:
+                if pd.notna(row[col]) and row[col] != '':
+                    try:
+                        new_lon = float(row[col])
+                        break
+                    except (ValueError, TypeError):
+                        continue
+        
+        # Update the dataframe
+        df.at[idx, 'latitude_deg'] = new_lat
+        df.at[idx, 'longitude_deg'] = new_lon
+    
     return df
+    
 class DownstreamDataLoader:
     ModeConfig = {
         "asv": ("asv", "table", "asv"), 
