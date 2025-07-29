@@ -273,7 +273,7 @@ class DownstreamDataLoader:
 
     def _load_table_biom(self, table_level, table_dir) -> None:
         table_biom_paths = self._find_table_biom_paths(table_level, table_dir)  
-        if not biom_paths:
+        if not table_biom_paths:
             raise FileNotFoundError("No BIOM files found")
         self.tables[table_level]['raw'] = import_merged_table_biom(table_biom_paths, "table", self.verbose)
 
