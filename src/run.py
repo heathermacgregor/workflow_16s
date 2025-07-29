@@ -287,7 +287,7 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
         )
         raise
 
-def downstream(config, logger, project_dir, existing_subsets) -> None:
+def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     """Run the "downstream" part of the workflow (feature table analysis).
 
     Args:
