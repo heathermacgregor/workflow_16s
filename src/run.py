@@ -50,7 +50,7 @@ from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
-
+from workflow_16s.amplicon_data.downstream.downstream import Downstream
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 import workflow_16s.custom_tmp_config
@@ -305,6 +305,14 @@ def downstream(config, logger, project_dir, existing_subsets) -> None:
     mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
     verbose = False
     try:
+        amplicon_data = Downstream(
+            config=config,
+            project_dir=project_dir,
+            mode=mode,
+            existing_subsets=existing_subsets,
+            verbose=verbose    
+        )
+        """
         amplicon_data = AmpliconData(
             config=config,
             project_dir=project_dir,
@@ -312,11 +320,12 @@ def downstream(config, logger, project_dir, existing_subsets) -> None:
             existing_subsets=existing_subsets,
             verbose=verbose        
         )
+        """
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
         if verbose:
-            print_data_dicts(data)
+            print_data_dicts(amplicon_data)
         
     output_path = Path(project_dir.final) / "analysis_report.html"
     try:
@@ -330,18 +339,49 @@ def downstream(config, logger, project_dir, existing_subsets) -> None:
     
 
 class Workflow16S:
-    def __init__(self, config_path: Path = constants.DEFAULT_CONFIG):
+    def __init__(self, config_path: Path = constants.DEFAULT_CONFIG) -> None:
         self.config = get_config(config_path)
         self.project_dir = SubDirs(self.config["project_dir"])
         self.logger = setup_logging(self.project_dir.logs)
+        self._success_subsets: Optional[List[str]] = None
 
-    def run(self):
-        if self.config.get("upstream", {}).get("enabled", False):
-            success_subsets = upstream(self.config, self.logger, self.project_dir)
-        else:
-            success_subsets = None
-        if self.config.get("downstream", {}).get("enabled", False):
-            downstream(self.config, self.logger, self.project_dir, success_subsets)
+    def run(self) -> None:
+        """Execute the workflow based on configuration settings."""
+        try:
+            self._execute_upstream()
+            self._execute_downstream()
+        except Exception as e:
+            self.logger.error(f"Workflow execution failed: {e}")
+            raise WorkflowError("Workflow aborted due to errors") from e
+
+    def _execute_upstream(self) -> None:
+        """Run upstream processing if enabled in config."""
+        upstream_config = self.config.get("upstream", {})
+        if upstream_config.get("enabled", False):
+            self.logger.info("Starting upstream processing")
+            self._success_subsets = run_upstream(
+                self.config, 
+                self.logger, 
+                self.project_dir
+            )
+            self.logger.info("Upstream processing completed")
+
+    def _execute_downstream(self) -> None:
+        """Run downstream processing if enabled in config."""
+        downstream_config = self.config.get("downstream", {})
+        if downstream_config.get("enabled", False):
+            self.logger.info("Starting downstream processing")
+            run_downstream(
+                self.config,
+                self.logger,
+                self.project_dir,
+                self._success_subsets
+            )
+            self.logger.info("Downstream processing completed")
+
+class WorkflowError(Exception):
+    """Custom exception for workflow-related errors."""
+    pass
             
 
 def main(config_path: Path = constants.DEFAULT_CONFIG) -> None:
