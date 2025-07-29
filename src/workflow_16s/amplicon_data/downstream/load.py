@@ -324,8 +324,8 @@ class DownstreamDataLoader:
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
         for table_level, metadata in self.metadata.items():
-            print(metadata)
-            print_columns_with_missing_location_data(metadata)
+            #print(metadata)
+            print_columns_with_missing_location_data(metadata['raw'])
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
