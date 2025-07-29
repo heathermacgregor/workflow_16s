@@ -352,7 +352,7 @@ class DownstreamDataLoader:
 
     def _match_facilities_to_samples(self, metadata) -> None:
         if not self.nfc_facilities:
-            return
+            return metadata
         else:
             return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
 
