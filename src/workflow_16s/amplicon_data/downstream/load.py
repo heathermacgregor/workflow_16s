@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
 import pandas as pd
+from biom import load_table
 from biom.table import Table
 
 # Local Imports
