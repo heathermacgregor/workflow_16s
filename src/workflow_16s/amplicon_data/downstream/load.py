@@ -204,7 +204,7 @@ def update_table_and_metadata(
     biom_mapping = _create_biom_id_mapping(table)
     
     shared_ids = [sid for sid in norm_metadata[sample_col] if sid in biom_mapping]
-    filtered_metadata = norm_meta[norm_meta[sample_col].isin(shared_ids)]
+    filtered_metadata = norm_metadata[norm_metadata[sample_col].isin(shared_ids)]
     original_ids = [biom_mapping[sid] for sid in filtered_metadata[sample_col]]
     filtered_table = table.filter(original_ids, axis='sample', inplace=False)
     
