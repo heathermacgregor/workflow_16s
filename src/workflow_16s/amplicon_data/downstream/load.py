@@ -30,6 +30,8 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
+
+
 import pandas as pd
 
 def print_columns_with_missing_location_data(
@@ -326,6 +328,9 @@ class DownstreamDataLoader:
         for table_level, metadata in self.metadata.items():
             #print(metadata)
             print_columns_with_missing_location_data(metadata['raw'])
+            logger.info(metadata['raw'][['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1', 'lat_lon']])
+
+            logger.info(metadata['raw'][['lon', 'longitude_deg.1', 'lat_lon']])
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
