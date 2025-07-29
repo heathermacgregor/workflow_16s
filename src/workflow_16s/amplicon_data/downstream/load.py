@@ -93,7 +93,7 @@ def import_merged_metadata_tsv(
     """
     dfs: List[pd.DataFrame] = []
     with get_progress_bar() as progress:
-        task_desc = "Loading metadata files..."
+        task_desc = "Loading metadata files"
         task = progress.add_task(_format_task_desc(task_desc), total=len(tsv_paths))
         for tsv_path in tsv_paths:
             try:
@@ -300,7 +300,7 @@ class DownstreamDataLoader:
         else:
             table_biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
             if self.verbose:
-                logger.info(f"Found {len(biom_paths)} feature tables")
+                logger.info(f"Found {len(table_biom_paths)} feature tables")
             return table_biom_paths
 
     def _load_metadata_df(self, table_level, table_dir) -> None:
@@ -328,10 +328,10 @@ class DownstreamDataLoader:
                     *tail, "sample-metadata.tsv"
                 )
                 if tsv_path.exists():
-                    paths.append(tsv_path)
+                    tsv_paths.append(tsv_path)
             if self.verbose:
-                logger.info(f"Found {len(paths)} metadata files")
-            return paths
+                logger.info(f"Found {len(tsv_paths)} metadata files")
+            return tsv_paths
         else:
             metadata_paths = [paths["metadata"] 
                               for subset_id, paths in self.existing_subsets.items()]
