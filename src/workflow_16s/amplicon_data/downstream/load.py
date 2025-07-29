@@ -48,14 +48,14 @@ def print_columns_with_missing_location_data(
     # Check if the required columns exist
     missing_cols = [col for col in [lon_col, lat_col] if col not in df.columns]
     if missing_cols:
-        print(f"Warning: Columns {missing_cols} not found in DataFrame. Skipping location-based analysis.")
+        logger.info(f"Warning: Columns {missing_cols} not found in DataFrame. Skipping location-based analysis.")
         return
     # Identify rows missing both coordinates
     missing_loc_mask = df[lon_col].isna() & df[lat_col].isna()
     missing_loc_rows = df[missing_loc_mask]
     
     if missing_loc_rows.empty:
-        print("No rows missing both longitude and latitude values")
+        logger.info("No rows missing both longitude and latitude values")
         return
     
     # Find columns with at least one non-null value in missing location rows
@@ -66,21 +66,21 @@ def print_columns_with_missing_location_data(
     ]
     
     if not cols_with_data:
-        print("No additional data exists for rows missing coordinates")
+        logger.info("No additional data exists for rows missing coordinates")
         return
     
-    print("Columns containing data for rows without coordinates:")
-    print("-" * 50)
+    logger.info("Columns containing data for rows without coordinates:")
+    logger.info("-" * 50)
     
     # Print column names and sample values
     for col in cols_with_data:
         # Get non-null values from the column
         sample_values = missing_loc_rows[col].dropna().unique()
         
-        print(f"{col}:")
-        print(f"  • Non-null count: {missing_loc_rows[col].notna().sum()}")
-        print(f"  • Sample values: {sample_values[:5]}... (Total unique: {len(sample_values)})")
-        print("-" * 50)
+        logger.info(f"{col}:")
+        logger.info(f"  • Non-null count: {missing_loc_rows[col].notna().sum()}")
+        logger.info(f"  • Sample values: {sample_values[:5]}... (Total unique: {len(sample_values)})")
+        logger.info("-" * 50)
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
