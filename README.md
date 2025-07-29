@@ -1,6 +1,7 @@
-# workflow_16s
+workflow_16s
+============
 
-A modular, extensible **16S rRNA microbiome analysis pipeline** supporting preprocessing, taxonomy assignment, diversity analysis, machine learning, and visualization. Designed for reproducible research.
+A modular, extensible **microbial community analysis pipeline** for 16S rRNA amplicon sequencing data. Designed for reproducible research.
 
 > See an example output file [here](https://heathermacgregor.github.io/workflow_16s_sample/).
 
@@ -14,7 +15,27 @@ This repository provides:
 - Advanced **downstream analysis**: diversity metrics, statistical testing, ML-based feature selection, functional prediction, and geospatial mapping.
 - Flexible control for grouping and metadata‑driven comparisons.
 
-Originally used for the “nuclear contamination” study, the pipeline is fully adaptable to other case studies.
+Originally used for [Article Title Placeholder], the pipeline is fully adaptable to other analyses.
+
+---
+
+## Installation & Setup
+
+```bash
+git clone https://github.com/heathermacgregor/workflow_16s.git
+cd workflow_16s
+bash setup.sh
+```
+
+---
+
+## Usage
+
+After creating custom input files ([`config.yaml`](#configuration), [`datasets.txt`](#datasets-txt), [`datasets.tsv`](#datasets-tsv)), run: 
+
+```bash
+bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
+```
 
 ---
 
@@ -50,26 +71,29 @@ Originally used for the “nuclear contamination” study, the pipeline is fully
 
 
 ---
+## Input Files
 
-## Configuration
+### Configuration
 
 > See a breakdown of the default example [here](https://github.com/heathermacgregor/workflow_16s/blob/main/info/config.md).
 
-### Key YAML Settings
+**Make sure that your config file contains accurate paths for `dataset_list`, `dataset_info`, `manual_metadata_dir`, and `project_dir`.**
+
+#### Key YAML Settings
 
 - **Hardware**: CPU thread limits (`cpu.limit`).
 - **Paths**: Dataset list, metadata, manual metadata directory, project output path.
 - **Credentials**: ENA API email for obtaining sequence metadata or download authorization.
 - **Execution flags**: Toggle `upstream` and `downstream` processing; optionally enable subset analysis.
 
-### Core Pipeline Modules
+#### Core Pipeline Modules
 
 #### Upstream
 - PCR primer control, subfragment targeting, BLAST database location.
 - Tools like `fastqc`, `seqkit`, `validate_16s`, and `cutadapt` for preprocessing.
 - QIIME2 settings: trimming, denoising (e.g. DADA2), taxonomy classification, filtering, and cleanup.
 
-#### Downstream
+##### Downstream
 - **Metadata grouping**: Define sample groups using columns (e.g. `nuclear_contamination_status`).
 - **Feature preprocessing**: Support for filtering, normalization, CLR transformation, and presence/absence conversion.
 - **Statistical testing**: Mann‑Whitney U, Kruskal‑Wallis, Fisher’s exact, and t‑tests across multiple feature representations.
@@ -80,25 +104,24 @@ Originally used for the “nuclear contamination” study, the pipeline is fully
 - **Mapping & visualization**: Geospatial sample maps, violin plots, feature maps colored by metadata.
 - **Machine learning**: Feature selection via RFE, chi‑squared, LASSO, SHAP; permutation importance; performance tracking.
 
----
-
-## Installation & Setup
-
-```bash
-git clone https://github.com/heathermacgregor/workflow_16s.git
-cd workflow_16s
-bash setup.sh
+### Datasets (TXT)
+```
+PRJDB15313
+PRJDB7915
+PRJDB7978
 ```
 
+### Datasets (TSV)
+
+| dataset_id     | metadata_complete | dataset_type | ena_project_accession | ena_project_description | ... |
+|----------------|-------------------|--------------|-----------------------|-------------------------|-----|
+| ENA_PRJDB15313 | TRUE              | ENA          | PRJDB15313            | Boston, MA              | ... |
+| ENA_PRJDB7915  | TRUE              | ENA          | PRJDB7915             | Fukushima (river soils) | ... |
+| ENA_PRJDB7978  | TRUE              | ENA          | PRJDB7978             | Fukushima (soil)        | ... |
+
 ---
-
-## Usage
-
-```bash
-bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
-```
 
 ## To-Do
-- Add to HTML report sections on the original datasets, linking to ENA BioProjects when relevant.
-- Add **batch correction methods** that are appropriate for microbial community data (e.g. [ConQuR](https://github.com/wdl2459/ConQuR)).
-- Add support for ASV mode (only genus mode is currently available).
+- [ ] Add to HTML report sections on the original datasets, linking to ENA BioProjects when relevant.
+- [ ] Add **batch correction methods** that are appropriate for microbial community data (e.g. [ConQuR](https://github.com/wdl2459/ConQuR)).
+- [ ] Add support for ASV mode (only genus mode is currently available).
