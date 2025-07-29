@@ -361,7 +361,7 @@ class DownstreamDataLoader:
             return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
 
     def _filter_and_align(self, table, metadata) -> None:
-        table, metadata = update_table_and_meta(
+        table, metadata = update_table_and_metadata(
             table, metadata, 
             self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
         )
