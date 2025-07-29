@@ -238,119 +238,145 @@ def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
 
 class DownstreamDataLoader:
     ModeConfig = {
-        "asv": ("asv", "table", "asv"),
+        "asv": ("asv", "table", "asv"), 
         "genus": ("genus", "table_6", "l6")
     }
-
     def __init__(
         self,
         config: Dict,
         mode: str,
         project_dir: SubDirs,
-        existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
+        existing_subsets: Any = None,
         verbose: bool = False
     ):
         self.config = config
-        self.mode = mode
         self.project_dir = project_dir
         self.existing_subsets = existing_subsets
         self.verbose = verbose
+        
+        self.tables: Dict = {}
+        self.metadata: Dict = {}
 
-        self.tables: Dict[str, Dict[str, Table]] = {}
-        self.metadata: Dict[str, Dict[str, pd.DataFrame]] = {}
+        self._load_nfc_facilities()
 
-        self.nfc_facilities = self._load_nfc_facilities()
-
-        for level in self.ModeConfig:
-            self._load_data_level(*self.ModeConfig[level])
-
-    def _load_data_level(self, level: str, table_dir: str, _tax_level: str):
-        self.tables[level], self.metadata[level] = {}, {}
-
-        table = self._load_table_biom(level, table_dir)
-        metadata = self._load_metadata_df(level, table_dir)
-        metadata = self._match_facilities_to_samples(metadata)
-
-        table, metadata = self._filter_and_align(table, metadata)
-
-        self.tables[level]["raw"] = table
-        self.metadata[level]["raw"] = metadata
-
-    def _load_table_biom(self, table_level: str, table_dir: str) -> Table:
-        biom_paths = self._find_table_biom_paths(table_level, table_dir)
-        if not biom_paths:
-            raise FileNotFoundError(f"No BIOM files found for {table_level} in {table_dir}")
-        return import_merged_table_biom(biom_paths, as_type="table", verbose=self.verbose)
-
-    def _load_metadata_df(self, table_level: str, table_dir: str) -> pd.DataFrame:
-        tsv_paths = self._find_metadata_paths(table_level, table_dir)
-        metadata = import_merged_metadata_tsv(tsv_paths)
-
-        if metadata.columns.duplicated().any():
-            dupes = metadata.columns[metadata.columns.duplicated()].tolist()
-            logger.warning(f"Duplicate columns found in metadata: {dupes}. Removing duplicates.")
-            metadata = metadata.loc[:, ~metadata.columns.duplicated()]
-
-        return metadata
-
-    def _find_table_biom_paths(self, table_level: str, table_dir: str) -> List[Path]:
-        if self.existing_subsets:
-            return [paths[table_dir] for paths in self.existing_subsets.values()]
-
-        subfragment = (
-            "*" if self.config["target_subfragment_mode"] == "any" or table_level == "asv"
-            else self.config["target_subfragment_mode"]
-        )
-
-        pattern = Path(self.project_dir.qiime_data_per_dataset) / "*/*/*" / subfragment / "FWD_*_REV_*" / table_dir / "feature-table.biom"
-        paths = glob.glob(str(pattern), recursive=True)
-
-        if self.verbose:
-            logger.info(f"[{table_level}] Found {len(paths)} BIOM files")
-
-        return [Path(p) for p in paths]
-
-    def _find_metadata_paths(self, table_level: str, table_dir: str) -> List[Path]:
-        if self.existing_subsets:
-            return [paths["metadata"] for paths in self.existing_subsets.values()]
-
-        tsv_paths: List[Path] = []
-        for biom_path in self._find_table_biom_paths(table_level, table_dir):
-            dataset_parts = biom_path.parts[-6:-1]
-            tsv_path = Path(self.project_dir.metadata_per_dataset).joinpath(*dataset_parts, "sample-metadata.tsv")
-            if tsv_path.exists():
-                tsv_paths.append(tsv_path)
-
-        if self.verbose:
-            logger.info(f"[{table_level}] Found {len(tsv_paths)} metadata files")
-
-        return tsv_paths
-
-    def _load_nfc_facilities(self) -> Optional[pd.DataFrame]:
-        if self.config.get("nfc_facilities", {}).get("enabled", False):
-            return load_nfc_facilities(self.config, output_dir=self.project_dir.final)
-        return None
-
-    def _match_facilities_to_samples(self, metadata: pd.DataFrame) -> pd.DataFrame:
-        if self.nfc_facilities is not None:
-            return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
-        return metadata
-
-    def _filter_and_align(self, table: Table, metadata: pd.DataFrame) -> Tuple[Table, pd.DataFrame]:
-        return update_table_and_meta(
-            table,
-            metadata,
-            sample_col=self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
-        )
-
-    def log_summary(self) -> None:
-        """Optional logging method to summarize data loaded"""
-        for level in self.tables:
-            table = self.tables[level]["raw"]
-            meta = self.metadata[level]["raw"]
-            logger.info(
-                f"[{level}] {table.shape[0]} features × {table.shape[1]} samples — "
-                f"{meta.shape[0]} metadata samples × {meta.shape[1]} columns"
+        # Load ASV feature table if appropriate
+        if not self.config["target_subfragment_mode"] == 'any':
+            table_level, table_dir, _ = self.ModeConfig['asv']
+            self.tables[table_level], self.metadata[table_level] = {}, {}
+            self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
+                self._load_table_biom(table_level, table_dir), 
+                self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
             )
+        
+        # Load taxonomically-assigned feature table at genus level     
+        table_level, table_dir, _ = self.ModeConfig['genus']
+        self.tables[table_level], self.metadata[table_level] = {}, {}
+        self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
+            self._load_table_biom(table_level, table_dir), 
+            self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
+        )
+        print(self.metadata)
+        #self._log_results()
+
+    def _load_table_biom(self, table_level, table_dir) -> None:
+        table_biom_paths = self._find_table_biom_paths(table_level, table_dir)  
+        if not table_biom_paths:
+            raise FileNotFoundError("No BIOM files found")
+        return import_merged_table_biom(table_biom_paths, "table", self.verbose)
+
+    def _find_table_biom_paths(self, table_level, table_dir) -> List[Path]:
+        if self.existing_subsets == None:
+            # Use wildcard for subfragment when in 'any' mode or not in 'genus' mode
+            subfragment_part = (
+              "*" if self.config["target_subfragment_mode"] == 'any' or table_level == 'asv'
+              else self.config["target_subfragment_mode"]
+            )
+            pattern = "/".join([
+                "*", "*", "*", subfragment_part, 
+                "FWD_*_REV_*", table_dir, "feature-table.biom"
+            ])
+            globbed = glob.glob(
+                str(Path(self.project_dir.qiime_data_per_dataset) / pattern), 
+                recursive=True
+            )
+            if self.verbose:
+                logger.info(f"Found {len(globbed)} feature tables")
+            return [Path(p) for p in globbed]
+        else:
+            table_biom_paths = [paths[table_dir] for subset_id, paths in self.existing_subsets.items()]
+            if self.verbose:
+                logger.info(f"Found {len(table_biom_paths)} feature tables")
+            return table_biom_paths
+
+    def _load_metadata_df(self, table_level, table_dir) -> None:
+        tsv_paths = self._find_metadata_paths(table_level, table_dir)
+        metadata = import_merged_metadata_tsv(tsv_paths, None)
+
+        # Remove duplicated columns
+        if metadata.columns.duplicated().any():
+            duplicated_columns = metadata.columns[metadata.columns.duplicated()].tolist()
+            logger.debug(
+                f"Found duplicate columns in metadata: {duplicated_columns}. "
+                "Removing duplicates."
+            )
+            metadata = metadata.loc[:, ~metadata.columns.duplicated()]
+          
+        return metadata
+
+    def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
+        tsv_paths: List[Path] = []
+        if self.existing_subsets == None:
+            for biom_path in self._find_table_biom_paths(table_level, table_dir):
+                dataset_dir = biom_path.parent if biom_path.is_file() else biom_path
+                tail = dataset_dir.parts[-6:-1]
+                tsv_path = Path(self.project_dir.metadata_per_dataset).joinpath(
+                    *tail, "sample-metadata.tsv"
+                )
+                if tsv_path.exists():
+                    tsv_paths.append(tsv_path)
+            if self.verbose:
+                logger.info(f"Found {len(tsv_paths)} metadata files")
+            return tsv_paths
+        else:
+            metadata_paths = [paths["metadata"] 
+                              for subset_id, paths in self.existing_subsets.items()]
+            if self.verbose:
+                (f"Found {len(metadata_paths)} metadata files")
+            return metadata_paths
+          
+    def _load_nfc_facilities(self) -> None:
+        # If enabled, find samples within a threshold distance from NFC facilities
+        if self.config.get("nfc_facilities", {}).get("enabled", False):
+            self.nfc_facilities = load_nfc_facilities(
+                cfg=self.config,
+                output_dir=self.project_dir.final
+            )
+        else:
+            self.nfc_facilities = None
+
+    def _match_facilities_to_samples(self, metadata) -> None:
+        if not self.nfc_facilities:
+            return
+        else:
+            return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
+
+    def _filter_and_align(self, table, metadata) -> None:
+        table, metadata = update_table_and_meta(
+            table, metadata, 
+            self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
+        )
+        return table, metadata
+      
+    def _log_results(self) -> None:   
+        logger.info(
+            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples "
+            f"× {self.meta.shape[1]:>5} cols"
+        )
+      
+        feature_type = "genera" if self.mode == "genus" else "ASVs"
+        logger.info(
+            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples "
+            f"× {self.table.shape[0]:>5} {feature_type}"
+        )
 
     
