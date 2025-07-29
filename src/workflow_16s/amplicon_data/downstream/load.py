@@ -36,7 +36,7 @@ logger = logging.getLogger("workflow_16s")
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
-    column_renames: Optional[List[Tuple[str, str]]] = []
+    column_renames: Optional[List[Tuple[str, str]]] = None
 ) -> pd.DataFrame:
     """Load and standardize a sample metadata TSV file.
     
@@ -53,6 +53,7 @@ def import_metadata_tsv(
     tsv_path = Path(tsv_path)
     if not tsv_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {tsv_path}")
+    
 
     df = pd.read_csv(tsv_path, sep='\t')
   
@@ -69,7 +70,8 @@ def import_metadata_tsv(
         if col.get('type') == 'bool' and col_name and col_name not in df.columns:
             df[col_name] = False
 
-          
+    if column_renames is None:
+        column_renames = []      
     for old, new in column_renames:
         if old in df.columns:
             df.rename(columns={old: new}, inplace=True)
