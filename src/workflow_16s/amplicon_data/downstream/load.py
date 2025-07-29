@@ -275,6 +275,7 @@ class DownstreamDataLoader:
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
+        print(self.metadata)
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
