@@ -304,7 +304,7 @@ class DownstreamDataLoader:
             return table_biom_paths
 
     def _load_metadata_df(self, table_level, table_dir) -> None:
-        tsv_paths = self._find_metadata_paths()
+        tsv_paths = self._find_metadata_paths(table_level, table_dir)
         metadata = import_merged_metadata_tsv(tsv_paths, None, self.verbose)
 
         # Remove duplicated columns
