@@ -199,7 +199,58 @@ def match_facilities_to_locations(
     
     return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
 
+def load_nfc_facilities(cfg: Dict, output_dir: Optional[Union[str, Path]] = None) -> pd.DataFrame:
+    databases = cfg.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
+    use_local = cfg.get("nfc_facilities", {}).get('use_local', False)
+    if output_dir:
+        tsv_path = Path(output_dir) / 'nfc_facilities.csv'
+    if use_local and tsv_path.exists():
+        facilities_df = pd.read_csv(tsv_path, sep='\t')
+    else:
+        dfs = []
+        for db in databases:
+            path = constants.DEFAULT_NFCIS_PATH if db['name']=="NFCIS" else constants.DEFAULT_GEM_PATH
+            dfs.append(process_and_geocode_db(database=db['name'], file_path=path))
+        facilities_df = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
+        facilities_df.to_csv(tsv_path, sep='\t', index=True)
+    logger.info(f"Merged facilities: {facilities_df.shape}")
+    return facilities_df
+    
+def match_facilities_to_samples(
+    cfg: Dict,
+    meta: pd.DataFrame,
+    facilities_df: pd.DataFrame,
+    output_dir: Optional[Union[str, Path]] = None
+) -> pd.DataFrame:
+    max_dist = cfg.get("nfc_facilities", {}).get("max_distance_km", 50)
+    # Pass full metadata to ensure coordinate columns are available
+    matched_df = match_facilities_to_locations(facilities_df, meta, max_distance_km=max_dist)
+    
+    # Define required metadata columns to keep
+    required_meta_cols = [
+        'nuclear_contamination_status', 
+        'dataset_name', 
+        'country', 
+        'latitude_deg', 
+        'longitude_deg'
+    ]
+    
+    # Get new facility columns (including renamed coordinates)
+    new_cols = [col for col in matched_df.columns if col not in meta.columns]
+    
+    # Combine required metadata and new facility columns
+    result_cols = [col for col in required_meta_cols if col in matched_df] + new_cols
+    
+    # Log warning if any required columns are missing
+    missing_cols = set(required_meta_cols) - set(result_cols)
+    if missing_cols:
+        logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
+    # Save full matched results
+    matched_df[result_cols].to_csv(f"/usr2/people/macgregor/amplicon/test/facility_matches_{max_dist}km.tsv",
+                      sep='\t', index=False)
+    return matched_df
 
+    
 def find_nearby_nfc_facilities(
     cfg: Dict,
     meta: pd.DataFrame,
