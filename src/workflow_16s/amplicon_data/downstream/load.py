@@ -17,13 +17,9 @@ from biom.table import Table
 # Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
-from workflow_16s.utils.data import (
-    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
-    update_table_and_meta, to_biom
-)
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.io import (
-    export_h5py, import_merged_metadata_tsv, import_merged_table_biom
+    export_h5py
 )
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.utils.nfc_facilities import load_nfc_facilities, match_facilities_to_samples
