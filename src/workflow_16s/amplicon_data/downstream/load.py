@@ -30,6 +30,53 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
+import pandas as pd
+
+def print_columns_with_missing_location_data(
+    df: pd.DataFrame,
+    lon_col: str = 'longitude_deg',
+    lat_col: str = 'latitude_deg'
+) -> None:
+    """
+    Prints columns that contain data for rows missing both longitude and latitude values.
+    
+    Args:
+        df: Input DataFrame
+        lon_col: Name of longitude column (default: 'longitude_deg')
+        lat_col: Name of latitude column (default: 'latitude_deg')
+    """
+    # Identify rows missing both coordinates
+    missing_loc_mask = df[lon_col].isna() & df[lat_col].isna()
+    missing_loc_rows = df[missing_loc_mask]
+    
+    if missing_loc_rows.empty:
+        print("No rows missing both longitude and latitude values")
+        return
+    
+    # Find columns with at least one non-null value in missing location rows
+    cols_with_data = [
+        col for col in df.columns
+        if col not in [lon_col, lat_col] 
+        and missing_loc_rows[col].notna().any()
+    ]
+    
+    if not cols_with_data:
+        print("No additional data exists for rows missing coordinates")
+        return
+    
+    print("Columns containing data for rows without coordinates:")
+    print("-" * 50)
+    
+    # Print column names and sample values
+    for col in cols_with_data:
+        # Get non-null values from the column
+        sample_values = missing_loc_rows[col].dropna().unique()
+        
+        print(f"{col}:")
+        print(f"  • Non-null count: {missing_loc_rows[col].notna().sum()}")
+        print(f"  • Sample values: {sample_values[:5]}... (Total unique: {len(sample_values)})")
+        print("-" * 50)
+
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
     column_renames: Optional[List[Tuple[str, str]]] = None
@@ -271,7 +318,8 @@ class DownstreamDataLoader:
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
-        print(self.metadata)
+        for table_level, metadata in self.metadata.items():
+            print_columns_with_missing_location_data(metadata)
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
