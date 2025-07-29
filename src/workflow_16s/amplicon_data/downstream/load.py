@@ -364,6 +364,7 @@ class DownstreamDataLoader:
             table, metadata, 
             self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
         )
+        return table, metadata
       
     def _log_results(self) -> None:   
         logger.info(
