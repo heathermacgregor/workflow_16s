@@ -5,6 +5,7 @@ import glob
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from functools import reduce
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
