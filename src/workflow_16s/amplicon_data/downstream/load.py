@@ -30,7 +30,56 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
-
+def check_coordinate_completeness(df):
+    """
+    Check completeness of latitude and longitude coordinates in a DataFrame.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame to check
+        
+    Returns:
+        dict: Dictionary containing:
+            - 'total_rows': Total number of rows in DataFrame
+            - 'complete_coordinates': Count of rows with both latitude and longitude
+            - 'missing_coordinates': Count of rows missing at least one coordinate
+            - 'missing_latitude': Count of rows missing latitude
+            - 'missing_longitude': Count of rows missing longitude
+            - 'completeness_percentage': Percentage of rows with complete coordinates
+    """
+    # Initialize result dictionary
+    result = {
+        'total_rows': len(df),
+        'complete_coordinates': 0,
+        'missing_coordinates': 0,
+        'missing_latitude': 0,
+        'missing_longitude': 0,
+        'completeness_percentage': 0.0
+    }
+    
+    # Check if required columns exist
+    has_lat = 'latitude_deg' in df.columns
+    has_lon = 'longitude_deg' in df.columns
+    
+    if not (has_lat and has_lon):
+        result['missing_coordinates'] = len(df)
+        return result
+    
+    # Calculate completeness metrics
+    lat_missing = df['latitude_deg'].isna()
+    lon_missing = df['longitude_deg'].isna()
+    
+    result['complete_coordinates'] = ((~lat_missing) & (~lon_missing)).sum()
+    result['missing_coordinates'] = (lat_missing | lon_missing).sum()
+    result['missing_latitude'] = lat_missing.sum()
+    result['missing_longitude'] = lon_missing.sum()
+    
+    # Calculate completeness percentage
+    if result['total_rows'] > 0:
+        result['completeness_percentage'] = round(
+            (result['complete_coordinates'] / result['total_rows']) * 100, 2
+        )
+    
+    return result
 
 import pandas as pd
 
@@ -510,7 +559,10 @@ class DownstreamDataLoader:
                 "Removing duplicates."
             )
             metadata = metadata.loc[:, ~metadata.columns.duplicated()]
+
+        logger.info(check_coordinate_completeness(metadata))
         metadata = fill_missing_coordinates(metadata)
+        logger.info(check_coordinate_completeness(metadata))
         return metadata
 
     def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
