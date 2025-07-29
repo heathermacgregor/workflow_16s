@@ -11,11 +11,69 @@ A modular, extensible **microbial community analysis pipeline** for 16S rRNA amp
 
 This repository provides:
 
-- A configurable **upstream pipeline**: trimming, quality control, and QIIME2 taxonomic processing.
-- Advanced **downstream analysis**: diversity metrics, statistical testing, ML-based feature selection, functional prediction, and geospatial mapping.
-- Flexible control for grouping and metadata‑driven comparisons.
+1. A configurable **upstream pipeline**:
+    1. Retrieval of metadata and raw sequencing data
+        1. From the European Nucleotide Archive (ENA) database
+        1. Locally
+    1. Sample selection based on target region
+    1. (Optional) Prediction of PCR primers and target regions
+    1. (Optional) Validation of 16S sequences
+    1. (Optional) Sequence quality assessment ([SeqKit](https://bioinf.shenwei.me/seqkit/), [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/))
+    1. (Optional) Sequence trimming using [CutAdapt](https://cutadapt.readthedocs.io/en/stable/)
+    1. [QIIME 2](https://qiime2.org) workflow performed on each dataset
+        1. Sequence trimming
+        1. Denoising
+        1. Quality control
+        1. Taxonomic assignment
+    1. (Optional) Cleanup of raw data
+1. Advanced **downstream analysis**, focusing on the relationship between a group column and the microbial community composition and/or individual taxonomic features:
+    1. Alpha diversity metrics
+    1. Beta diversity and ordination
+    1. Statistical testing
+    1. Feature selection ([CatBoost](https://catboost.ai))
+    1. Functional prediction ([FAPROTAX](https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/lib/php/index.php))
+    1. Geospatial mapping
+1. Generation of a comprehensive HTML report with interactive visualizations
 
-Originally used for [Article Title Placeholder], the pipeline is fully adaptable to other analyses.
+Originally used for ["Article Title Placeholder"](https://doi.org), the pipeline is fully adaptable to other analyses. It will continue to be updated in order to become more easily applicable to different use cases.
+
+---
+
+## Repository Structure
+
+
+<pre> 
+  workflow_16s/ 
+  ├── references/ 
+  │ ├── classifier/ 
+  │ │ └── silva-138-99-515-806/ 
+  │ ├── conda_envs/
+  │ ├── manual_metadata/                   # Default directory for manual metadata
+  │ ├── config.yaml                        # Default config file
+  │ ├── datasets.tsv                       # Default datasets TSV
+  │ └── datasets.txt                       # Default datasets TXT
+  ├── src/ 
+  │ ├── workflow_16s/
+  │ │ ├── amplicon_data/                   # Downstream (cross-dataset) analysis
+  │ │ ├── ena/                             # Interactions with the ENA API
+  │ │ ├── figures/                         # Figure generation
+  │ │ ├── function/                        # Functional assignment
+  │ │ ├── metadata/                        # Metadata handling
+  │ │ ├── models/                          # Machine learning models
+  │ │ ├── qiime/                           # Interactions with the QIIME 2 API
+  │ │ ├── sequences/                       # Sequence data analysis
+  │ │ ├── stats/                           # Statistical analysis
+  │ │ ├── utils/                           # Utilities
+  │ │ ├── __init__.py 
+  │ │ ├── config.py 
+  │ │ ├── constants.py                     # Constants and default values 
+  │ │ └── logger.py 
+  │ ├── __init__.py 
+  │ └── run.py 
+  ├── README.md                            # YOU ARE HERE
+  ├── run.sh                               # Executes the full workflow
+  └── setup.sh                             # Set up a conda environment for the workflow
+  </pre>
 
 ---
 
@@ -37,38 +95,7 @@ After creating custom input files ([`config.yaml`](#configuration), [`datasets.t
 bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
 ```
 
----
-
-## Repository Structure
-
-
-<pre> 
-  workflow_16s/ 
-  ├── references/ 
-  │ ├── classifier/ 
-  │ │ └── silva-138-99-515-806/ 
-  │ ├── conda_envs/
-  │ ├── manual_metadata/ 
-  │ ├── config.yaml
-  │ ├── datasets.tsv
-  │ └── datasets.txt
-  ├── src/ 
-  │ ├── workflow_16s/
-  │ │ ├── ena/
-  │ │ ├── figures/
-  │ │ ├── metadata/
-  │ │ ├── qiime/
-  │ │ ├── sequences/
-  │ │ ├── utils/
-  │ │ ├── __init__.py 
-  │ │ ├── config.py 
-  │ │ └── logger.py 
-  │ ├── __init__.py 
-  │ └── run.py 
-  ├── README.md # This file
-  └── setup.sh 
-  </pre>
-
+**`[!] IMPORTANT:`** Make sure you edit `ena_email` in the configuration file so you can access the ENA API.
 
 ---
 ## Input Files
@@ -77,7 +104,7 @@ bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
 
 > See a breakdown of the default example [here](https://github.com/heathermacgregor/workflow_16s/blob/main/info/config.md).
 
-**Make sure that your config file contains accurate paths for `dataset_list`, `dataset_info`, `manual_metadata_dir`, and `project_dir`.**
+**`[!] IMPORTANT:`** Make sure that your config file contains accurate paths for `dataset_list`, `dataset_info`, `manual_metadata_dir`, and `project_dir`.
 
 #### Key YAML Settings
 
@@ -105,6 +132,7 @@ bash run.sh [--config PATH_TO_CUSTOM_CONFIG_YAML]
 - **Machine learning**: Feature selection via RFE, chi‑squared, LASSO, SHAP; permutation importance; performance tracking.
 
 ### Datasets (TXT)
+A TXT file containing a list of datasets. ENA datasets should be listed by their project accession. Local datasets should be listed by the same name used for the subfolder(s) where their metadata and sequencing data are stored.
 ```
 PRJDB15313
 PRJDB7915
@@ -112,6 +140,9 @@ PRJDB7978
 ```
 
 ### Datasets (TSV)
+A TSV file containing pertinent information about datasets. 
+
+**`[!] IMPORTANT:`** ENA datasets do not always clarify the target gene, target region, the PCR primers used, and other experimental details. Although the workflow can attempt to predict the details necessary for conversion of raw data to feature tables, it is highly recommended to manually collect metadata (e.g. from associated publications).
 
 | dataset_id     | metadata_complete | dataset_type | ena_project_accession | ena_project_description | ... |
 |----------------|-------------------|--------------|-----------------------|-------------------------|-----|
