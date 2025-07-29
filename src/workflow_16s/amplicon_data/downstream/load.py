@@ -285,7 +285,129 @@ def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
     return mapping
   
 ########################################################################################
+import pandas as pd
+import numpy as np
+import re
 
+def extract_lat_lon(s):
+    if not isinstance(s, str):
+        return None, None
+        
+    pattern = r'[-+]?\d*\.\d+|[-+]?\d+'
+    matches = list(re.finditer(pattern, s))
+    if len(matches) < 2:
+        return None, None
+        
+    try:
+        num1 = float(matches[0].group())
+        num2 = float(matches[1].group())
+    except ValueError:
+        return None, None
+        
+    def get_letter_around(match, full_string):
+        start, end = match.span()
+        window_start = max(0, start - 3)
+        window_end = min(len(full_string), end + 3)
+        window = full_string[window_start:window_end]
+        if re.search(r'[Nn]', window):
+            return 'N'
+        elif re.search(r'[Ss]', window):
+            return 'S'
+        elif re.search(r'[Ee]', window):
+            return 'E'
+        elif re.search(r'[Ww]', window):
+            return 'W'
+        return None
+        
+    letter1 = get_letter_around(matches[0], s)
+    letter2 = get_letter_around(matches[1], s)
+    
+    coords = {}
+    if letter1 == 'N':
+        coords['lat'] = num1
+    elif letter1 == 'S':
+        coords['lat'] = -num1
+    elif letter1 == 'E':
+        coords['lon'] = num1
+    elif letter1 == 'W':
+        coords['lon'] = -num1
+        
+    if letter2 == 'N':
+        coords['lat'] = num2 if 'lat' not in coords else coords['lat']
+    elif letter2 == 'S':
+        coords['lat'] = -num2 if 'lat' not in coords else coords['lat']
+    elif letter2 == 'E':
+        coords['lon'] = num2 if 'lon' not in coords else coords['lon']
+    elif letter2 == 'W':
+        coords['lon'] = -num2 if 'lon' not in coords else coords['lon']
+        
+    if 'lat' in coords and 'lon' in coords:
+        return coords['lat'], coords['lon']
+        
+    if 'lat' in coords:
+        return coords['lat'], num2
+    elif 'lon' in coords:
+        return num1, coords['lon']
+        
+    return num1, num2
+
+def fill_missing_coordinates(df):
+    if 'latitude_deg' not in df.columns:
+        df['latitude_deg'] = np.nan
+    if 'longitude_deg' not in df.columns:
+        df['longitude_deg'] = np.nan
+        
+    lat_single_columns = ['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1']
+    lon_single_columns = ['lon', 'lon_study', 'longitude_deg.1']
+    pair_columns = [
+        'lat_lon', 'location', 'location_ena', 'location_start', 'location_end',
+        'location_start_study', 'location_end_study'
+    ]
+    
+    existing_lat_single = [col for col in lat_single_columns if col in df.columns]
+    existing_lon_single = [col for col in lon_single_columns if col in df.columns]
+    existing_pair = [col for col in pair_columns if col in df.columns]
+    
+    missing_mask = df['latitude_deg'].isna() | df['longitude_deg'].isna()
+    missing_indices = df.index[missing_mask]
+    
+    for idx in missing_indices:
+        row = df.loc[idx].copy()
+        original_lat = row['latitude_deg']
+        original_lon = row['longitude_deg']
+        
+        for col in existing_pair:
+            if pd.notna(row[col]) and row[col] != '':
+                s = str(row[col])
+                lat_val, lon_val = extract_lat_lon(s)
+                if pd.isna(original_lat) and lat_val is not None:
+                    row['latitude_deg'] = lat_val
+                if pd.isna(original_lon) and lon_val is not None:
+                    row['longitude_deg'] = lon_val
+                    
+        if pd.isna(row['latitude_deg']):
+            for col in existing_lat_single:
+                if pd.notna(row[col]) and row[col] != '':
+                    try:
+                        lat_val = float(row[col])
+                        row['latitude_deg'] = lat_val
+                        break
+                    except (ValueError, TypeError):
+                        pass
+                        
+        if pd.isna(row['longitude_deg']):
+            for col in existing_lon_single:
+                if pd.notna(row[col]) and row[col] != '':
+                    try:
+                        lon_val = float(row[col])
+                        row['longitude_deg'] = lon_val
+                        break
+                    except (ValueError, TypeError):
+                        pass
+                        
+        df.loc[idx] = row
+        
+    return df
 class DownstreamDataLoader:
     ModeConfig = {
         "asv": ("asv", "table", "asv"), 
@@ -328,9 +450,7 @@ class DownstreamDataLoader:
         for table_level, metadata in self.metadata.items():
             #print(metadata)
             print_columns_with_missing_location_data(metadata['raw'])
-            logger.info(metadata['raw'][['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1', 'lat_lon']])
-
-            logger.info(metadata['raw'][['lon', 'longitude_deg.1', 'lat_lon']])
+            logger.info(metadata['raw'][['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1', 'lat_lon', 'location', 'location_ena', 'location_start', 'location_end', 'location_start_study', 'location_end_study', 'lon', 'lon_study', 'longitude_deg.1', 'lat_lon']])
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
@@ -375,7 +495,7 @@ class DownstreamDataLoader:
                 "Removing duplicates."
             )
             metadata = metadata.loc[:, ~metadata.columns.duplicated()]
-          
+        metadata = fill_missing_coordinates(metadata)
         return metadata
 
     def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
