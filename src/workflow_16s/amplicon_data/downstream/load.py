@@ -65,8 +65,10 @@ def import_metadata_tsv(
     df['DATASET ID'] = (df[dataset_id_col] if dataset_id_col else tsv_path.parents[5].name)
   
     for col in constants.DEFAULT_GROUP_COLUMNS:
-        if col['type'] == 'bool' and col not in df.columns:
-            df[col] = False
+        col_name = col.get('name')
+        if col.get('type') == 'bool' and col_name and col_name not in df.columns:
+            df[col_name] = False
+
           
     for old, new in column_renames:
         if old in df.columns:
