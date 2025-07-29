@@ -240,11 +240,13 @@ class DownstreamDataLoader:
         config: Dict,
         mode: str,
         project_dir: SubDirs,
-        existing_subsets: Any = None
+        existing_subsets: Any = None,
+        verbose: bool = False
     ):
         self.config = config
         self.project_dir = project_dir
         self.existing_subsets = existing_subsets
+        self.verbose = verbose
         
         self.tables: Dict = {}
         self.metadata: Dict = {}
