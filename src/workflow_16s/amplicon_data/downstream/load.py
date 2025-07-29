@@ -24,7 +24,7 @@ from workflow_16s.utils.io import (
     export_h5py, import_merged_metadata_tsv, import_merged_table_biom
 )
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
-from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
+from workflow_16s.utils.nfc_facilities import load_nfc_facilities, match_facilities_to_samples
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -232,8 +232,8 @@ def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
 
 class DownstreamDataLoader:
     ModeConfig = {
-        "asv": ("table", "asv"), 
-        "genus": ("table_6", "l6")
+        "asv": ("asv", "table", "asv"), 
+        "genus": ("genus", "table_6", "l6")
     }
     def __init__(
         self,
@@ -244,27 +244,42 @@ class DownstreamDataLoader:
     ):
         self.config = config
         self.project_dir = project_dir
-        self.mode = mode
         self.existing_subsets = existing_subsets
+        
+        self.tables: Dict = {}
+        self.metadata: Dict = {}
 
-        self._load_table_biom()
-        self._load_metadata_df()
-        self._find_nfc_facilities()
-        self._filter_and_align()
-        self._log_results()
+        self._load_nfc_facilities()
 
-    def _load_table_biom(self) -> None:
-        table_biom_paths = self._find_table_biom_paths()  
+        # Load ASV feature table if appropriate
+        if not self.config["target_subfragment_mode"] == 'any':
+            table_level, table_dir, _ = self.ModeConfig['asv']
+            self.tables[table_level], self.metadata[table_level] = {}, {}
+            self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
+                self._load_table_biom(table_level, table_dir), 
+                self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
+            )
+        
+        # Load taxonomically-assigned feature table at genus level     
+        table_level, table_dir, _ = self.ModeConfig['genus']
+        self.tables[table_level], self.metadata[table_level] = {}, {}
+        self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
+            self._load_table_biom(table_level, table_dir), 
+            self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
+        )
+        #self._log_results()
+
+    def _load_table_biom(self, table_level, table_dir) -> None:
+        table_biom_paths = self._find_table_biom_paths(table_level, table_dir)  
         if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
-        self.table = import_merged_table_biom(table_biom_paths, "table", self.verbose)
+        self.tables[table_level]['raw'] = import_merged_table_biom(table_biom_paths, "table", self.verbose)
 
-    def _find_table_biom_paths(self) -> List[Path]:
-        table_dir, _ = self.ModeConfig[self.mode]
+    def _find_table_biom_paths(self, table_level, table_dir) -> List[Path]:
         if self.existing_subsets == None:
             # Use wildcard for subfragment when in 'any' mode or not in 'genus' mode
             subfragment_part = (
-              "*" if self.config["target_subfragment_mode"] == 'any' or self.mode != 'genus'
+              "*" if self.config["target_subfragment_mode"] == 'any' or table_level == 'asv'
               else self.config["target_subfragment_mode"]
             )
             pattern = "/".join([
@@ -284,7 +299,7 @@ class DownstreamDataLoader:
                 logger.info(f"Found {len(biom_paths)} feature tables")
             return table_biom_paths
 
-    def _load_metadata_df(self) -> None:
+    def _load_metadata_df(self, table_level, table_dir) -> None:
         tsv_paths = self._find_metadata_paths()
         metadata = import_merged_metadata_tsv(tsv_paths, None, self.verbose)
 
@@ -299,10 +314,10 @@ class DownstreamDataLoader:
           
         self.metadata = metadata
 
-    def _find_metadata_paths(self) -> List[Path]:
+    def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
         tsv_paths: List[Path] = []
         if self.existing_subsets == None:
-            for biom_path in self._find_table_biom_paths():
+            for biom_path in self._find_table_biom_paths(table_level, table_dir):
                 dataset_dir = biom_path.parent if biom_path.is_file() else biom_path
                 tail = dataset_dir.parts[-6:-1]
                 tsv_path = Path(self.project_dir.metadata_per_dataset).joinpath(
@@ -320,20 +335,25 @@ class DownstreamDataLoader:
                 (f"Found {len(metadata_paths)} metadata files")
             return metadata_paths
           
-    def _find_nfc_facilities(self) -> None:
+    def _load_nfc_facilities(self) -> None:
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
-            self.metadata, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(
+            self.nfc_facilities = load_nfc_facilities(
                 cfg=self.config,
-                meta=self.metadata, 
                 output_dir=self.project_dir.final
             )
         else:
-            self.nfc_facilities, self.meta_nfc_facilities = None, None
+            self.nfc_facilities = None
 
-    def _filter_and_align(self) -> None:
-        self.table, self.metadata = update_table_and_meta(
-            self.table, self.metadata, 
+    def _match_facilities_to_samples(self, metadata) -> None:
+        if not self.nfc_facilities:
+            return
+        else:
+            return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
+
+    def _filter_and_align(self, table, metadata) -> None:
+        table, metadata = update_table_and_meta(
+            table, metadata, 
             self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
         )
       
