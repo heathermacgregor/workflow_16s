@@ -72,7 +72,6 @@ class Downstream:
         self._validate_mode()
         
         # Initialize result containers
-        self.tables: Dict[str, Any] = {}
         self.maps: Optional[Dict[str, Any]] = None
         
         self.stats: Dict[str, Any] = {}
@@ -91,8 +90,8 @@ class Downstream:
           
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
-        metadata, tables, nfc_facilities = self._load_data()
-        print(metadata)
+        self.metadata, self.tables, self.nfc_facilities = self._load_data()
+        print(self.metadata)
         #self._process_tables()
         #self._run_analysis()
         
