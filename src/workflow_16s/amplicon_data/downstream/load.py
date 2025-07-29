@@ -351,7 +351,7 @@ class DownstreamDataLoader:
             self.nfc_facilities = None
 
     def _match_facilities_to_samples(self, metadata) -> None:
-        if not self.nfc_facilities:
+        if not self.config.get("nfc_facilities", {}).get("enabled", False):
             return metadata
         else:
             return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
