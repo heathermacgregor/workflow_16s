@@ -208,7 +208,7 @@ def update_table_and_metadata(
     original_ids = [biom_mapping[sid] for sid in filtered_metadata[sample_col]]
     filtered_table = table.filter(original_ids, axis='sample', inplace=False)
     
-    return filtered_table, filtered_meta
+    return filtered_table, filtered_metadata
 
 
 def _normalize_metadata(metadata: pd.DataFrame, sample_col: str) -> pd.DataFrame:
