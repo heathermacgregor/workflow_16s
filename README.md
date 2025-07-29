@@ -2,7 +2,7 @@
 
 A modular, extensible **16S rRNA microbiome analysis pipeline** supporting preprocessing, taxonomy assignment, diversity analysis, machine learning, and visualization. Designed for reproducible research.
 
-> See an example output file [here](https://heathermacgregor.github.io/workflow_16s/info/Example_Report.html).
+> See an example output file [here](https://heathermacgregor.github.io/workflow_16s_sample/).
 
 ---
 
@@ -53,7 +53,7 @@ Originally used for the “nuclear contamination” study, the pipeline is fully
 
 ## Configuration
 
-See a breakdown of the default example [here](https://github.com/heathermacgregor/workflow_16s/blob/main/info/config.md).
+> See a breakdown of the default example [here](https://github.com/heathermacgregor/workflow_16s/blob/main/info/config.md).
 
 ### Key YAML Settings
 
