@@ -511,10 +511,6 @@ class DownstreamDataLoader:
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
-        for table_level, metadata in self.metadata.items():
-            #print(metadata)
-            print_columns_with_missing_location_data(metadata['raw'])
-            logger.info(metadata['raw'][['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1', 'lat_lon', 'location', 'location_ena', 'location_start', 'location_end', 'location_start_study', 'location_end_study', 'lon', 'lon_study', 'longitude_deg.1', 'lat_lon']])
         #self._log_results()
 
     def _load_table_biom(self, table_level, table_dir) -> None:
@@ -560,9 +556,7 @@ class DownstreamDataLoader:
             )
             metadata = metadata.loc[:, ~metadata.columns.duplicated()]
 
-        logger.info(check_coordinate_completeness(metadata))
         metadata = fill_missing_coordinates(metadata)
-        logger.info(check_coordinate_completeness(metadata))
         return metadata
 
     def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
