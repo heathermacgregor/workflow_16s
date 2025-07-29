@@ -305,7 +305,7 @@ class DownstreamDataLoader:
 
     def _load_metadata_df(self, table_level, table_dir) -> None:
         tsv_paths = self._find_metadata_paths(table_level, table_dir)
-        metadata = import_merged_metadata_tsv(tsv_paths, None, self.verbose)
+        metadata = import_merged_metadata_tsv(tsv_paths, None)
 
         # Remove duplicated columns
         if metadata.columns.duplicated().any():
