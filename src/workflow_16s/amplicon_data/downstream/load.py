@@ -45,6 +45,11 @@ def print_columns_with_missing_location_data(
         lon_col: Name of longitude column (default: 'longitude_deg')
         lat_col: Name of latitude column (default: 'latitude_deg')
     """
+    # Check if the required columns exist
+    missing_cols = [col for col in [lon_col, lat_col] if col not in df.columns]
+    if missing_cols:
+        print(f"Warning: Columns {missing_cols} not found in DataFrame. Skipping location-based analysis.")
+        return
     # Identify rows missing both coordinates
     missing_loc_mask = df[lon_col].isna() & df[lat_col].isna()
     missing_loc_rows = df[missing_loc_mask]
@@ -319,6 +324,7 @@ class DownstreamDataLoader:
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
         for table_level, metadata in self.metadata.items():
+            print(metadata)
             print_columns_with_missing_location_data(metadata)
         #self._log_results()
 
