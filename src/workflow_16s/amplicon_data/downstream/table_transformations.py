@@ -39,54 +39,88 @@ class DownstreamTableTransformations:
     def __init__(
         self,
         config: Dict,
-        tables: Dict,#Table,
-        metadata: Dict,#pd.DataFrame,
+        tables: Dict,
+        metadata: Dict,
         mode: str,
         project_dir: Union[str, Path]
     ) -> None:
-        self.config = config
-        self.mode = mode
-        self.project_dir = project_dir
+        self.config, self.project_dir, self.mode = config, project_dir, mode
         self.tables, self.metadata = tables, metadata
 
-        self.base_level, _, _ = self.ModeConfig[self.mode]
-        self._collapse_taxonomy()
+        # Step 1: Collapse raw tables at all taxonomy levels
+        self._collapse_taxonomy("raw")
 
-    def _collapse_taxonomy(self) -> None:
+        # Step 2: For each level, apply preprocessing and create presence/absence
+        for level in constants.levels:
+            try:
+                self._apply_preprocessing(level)
+                for table_type in ["filtered", "normalized", "clr_transformed"]:
+                    if table_type in self.tables and level in self.tables[table_type]:
+                        self._create_presence_absence(table_type, level)
+            except Exception as e:
+                logger.error(f"Preprocessing failed for {level}: {e}")
+
+    def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         with get_progress_bar() as progress:
             ct_desc = "Collapsing taxonomy"
             ct_task = progress.add_task(_format_task_desc(ct_desc), total=len(constants.levels))   
             for level in constants.levels:
-                level_desc = f"{ct_desc} → {level.title()}"
+                level_desc = f"{ct_desc} {table_type} → {level.title()}"
                 progress.update(ct_task, description=_format_task_desc(level_desc))
                 try:
-                    self.tables[level], self.metadata[level] = {}, {}
-                    base_table, base_metadata = self.tables["genus"]["raw"], self.metadata["genus"]["raw"]
-                    self.tables[level]["raw"] = collapse_taxa(base_table, level, progress, ct_task)
+                    base_table = self.tables.setdefault(table_type, {}).get("genus")
+                    base_metadata = self.metadata.setdefault(table_type, {}).get("genus")
+
+                    if base_table is None or base_metadata is None:
+                        raise ValueError(f"Missing base table or metadata for genus level in {table_type}")
+
+                    table = collapse_taxa(base_table, level, progress, ct_task)
+                    table, metadata = update_table_and_metadata(table, base_metadata)
+
+                    self.tables.setdefault(table_type, {})[level] = table
+                    self.metadata.setdefault(table_type, {})[level] = metadata
                 except Exception as e:
                     logger.error(f"Taxonomic collapse failed for {level}: {e}")
-                    self.tables[level]["raw"] = None
+                    self.tables.setdefault(table_type, {})[level] = None
+                    self.metadata.setdefault(table_type, {})[level] = None
                 finally:
                     progress.update(ct_task, advance=1)
-                    
             progress.update(ct_task, description=_format_task_desc(ct_desc))
 
-    def _apply_preprocessing(self) -> None:
+    def _apply_preprocessing(self, level: str) -> None:
         features_config = self.config.get("features", {})
-        table = self.tables["raw"][self.mode]
+        table = self.tables.get("raw", {}).get(level)
+        metadata = self.metadata.get("raw", {}).get(level)
+        if table is None or metadata is None:
+            raise ValueError(f"Missing raw table or metadata for level: {level}")
 
-        if features_config.get("filter", True):
-            table = filter(table)
-            table, metadata = update_table_and_metadata(table, metadata)
-            self.tables.setdefault("filtered", {})[self.mode] = table
+        steps = [
+            ("filter", filter, "filtered"),
+            ("normalize", normalize, "normalized"),
+            ("clr_transform", clr, "clr_transformed")
+        ]
+    
+        for config_key, func, table_type in steps:
+            if features_config.get(config_key, True):
+                table = func(table)
+                table, metadata = update_table_and_metadata(table, metadata)
+                self.tables.setdefault(table_type, {})[level] = table
+                self.metadata.setdefault(table_type, {})[level] = metadata
+        
+    def _create_presence_absence(self, table_type: str, level: str) -> None:
+        if not self.config.get("features", {}).get("presence_absence", False):
+            return
+        try:
+            table = self.tables[table_type][level]
+            metadata = self.metadata[table_type][level]
+            pa_table = presence_absence(table)
+            pa_table, pa_metadata = update_table_and_metadata(pa_table, metadata)
+            self.tables.setdefault(f"{table_type}_presence_absence", {})[level] = pa_table
+            self.metadata.setdefault(f"{table_type}_presence_absence", {})[level] = pa_metadata
+        except Exception as e:
+            logger.error(f"Presence/absence table failed for {level} ({table_type}): {e}")
 
-        if features_config.get("normalize", True):
-            table = normalize(table, axis=1)
-            self.tables.setdefault("normalized", {})[self.mode] = table
-
-        if features_config.get("clr_transform", True):
-            table = clr(table)
-            self.tables.setdefault("clr_transformed", {})[self.mode] = table
+        
 
 
 class _TableProcessor(_ProcessingMixin):
