@@ -12,7 +12,7 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s import constants
-from workflow_16s.amplicon_data.downstream.load import update_table_and_metadata
+from workflow_16s.amplicon_data.downstream.input import update_table_and_metadata
 from workflow_16s.utils.data import (
     clr, collapse_taxa, filter, normalize, presence_absence, table_to_df
 )
@@ -1109,7 +1109,7 @@ class StatisticalAnalysis:
                     # Prepare data
                     table = self.tables[table_type][level]
                     metadata = self.metadata[table_type][level]
-                    table_aligned, metadata_aligned = update_table_and_meta(table, metadata)
+                    table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
                     
                     # Run statistical test
                     result = self.TestConfig[test]["func"](
