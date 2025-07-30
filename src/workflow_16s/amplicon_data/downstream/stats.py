@@ -1072,7 +1072,7 @@ class StatisticalAnalysis:
         self.results: Dict = {}
         for group_column in self.group_columns:
             col, vals = group_column['name'], group_column['values']
-            self.results[group_column['name']] = _run_for_group(col, vals)
+            self.results[group_column['name']] = self._run_for_group(col, vals)
 
     def _run_for_group(
         self, 
