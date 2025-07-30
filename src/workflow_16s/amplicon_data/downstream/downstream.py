@@ -35,6 +35,7 @@ from workflow_16s.function.faprotax import (
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.amplicon_data.downstream.input import DownstreamDataLoader as InputData
 from workflow_16s.amplicon_data.downstream.tables import PrepData 
+from workflow_16s.amplicon_data.downstream.stats import StatisticalAnalysis
 
 # ==================================== FUNCTIONS ===================================== #
 
