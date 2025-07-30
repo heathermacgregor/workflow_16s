@@ -36,11 +36,12 @@ class PrepData:
         tables: Dict,
         metadata: Dict,
         mode: str,
-        project_dir: Union[str, Path]
+        project_dir: Union[str, Path],
+        verbose: bool = False
     ) -> None:
         self.config, self.project_dir, self.mode = config, project_dir, mode
         self.tables, self.metadata = tables, metadata
-
+        self.verbose = verbose
         # Collapse raw tables at all taxonomy levels
         self._collapse_taxonomy("raw")
 
