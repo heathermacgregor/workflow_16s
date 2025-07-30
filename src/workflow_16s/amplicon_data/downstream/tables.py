@@ -99,9 +99,15 @@ class PrepData:
         ]
     
         for config_key, func, table_type in steps:
-            if features_config.get(config_key, True):
+            # Explicitly convert config value to boolean
+            if bool(features_config.get(config_key, True)):
                 initial_samples, initial_features = table.shape
-                table = func(table)
+                try:
+                    table = func(table)
+                except Exception as e:
+                    logger.error(f"Preprocessing function failed for {config_key} at {level}: {e}")
+                    continue
+                    
                 table, metadata = update_table_and_metadata(table, metadata)
                 self.tables.setdefault(table_type, {})[level] = table
                 self.metadata.setdefault(table_type, {})[level] = metadata
@@ -111,7 +117,7 @@ class PrepData:
                 )
         
     def _create_presence_absence(self, table_type: str, level: str) -> None:
-        if not self.config.get("features", {}).get("presence_absence", False):
+        if not bool(self.config.get("features", {}).get("presence_absence", False)):
             return
         try:
             table = self.tables[table_type][level]
