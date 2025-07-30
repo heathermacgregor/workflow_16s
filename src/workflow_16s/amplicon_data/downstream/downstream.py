@@ -66,7 +66,7 @@ class FunctionalAnnotation:
         with ThreadPoolExecutor() as executor:
             future_to_idx = {executor.submit(self._get_cached_faprotax, taxon): idx for idx, taxon in enumerate(features)}
             with get_progress_bar() as progress:
-                task = progress.add_task(description=_format_task_desc("Annotating most important features"), total=len(features)
+                task = progress.add_task(description=_format_task_desc("Annotating most important features"), total=len(features))
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx(future)
                     results[idx] = future.result()
