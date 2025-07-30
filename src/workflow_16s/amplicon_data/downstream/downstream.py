@@ -95,6 +95,7 @@ class Downstream:
         verbose: bool = False
     ):
         self.config, self.project_dir, self.verbose = config, project_dir, verbose
+        self.output_dir = self.project_dir.final
         self.existing_subsets = existing_subsets
         self.mode = 'genus' if self.config.get("target_subfragment_mode", constants.DEFAULT_MODE) == 'any' else 'asv'
         self._validate_mode()
