@@ -91,8 +91,8 @@ class Downstream:
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
+        self.metadata, self.tables = self._process_tables()
         print(self.metadata)
-        self._process_tables()
         #self._run_analysis()
         
         if self.verbose:
@@ -103,13 +103,14 @@ class Downstream:
         return data_loader.metadata, data_loader.tables, data_loader.nfc_facilities
     
     def _process_tables(self):
-        DownstreamTableTransformations(
+        dtt = DownstreamTableTransformations(
             self.config,
             self.tables,#Table,
             self.metadata,#pd.DataFrame,
             self.mode,
             self.project_dir
         )
+        return dtt.metadata, dtt.tables
     """
         processor = _TableProcessor(
             config=self.config,
