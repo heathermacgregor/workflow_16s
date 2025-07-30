@@ -46,7 +46,7 @@ umap_lock = threading.Lock()
 # ================================= DEFAULT VALUES =================================== #
 
 from workflow_16s.amplicon_data.downstream.load import DownstreamDataLoader
-
+from workflow_16s.amplicon_data.downstream.table_transformations import DownstreamTableTransformations
 class Downstream:
     """Main class for orchestrating 16S amplicon data analysis pipeline."""
     ModeConfig = {
@@ -92,7 +92,7 @@ class Downstream:
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
         print(self.metadata)
-        #self._process_tables()
+        self._process_tables()
         #self._run_analysis()
         
         if self.verbose:
@@ -101,8 +101,16 @@ class Downstream:
     def _load_data(self):
         data_loader = DownstreamDataLoader(self.config, self.mode, self.project_dir, self.existing_subsets)
         return data_loader.metadata, data_loader.tables, data_loader.nfc_facilities
-    """
+    
     def _process_tables(self):
+        DownstreamTableTransformations(
+            self.config,
+            self.tables,#Table,
+            self.metadata,#pd.DataFrame,
+            self.mode,
+            self.project_dir
+        )
+    """
         processor = _TableProcessor(
             config=self.config,
             mode=self.mode,
