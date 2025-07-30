@@ -471,7 +471,8 @@ def fill_missing_coordinates(df):
         df.at[idx, 'longitude_deg'] = new_lon
     
     return df
-    
+
+
 class DownstreamDataLoader:
     ModeConfig = {
         "asv": ("asv", "table", "asv"), 
@@ -485,35 +486,38 @@ class DownstreamDataLoader:
         existing_subsets: Any = None,
         verbose: bool = False
     ):
-        self.config = config
-        self.project_dir = project_dir
+        self.config, self.project_dir, self.verbose = config, project_dir, verbose
         self.existing_subsets = existing_subsets
-        self.verbose = verbose
-        
-        self.tables: Dict = {}
-        self.metadata: Dict = {}
 
         self._load_nfc_facilities()
-
-        # Load ASV feature table if appropriate
-        if not self.config["target_subfragment_mode"] == 'any':
-            table_level, table_dir, _ = self.ModeConfig['asv']
-            self.tables[table_level], self.metadata[table_level] = {}, {}
-            self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
-                self._load_table_biom(table_level, table_dir), 
-                self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
-            )
         
-        # Load taxonomically-assigned feature table at genus level     
+        self.tables: Dict = {'raw': {}}
+        self.metadata: Dict = {'raw': {}}
+        
+        # Load the ASV feature table if the target subfragment is specified (so, not 'any')
+        if not self.config["target_subfragment_mode"] == 'any':
+            self._load_table_and_metadata('asv')
+        # Load the taxonomically-assigned feature table at genus level     
+        self._load_table_and_metadata('genus')
+    
+    def _load_table_and_metadata(self, table_level: str = 'genus') -> None:
         table_level, table_dir, _ = self.ModeConfig['genus']
-        self.tables[table_level], self.metadata[table_level] = {}, {}
-        self.tables[table_level]['raw'], self.metadata[table_level]['raw'] = self._filter_and_align(
+        table, metadata = self._filter_and_align(
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
         )
-        #self._log_results()
+        self._log_results(table_level, table, metadata)
+        self.tables['raw'][table_level], self.metadata['raw'][table_level] = table, metadata
 
-    def _load_table_biom(self, table_level, table_dir) -> None:
+    def _filter_and_align(self, table, metadata) -> Tuple:
+        table, metadata = update_table_and_metadata(
+            table, metadata, 
+            self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
+        )
+        return table, metadata
+        
+    # BIOM FEATURE TABLE    
+    def _load_table_biom(self, table_level, table_dir) -> Table:
         table_biom_paths = self._find_table_biom_paths(table_level, table_dir)  
         if not table_biom_paths:
             raise FileNotFoundError("No BIOM files found")
@@ -543,11 +547,10 @@ class DownstreamDataLoader:
                 logger.info(f"Found {len(table_biom_paths)} feature tables")
             return table_biom_paths
 
-    def _load_metadata_df(self, table_level, table_dir) -> None:
-        tsv_paths = self._find_metadata_paths(table_level, table_dir)
-        metadata = import_merged_metadata_tsv(tsv_paths, None)
-
-        # Remove duplicated columns
+    # METADATA TSV
+    def _load_metadata_df(self, table_level, table_dir) -> pd.DataFrame:
+        metadata = import_merged_metadata_tsv(self._find_metadata_paths(table_level, table_dir), None)
+        # Remove duplicate columns
         if metadata.columns.duplicated().any():
             duplicated_columns = metadata.columns[metadata.columns.duplicated()].tolist()
             logger.debug(
@@ -555,7 +558,7 @@ class DownstreamDataLoader:
                 "Removing duplicates."
             )
             metadata = metadata.loc[:, ~metadata.columns.duplicated()]
-
+        # Attempt to fill in missing latitude/longitude
         metadata = fill_missing_coordinates(metadata)
         return metadata
 
@@ -579,7 +582,8 @@ class DownstreamDataLoader:
             if self.verbose:
                 (f"Found {len(metadata_paths)} metadata files")
             return metadata_paths
-          
+
+    # SPECIAL CASE: NFC FACILITIES
     def _load_nfc_facilities(self) -> None:
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
@@ -590,29 +594,21 @@ class DownstreamDataLoader:
         else:
             self.nfc_facilities = None
 
-    def _match_facilities_to_samples(self, metadata) -> None:
+    def _match_facilities_to_samples(self, metadata) -> pd.DataFrame:
         if not self.config.get("nfc_facilities", {}).get("enabled", False):
             return metadata
         else:
             return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
 
-    def _filter_and_align(self, table, metadata) -> None:
-        table, metadata = update_table_and_metadata(
-            table, metadata, 
-            self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
-        )
-        return table, metadata
-      
-    def _log_results(self) -> None:   
+    def _log_results(self, table_level, table, metadata) -> None:   
         logger.info(
-            f"{'Loaded metadata:':<30}{self.meta.shape[0]:>6} samples "
-            f"× {self.meta.shape[1]:>5} cols"
+            f"{'Loaded metadata:':<30}{metadata.shape[0]:>6} samples "
+            f"× {metadata.shape[1]:>5} cols"
         )
-      
-        feature_type = "genera" if self.mode == "genus" else "ASVs"
+        feature_type = "genera" if table_level == "genus" else "ASVs"
         logger.info(
-            f"{'Loaded features:':<30}{self.table.shape[1]:>6} samples "
-            f"× {self.table.shape[0]:>5} {feature_type}"
+            f"{'Loaded features:':<30}{table.shape[1]:>6} samples "
+            f"× {table.shape[0]:>5} {feature_type}"
         )
 
     
