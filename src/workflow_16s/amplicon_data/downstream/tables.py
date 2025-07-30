@@ -1,9 +1,7 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
-import glob
 import logging
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -14,24 +12,20 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s import constants
-from workflow_16s.amplicon_data.helpers import _init_dict_level, _ProcessingMixin
-from workflow_16s.utils.data import (
-    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df, 
-    update_table_and_meta, to_biom
-)
-from workflow_16s.utils.io import (
-    export_h5py, import_merged_metadata_tsv, import_merged_table_biom
-)
-from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
-from workflow_16s.utils.nfc_facilities import find_nearby_nfc_facilities
 from workflow_16s.amplicon_data.downstream.load import update_table_and_metadata
+from workflow_16s.utils.data import (
+    clr, collapse_taxa, filter, normalize, presence_absence
+)
+from workflow_16s.utils.io import export_h5py
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
-class DownstreamTableTransformations:
+class PrepData:
     ModeConfig = {
         "any": ("asv", "table", "asv"), 
         "genus": ("genus", "table_6", "l6")
@@ -47,10 +41,10 @@ class DownstreamTableTransformations:
         self.config, self.project_dir, self.mode = config, project_dir, mode
         self.tables, self.metadata = tables, metadata
 
-        # Step 1: Collapse raw tables at all taxonomy levels
+        # Collapse raw tables at all taxonomy levels
         self._collapse_taxonomy("raw")
 
-        # Step 2: For each level, apply preprocessing and create presence/absence
+        # For each level, apply preprocessing and create presence/absence
         for level in constants.levels:
             try:
                 self._apply_preprocessing(level)
@@ -59,6 +53,9 @@ class DownstreamTableTransformations:
                         self._create_presence_absence(table_type, level)
             except Exception as e:
                 logger.error(f"Preprocessing failed for {level}: {e}")
+                
+        # Save tables
+        self._save_tables()
 
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         with get_progress_bar() as progress:
@@ -102,10 +99,15 @@ class DownstreamTableTransformations:
     
         for config_key, func, table_type in steps:
             if features_config.get(config_key, True):
+                initial_samples, initial_features = table.shape
                 table = func(table)
                 table, metadata = update_table_and_metadata(table, metadata)
                 self.tables.setdefault(table_type, {})[level] = table
                 self.metadata.setdefault(table_type, {})[level] = metadata
+                logger.info(
+                    f"Preprocessing: {initial_samples}→{table.shape[0]} samples, "
+                    f"{initial_features}→{table.shape[1]} features"
+                )
         
     def _create_presence_absence(self, table_type: str, level: str) -> None:
         if not self.config.get("features", {}).get("presence_absence", False):
@@ -120,134 +122,6 @@ class DownstreamTableTransformations:
         except Exception as e:
             logger.error(f"Presence/absence table failed for {level} ({table_type}): {e}")
 
-        
-
-
-class _TableProcessor(_ProcessingMixin):
-    """Processes feature tables through various transformations and taxonomical collapses."""
-    
-    def __init__(
-        self,
-        config: Dict,
-        table: Table,
-        mode: str,
-        meta: pd.DataFrame,
-        output_dir: Path,
-        project_dir: Any,
-        verbose: bool,
-    ) -> None:
-        self.config, self.mode, self.verbose = config, mode, verbose
-        self.project_dir, self.output_dir = project_dir, output_dir
-        self.meta = meta
-        self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
-        self.levels = ["phylum", "class", "order", "family", "genus"]
-        
-        self._apply_preprocessing()
-        self._collapse_taxa()
-        self._create_presence_absence()
-        self._save_tables()
-
-    def _apply_preprocessing(self) -> None:
-        feat_config = self.config.get("features", {})
-        table = self.tables["raw"][self.mode]
-
-        if feat_config.get("filter", True):
-            table = filter(table)
-            self.tables.setdefault("filtered", {})[self.mode] = table
-
-        if feat_config.get("normalize", True):
-            table = normalize(table, axis=1)
-            self.tables.setdefault("normalized", {})[self.mode] = table
-
-        if feat_config.get("clr_transform", True):
-            table = clr(table)
-            self.tables.setdefault("clr_transformed", {})[self.mode] = table
-
-    def _collapse_taxa(self) -> None:
-        with get_progress_bar() as progress:
-            ct_desc = "Collapsing taxonomy"
-            ct_task = progress.add_task(
-                _format_task_desc(ct_desc), 
-                total=len(self.tables) * len(self.levels)
-            )   
-            
-            for table_type in list(self.tables.keys()):
-                table_desc = f"{table_type.replace('_', ' ').title()}"
-                table_task = progress.add_task(
-                    _format_task_desc(table_desc),
-                    parent=ct_task,
-                    total=len(self.levels)
-                )
-                
-                base_table = self.tables[table_type][self.mode]
-                processed = {}
-                for level in self.levels:
-                    level_desc = f"{table_desc} → {level.title()}"
-                    progress.update(
-                        table_task, 
-                        description=_format_task_desc(level_desc)
-                    )
-                    try:
-                        start_time = time.perf_counter()
-                        processed[level] = collapse_taxa(
-                            base_table, 
-                            level, 
-                            progress, table_task
-                        )
-                        duration = time.perf_counter() - start_time
-                        logger.debug(
-                            f"Collapsed {table_type} to {level} in {duration:.2f}s"
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Taxonomic collapse failed for {table_type}/{level}: {e}"
-                        )
-                        processed[level] = None
-                    finally:
-                        progress.update(table_task, advance=1)
-                        progress.update(ct_task, advance=1)
-                    
-                self.tables[table_type] = processed
-                progress.remove_task(table_task)
-    
-    def _create_presence_absence(self) -> None:
-        if not self.config.get("features", {}).get("presence_absence", False):
-            return
-        with get_progress_bar() as progress:
-            pa_desc = "Converting to Presence/Absence"
-            pa_task = progress.add_task(
-                _format_task_desc(pa_desc),
-                total=len(self.levels)  
-            )
-            processed = {}
-            
-            for level in self.levels:
-                level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
-                progress.update(
-                    pa_task, 
-                    description=_format_task_desc(level_desc)
-                )
-                try:
-                    collapsed_table = self.tables["raw"][level]
-                    start_time = time.perf_counter()
-                    processed[level] = presence_absence(collapsed_table)
-                    duration = time.perf_counter() - start_time
-                    if self.verbose:
-                        logger.debug(
-                            f"Created Presence/Absence table for {level} in {duration:.2f}s"
-                        )
-                except Exception as e:
-                    logger.error(f"Presence/Absence failed for {level}: {e}")
-                    processed[level] = None
-                finally:
-                    progress.update(pa_task, advance=1)
-                
-            self.tables["presence_absence"] = processed
-            progress.update(
-                pa_task, 
-                description=_format_task_desc(pa_desc)
-            )
-            
     def _save_tables(self) -> None:
         # Create directory if it doesn't exist
         base = Path(self.project_dir.data) / "merged" / "table"
@@ -282,9 +156,7 @@ class _TableProcessor(_ProcessingMixin):
                     try:
                         future.result()
                         if self.verbose:
-                            logger.debug(
-                                f"Exported {table_type}/{level} to {out_path}"
-                            )
+                            logger.debug(f"Exported {table_type}/{level} to {out_path}")
                     except Exception as e:
                         logger.error(f"Failed to export {out_path}: {str(e)}")
                     finally:
