@@ -146,7 +146,7 @@ class Downstream:
         if not self.config.get("maps", {}).get('enabled', False):
             return
         maps = Maps(self.config, self.metadata, Path(self.output_dir) / 'sample_maps', self.verbose)
-        maps.generate_sample_maps(nfc_facility_data=self.nfc_facilities)s
+        maps.generate_sample_maps(nfc_facility_data=self.nfc_facilities)
         return maps.maps
 
     def _stats(self):
