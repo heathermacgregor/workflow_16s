@@ -66,11 +66,11 @@ DEFAULT_MAX_WORKERS_ENA = 16
 DEFAULT_MAX_WORKERS_SEQKIT = 8
 
 levels = {
-    'phylum': 1, 
-    'class': 2, 
-    'order': 3, 
-    'family': 4, 
-    'genus': 5
+    'phylum': 2, 
+    'class': 3, 
+    'order': 4, 
+    'family': 5, 
+    'genus': 6
 }
 
 DEFAULT_REGIONS = {
