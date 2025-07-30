@@ -55,8 +55,7 @@ class DownstreamTableTransformations:
     def _collapse_taxonomy(self) -> None:
         with get_progress_bar() as progress:
             ct_desc = "Collapsing taxonomy"
-            print(len(constants.levels))
-            ct_task = progress.add_task(_format_task_desc(ct_desc), len(constants.levels))   
+            ct_task = progress.add_task(_format_task_desc(ct_desc), total=len(constants.levels))   
             for level in constants.levels:
                 level_desc = f"{ct_desc} → {level.title()}"
                 progress.update(ct_task, description=_format_task_desc(level_desc))
