@@ -11,18 +11,16 @@ import warnings
 import pandas as pd
 import numpy as np
 from biom.table import Table
-from scipy.stats import (
-    ttest_ind, mannwhitneyu, kruskal, f_oneway, fisher_exact, 
-    spearmanr, shapiro, levene
-)
-from statsmodels.stats.multitest import multipletests
-
-from sklearn.cluster import KMeans
-from tqdm import tqdm
 
 # Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.downstream.input import update_table_and_metadata
+from workflow_16s.stats.test import (
+    anova, core_microbiome, differential_abundance_analysis, 
+    enhanced_statistical_tests, fisher_exact_bonferroni, kruskal_bonferroni, 
+    microbial_network_analysis, mwu_bonferroni, ttest, spearman_correlation
+)
+from workflow_16s.stats.utils import validate_inputs
 from workflow_16s.utils.data import (
     clr, collapse_taxa, filter, normalize, presence_absence, table_to_df,
     merge_table_with_meta
@@ -45,6 +43,7 @@ def _init_dict_level(dictionary: Dict, *keys) -> None:
         current = current[key]
     if keys[-1] not in current:
         current[keys[-1]] = {}
+
 
 def get_enabled_tasks(
     config: Dict, 
@@ -85,321 +84,6 @@ def get_enabled_tasks(
                 tasks.append((table_type, level, test))
     return tasks
 
-def validate_inputs(
-    table: Union[Dict, Any, pd.DataFrame],
-    metadata: Optional[pd.DataFrame] = None,
-    group_column: Optional[str] = None
-) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
-    """Validate and standardize inputs for analysis functions."""
-    df = table_to_df(table)
-    
-    if df.empty:
-        raise ValueError("Input table is empty")
-    
-    if df.isnull().all().all():
-        raise ValueError("Input table contains only null values")
-    
-    if metadata is not None:
-        if not isinstance(metadata, pd.DataFrame):
-            raise ValueError("Metadata must be a pandas DataFrame")
-        
-        if group_column and group_column not in metadata.columns:
-            raise ValueError(f"Group column '{group_column}' not found in metadata")
-        
-        common_samples = df.index.intersection(metadata.index)
-        if len(common_samples) == 0:
-            raise ValueError("No common samples between table and metadata")
-        
-        if len(common_samples) < len(df.index) * 0.5:
-            warnings.warn(
-                f"Only {len(common_samples)}/{len(df.index)} samples have metadata. "
-                "Consider checking sample ID matching."
-            )
-    
-    return df, metadata
-
-def enhanced_statistical_tests(
-    table: Union[Dict, Table, pd.DataFrame],
-    metadata: pd.DataFrame,
-    group_column: str,
-    test_type: str = 'auto',
-    correction_method: str = 'fdr_bh',
-    alpha: float = 0.05,
-    effect_size_threshold: float = 0.5
-) -> pd.DataFrame:
-    """Enhanced statistical testing with automatic test selection and effect sizes."""
-    df, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
-    
-    groups = merged[group_column].unique()
-    n_groups = len(groups)
-    
-    if n_groups < 2:
-        raise ValueError("Need at least 2 groups for comparison")
-    
-    results = []
-    
-    for feature in tqdm(df.columns, desc="Statistical testing"):
-        group_data = []
-        for group in groups:
-            data = merged[merged[group_column] == group][feature].dropna()
-            if len(data) >= 3:
-                group_data.append(data)
-        
-        if len(group_data) < 2:
-            continue
-        
-        # Test for normality and equal variances if auto mode
-        normality_ok = True
-        equal_var_ok = True
-        
-        if test_type == 'auto':
-            for data in group_data:
-                if len(data) < 50:
-                    _, p_norm = shapiro(data)
-                    if p_norm < 0.05:
-                        normality_ok = False
-                        break
-            
-            if normality_ok:
-                _, p_levene = levene(*group_data)
-                if p_levene < 0.05:
-                    equal_var_ok = False
-        
-        # Choose appropriate test
-        if n_groups == 2:
-            if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                stat, p_val = ttest_ind(*group_data, equal_var=equal_var_ok)
-                test_name = "Welch's t-test" if not equal_var_ok else "Student's t-test"
-                
-                pooled_std = np.sqrt((np.var(group_data[0], ddof=1) + 
-                                    np.var(group_data[1], ddof=1)) / 2)
-                effect_size = (np.mean(group_data[0]) - np.mean(group_data[1])) / pooled_std
-                
-            else:
-                stat, p_val = mannwhitneyu(*group_data, alternative='two-sided')
-                test_name = "Mann-Whitney U"
-                
-                n1, n2 = len(group_data[0]), len(group_data[1])
-                effect_size = 1 - (2 * stat) / (n1 * n2)
-        
-        else:
-            if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                stat, p_val = f_oneway(*group_data)
-                test_name = "One-way ANOVA"
-                
-                all_data = np.concatenate(group_data)
-                grand_mean = np.mean(all_data)
-                ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in group_data)
-                ss_total = sum((x - grand_mean)**2 for x in all_data)
-                effect_size = ss_between / ss_total if ss_total > 0 else 0
-                
-            else:
-                stat, p_val = kruskal(*group_data)
-                test_name = "Kruskal-Wallis"
-                
-                n_total = sum(len(g) for g in group_data)
-                effect_size = stat / (n_total - 1) if n_total > 1 else 0
-        
-        means = [np.mean(g) for g in group_data]
-        medians = [np.median(g) for g in group_data]
-        
-        results.append({
-            'feature': feature,
-            'test': test_name,
-            'statistic': stat,
-            'p_value': p_val,
-            'effect_size': effect_size,
-            'mean_values': means,
-            'median_values': medians,
-            'n_groups': len(group_data),
-            'total_samples': sum(len(g) for g in group_data)
-        })
-    
-    if not results:
-        return pd.DataFrame()
-    
-    results_df = pd.DataFrame(results)
-    
-    _, p_adj, _, _ = multipletests(results_df['p_value'], method=correction_method)
-    results_df['p_adj'] = p_adj
-    
-    significant = results_df[
-        (results_df['p_adj'] <= alpha) & 
-        (np.abs(results_df['effect_size']) >= effect_size_threshold)
-    ]
-    
-    return significant.sort_values('p_adj')
-
-def differential_abundance_analysis(
-    table: Union[Dict, Any, pd.DataFrame],
-    metadata: pd.DataFrame,
-    group_column: str,
-    method: str = 'deseq2_like',
-    alpha: float = 0.05,
-    fold_change_threshold: float = 1.5,
-    min_prevalence: float = 0.1
-) -> pd.DataFrame:
-    """Comprehensive differential abundance analysis with multiple methods."""
-    from scipy.stats import ttest_ind, mannwhitneyu
-    
-    df, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
-    
-    # Filter by prevalence
-    prevalence = (df > 0).mean()
-    df_filt = df.loc[:, prevalence >= min_prevalence]
-    merged_filt = merge_table_with_meta(df_filt, metadata, group_column)
-    
-    groups = merged_filt[group_column].unique()
-    if len(groups) != 2:
-        raise ValueError("Differential abundance analysis requires exactly 2 groups")
-    
-    results = []
-    
-    for feature in tqdm(df_filt.columns, desc=f"DA analysis ({method})"):
-        group1_data = merged_filt[merged_filt[group_column] == groups[0]][feature]
-        group2_data = merged_filt[merged_filt[group_column] == groups[1]][feature]
-        
-        if len(group1_data) < 3 or len(group2_data) < 3:
-            continue
-        
-        # Calculate fold change
-        mean1 = group1_data.mean()
-        mean2 = group2_data.mean()
-        fold_change = (mean1 + 1e-8) / (mean2 + 1e-8)
-        log2_fc = np.log2(fold_change)
-        
-        if abs(log2_fc) < np.log2(fold_change_threshold):
-            continue
-        
-        # Statistical testing
-        if method == 'wilcoxon':
-            statistic, p_value = mannwhitneyu(group1_data, group2_data)
-        elif method == 'ttest':
-            statistic, p_value = ttest_ind(group1_data, group2_data)
-        elif method == 'deseq2_like':
-            statistic, p_value = _deseq2_like_test(group1_data, group2_data)
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        results.append({
-            'feature': feature,
-            'log2_fold_change': log2_fc,
-            'fold_change': fold_change,
-            'mean_group1': mean1,
-            'mean_group2': mean2,
-            'statistic': statistic,
-            'p_value': p_value,
-            'prevalence': prevalence[feature]
-        })
-    
-    if not results:
-        return pd.DataFrame()
-    
-    results_df = pd.DataFrame(results)
-    
-    _, p_adj, _, _ = multipletests(results_df['p_value'], method='fdr_bh')
-    results_df['p_adj'] = p_adj
-    
-    significant = results_df[results_df['p_adj'] <= alpha]
-    significant = significant.sort_values('p_adj')
-    
-    return significant
-
-def _deseq2_like_test(group1: pd.Series, group2: pd.Series) -> Tuple[float, float]:
-    """Simplified DESeq2-like differential expression test."""
-    def variance_stabilize(x):
-        return np.arcsinh(x)
-    
-    vs1 = variance_stabilize(group1)
-    vs2 = variance_stabilize(group2)
-    
-    return ttest_ind(vs1, vs2)
-
-def core_microbiome(
-    table: Union[Dict, Any, pd.DataFrame],
-    metadata: pd.DataFrame,
-    group_column: str,
-    prevalence_threshold: float = 0.8,
-    abundance_threshold: float = 0.01
-) -> Dict[str, pd.DataFrame]:
-    """Identify core microbiome for each group."""
-    df, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
-    
-    rel_abundance = df.div(df.sum(axis=1), axis=0)
-    merged_rel = merge_table_with_meta(rel_abundance, metadata, group_column)
-    
-    core_features = {}
-    
-    for group in merged[group_column].unique():
-        group_data = merged_rel[merged_rel[group_column] == group]
-        group_features = group_data.drop(columns=[group_column])
-        
-        prevalence = (group_features > 0).mean()
-        mean_abundance = group_features.mean()
-        
-        core_mask = (
-            (prevalence >= prevalence_threshold) & 
-            (mean_abundance >= abundance_threshold)
-        )
-        
-        core_df = pd.DataFrame({
-            'feature': core_mask.index[core_mask],
-            'prevalence': prevalence[core_mask],
-            'mean_abundance': mean_abundance[core_mask],
-            'group': group
-        })
-        
-        core_features[group] = core_df.sort_values('mean_abundance', ascending=False)
-    
-    return core_features
-
-def microbial_network_analysis(
-    table: Union[Dict, Table, pd.DataFrame],
-    method: str = 'sparcc',
-    threshold: float = 0.3,
-    min_prevalence: float = 0.1
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Construct microbial co-occurrence networks."""
-    df, _ = validate_inputs(table)
-    
-    prevalence = (df > 0).mean()
-    df_filt = df.loc[:, prevalence >= min_prevalence]
-    
-    logger.info(f"Network analysis: {df_filt.shape[1]} features after prevalence filtering")
-    
-    if method == 'sparcc':
-        corr_matrix = df_filt.corr(method='spearman')
-    elif method in ['spearman', 'pearson']:
-        corr_matrix = df_filt.corr(method=method)
-    else:
-        raise ValueError(f"Unknown correlation method: {method}")
-    
-    edges = []
-    n_features = len(corr_matrix)
-    
-    for i in range(n_features):
-        for j in range(i + 1, n_features):
-            corr_val = corr_matrix.iloc[i, j]
-            if abs(corr_val) >= threshold:
-                edges.append({
-                    'source': corr_matrix.index[i],
-                    'target': corr_matrix.index[j],
-                    'correlation': corr_val,
-                    'abs_correlation': abs(corr_val),
-                    'edge_type': 'positive' if corr_val > 0 else 'negative'
-                })
-    
-    edges_df = pd.DataFrame(edges).sort_values('abs_correlation', ascending=False)
-    
-    return corr_matrix, edges_df
-
-from workflow_16s.stats.tests import (
-    anova, fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest,
-    spearman_correlation
-)
 
 def get_group_column_values(group_column, metadata):
     """Your existing get_group_column_values function"""
@@ -413,6 +97,7 @@ def get_group_column_values(group_column, metadata):
             return metadata[group_column['name']].unique()
         else:
             return None
+
 
 class StatisticalAnalysis:
     """Enhanced Statistical Analysis class with integrated advanced functions."""
@@ -500,7 +185,7 @@ class StatisticalAnalysis:
         if (self.config.get("nfc_facilities", {}).get('enabled', False) and 
             'facility_match' in self.metadata["raw"]["genus"].columns):
             self.group_columns.append({
-                'name': 'nfc_facilities', 
+                'name': 'facility_match', 
                 'type': 'bool', 
                 'values': [True, False]
             })
@@ -603,8 +288,11 @@ class StatisticalAnalysis:
             
         return group_stats
 
-    def run_core_microbiome_analysis(self, prevalence_threshold: float = 0.8, 
-                                   abundance_threshold: float = 0.01) -> Dict:
+    def run_core_microbiome_analysis(
+        self, 
+        prevalence_threshold: float = 0.8, 
+        abundance_threshold: float = 0.01
+    ) -> Dict:
         """Run core microbiome analysis for all groups."""
         core_results = {}
         
@@ -771,8 +459,11 @@ class StatisticalAnalysis:
         self.advanced_results['correlations'] = correlation_results
         return correlation_results
 
-    def run_network_analysis_batch(self, methods: List[str] = ['sparcc', 'spearman'], 
-                                 threshold: float = 0.3) -> Dict:
+    def run_network_analysis_batch(
+        self, 
+        methods: List[str] = ['sparcc', 'spearman'], 
+        threshold: float = 0.3
+    ) -> Dict:
         """Run network analysis for multiple correlation methods."""
         network_results = {}
         
