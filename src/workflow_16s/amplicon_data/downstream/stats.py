@@ -5,10 +5,18 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import warnings
 
 # Third‑Party Imports
 import pandas as pd
+import numpy as np
 from biom.table import Table
+from scipy.stats import (
+    ttest_ind, mannwhitneyu, kruskal, f_oneway, fisher_exact, 
+    spearmanr, shapiro, levene, multipletests
+)
+from sklearn.cluster import KMeans
+from tqdm import tqdm
 
 # Local Imports
 from workflow_16s import constants
@@ -26,12 +34,24 @@ logger = logging.getLogger("workflow_16s")
 
 # ==================================== FUNCTIONS ===================================== #
 
+def _init_dict_level(dictionary: Dict, *keys) -> None:
+    """Initialize nested dictionary levels."""
+    current = dictionary
+    for key in keys[:-1]:
+        if key not in current:
+            current[key] = {}
+        current = current[key]
+    if keys[-1] not in current:
+        current[keys[-1]] = {}
+
 def get_enabled_tasks(
     config: Dict, 
     tables: Dict[str, Dict[str, Table]]
 ):
     # Configuration setup
-    KNOWN_TESTS = {'fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni'}
+    KNOWN_TESTS = {'fisher', 'ttest', 'mwu_bonferroni', 'kruskal_bonferroni', 
+                   'enhanced_stats', 'differential_abundance', 'anova', 
+                   'spearman_correlation', 'network_analysis'}
     DEFAULT_TESTS = {
         "raw": ["ttest"],
         "filtered": ['mwu_bonferroni', 'kruskal_bonferroni'],
@@ -63,59 +83,20 @@ def get_enabled_tasks(
                 tasks.append((table_type, level, test))
     return tasks
 
-
-def log_test_results(
-    result: pd.DataFrame, 
-    table_type: str, 
-    level: str, 
-    test: str
-) -> None:
-    """Log statistical test results"""
-    sig_mask = result["p_value"] < 0.05
-    n_sig = sig_mask.sum()
-    
-    logger.debug(f"Found {n_sig} significant features for {table_type}/{level}/{test}")
-    
-    if n_sig == 0:
-        logger.debug(f"Top 5 features by p-value ({test}):")
-        top_features = result.nsmallest(5, "p_value")
-        
-        for _, row in top_features.iterrows():
-            feat = row.get('feature', 'N/A')
-            p_val = row.get('p_value', float('nan'))
-            effect = row.get('effect_size', float('nan'))
-            logger.debug(f"  {feat}: p={p_val:.3e}, effect={effect:.3f}")
-          
-
 def validate_inputs(
     table: Union[Dict, Any, pd.DataFrame],
     metadata: Optional[pd.DataFrame] = None,
     group_column: Optional[str] = None
 ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
-    """Validate and standardize inputs for analysis functions.
-    
-    Args:
-        table: Input abundance table
-        metadata: Sample metadata DataFrame
-        group_column: Column name for grouping variable
-        
-    Returns:
-        Tuple of (standardized_table, metadata)
-        
-    Raises:
-        ValueError: If inputs are invalid
-    """
-    # Convert table to DataFrame
+    """Validate and standardize inputs for analysis functions."""
     df = table_to_df(table)
     
-    # Basic validation
     if df.empty:
         raise ValueError("Input table is empty")
     
     if df.isnull().all().all():
         raise ValueError("Input table contains only null values")
     
-    # Validate metadata if provided
     if metadata is not None:
         if not isinstance(metadata, pd.DataFrame):
             raise ValueError("Metadata must be a pandas DataFrame")
@@ -123,7 +104,6 @@ def validate_inputs(
         if group_column and group_column not in metadata.columns:
             raise ValueError(f"Group column '{group_column}' not found in metadata")
         
-        # Check for sample overlap
         common_samples = df.index.intersection(metadata.index)
         if len(common_samples) == 0:
             raise ValueError("No common samples between table and metadata")
@@ -136,192 +116,6 @@ def validate_inputs(
     
     return df, metadata
 
-
-def differential_abundance_analysis(
-    table: Union[Dict, Any, pd.DataFrame],
-    metadata: pd.DataFrame,
-    group_column: str,
-    method: str = 'deseq2_like',
-    alpha: float = 0.05,
-    fold_change_threshold: float = 1.5,
-    min_prevalence: float = 0.1
-) -> pd.DataFrame:
-    """Comprehensive differential abundance analysis with multiple methods.
-    
-    Args:
-        table: Input abundance table
-        metadata: Sample metadata
-        group_column: Column containing group labels
-        method: Analysis method ('deseq2_like', 'ancom_like', 'wilcoxon', 'ttest')
-        alpha: Significance threshold
-        fold_change_threshold: Minimum fold change for biological significance
-        min_prevalence: Minimum prevalence threshold
-        
-    Returns:
-        DataFrame with differential abundance results
-    """
-    df, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
-    
-    # Filter by prevalence
-    prevalence = (df > 0).mean()
-    df_filt = df.loc[:, prevalence >= min_prevalence]
-    merged_filt = merge_table_with_meta(df_filt, metadata, group_column)
-    
-    groups = merged_filt[group_column].unique()
-    if len(groups) != 2:
-        raise ValueError("Differential abundance analysis requires exactly 2 groups")
-    
-    results = []
-    
-    for feature in tqdm(df_filt.columns, desc=f"DA analysis ({method})"):
-        group1_data = merged_filt[merged_filt[group_column] == groups[0]][feature]
-        group2_data = merged_filt[merged_filt[group_column] == groups[1]][feature]
-        
-        # Skip if insufficient data
-        if len(group1_data) < 3 or len(group2_data) < 3:
-            continue
-        
-        # Calculate fold change
-        mean1 = group1_data.mean()
-        mean2 = group2_data.mean()
-        fold_change = (mean1 + 1e-8) / (mean2 + 1e-8)  # Add pseudocount
-        log2_fc = np.log2(fold_change)
-        
-        # Skip if fold change is too small
-        if abs(log2_fc) < np.log2(fold_change_threshold):
-            continue
-        
-        # Statistical testing
-        if method == 'wilcoxon':
-            statistic, p_value = mannwhitneyu(group1_data, group2_data)
-        elif method == 'ttest':
-            statistic, p_value = ttest_ind(group1_data, group2_data)
-        elif method == 'deseq2_like':
-            # Simplified DESeq2-like analysis with variance stabilization
-            statistic, p_value = _deseq2_like_test(group1_data, group2_data)
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        results.append({
-            'feature': feature,
-            'log2_fold_change': log2_fc,
-            'fold_change': fold_change,
-            'mean_group1': mean1,
-            'mean_group2': mean2,
-            'statistic': statistic,
-            'p_value': p_value,
-            'prevalence': prevalence[feature]
-        })
-    
-    if not results:
-        return pd.DataFrame()
-    
-    results_df = pd.DataFrame(results)
-    
-    # Multiple testing correction
-    _, p_adj, _, _ = multipletests(results_df['p_value'], method='fdr_bh')
-    results_df['p_adj'] = p_adj
-    
-    # Filter significant results
-    significant = results_df[results_df['p_adj'] <= alpha]
-    significant = significant.sort_values('p_adj')
-    
-    return significant
-
-
-def _deseq2_like_test(group1: pd.Series, group2: pd.Series) -> Tuple[float, float]:
-    """Simplified DESeq2-like differential expression test."""
-    # Variance stabilization (similar to DESeq2's approach)
-    def variance_stabilize(x):
-        return np.arcsinh(x)
-    
-    vs1 = variance_stabilize(group1)
-    vs2 = variance_stabilize(group2)
-    
-    # Perform t-test on variance-stabilized data
-    return ttest_ind(vs1, vs2)
-
-
-def core_microbiome(
-    table: Union[Dict, Any, pd.DataFrame],
-    metadata: pd.DataFrame,
-    group_column: str,
-    prevalence_threshold: float = 0.8,
-    abundance_threshold: float = 0.01
-) -> Dict[str, pd.DataFrame]:
-    """Identify core microbiome for each group.
-    
-    Args:
-        table: Input abundance table
-        metadata: Sample metadata
-        group_column: Column containing group labels
-        prevalence_threshold: Minimum prevalence within group
-        abundance_threshold: Minimum relative abundance
-        
-    Returns:
-        Dictionary mapping group names to core feature DataFrames
-    """
-    df, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
-    
-    # Convert to relative abundance
-    rel_abundance = df.div(df.sum(axis=1), axis=0)
-    merged_rel = merge_table_with_meta(rel_abundance, metadata, group_column)
-    
-    core_features = {}
-    
-    for group in merged[group_column].unique():
-        group_data = merged_rel[merged_rel[group_column] == group]
-        group_features = group_data.drop(columns=[group_column])
-        
-        # Calculate prevalence and mean abundance for this group
-        prevalence = (group_features > 0).mean()
-        mean_abundance = group_features.mean()
-        
-        # Identify core features
-        core_mask = (
-            (prevalence >= prevalence_threshold) & 
-            (mean_abundance >= abundance_threshold)
-        )
-        
-        core_df = pd.DataFrame({
-            'feature': core_mask.index[core_mask],
-            'prevalence': prevalence[core_mask],
-            'mean_abundance': mean_abundance[core_mask],
-            'group': group
-        })
-        
-        core_features[group] = core_df.sort_values('mean_abundance', ascending=False)
-    
-    return core_features
-
-
-def k_means(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = constants.DEFAULT_GROUP_COLUMN,
-    n_clusters: int = constants.DEFAULT_N_CLUSTERS, 
-    random_state: int = constants.DEFAULT_RANDOM_STATE,
-    verbose: bool = False
-) -> pd.Series:
-    """Apply K-means clustering and return cluster labels."""
-    table = table_to_df(table)
-    table_with_column = merge_table_with_meta(table, metadata, group_column)
-    
-    kmeans = KMeans(
-        n_clusters, 
-        random_state=random_state
-    ).fit(table_with_column.drop(group_column, axis=1))
-
-    results = pd.Series(
-        kmeans.labels_, 
-        index=table_with_column.index, 
-        name='kmeans_cluster'
-    )
-    return results
-
-
 def enhanced_statistical_tests(
     table: Union[Dict, Table, pd.DataFrame],
     metadata: pd.DataFrame,
@@ -331,20 +125,7 @@ def enhanced_statistical_tests(
     alpha: float = 0.05,
     effect_size_threshold: float = 0.5
 ) -> pd.DataFrame:
-    """Enhanced statistical testing with automatic test selection and effect sizes.
-    
-    Args:
-        table: Input abundance table
-        metadata: Sample metadata
-        group_column: Column containing group labels
-        test_type: Statistical test ('auto', 'parametric', 'nonparametric')
-        correction_method: Multiple testing correction method
-        alpha: Significance threshold
-        effect_size_threshold: Minimum effect size for practical significance
-        
-    Returns:
-        DataFrame with comprehensive statistical results
-    """
+    """Enhanced statistical testing with automatic test selection and effect sizes."""
     df, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
@@ -357,11 +138,10 @@ def enhanced_statistical_tests(
     results = []
     
     for feature in tqdm(df.columns, desc="Statistical testing"):
-        # Collect group data
         group_data = []
         for group in groups:
             data = merged[merged[group_column] == group][feature].dropna()
-            if len(data) >= 3:  # Minimum sample size
+            if len(data) >= 3:
                 group_data.append(data)
         
         if len(group_data) < 2:
@@ -372,15 +152,13 @@ def enhanced_statistical_tests(
         equal_var_ok = True
         
         if test_type == 'auto':
-            # Shapiro-Wilk test for normality (if n < 50)
             for data in group_data:
                 if len(data) < 50:
-                    _, p_norm = stats.shapiro(data)
+                    _, p_norm = shapiro(data)
                     if p_norm < 0.05:
                         normality_ok = False
                         break
             
-            # Levene's test for equal variances
             if normality_ok:
                 _, p_levene = levene(*group_data)
                 if p_levene < 0.05:
@@ -389,31 +167,25 @@ def enhanced_statistical_tests(
         # Choose appropriate test
         if n_groups == 2:
             if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                # t-test
                 stat, p_val = ttest_ind(*group_data, equal_var=equal_var_ok)
                 test_name = "Welch's t-test" if not equal_var_ok else "Student's t-test"
                 
-                # Cohen's d
                 pooled_std = np.sqrt((np.var(group_data[0], ddof=1) + 
                                     np.var(group_data[1], ddof=1)) / 2)
                 effect_size = (np.mean(group_data[0]) - np.mean(group_data[1])) / pooled_std
                 
             else:
-                # Mann-Whitney U test
                 stat, p_val = mannwhitneyu(*group_data, alternative='two-sided')
                 test_name = "Mann-Whitney U"
                 
-                # Rank biserial correlation
                 n1, n2 = len(group_data[0]), len(group_data[1])
                 effect_size = 1 - (2 * stat) / (n1 * n2)
         
-        else:  # Multiple groups
+        else:
             if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                # ANOVA
                 stat, p_val = f_oneway(*group_data)
                 test_name = "One-way ANOVA"
                 
-                # Eta squared
                 all_data = np.concatenate(group_data)
                 grand_mean = np.mean(all_data)
                 ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in group_data)
@@ -421,15 +193,12 @@ def enhanced_statistical_tests(
                 effect_size = ss_between / ss_total if ss_total > 0 else 0
                 
             else:
-                # Kruskal-Wallis test
                 stat, p_val = kruskal(*group_data)
                 test_name = "Kruskal-Wallis"
                 
-                # Epsilon squared
                 n_total = sum(len(g) for g in group_data)
                 effect_size = stat / (n_total - 1) if n_total > 1 else 0
         
-        # Calculate additional statistics
         means = [np.mean(g) for g in group_data]
         medians = [np.median(g) for g in group_data]
         
@@ -450,11 +219,9 @@ def enhanced_statistical_tests(
     
     results_df = pd.DataFrame(results)
     
-    # Multiple testing correction
     _, p_adj, _, _ = multipletests(results_df['p_value'], method=correction_method)
     results_df['p_adj'] = p_adj
     
-    # Filter for significance and effect size
     significant = results_df[
         (results_df['p_adj'] <= alpha) & 
         (np.abs(results_df['effect_size']) >= effect_size_threshold)
@@ -462,148 +229,130 @@ def enhanced_statistical_tests(
     
     return significant.sort_values('p_adj')
 
-
-def ttest(
-    table: Union[Dict, Table, pd.DataFrame], 
+def differential_abundance_analysis(
+    table: Union[Dict, Any, pd.DataFrame],
     metadata: pd.DataFrame,
-    group_column: str = constants.DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = constants.DEFAULT_GROUP_COLUMN_VALUES,
-    equal_var: bool = False,
-    verbose: bool = False
+    group_column: str,
+    method: str = 'deseq2_like',
+    alpha: float = 0.05,
+    fold_change_threshold: float = 1.5,
+    min_prevalence: float = 0.1
 ) -> pd.DataFrame:
-    """Performs independent t-tests for two groups."""
-    table = table_to_df(table)
-    table_with_column = merge_table_with_meta(table, metadata, group_column)
+    """Comprehensive differential abundance analysis with multiple methods."""
+    from scipy.stats import ttest_ind, mannwhitneyu
+    
+    df, metadata = validate_inputs(table, metadata, group_column)
+    merged = merge_table_with_meta(df, metadata, group_column)
+    
+    # Filter by prevalence
+    prevalence = (df > 0).mean()
+    df_filt = df.loc[:, prevalence >= min_prevalence]
+    merged_filt = merge_table_with_meta(df_filt, metadata, group_column)
+    
+    groups = merged_filt[group_column].unique()
+    if len(groups) != 2:
+        raise ValueError("Differential abundance analysis requires exactly 2 groups")
     
     results = []
-    for feature in table_with_column.columns.drop(group_column):
-        # Subset groups
-        mask_group1 = (table_with_column[group_column] == group_column_values[0])
-        mask_group2 = (table_with_column[group_column] == group_column_values[1])
+    
+    for feature in tqdm(df_filt.columns, desc=f"DA analysis ({method})"):
+        group1_data = merged_filt[merged_filt[group_column] == groups[0]][feature]
+        group2_data = merged_filt[merged_filt[group_column] == groups[1]][feature]
         
-        group1_values = table_with_column.loc[mask_group1, feature].dropna()
-        group2_values = table_with_column.loc[mask_group2, feature].dropna()
-        
-        # Skip features with < 2 samples in either group
-        if len(group1_values) < 2 or len(group2_values) < 2:
+        if len(group1_data) < 3 or len(group2_data) < 3:
             continue
-            
-        try:
-            t_stat, p_val = ttest_ind(group1_values, group2_values, equal_var=equal_var)
-        except ValueError:
-            continue  # Handle cases with invalid variance calculations
-            
-        # Calculate effect size (Cohen's d)
-        n1, n2 = len(group1_values), len(group2_values)
-        mean_diff = group1_values.mean() - group2_values.mean()
-        std1 = group1_values.std(ddof=1)
-        std2 = group2_values.std(ddof=1)
         
-        # Pooled standard deviation for Cohen's d
-        pooled_std = np.sqrt(((n1-1)*std1**2 + (n2-1)*std2**2) / (n1 + n2 - 2))
-        cohen_d = mean_diff / pooled_std if pooled_std != 0 else 0.0
-
-        if constants.debug_mode:
-            print(f"{feature}: {t_stat}, {p_val}, {mean_diff}, {cohen_d}")
-            
+        # Calculate fold change
+        mean1 = group1_data.mean()
+        mean2 = group2_data.mean()
+        fold_change = (mean1 + 1e-8) / (mean2 + 1e-8)
+        log2_fc = np.log2(fold_change)
+        
+        if abs(log2_fc) < np.log2(fold_change_threshold):
+            continue
+        
+        # Statistical testing
+        if method == 'wilcoxon':
+            statistic, p_value = mannwhitneyu(group1_data, group2_data)
+        elif method == 'ttest':
+            statistic, p_value = ttest_ind(group1_data, group2_data)
+        elif method == 'deseq2_like':
+            statistic, p_value = _deseq2_like_test(group1_data, group2_data)
+        else:
+            raise ValueError(f"Unknown method: {method}")
+        
         results.append({
             'feature': feature,
-            't_statistic': t_stat,
-            'p_value': max(p_val, 1e-10),  # Prevent zero p-values
-            'mean_difference': mean_diff,
-            'cohens_d': cohen_d
+            'log2_fold_change': log2_fc,
+            'fold_change': fold_change,
+            'mean_group1': mean1,
+            'mean_group2': mean2,
+            'statistic': statistic,
+            'p_value': p_value,
+            'prevalence': prevalence[feature]
         })
     
+    if not results:
+        return pd.DataFrame()
+    
     results_df = pd.DataFrame(results)
-    if results_df.empty:
-        if verbose:
-            logger.error(
-                    f"No features passed for groups: {group_column_values} "
-                    f"in column '{group_column}'"
-            )
-        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
+    
+    _, p_adj, _, _ = multipletests(results_df['p_value'], method='fdr_bh')
+    results_df['p_adj'] = p_adj
+    
+    significant = results_df[results_df['p_adj'] <= alpha]
+    significant = significant.sort_values('p_adj')
+    
+    return significant
 
-    # Filter invalid p-values and sort
-    results_df = results_df[(results_df['p_value'] != 0) & (
-        results_df['p_value'].notna()
-    )]
-    results_df = results_df[results_df['p_value'] <= 0.05]
-    results_df = results_df.sort_values('p_value', ascending=True)
-    return results_df
+def _deseq2_like_test(group1: pd.Series, group2: pd.Series) -> Tuple[float, float]:
+    """Simplified DESeq2-like differential expression test."""
+    def variance_stabilize(x):
+        return np.arcsinh(x)
+    
+    vs1 = variance_stabilize(group1)
+    vs2 = variance_stabilize(group2)
+    
+    return ttest_ind(vs1, vs2)
 
-
-def mwu_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
+def core_microbiome(
+    table: Union[Dict, Any, pd.DataFrame],
     metadata: pd.DataFrame,
-    group_column: str = constants.DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = constants.DEFAULT_GROUP_COLUMN_VALUES,
-    verbose: bool = False
-) -> pd.DataFrame:
-    """Performs Mann-Whitney U tests with Bonferroni correction for two groups."""
-    table = table_to_df(table)
-    table_with_column = merge_table_with_meta(table, metadata, group_column)
+    group_column: str,
+    prevalence_threshold: float = 0.8,
+    abundance_threshold: float = 0.01
+) -> Dict[str, pd.DataFrame]:
+    """Identify core microbiome for each group."""
+    df, metadata = validate_inputs(table, metadata, group_column)
+    merged = merge_table_with_meta(df, metadata, group_column)
     
-    # Total features tested (for Bonferroni)
-    total_features = len(table_with_column.columns.drop(group_column))
-    threshold = 0.01 / total_features
+    rel_abundance = df.div(df.sum(axis=1), axis=0)
+    merged_rel = merge_table_with_meta(rel_abundance, metadata, group_column)
     
-    results = []
-    for feature in table_with_column.columns.drop(group_column):
-        # Subset groups safely
-        mask_group1 = (table_with_column[group_column] == group_column_values[0])
-        mask_group2 = (table_with_column[group_column] == group_column_values[1])
+    core_features = {}
+    
+    for group in merged[group_column].unique():
+        group_data = merged_rel[merged_rel[group_column] == group]
+        group_features = group_data.drop(columns=[group_column])
         
-        group1_values = table_with_column.loc[mask_group1, feature].dropna()
-        group2_values = table_with_column.loc[mask_group2, feature].dropna()
+        prevalence = (group_features > 0).mean()
+        mean_abundance = group_features.mean()
         
-        # Skip features with empty groups
-        if len(group1_values) < 1 or len(group2_values) < 1:
-            continue
-        
-        # Perform MWU test
-        u_stat, p_val = mannwhitneyu(
-            group1_values, 
-            group2_values, 
-            alternative='two-sided'
+        core_mask = (
+            (prevalence >= prevalence_threshold) & 
+            (mean_abundance >= abundance_threshold)
         )
         
-        # Effect size and median difference
-        n1, n2 = len(group1_values), len(group2_values)
-        r = 1 - (2 * u_stat) / (n1 * n2)
-        median_diff = group1_values.median() - group2_values.median()
-
-        if constants.debug_mode:
-            print(f"{feature}: {u_stat}, {p_val}, {median_diff}, {r}")
-            
-        results.append({
-            'feature': feature,
-            'u_statistic': u_stat,
-            'p_value': max(p_val, 1e-10),  # Cap p-values
-            'median_difference': median_diff,
-            'effect_size_r': r
+        core_df = pd.DataFrame({
+            'feature': core_mask.index[core_mask],
+            'prevalence': prevalence[core_mask],
+            'mean_abundance': mean_abundance[core_mask],
+            'group': group
         })
         
-    results_df = pd.DataFrame(results)
-    if results_df.empty:
-        if verbose:
-            logger.error(
-                f"No features passed Mann-Whitney U tests with Bonferroni correction "
-                f"for groups: {group_column_values} "
-                f"in column '{group_column}'"
-            )
-        return pd.DataFrame(columns=['feature', 'u_statistic', 'p_value'])
-
-    # Filter invalid p-values and sort
-    results_df = results_df[(results_df['p_value'] != 0) & (
-        results_df['p_value'].notna()
-    )]
-    results_df = results_df[results_df['p_value'] <= 0.05]
-    results_df = results_df.sort_values('p_value', ascending=True)
+        core_features[group] = core_df.sort_values('mean_abundance', ascending=False)
     
-    # Apply Bonferroni threshold
-    results_df = results_df[results_df['p_value'] <= threshold]
-    return results_df
-
+    return core_features
 
 def microbial_network_analysis(
     table: Union[Dict, Table, pd.DataFrame],
@@ -611,35 +360,21 @@ def microbial_network_analysis(
     threshold: float = 0.3,
     min_prevalence: float = 0.1
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Construct microbial co-occurrence networks.
-    
-    Args:
-        table: Input abundance table
-        method: Correlation method ('sparcc', 'spearman', 'pearson')
-        threshold: Minimum correlation threshold for edges
-        min_prevalence: Minimum prevalence for including features
-        
-    Returns:
-        Tuple of (correlation_matrix, network_edges)
-    """
+    """Construct microbial co-occurrence networks."""
     df, _ = validate_inputs(table)
     
-    # Filter by prevalence
     prevalence = (df > 0).mean()
     df_filt = df.loc[:, prevalence >= min_prevalence]
     
     logger.info(f"Network analysis: {df_filt.shape[1]} features after prevalence filtering")
     
     if method == 'sparcc':
-        # Simplified SparCC-like approach
-        # In practice, you'd use the actual SparCC algorithm
         corr_matrix = df_filt.corr(method='spearman')
     elif method in ['spearman', 'pearson']:
         corr_matrix = df_filt.corr(method=method)
     else:
         raise ValueError(f"Unknown correlation method: {method}")
     
-    # Create network edges
     edges = []
     n_features = len(corr_matrix)
     
@@ -659,375 +394,16 @@ def microbial_network_analysis(
     
     return corr_matrix, edges_df
 
-
-def kruskal_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = constants.DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = None,
-    verbose: bool = False
-) -> pd.DataFrame:
-    """Performs Kruskal-Wallis H-test with Bonferroni correction for ≥3 groups."""
-    table = table_to_df(table)
-    table_with_column = merge_table_with_meta(table, metadata, group_column)
-    
-    # Get unique groups if group_column_values not specified
-    if group_column_values is None:
-        group_column_values = table_with_column[group_column].unique().tolist()
-    
-    # Pre-calculate Bonferroni threshold
-    total_features = len(table_with_column.columns.drop(group_column))
-    threshold = 0.01 / total_features
-    
-    results = []
-    for feature in table_with_column.columns.drop(group_column):
-        # Collect data for all groups
-        groups = []
-        for group_value in group_column_values:
-            mask = (table_with_column[group_column] == group_value)
-            group_data = table_with_column.loc[mask, feature].dropna()
-            if len(group_data) > 0:  # Skip empty groups
-                groups.append(group_data)
-        
-        # Skip feature if < 2 groups have data
-        if len(groups) < 2:
-            continue
-        
-        try:
-            h_stat, p_val = kruskal(*groups)
-        except ValueError:
-            continue  # Handle identical values in all groups
-            
-        # Calculate effect size (epsilon squared)
-        n_total = sum(len(g) for g in groups)
-        epsilon_sq = h_stat / (n_total - 1)
-        
-        if constants.debug_mode:
-            print(f"{feature}: {h_stat}, {p_val}, {epsilon_sq}")
-            
-        results.append({
-            'feature': feature,
-            'h_statistic': h_stat,
-            'p_value': max(p_val, 1e-10),
-            'epsilon_squared': epsilon_sq,
-            'groups_tested': len(groups)
-        })
-    
-    results_df = pd.DataFrame(results)
-    if results_df.empty:
-        if verbose:
-            logger.error(
-                f"No features passed Kruskal-Wallis H-test with Bonferroni correction "
-                f"for groups: {group_column_values} "
-                f"in column '{group_column}'"
-            )
-        return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
-
-    # Filter invalid p-values and sort
-    results_df = results_df[(results_df['p_value'] != 0) & (
-        results_df['p_value'].notna()
-    )]
-    results_df = results_df[results_df['p_value'] <= 0.05]
-    results_df = results_df.sort_values('p_value', ascending=True)
-    
-    # Apply Bonferroni correction
-    results_df = results_df[results_df['p_value'] <= threshold]
-    return results_df
-
-
-def anova(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str = constants.DEFAULT_GROUP_COLUMN,
-    group_column_values: List[Union[bool, int, str]] = None,
-    verbose: bool = False
-) -> pd.DataFrame:
-    """Performs one-way ANOVA for ≥3 groups."""
-    table = table_to_df(table)
-    table_with_column = merge_table_with_meta(table, metadata, group_column)
-    
-    # Get unique groups if group_column_values not specified
-    if group_column_values is None:
-        group_column_values = table_with_column[group_column].unique().tolist()
-    
-    results = []
-    for feature in table_with_column.columns.drop(group_column):
-        # Collect data for all groups
-        groups = []
-        for group_value in group_column_values:
-            mask = (table_with_column[group_column] == group_value)
-            group_data = table_with_column.loc[mask, feature].dropna()
-            if len(group_data) >= 2:  # Require ≥ 2 samples per group
-                groups.append(group_data.values)
-        
-        # Skip feature if < 2 groups have sufficient data
-        if len(groups) < 2:
-            continue
-            
-        try:
-            # Perform one-way ANOVA
-            f_stat, p_val = f_oneway(*groups)
-            
-            # Calculate effect size (eta squared)
-            all_data = np.concatenate(groups)
-            ss_between = sum([len(g) * (np.mean(g) - np.mean(all_data))**2 
-                              for g in groups])
-            ss_total = sum((x - np.mean(all_data))**2 for x in all_data)
-            eta_sq = ss_between / ss_total if ss_total != 0 else 0.0
-            
-        except (ValueError, ZeroDivisionError):
-            continue  # Handle degenerate cases
-            
-        results.append({
-            'feature': feature,
-            'f_statistic': f_stat,
-            'p_value': max(p_val, 1e-10),
-            'eta_squared': eta_sq,
-            'groups_tested': len(groups)
-        })
-    
-    results_df = pd.DataFrame(results)
-    if results_df.empty:
-        if verbose:
-            logger.error(
-                f"No features passed one-way ANOVA for groups: {group_column_values} "
-                f"in column '{group_column}'"
-            )
-        return pd.DataFrame(columns=['feature', 'f_statistic', 'p_value'])
-
-    # Filter and sort results
-    results_df = results_df[(results_df['p_value'] != 0) & (
-        results_df['p_value'].notna()
-    )]
-    results_df = results_df[results_df['p_value'] <= 0.05]
-    results_df = results_df.sort_values('p_value', ascending=True)
-    return results_df
-
-
-def fisher_exact_bonferroni(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    group_column: str,
-    group_column_values: List[Union[bool, int, str]],
-    alpha: float = 0.01,
-    min_samples: int = 5,
-    debug_mode: bool = constants.debug_mode,
-    verbose: bool = False
-) -> pd.DataFrame:
-    """Performs Fisher's Exact Tests with Bonferroni correction for presence-absence data."""
-    # Convert to DataFrame and merge with metadata
-    table_df = table_to_df(table)
-    merged_df = merge_table_with_meta(table_df, metadata, group_column)
-    
-    # Total features for Bonferroni correction
-    total_features = len(merged_df.columns) - 1  # Exclude group column
-    threshold = alpha / total_features
-    
-    results = []
-    for feature in merged_df.columns.drop(group_column):
-        # Subset groups
-        mask_group1 = (merged_df[group_column] == group_column_values[0])
-        mask_group2 = (merged_df[group_column] == group_column_values[1])
-        
-        group1 = merged_df.loc[mask_group1, feature].dropna()
-        group2 = merged_df.loc[mask_group2, feature].dropna()
-        
-        # Skip small groups
-        if len(group1) < min_samples or len(group2) < min_samples:
-            continue
-            
-        # Build 2x2 contingency table
-        a = (group1 == 1).sum()  # Group1 present
-        b = (group2 == 1).sum()  # Group2 present
-        c = (group1 == 0).sum()  # Group1 absent
-        d = (group2 == 0).sum()  # Group2 absent
-        
-        # Skip invariant features
-        if (a + b == 0) or (c + d == 0):
-            continue
-            
-        # Perform Fisher's Exact Test
-        try:
-            odds_ratio, p_val = fisher_exact(
-                [[a, b], [c, d]], alternative='two-sided'
-            )
-        except ValueError:
-            continue  # Skip invalid tables
-            
-        # Calculate proportions
-        prop1 = a / (a + c) if (a + c) > 0 else 0
-        prop2 = b / (b + d) if (b + d) > 0 else 0
-        prop_diff = prop1 - prop2
-
-        results.append({
-            'feature': feature,
-            'p_value': max(p_val, 1e-10),
-            'odds_ratio': odds_ratio,
-            'proportion_diff': prop_diff,
-            f'prop_{group_column_values[0]}': prop1,
-            f'prop_{group_column_values[1]}': prop2,
-            f'present_{group_column_values[0]}': a,
-            f'absent_{group_column_values[0]}': c,
-            f'present_{group_column_values[1]}': b,
-            f'absent_{group_column_values[1]}': d
-        })
-        
-        if constants.debug_mode:
-            print(
-                f"{feature}: OR={odds_ratio:.3f}, "
-                f"p={p_val:.4f}, "
-                f"diff={prop_diff:.2f}"
-            )
-            
-    # Create results DataFrame
-    results_df = pd.DataFrame(results)
-    if results_df.empty:
-        if verbose:
-            logger.warning(
-                "No significant features found after Fisher's Exact "
-                f"Tests with Bonferroni correction"
-            )
-        return pd.DataFrame()
-    
-    # Apply Bonferroni correction
-    results_df = results_df.sort_values('p_value', ascending=True)
-    results_df['p_adj'] = results_df['p_value'] * total_features
-    results_df['p_adj'] = results_df['p_adj'].clip(upper=1.0)  # Cap at 1.0
-    
-    # Filter significant results
-    results_df = results_df[results_df['p_value'] <= threshold]
-    return results_df
-
-
-def spearman_correlation(
-    table: Union[Dict, Table, pd.DataFrame], 
-    metadata: pd.DataFrame,
-    continuous_column: str,
-    alpha: float = 0.01
-) -> pd.DataFrame:
-    """Calculate Spearman correlations between features and a continuous metadata variable."""
-    df = table_to_df(table)
-    merged = merge_table_with_meta(df, metadata, continuous_column)
-    
-    results = []
-    for feature in tqdm(
-        merged.columns.drop(continuous_column), 
-        desc="Calculating correlations"
-    ):
-        # Remove NA values pairwise
-        valid_idx = merged[[feature, continuous_column]].dropna().index
-        if len(valid_idx) < 3:
-            continue
-            
-        subset = merged.loc[valid_idx]
-        rho, p_val = spearmanr(subset[feature], subset[continuous_column])
-        
-        results.append({
-            'feature': feature,
-            'rho': rho,
-            'p_value': p_val,
-            'n_samples': len(valid_idx)
-        })
-    
-    result_df = pd.DataFrame(results)
-    result_df['p_adj'] = result_df['p_value'] * len(result_df)
-    results_df = result_df[result_df['p_adj'] <= alpha].sort_values(
-        'rho', key=abs, ascending=False
-    )
-    return results_df
-
-
-def microbiome_age_prediction(
-    table: Union[Dict, Table, pd.DataFrame],
-    metadata: pd.DataFrame,
-    age_column: str,
-    feature_selection_method: str = 'correlation',
-    top_n_features: int = 50
-) -> Dict[str, Any]:
-    """Predict biological age from microbiome composition.
-    
-    Args:
-        table: Input abundance table
-        metadata: Sample metadata with age information
-        age_column: Column containing age values
-        feature_selection_method: Method for feature selection
-        top_n_features: Number of top features to use
-        
-    Returns:
-        Dictionary with model results and selected features
-    """
-    from sklearn.model_selection import cross_val_score, train_test_split
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.metrics import mean_absolute_error, r2_score
-    
-    df, metadata = validate_inputs(table, metadata, age_column)
-    merged = merge_table_with_meta(df, metadata, age_column)
-    
-    # Remove samples with missing age
-    merged_clean = merged.dropna(subset=[age_column])
-    
-    if len(merged_clean) < 20:
-        raise ValueError("Insufficient samples with age data for prediction")
-    
-    X = merged_clean.drop(columns=[age_column])
-    y = merged_clean[age_column]
-    
-    # Feature selection
-    if feature_selection_method == 'correlation':
-        # Select features most correlated with age
-        correlations = X.corrwith(y).abs().sort_values(ascending=False)
-        selected_features = correlations.head(top_n_features).index.tolist()
-    elif feature_selection_method == 'variance':
-        # Select features with highest variance
-        variances = X.var().sort_values(ascending=False)
-        selected_features = variances.head(top_n_features).index.tolist()
-    else:
-        raise ValueError(f"Unknown feature selection method: {feature_selection_method}")
-    
-    X_selected = X[selected_features]
-    
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_selected, y, test_size=0.3, random_state=42
-    )
-    
-    # Train model
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    
-    # Evaluate model
-    y_pred = model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    
-    # Cross-validation
-    cv_scores = cross_val_score(model, X_selected, y, cv=5, scoring='r2')
-    
-    # Feature importance
-    feature_importance = pd.DataFrame({
-        'feature': selected_features,
-        'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    
-    return {
-        'model': model,
-        'selected_features': selected_features,
-        'feature_importance': feature_importance,
-        'test_mae': mae,
-        'test_r2': r2,
-        'cv_r2_mean': cv_scores.mean(),
-        'cv_r2_std': cv_scores.std(),
-        'predictions': pd.DataFrame({
-            'actual': y_test,
-            'predicted': y_pred
-        })
-    }
-
+from workflow_16s.stats.tests import (
+    anova, fisher_exact_bonferroni, kruskal_bonferroni, mwu_bonferroni, ttest,
+    spearman_correlation
+)
 
 def get_group_column_values(group_column, metadata):
+    """Your existing get_group_column_values function"""
     col = group_column['name']
-    if group_column_info['values']:
-        return group_column_info['values']
+    if 'values' in group_column and group_column['values']:
+        return group_column['values']
     elif group_column['type'] == 'bool':
         return [True, False]
     else:
@@ -1035,9 +411,10 @@ def get_group_column_values(group_column, metadata):
             return metadata[group_column['name']].unique()
         else:
             return None
-                
 
 class StatisticalAnalysis:
+    """Enhanced Statistical Analysis class with integrated advanced functions."""
+    
     TestConfig = {
         "fisher": {
             "key": "fisher",
@@ -1067,7 +444,43 @@ class StatisticalAnalysis:
             "effect_col": "epsilon_squared",
             "alt_effect_col": None,
         },
+        "enhanced_stats": {
+            "key": "enhanced",
+            "func": enhanced_statistical_tests,
+            "name": "Enhanced Statistical Tests",
+            "effect_col": "effect_size",
+            "alt_effect_col": None,
+        },
+        "differential_abundance": {
+            "key": "diffabund",
+            "func": differential_abundance_analysis,
+            "name": "Differential Abundance Analysis",
+            "effect_col": "log2_fold_change",
+            "alt_effect_col": "fold_change",
+        },
+        "anova": {
+            "key": "anova",
+            "func": anova,
+            "name": "One-way ANOVA",
+            "effect_col": "eta_squared",
+            "alt_effect_col": None,
+        },
+        "spearman_correlation": {
+            "key": "spearman",
+            "func": spearman_correlation,
+            "name": "Spearman Correlation",
+            "effect_col": "rho",
+            "alt_effect_col": None,
+        },
+        "network_analysis": {
+            "key": "network",
+            "func": microbial_network_analysis,
+            "name": "Network Analysis",
+            "effect_col": "correlation",
+            "alt_effect_col": "abs_correlation",
+        }
     }
+    
     def __init__(
         self,
         config: Dict,
@@ -1080,22 +493,29 @@ class StatisticalAnalysis:
         self.config, self.project_dir, self.mode = config, project_dir, mode
         self.tables, self.metadata = tables, metadata
         self.group_columns = group_columns 
-        if self.config.get("nfc_facilities", {}).get('enabled', False) and 'facility_match' in self.metadata["raw"]["genus"].columns:
-            self.group_columns.append({'name': 'nfc_facilities', 'type': 'bool', 'values': [True, False]})
+        
+        # Add NFC facilities if enabled
+        if (self.config.get("nfc_facilities", {}).get('enabled', False) and 
+            'facility_match' in self.metadata["raw"]["genus"].columns):
+            self.group_columns.append({
+                'name': 'nfc_facilities', 
+                'type': 'bool', 
+                'values': [True, False]
+            })
+            
         self.results: Dict = {}
+        self.advanced_results: Dict = {}  # Store advanced analysis results
+        
+        # Run analysis for each group column
         for group_column in self.group_columns:
             col = group_column['name']
             vals = get_group_column_values(group_column, self.metadata["raw"]["genus"])
-            print(col)
-            print(vals)
-            self.results[group_column['name']] = self._run_for_group(col, vals)
+            print(f"Processing group column: {col}")
+            print(f"Values: {vals}")
+            self.results[col] = self._run_for_group(col, vals)
 
-    def _run_for_group(
-        self, 
-        group_column: str,
-        group_column_values: List[Any]
-    ):
-        # Check which table_type/level/test combinations are enabled
+    def _run_for_group(self, group_column: str, group_column_values: List[Any]):
+        """Run statistical analysis for a specific group column."""
         tasks = get_enabled_tasks(self.config, self.tables)
         if not tasks:
             return {}
@@ -1116,6 +536,7 @@ class StatisticalAnalysis:
                 # Initialize data storage
                 _init_dict_level(group_stats, table_type, level)
                 data_storage = group_stats[table_type][level]
+                
                 # Initialize output directory and path
                 output_dir = self.project_dir.final / 'stats' / group_column / table_type / level
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -1128,34 +549,101 @@ class StatisticalAnalysis:
                     table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
                     
                     # Run statistical test
-                    result = self.TestConfig[test]["func"](
-                        table=table_aligned,
-                        metadata=metadata_aligned,
-                        group_column=group_column,
-                        group_column_values=group_column_values
-                    )
+                    test_func = self.TestConfig[test]["func"]
+                    
+                    # Handle different function signatures
+                    if test in ['enhanced_stats', 'differential_abundance']:
+                        result = test_func(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            group_column=group_column
+                        )
+                    elif test == 'network_analysis':
+                        # Network analysis returns tuple, handle differently
+                        corr_matrix, edges_df = test_func(table=table_aligned)
+                        result = edges_df
+                        # Save correlation matrix separately
+                        corr_path = output_dir / f'{test}_correlation_matrix.tsv'
+                        corr_matrix.to_csv(corr_path, sep='\t')
+                    elif test == 'spearman_correlation':
+                        # Skip if no continuous variables configured
+                        continuous_vars = self.config.get('stats', {}).get('continuous_variables', [])
+                        if not continuous_vars:
+                            continue
+                        # Use first continuous variable (you might want to iterate through all)
+                        result = test_func(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            continuous_column=continuous_vars[0]
+                        )
+                    else:
+                        # Standard statistical tests
+                        result = test_func(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            group_column=group_column,
+                            group_column_values=group_column_values
+                        )
                     
                     # Store and save results
                     data_storage[test] = result
-                    result.to_csv(output_path, sep='\t', index=True)
-                    
-                    #if verbose:
-                        # Log significant features
-                    #    if isinstance(result, pd.DataFrame) and "p_value" in result.columns:
-                    #        self._log_test_results(result, table_type, level, test)
+                    if isinstance(result, pd.DataFrame) and not result.empty:
+                        result.to_csv(output_path, sep='\t', index=True)
                     
                 except Exception as e:
-                    logger.error(
-                        f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
-                    )
+                    logger.error(f"Test '{test}' failed for {table_type}/{level}: {str(e)}")
                     data_storage[test] = None
                     
                 finally:
                     progress.update(stats_task, advance=1)
-        progress.update(stats_task, description=_format_task_desc(stats_desc))    
+                    
+            progress.update(stats_task, description=_format_task_desc(stats_desc))
+            
         return group_stats
 
+    def run_core_microbiome_analysis(self, prevalence_threshold: float = 0.8, 
+                                   abundance_threshold: float = 0.01) -> Dict:
+        """Run core microbiome analysis for all groups."""
+        core_results = {}
+        
+        for group_column in self.group_columns:
+            col = group_column['name']
+            core_results[col] = {}
+            
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    table = self.tables[table_type][level]
+                    metadata = self.metadata[table_type][level]
+                    table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
+                    
+                    try:
+                        core_features = core_microbiome(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            group_column=col,
+                            prevalence_threshold=prevalence_threshold,
+                            abundance_threshold=abundance_threshold
+                        )
+                        
+                        _init_dict_level(core_results, col, table_type, level)
+                        core_results[col][table_type][level] = core_features
+                        
+                        # Save results
+                        output_dir = self.project_dir.final / 'core_microbiome' / col / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        for group, core_df in core_features.items():
+                            output_path = output_dir / f'core_features_{group}.tsv'
+                            core_df.to_csv(output_path, sep='\t', index=False)
+                            
+                    except Exception as e:
+                        logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
+        
+        self.advanced_results['core_microbiome'] = core_results
+        return core_results
+
     def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
+        """Get effect size from test results."""
         if test_name not in self.TestConfig:
             return None
         test_config = self.TestConfig[test_name]
@@ -1163,3 +651,438 @@ class StatisticalAnalysis:
             if col and col in row:
                 return row[col]
         return None
+
+    def get_summary_statistics(self) -> Dict:
+        """Generate summary statistics across all analyses."""
+        summary = {
+            'total_tests_run': 0,
+            'significant_features_by_test': {},
+            'effect_sizes_summary': {},
+            'group_columns_analyzed': list(self.results.keys())
+        }
+        
+        for group_col, group_results in self.results.items():
+            for table_type, levels in group_results.items():
+                for level, tests in levels.items():
+                    for test_name, result in tests.items():
+                        if isinstance(result, pd.DataFrame) and not result.empty:
+                            summary['total_tests_run'] += 1
+                            
+                            # Count significant features
+                            if test_name not in summary['significant_features_by_test']:
+                                summary['significant_features_by_test'][test_name] = 0
+                            summary['significant_features_by_test'][test_name] += len(result)
+                            
+                            # Effect size summary
+                            effect_col = self.TestConfig.get(test_name, {}).get('effect_col')
+                            if effect_col and effect_col in result.columns:
+                                if test_name not in summary['effect_sizes_summary']:
+                                    summary['effect_sizes_summary'][test_name] = {
+                                        'mean': 0, 'std': 0, 'min': 0, 'max': 0
+                                    }
+                                
+                                effects = result[effect_col].dropna()
+                                if len(effects) > 0:
+                                    summary['effect_sizes_summary'][test_name] = {
+                                        'mean': float(effects.mean()),
+                                        'std': float(effects.std()),
+                                        'min': float(effects.min()),
+                                        'max': float(effects.max())
+                                    }
+        
+        return summary
+
+    def export_results_summary(self, output_path: Union[str, Path]) -> None:
+        """Export a comprehensive summary of all results."""
+        summary = self.get_summary_statistics()
+        
+        # Create summary report
+        report_lines = [
+            "# Statistical Analysis Summary Report",
+            f"Total tests executed: {summary['total_tests_run']}",
+            f"Group columns analyzed: {', '.join(summary['group_columns_analyzed'])}",
+            "",
+            "## Significant Features by Test Type",
+        ]
+        
+        for test_name, count in summary['significant_features_by_test'].items():
+            test_display_name = self.TestConfig.get(test_name, {}).get('name', test_name)
+            report_lines.append(f"- {test_display_name}: {count} significant features")
+        
+        report_lines.extend([
+            "",
+            "## Effect Size Summaries",
+        ])
+        
+        for test_name, stats in summary['effect_sizes_summary'].items():
+            test_display_name = self.TestConfig.get(test_name, {}).get('name', test_name)
+            report_lines.extend([
+                f"### {test_display_name}",
+                f"- Mean effect size: {stats['mean']:.4f}",
+                f"- Standard deviation: {stats['std']:.4f}",
+                f"- Range: {stats['min']:.4f} to {stats['max']:.4f}",
+                ""
+            ])
+        
+        # Write summary report
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(report_lines))
+        
+        logger.info(f"Summary report exported to {output_path}")
+
+    def run_batch_correlation_analysis(self, continuous_variables: List[str]) -> Dict:
+        """Run correlation analysis for multiple continuous variables."""
+        correlation_results = {}
+        
+        for var in continuous_variables:
+            correlation_results[var] = {}
+            
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    # Check if variable exists in metadata
+                    metadata = self.metadata[table_type][level]
+                    if var not in metadata.columns:
+                        continue
+                    
+                    table = self.tables[table_type][level]
+                    table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
+                    
+                    try:
+                        result = spearman_correlation(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            continuous_column=var
+                        )
+                        
+                        _init_dict_level(correlation_results, var, table_type, level)
+                        correlation_results[var][table_type][level] = result
+                        
+                        # Save results
+                        output_dir = self.project_dir.final / 'correlations' / var / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        output_path = output_dir / 'spearman_correlations.tsv'
+                        result.to_csv(output_path, sep='\t', index=False)
+                        
+                    except Exception as e:
+                        logger.error(f"Correlation analysis failed for {var}/{table_type}/{level}: {e}")
+        
+        self.advanced_results['correlations'] = correlation_results
+        return correlation_results
+
+    def run_network_analysis_batch(self, methods: List[str] = ['sparcc', 'spearman'], 
+                                 threshold: float = 0.3) -> Dict:
+        """Run network analysis for multiple correlation methods."""
+        network_results = {}
+        
+        for method in methods:
+            network_results[method] = {}
+            
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    table = self.tables[table_type][level]
+                    table_aligned, _ = update_table_and_metadata(
+                        table, self.metadata[table_type][level]
+                    )
+                    
+                    try:
+                        corr_matrix, edges_df = microbial_network_analysis(
+                            table=table_aligned,
+                            method=method,
+                            threshold=threshold
+                        )
+                        
+                        _init_dict_level(network_results, method, table_type, level)
+                        network_results[method][table_type][level] = {
+                            'correlation_matrix': corr_matrix,
+                            'edges': edges_df
+                        }
+                        
+                        # Save results
+                        output_dir = self.project_dir.final / 'networks' / method / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        corr_path = output_dir / 'correlation_matrix.tsv'
+                        edges_path = output_dir / 'network_edges.tsv'
+                        
+                        corr_matrix.to_csv(corr_path, sep='\t')
+                        edges_df.to_csv(edges_path, sep='\t', index=False)
+                        
+                        # Generate network statistics
+                        network_stats = self._calculate_network_statistics(edges_df)
+                        stats_path = output_dir / 'network_statistics.tsv'
+                        pd.DataFrame([network_stats]).to_csv(stats_path, sep='\t', index=False)
+                        
+                    except Exception as e:
+                        logger.error(f"Network analysis failed for {method}/{table_type}/{level}: {e}")
+        
+        self.advanced_results['networks'] = network_results
+        return network_results
+
+    def _calculate_network_statistics(self, edges_df: pd.DataFrame) -> Dict:
+        """Calculate basic network statistics from edge list."""
+        if edges_df.empty:
+            return {
+                'total_edges': 0,
+                'positive_edges': 0,
+                'negative_edges': 0,
+                'mean_correlation': 0,
+                'unique_nodes': 0
+            }
+        
+        total_edges = len(edges_df)
+        positive_edges = (edges_df['correlation'] > 0).sum()
+        negative_edges = (edges_df['correlation'] < 0).sum()
+        mean_correlation = edges_df['correlation'].mean()
+        
+        # Count unique nodes
+        unique_nodes = len(
+            set(edges_df['source'].tolist() + edges_df['target'].tolist())
+        )
+        
+        return {
+            'total_edges': total_edges,
+            'positive_edges': positive_edges,
+            'negative_edges': negative_edges,
+            'mean_correlation': mean_correlation,
+            'unique_nodes': unique_nodes,
+            'density': total_edges / (unique_nodes * (unique_nodes - 1) / 2) if unique_nodes > 1 else 0
+        }
+
+    def run_comprehensive_analysis(self, **kwargs) -> Dict:
+        """Run all available advanced analyses."""
+        comprehensive_results = {}
+        
+        logger.info("Starting comprehensive statistical analysis...")
+        
+        # 1. Core microbiome analysis
+        logger.info("Running core microbiome analysis...")
+        try:
+            core_results = self.run_core_microbiome_analysis(
+                prevalence_threshold=kwargs.get('prevalence_threshold', 0.8),
+                abundance_threshold=kwargs.get('abundance_threshold', 0.01)
+            )
+            comprehensive_results['core_microbiome'] = core_results
+        except Exception as e:
+            logger.error(f"Core microbiome analysis failed: {e}")
+        
+        # 2. Correlation analysis
+        continuous_vars = kwargs.get('continuous_variables', 
+                                   self.config.get('stats', {}).get('continuous_variables', []))
+        if continuous_vars:
+            logger.info("Running correlation analysis...")
+            try:
+                correlation_results = self.run_batch_correlation_analysis(continuous_vars)
+                comprehensive_results['correlations'] = correlation_results
+            except Exception as e:
+                logger.error(f"Correlation analysis failed: {e}")
+        
+        # 3. Network analysis
+        logger.info("Running network analysis...")
+        try:
+            network_methods = kwargs.get('network_methods', ['sparcc', 'spearman'])
+            network_threshold = kwargs.get('network_threshold', 0.3)
+            network_results = self.run_network_analysis_batch(
+                methods=network_methods,
+                threshold=network_threshold
+            )
+            comprehensive_results['networks'] = network_results
+        except Exception as e:
+            logger.error(f"Network analysis failed: {e}")
+        
+        # 4. Generate summary
+        logger.info("Generating comprehensive summary...")
+        try:
+            summary_path = self.project_dir.final / 'comprehensive_analysis_summary.md'
+            self.export_results_summary(summary_path)
+            comprehensive_results['summary_path'] = str(summary_path)
+        except Exception as e:
+            logger.error(f"Summary generation failed: {e}")
+        
+        # Store all results
+        self.advanced_results.update(comprehensive_results)
+        
+        logger.info("Comprehensive analysis completed!")
+        return comprehensive_results
+
+    def get_top_features_across_tests(self, n_features: int = 10) -> pd.DataFrame:
+        """Get top features that appear consistently across multiple tests."""
+        feature_counts = {}
+        feature_effects = {}
+        
+        for group_col, group_results in self.results.items():
+            for table_type, levels in group_results.items():
+                for level, tests in levels.items():
+                    for test_name, result in tests.items():
+                        if isinstance(result, pd.DataFrame) and not result.empty:
+                            for _, row in result.iterrows():
+                                feature = row.get('feature', '')
+                                if feature:
+                                    # Count occurrences
+                                    if feature not in feature_counts:
+                                        feature_counts[feature] = 0
+                                        feature_effects[feature] = []
+                                    
+                                    feature_counts[feature] += 1
+                                    
+                                    # Store effect sizes
+                                    effect_size = self.get_effect_size(test_name, row)
+                                    if effect_size is not None:
+                                        feature_effects[feature].append(abs(effect_size))
+        
+        # Create summary DataFrame
+        summary_data = []
+        for feature, count in feature_counts.items():
+            effects = feature_effects[feature]
+            summary_data.append({
+                'feature': feature,
+                'test_count': count,
+                'mean_effect_size': np.mean(effects) if effects else 0,
+                'max_effect_size': np.max(effects) if effects else 0,
+                'effect_size_std': np.std(effects) if len(effects) > 1 else 0
+            })
+        
+        summary_df = pd.DataFrame(summary_data)
+        if not summary_df.empty:
+            # Sort by test count and mean effect size
+            summary_df = summary_df.sort_values(
+                ['test_count', 'mean_effect_size'], 
+                ascending=[False, False]
+            ).head(n_features)
+        
+        return summary_df
+
+    def validate_configuration(self) -> Dict[str, List[str]]:
+        """Validate the analysis configuration and return issues."""
+        issues = {
+            'errors': [],
+            'warnings': [],
+            'info': []
+        }
+        
+        # Check if tables and metadata are aligned
+        for table_type in self.tables:
+            for level in self.tables[table_type]:
+                try:
+                    table = self.tables[table_type][level]
+                    metadata = self.metadata[table_type][level]
+                    update_table_and_metadata(table, metadata)
+                except Exception as e:
+                    issues['errors'].append(
+                        f"Table/metadata alignment failed for {table_type}/{level}: {e}"
+                    )
+        
+        # Check group columns
+        for group_column in self.group_columns:
+            col_name = group_column['name']
+            found_in_any = False
+            
+            for table_type in self.metadata:
+                for level in self.metadata[table_type]:
+                    metadata = self.metadata[table_type][level]
+                    if col_name in metadata.columns:
+                        found_in_any = True
+                        
+                        # Check for sufficient group sizes
+                        group_sizes = metadata[col_name].value_counts()
+                        small_groups = group_sizes[group_sizes < 3]
+                        if len(small_groups) > 0:
+                            issues['warnings'].append(
+                                f"Small group sizes for '{col_name}' in {table_type}/{level}: "
+                                f"{dict(small_groups)}"
+                            )
+            
+            if not found_in_any:
+                issues['errors'].append(f"Group column '{col_name}' not found in any metadata")
+        
+        # Check continuous variables if specified
+        continuous_vars = self.config.get('stats', {}).get('continuous_variables', [])
+        for var in continuous_vars:
+            found_in_any = False
+            for table_type in self.metadata:
+                for level in self.metadata[table_type]:
+                    metadata = self.metadata[table_type][level]
+                    if var in metadata.columns:
+                        found_in_any = True
+                        # Check if actually numeric
+                        if not pd.api.types.is_numeric_dtype(metadata[var]):
+                            issues['warnings'].append(
+                                f"Continuous variable '{var}' in {table_type}/{level} "
+                                "is not numeric"
+                            )
+            
+            if not found_in_any:
+                issues['warnings'].append(
+                    f"Continuous variable '{var}' not found in any metadata"
+                )
+        
+        # Configuration completeness
+        if not self.config.get('stats', {}).get('tables', {}):
+            issues['warnings'].append("No statistical tests configured in config['stats']['tables']")
+        
+        return issues
+
+    def get_analysis_recommendations(self) -> List[str]:
+        """Provide analysis recommendations based on data characteristics."""
+        recommendations = []
+        
+        # Analyze data characteristics
+        total_samples = 0
+        total_features = 0
+        
+        for table_type in self.tables:
+            for level in self.tables[table_type]:
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                total_samples += len(df)
+                total_features += len(df.columns)
+        
+        avg_samples = total_samples / (len(self.tables) * max(1, len(self.tables.get(list(self.tables.keys())[0], {}))))
+        avg_features = total_features / (len(self.tables) * max(1, len(self.tables.get(list(self.tables.keys())[0], {}))))
+        
+        # Sample size recommendations
+        if avg_samples < 20:
+            recommendations.append(
+                "Small sample size detected. Consider using non-parametric tests "
+                "(Mann-Whitney U, Kruskal-Wallis) instead of parametric tests."
+            )
+        
+        if avg_samples > 100:
+            recommendations.append(
+                "Large sample size detected. Both parametric and non-parametric tests "
+                "should be reliable. Consider using enhanced statistical tests for "
+                "automatic test selection."
+            )
+        
+        # Feature recommendations
+        if avg_features > 1000:
+            recommendations.append(
+                "High-dimensional data detected. Consider using differential abundance "
+                "analysis with appropriate multiple testing correction."
+            )
+        
+        # Group structure recommendations
+        group_structures = []
+        for group_column in self.group_columns:
+            col_name = group_column['name']
+            for table_type in self.metadata:
+                for level in self.metadata[table_type]:
+                    metadata = self.metadata[table_type][level]
+                    if col_name in metadata.columns:
+                        n_groups = metadata[col_name].nunique()
+                        group_structures.append(n_groups)
+                        break
+        
+        if any(n > 2 for n in group_structures):
+            recommendations.append(
+                "Multiple groups detected. Consider using ANOVA or Kruskal-Wallis tests "
+                "for overall group differences, followed by post-hoc pairwise comparisons."
+            )
+        
+        # Network analysis recommendations
+        if avg_features > 50:
+            recommendations.append(
+                "Sufficient features for network analysis. Consider running microbial "
+                "co-occurrence network analysis to identify feature interactions."
+            )
+        
+        return recommendations
