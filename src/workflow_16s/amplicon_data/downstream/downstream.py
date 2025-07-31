@@ -181,6 +181,15 @@ class Downstream:
         recommendations = stats.get_analysis_recommendations()
         for rec in recommendations:
             logger.info(f"- {rec}")
+
+        # Run all advanced analyses
+        results = stats_analysis.run_comprehensive_analysis(
+            prevalence_threshold=0.8,
+            abundance_threshold=0.01,
+            continuous_variables=['ph', 'facility_distance_km'],
+            network_methods=['sparcc', 'spearman'],
+            network_threshold=0.3
+        )
         return stats.results
 
     def _alpha_diversity(self):
