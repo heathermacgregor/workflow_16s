@@ -530,6 +530,7 @@ class DownstreamDataLoader:
         table, metadata = self._filter_and_align(
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
+        )
         self._log_results(table_level, table, metadata)
         self.tables['raw'][table_level], self.metadata['raw'][table_level] = table, metadata
 
