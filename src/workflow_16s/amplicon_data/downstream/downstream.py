@@ -123,7 +123,6 @@ class Downstream:
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
         self.metadata, self.tables = self._prep_data()
-        print('really finished data prep')
         self._run_analysis()
         
         if self.verbose:
@@ -135,12 +134,10 @@ class Downstream:
     
     def _prep_data(self):
         data = PrepData(self.config, self.tables, self.metadata, self.mode, self.project_dir)
-        print('finished data prep')
         return data.metadata, data.tables
 
     def _run_analysis(self):
-        print('starting run analysis')
-        self.maps = self._plot_sample_maps()
+        #self.maps = self._plot_sample_maps()
         self.stats = self._stats()
         self.alpha_diversity = self._alpha_diversity()
         self.beta_diversity = self._beta_diversity()
