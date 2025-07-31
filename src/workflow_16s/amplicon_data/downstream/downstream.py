@@ -134,6 +134,7 @@ class Downstream:
     
     def _prep_data(self):
         data = PrepData(self.config, self.tables, self.metadata, self.mode, self.project_dir)
+        print('finished data prep')
         return data.metadata, data.tables
 
     def _run_analysis(self):
