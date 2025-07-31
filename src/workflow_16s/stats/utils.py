@@ -14,12 +14,46 @@ from skbio.stats.composition import clr
 
 # Local Imports
 from workflow_16s import constants
+from workflow_16s.utils.data import merge_table_with_meta, table_to_df
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
 # ================================ TABLE CONVERSION ================================== #
+
+def validate_inputs(
+    table: Union[Dict, Any, pd.DataFrame],
+    metadata: Optional[pd.DataFrame] = None,
+    group_column: Optional[str] = None
+) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+    """Validate and standardize inputs for analysis functions."""
+    df = table_to_df(table)
+    
+    if df.empty:
+        raise ValueError("Input table is empty")
+    
+    if df.isnull().all().all():
+        raise ValueError("Input table contains only null values")
+    
+    if metadata is not None:
+        if not isinstance(metadata, pd.DataFrame):
+            raise ValueError("Metadata must be a pandas DataFrame")
+        
+        if group_column and group_column not in metadata.columns:
+            raise ValueError(f"Group column '{group_column}' not found in metadata")
+        
+        common_samples = df.index.intersection(metadata.index)
+        if len(common_samples) == 0:
+            raise ValueError("No common samples between table and metadata")
+        
+        if len(common_samples) < len(df.index) * 0.5:
+            warnings.warn(
+                f"Only {len(common_samples)}/{len(df.index)} samples have metadata. "
+                "Consider checking sample ID matching."
+            )
+    
+    return df, metadata
 
 def table_to_dataframe(
     table: Union[Dict, BiomTable, pd.DataFrame]
