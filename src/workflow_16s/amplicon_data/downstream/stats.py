@@ -13,8 +13,10 @@ import numpy as np
 from biom.table import Table
 from scipy.stats import (
     ttest_ind, mannwhitneyu, kruskal, f_oneway, fisher_exact, 
-    spearmanr, shapiro, levene, multipletests
+    spearmanr, shapiro, levene
 )
+from statsmodels.stats.multitest import multipletests
+
 from sklearn.cluster import KMeans
 from tqdm import tqdm
 
