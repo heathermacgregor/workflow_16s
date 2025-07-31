@@ -43,7 +43,7 @@ def validate_inputs(
         if group_column and group_column not in metadata.columns:
             raise ValueError(f"Group column '{group_column}' not found in metadata")
         
-        common_samples = df.index.intersection(metadata.index)
+        common_samples = df.index.intersection(metadata.index) + df.columns.intersection(metadata.index)
         if len(common_samples) == 0:
             raise ValueError("No common samples between table and metadata")
         
