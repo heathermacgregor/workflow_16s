@@ -1022,7 +1022,19 @@ def microbiome_age_prediction(
         })
     }
 
-  
+
+def get_group_column_values(group_column_info, metadata):
+    col = group_column['name']
+    if group_column_info['values']:
+        return group_column_info['values']
+    elif group_column['type'] == 'bool':
+        return [True, False]
+    else:
+        if group_column['name'] in metadata.columns:
+            return metadata[group_column['name']].unique()
+        else:
+            return None
+                
 
 class StatisticalAnalysis:
     TestConfig = {
@@ -1072,7 +1084,9 @@ class StatisticalAnalysis:
         self.results: Dict = {}
         for group_column in self.group_columns:
             col = group_column['name']
-            vals = group_column['values'] if group_column['values'] else [True, False] if group_column['type'] == 'bool' else None
+            vals = get_group_column_values(group_column, self.metadata["raw"]["genus"])
+            print(col)
+            print(vals)
             self.results[group_column['name']] = self._run_for_group(col, vals)
 
     def _run_for_group(
