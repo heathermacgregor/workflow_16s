@@ -1065,17 +1065,12 @@ class StatisticalAnalysis:
         project_dir: Union[str, Path]
     ) -> None:
         self.config, self.project_dir, self.mode = config, project_dir, mode
-        print('1')
         self.tables, self.metadata = tables, metadata
-        print('2')
-        self.group_columns = group_columns
-        print('3')
+        self.group_columns = group_columns 
         if self.config.get("nfc_facilities", {}).get('enabled', False) and 'facility_match' in self.metadata["raw"]["genus"].columns:
             self.group_columns.append({'name': 'nfc_facilities', 'type': 'bool', 'values': [True, False]})
-        print('4')
         self.results: Dict = {}
         for group_column in self.group_columns:
-            print(group_column)
             col, vals = group_column['name'], group_column['values']
             self.results[group_column['name']] = self._run_for_group(col, vals)
 
