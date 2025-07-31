@@ -531,49 +531,85 @@ def spearman_correlation(
     table: Union[Dict, Table, pd.DataFrame], 
     metadata: pd.DataFrame,
     continuous_column: str,
-    alpha: float = 0.01
+    alpha: float = 0.01,
+    min_samples: int = 10  # New parameter to enforce minimum sample size
 ) -> pd.DataFrame:
-    """Calculate Spearman correlations between features and a 
-    continuous metadata variable.
+    """Spearman correlations with enhanced missing value handling."""
+    df = table_to_df(table)
     
-    Args:
-        table:             Input abundance table.
-        metadata:          Sample metadata.
-        continuous_column: Metadata column with continuous values.
-        alpha:             Significance threshold.
-        
-    Returns:
-        DataFrame with correlation results.
-    """
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, continuous_column)
-    merged = merge_table_with_meta(df, metadata, continuous_column)
+    # Validate continuous column presence
+    if continuous_column not in metadata.columns:
+        logger.error(f"Continuous column '{continuous_column}' not found in metadata")
+        return pd.DataFrame()
+    
+    # Check for sufficient non-missing values
+    non_missing_count = metadata[continuous_column].notna().sum()
+    if non_missing_count < min_samples:
+        logger.error(
+            f"Cannot compute correlations for '{continuous_column}': "
+            f"Only {non_missing_count} non-missing values (min_samples={min_samples})"
+        )
+        return pd.DataFrame()
+    
+    # Merge with explicit handling of missing values
+    try:
+        merged = merge_table_with_meta(df, metadata, continuous_column)
+        # Drop samples missing the continuous variable
+        merged = merged.dropna(subset=[continuous_column])
+    except KeyError as e:
+        logger.error(f"Merge error: {str(e)}")
+        return pd.DataFrame()
+    
+    # Log sample size information
+    logger.info(
+        f"Correlation analysis for '{continuous_column}': "
+        f"{len(merged)} samples with valid data"
+    )
     
     results = []
     for feature in tqdm(
         merged.columns.drop(continuous_column), 
-        desc="Calculating correlations"
+        desc=f"Correlations for {continuous_column}"
     ):
-        # Remove NA values pairwise
+        # Pairwise complete observations
         valid_idx = merged[[feature, continuous_column]].dropna().index
-        if len(valid_idx) < 3:
-            continue
+        n_valid = len(valid_idx)
+        
+        if n_valid < min_samples:
+            continue  # Skip features with insufficient data
             
         subset = merged.loc[valid_idx]
-        rho, p_val = spearmanr(subset[feature], subset[continuous_column])
-        
-        results.append({
-            'feature': feature,
-            'rho': rho,
-            'p_value': p_val,
-            'n_samples': len(valid_idx)
-        })
+        try:
+            rho, p_val = spearmanr(subset[feature], subset[continuous_column])
+            results.append({
+                'feature': feature,
+                'rho': rho,
+                'p_value': p_val,
+                'n_samples': n_valid
+            })
+        except Exception as e:
+            logger.warning(f"Failed correlation for {feature}: {str(e)}")
+    
+    if not results:
+        logger.warning("No valid correlations computed")
+        return pd.DataFrame()
     
     result_df = pd.DataFrame(results)
+    
+    # Multiple testing correction
     result_df['p_adj'] = result_df['p_value'] * len(result_df)
-    results_df = result_df[result_df['p_adj'] <= alpha].sort_values(
+    result_df['p_adj'] = result_df['p_adj'].clip(upper=1.0)  # Cap at 1.0
+    
+    # Filter significant results
+    sig_df = result_df[result_df['p_adj'] <= alpha].sort_values(
         'rho', key=abs, ascending=False
     )
-    return results_df
+    
+    logger.info(
+        f"Found {len(sig_df)} significant correlations for '{continuous_column}' "
+        f"(α={alpha}, min_samples={min_samples})"
+    )
+    return sig_df
 
 
 # ENHANCED STATISTICAL TESTS
