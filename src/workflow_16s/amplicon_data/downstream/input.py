@@ -11,8 +11,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
 import pandas as pd
+import numpy as np
+import re
 from biom import load_table
 from biom.table import Table
+import h5py
 
 # Local Imports
 from workflow_16s import constants
@@ -81,8 +84,6 @@ def check_coordinate_completeness(df):
     
     return result
 
-import pandas as pd
-
 def print_columns_with_missing_location_data(
     df: pd.DataFrame,
     lon_col: str = 'longitude_deg',
@@ -117,7 +118,7 @@ def print_columns_with_missing_location_data(
     ]
     
     if not cols_with_data:
-        logger.info("No additional data exists for rows missing coordinates")
+        logger.info("No additional data exists for rows without coordinates")
         return
     
     logger.info("Columns containing data for rows without coordinates:")
@@ -159,7 +160,7 @@ def import_metadata_tsv(
     df.columns = df.columns.str.lower()
 
     sample_id_col = next((col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns), None)
-    df['SAMPLE ID'] = (df[sample_id_col] if sample_id_col else [f"{tsv_path.parents[5].name}_x{i}" for i in range(1, len(df)+1)])
+    df['SAMPLE ID'] = (df[sample_id_col] if sample_id_col else [f"{tsv_path.parents[5].name}_x{i}" for i in range(1, len(df)+1])
 
     dataset_id_col = next((col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns), None)
     df['DATASET ID'] = (df[dataset_id_col] if dataset_id_col else tsv_path.parents[5].name)
@@ -284,59 +285,6 @@ def import_merged_table_biom(
     return merged_table if as_type == 'table' else table_to_df(merged_table)
 
 ########################################################################################
-
-def update_table_and_metadata(
-    table: Table,
-    metadata: pd.DataFrame,
-    sample_col: str = constants.DEFAULT_META_ID_COLUMN
-) -> Tuple[Table, pd.DataFrame]:
-    """Align BIOM table with metadata using sample IDs.
-    
-    Args:
-        table:         BIOM feature table.
-        metadata:      Sample metadata DataFrame.
-        sample_column: Metadata column containing sample IDs.
-    
-    Returns:
-        Tuple of (filtered BIOM table, filtered metadata DataFrame)
-    
-    Raises:
-        ValueError: For duplicate lowercase sample IDs in BIOM table.
-    """
-    norm_metadata = _normalize_metadata(metadata, sample_col)
-    biom_mapping = _create_biom_id_mapping(table)
-    
-    shared_ids = [sid for sid in norm_metadata[sample_col] if sid in biom_mapping]
-    filtered_metadata = norm_metadata[norm_metadata[sample_col].isin(shared_ids)]
-    original_ids = [biom_mapping[sid] for sid in filtered_metadata[sample_col]]
-    filtered_table = table.filter(original_ids, axis='sample', inplace=False)
-    
-    return filtered_table, filtered_metadata
-
-
-def _normalize_metadata(metadata: pd.DataFrame, sample_col: str) -> pd.DataFrame:
-    """Normalize sample IDs and remove duplicates."""
-    metadata[sample_col] = metadata[sample_col].astype(str).str.lower()
-    return metadata.drop_duplicates(subset=[sample_col])
-
-
-def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
-    """Create lowercase to original-case ID mapping for BIOM table samples."""
-    mapping: Dict[str, str] = {}
-    for orig_id in table.ids(axis='sample'):
-        lower_id = orig_id.lower()
-        if lower_id in mapping:
-            raise ValueError(
-                f"Duplicate lowercase sample ID: '{lower_id}' "
-                f"(from '{orig_id}' and '{mapping[lower_id]}')"
-            )
-        mapping[lower_id] = orig_id
-    return mapping
-  
-########################################################################################
-import pandas as pd
-import numpy as np
-import re
 
 # Precompile regex patterns for efficiency
 NUM_PATTERN = re.compile(r'[-+]?\d*\.\d+|[-+]?\d+')
@@ -472,6 +420,83 @@ def fill_missing_coordinates(df):
     
     return df
 
+def update_table_and_metadata(
+    table: Table,
+    metadata: pd.DataFrame,
+    sample_col: str = constants.DEFAULT_META_ID_COLUMN
+) -> Tuple[Table, pd.DataFrame]:
+    """Align BIOM table with metadata using sample IDs.
+    
+    Args:
+        table:         BIOM feature table.
+        metadata:      Sample metadata DataFrame.
+        sample_column: Metadata column containing sample IDs.
+    
+    Returns:
+        Tuple of (filtered BIOM table, filtered metadata DataFrame)
+    
+    Raises:
+        ValueError: For duplicate lowercase sample IDs in BIOM table.
+    """
+    # Handle empty metadata case
+    if metadata.empty:
+        return Table(np.array([]), [], []), pd.DataFrame(columns=[sample_col])
+    
+    norm_metadata = _normalize_metadata(metadata, sample_col)
+    
+    # Handle empty metadata after normalization
+    if norm_metadata.empty:
+        return Table(np.array([]), [], []), pd.DataFrame(columns=[sample_col])
+    
+    biom_mapping = _create_biom_id_mapping(table)
+    
+    shared_ids = [sid for sid in norm_metadata[sample_col] if sid in biom_mapping]
+    
+    # Handle case with no shared IDs
+    if not shared_ids:
+        return Table(np.array([]), [], []), pd.DataFrame(columns=[sample_col])
+    
+    filtered_metadata = norm_metadata[norm_metadata[sample_col].isin(shared_ids)]
+    original_ids = [biom_mapping[sid] for sid in filtered_metadata[sample_col]]
+    
+    # Filter the BIOM table
+    filtered_table = table.filter(original_ids, axis='sample', inplace=False)
+    
+    return filtered_table, filtered_metadata
+
+
+def _normalize_metadata(metadata: pd.DataFrame, sample_col: str) -> pd.DataFrame:
+    """Normalize sample IDs and remove duplicates."""
+    # Handle empty metadata
+    if metadata.empty:
+        return metadata
+    
+    # Validate sample column exists
+    if sample_col not in metadata.columns:
+        raise ValueError(f"Sample column '{sample_col}' not found in metadata")
+    
+    metadata[sample_col] = metadata[sample_col].astype(str).str.lower()
+    return metadata.drop_duplicates(subset=[sample_col])
+
+
+def _create_biom_id_mapping(table: Table) -> Dict[str, str]:
+    """Create lowercase to original-case ID mapping for BIOM table samples."""
+    # Handle empty table
+    if table.is_empty():
+        return {}
+    
+    mapping: Dict[str, str] = {}
+    for orig_id in table.ids(axis='sample'):
+        lower_id = orig_id.lower()
+        if lower_id in mapping:
+            raise ValueError(
+                f"Duplicate lowercase sample ID: '{lower_id}' "
+                f"(from '{orig_id}' and '{mapping[lower_id]}')"
+            )
+        mapping[lower_id] = orig_id
+    return mapping
+  
+########################################################################################
 
 class DownstreamDataLoader:
     ModeConfig = {
@@ -505,7 +530,6 @@ class DownstreamDataLoader:
         table, metadata = self._filter_and_align(
             self._load_table_biom(table_level, table_dir), 
             self._match_facilities_to_samples(self._load_metadata_df(table_level, table_dir))
-        )
         self._log_results(table_level, table, metadata)
         self.tables['raw'][table_level], self.metadata['raw'][table_level] = table, metadata
 
@@ -514,6 +538,9 @@ class DownstreamDataLoader:
             table, metadata, 
             self.config.get("metadata_id_column", constants.DEFAULT_META_ID_COLUMN)
         )
+        # Log alignment results
+        if table.is_empty() or metadata.empty:
+            logger.warning(f"Alignment resulted in empty table for {table_level}")
         return table, metadata
         
     # BIOM FEATURE TABLE    
@@ -600,15 +627,14 @@ class DownstreamDataLoader:
         else:
             return match_facilities_to_samples(self.config, metadata, self.nfc_facilities)
 
-    def _log_results(self, table_level, table, metadata) -> None:   
+    def _log_results(self, table_level, table, metadata) -> None:
+        table_size = "Empty" if table.is_empty() else f"{table.shape[0]} features × {table.shape[1]} samples"
+        meta_size = "Empty" if metadata.empty else f"{metadata.shape[0]} samples × {metadata.shape[1]} cols"
+        
         logger.info(
-            f"{'Loaded metadata:':<30}{metadata.shape[0]:>6} samples "
-            f"× {metadata.shape[1]:>5} cols"
+            f"{'Loaded metadata:':<30}{meta_size}"
         )
         feature_type = "genera" if table_level == "genus" else "ASVs"
         logger.info(
-            f"{'Loaded features:':<30}{table.shape[1]:>6} samples "
-            f"× {table.shape[0]:>5} {feature_type}"
+            f"{'Loaded features:':<30}{table_size} {feature_type}"
         )
-
-    
