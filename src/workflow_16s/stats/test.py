@@ -587,7 +587,7 @@ def enhanced_statistical_tests(
     effect_size_threshold: float = 0.5
 ) -> pd.DataFrame:
     """Enhanced statistical testing with automatic test selection and effect sizes."""
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     groups = merged[group_column].unique()
@@ -704,7 +704,7 @@ def differential_abundance_analysis(
     """Comprehensive differential abundance analysis with multiple methods."""
     
     
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     # Filter by prevalence
@@ -789,7 +789,7 @@ def core_microbiome(
     abundance_threshold: float = 0.01
 ) -> Dict[str, pd.DataFrame]:
     """Identify core microbiome for each group."""
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     rel_abundance = df.div(df.sum(axis=1), axis=0)
@@ -829,8 +829,8 @@ def microbial_network_analysis(
     min_prevalence: float = 0.1
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Construct microbial co-occurrence networks."""
-    df, _ = validate_inputs(table)
-    
+    #df, _ = validate_inputs(table)
+    df = table_to_df(table)#
     prevalence = (df > 0).mean()
     df_filt = df.loc[:, prevalence >= min_prevalence]
     
