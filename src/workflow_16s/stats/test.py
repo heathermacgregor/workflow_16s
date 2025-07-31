@@ -54,7 +54,7 @@ def k_means(
 
     Returns:
     """
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     table_with_column = merge_table_with_meta(df, metadata, group_column)
     
     kmeans = KMeans(
@@ -92,7 +92,7 @@ def ttest(
     Returns:
         DataFrame with significant features (p < Bonferroni-corrected threshold).
     """
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     table_with_column = merge_table_with_meta(df, metadata, group_column)
     
     results = []
@@ -173,7 +173,7 @@ def mwu_bonferroni(
     Returns:
         Results with p-values below Bonferroni-corrected threshold.
     """
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     table_with_column = merge_table_with_meta(df, metadata, group_column)
     
     # Total features tested (for Bonferroni)
@@ -269,7 +269,7 @@ def fisher_exact_bonferroni(
         corrected threshold)
     """
     # Convert to DataFrame and merge with metadata
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     # Total features for Bonferroni correction
@@ -373,7 +373,7 @@ def kruskal_bonferroni(
     Returns:
         DataFrame with significant features after Bonferroni correction.
     """
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
@@ -465,7 +465,7 @@ def anova(
           explained by groups. Values range from 0 to 1, with higher values 
           indicating stronger group separation.
     """
-    df, metadata = validate_inputs(table, metadata, group_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
     merged = merge_table_with_meta(df, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
@@ -545,7 +545,7 @@ def spearman_correlation(
     Returns:
         DataFrame with correlation results.
     """
-    df, metadata = validate_inputs(table, metadata, continuous_column)
+    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, continuous_column)
     merged = merge_table_with_meta(df, metadata, continuous_column)
     
     results = []
