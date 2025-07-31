@@ -183,7 +183,7 @@ class Downstream:
             logger.info(f"- {rec}")
 
         # Run all advanced analyses
-        results = stats_analysis.run_comprehensive_analysis(
+        results = stats.run_comprehensive_analysis(
             prevalence_threshold=0.8,
             abundance_threshold=0.01,
             continuous_variables=['ph', 'facility_distance_km'],
