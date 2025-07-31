@@ -1072,7 +1072,7 @@ class StatisticalAnalysis:
         self.results: Dict = {}
         for group_column in self.group_columns:
             col = group_column['name']
-            vals = group_column['values'] if group_column['values'] else [True, False] if group_column['type'] == 'bool'
+            vals = group_column['values'] if group_column['values'] else [True, False] if group_column['type'] == 'bool' else None
             self.results[group_column['name']] = self._run_for_group(col, vals)
 
     def _run_for_group(
