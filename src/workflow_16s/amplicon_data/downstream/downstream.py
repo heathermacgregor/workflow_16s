@@ -162,6 +162,25 @@ class Downstream:
             group_columns=self.group_columns,
             project_dir=self.project_dir
         )
+        # Check for configuration issues
+        issues = stats_analysis.validate_configuration()
+        if issues['errors']:
+            print("Configuration errors:")
+            for error in issues['errors']:
+                print(f"  - {error}")
+
+        # Get summary statistics
+        summary = stats_analysis.get_summary_statistics()
+        print(f"Total tests run: {summary['total_tests_run']}")
+        
+        # Get top features across all tests
+        top_features = stats_analysis.get_top_features_across_tests(n_features=20)
+        print(top_features)
+        
+        # Get analysis recommendations
+        recommendations = stats_analysis.get_analysis_recommendations()
+        for rec in recommendations:
+            print(f"- {rec}")
         return stats.results
 
     def _alpha_diversity(self):
