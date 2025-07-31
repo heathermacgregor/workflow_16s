@@ -14,7 +14,8 @@ from biom.table import Table
 from workflow_16s import constants
 from workflow_16s.amplicon_data.downstream.input import update_table_and_metadata
 from workflow_16s.utils.data import (
-    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df
+    clr, collapse_taxa, filter, normalize, presence_absence, table_to_df,
+    merge_table_with_meta
 )
 from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
@@ -1023,7 +1024,7 @@ def microbiome_age_prediction(
     }
 
 
-def get_group_column_values(group_column_info, metadata):
+def get_group_column_values(group_column, metadata):
     col = group_column['name']
     if group_column_info['values']:
         return group_column_info['values']
