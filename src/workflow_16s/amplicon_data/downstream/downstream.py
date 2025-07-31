@@ -163,24 +163,24 @@ class Downstream:
             project_dir=self.project_dir
         )
         # Check for configuration issues
-        issues = stats_analysis.validate_configuration()
+        issues = stats.validate_configuration()
         if issues['errors']:
-            print("Configuration errors:")
+            logger.error("Configuration errors:")
             for error in issues['errors']:
-                print(f"  - {error}")
+                logger.error(f"  - {error}")
 
         # Get summary statistics
-        summary = stats_analysis.get_summary_statistics()
-        print(f"Total tests run: {summary['total_tests_run']}")
+        summary = stats.get_summary_statistics()
+        logger.info(f"Total tests run: {summary['total_tests_run']}")
         
         # Get top features across all tests
-        top_features = stats_analysis.get_top_features_across_tests(n_features=20)
-        print(top_features)
+        top_features = stats.get_top_features_across_tests(n_features=20)
+        logger.info(top_features)
         
         # Get analysis recommendations
-        recommendations = stats_analysis.get_analysis_recommendations()
+        recommendations = stats.get_analysis_recommendations()
         for rec in recommendations:
-            print(f"- {rec}")
+            logger.info(f"- {rec}")
         return stats.results
 
     def _alpha_diversity(self):
