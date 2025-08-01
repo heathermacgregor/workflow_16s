@@ -434,6 +434,12 @@ class StatisticalAnalysis:
                     if var not in metadata.columns:
                         continue
                     
+                    # Filter out samples with missing values
+                    metadata = metadata.dropna(subset=[var])
+                    if len(metadata) < 5:  # Require min samples
+                        logger.warning(f"Skipping {var}/{table_type}/{level}: only {len(metadata)} valid samples")
+                        continue
+                    
                     table = self.tables[table_type][level]
                     table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
                     
