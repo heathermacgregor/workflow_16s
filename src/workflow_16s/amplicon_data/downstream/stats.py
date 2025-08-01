@@ -299,36 +299,45 @@ class StatisticalAnalysis:
         for group_column in self.group_columns:
             col = group_column['name']
             core_results[col] = {}
-            
-            for table_type in self.tables:
-                for level in self.tables[table_type]:
-                    table = self.tables[table_type][level]
-                    metadata = self.metadata[table_type][level]
-                    table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
-                    
-                    try:
-                        core_features = core_microbiome(
-                            table=table_aligned,
-                            metadata=metadata_aligned,
-                            group_column=col,
-                            prevalence_threshold=prevalence_threshold,
-                            abundance_threshold=abundance_threshold
+            with get_progress_bar() as progress:
+                main_desc = f"Running core microbiome analysis for '{group_column}'"
+                main_task = progress.add_task(_format_task_desc(main_desc), total=len(self.tables) * len(self.tables['raw']))
+                for table_type in self.tables:
+                    for level in self.tables[table_type]:
+                        level_desc = (
+                            f"{table_type.replace('_', ' ').title()} ({level.title()})"
                         )
+                        progress.update(main_task, description=_format_task_desc(level_desc))
+                        table = self.tables[table_type][level]
+                        metadata = self.metadata[table_type][level]
+                        table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
                         
-                        _init_dict_level(core_results, col, table_type, level)
-                        core_results[col][table_type][level] = core_features
-                        
-                        # Save results
-                        output_dir = self.project_dir.final / 'core_microbiome' / col / table_type / level
-                        output_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        for group, core_df in core_features.items():
-                            output_path = output_dir / f'core_features_{group}.tsv'
-                            core_df.to_csv(output_path, sep='\t', index=False)
+                        try:
+                            core_features = core_microbiome(
+                                table=table_aligned,
+                                metadata=metadata_aligned,
+                                group_column=col,
+                                prevalence_threshold=prevalence_threshold,
+                                abundance_threshold=abundance_threshold
+                            )
                             
-                    except Exception as e:
-                        logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
-        
+                            _init_dict_level(core_results, col, table_type, level)
+                            core_results[col][table_type][level] = core_features
+                            
+                            # Save results
+                            output_dir = self.project_dir.final / 'core_microbiome' / col / table_type / level
+                            output_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            for group, core_df in core_features.items():
+                                output_path = output_dir / f'core_features_{group}.tsv'
+                                core_df.to_csv(output_path, sep='\t', index=False)
+                                
+                        except Exception as e:
+                            logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
+                        finally:
+                            progress.update(stats_task, advance=1)
+                    
+                progress.update(stats_task, description=_format_task_desc(stats_desc))
         self.advanced_results['core_microbiome'] = core_results
         return core_results
 
