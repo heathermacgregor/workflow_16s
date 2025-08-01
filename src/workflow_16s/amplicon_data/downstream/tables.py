@@ -59,30 +59,38 @@ class PrepData:
         self._save_tables()
 
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
+        # Get base level from mode config (e.g. "asv" or "genus")
+        base_level = self.ModeConfig[self.mode][0]
+        base_table = self.tables.setdefault(table_type, {}).get(base_level)
+        base_metadata = self.metadata.setdefault(table_type, {}).get(base_level)
+
+        if base_table is None or base_metadata is None:
+            raise ValueError(
+                f"Missing base table or metadata for {base_level} level in {table_type}"
+            )
+
         with get_progress_bar() as progress:
             ct_desc = "Collapsing taxonomy"
             ct_task = progress.add_task(_format_task_desc(ct_desc), total=len(constants.levels))   
             for level in constants.levels:
+                # Use level-specific description
                 level_desc = f"{ct_desc} {table_type} → {level.title()}"
                 progress.update(ct_task, description=_format_task_desc(level_desc))
-                try:
-                    base_table = self.tables.setdefault(table_type, {}).get("genus")
-                    base_metadata = self.metadata.setdefault(table_type, {}).get("genus")
-
-                    if base_table is None or base_metadata is None:
-                        raise ValueError(f"Missing base table or metadata for genus level in {table_type}")
-
+                
+                if level == base_level:
+                    # Use base table directly without collapsing
+                    table = base_table
+                    metadata = base_metadata
+                else:
+                    # Collapse from base table to target level
                     table = collapse_taxa(base_table, level, progress, ct_task)
                     table, metadata = update_table_and_metadata(table, base_metadata)
 
-                    self.tables.setdefault(table_type, {})[level] = table
-                    self.metadata.setdefault(table_type, {})[level] = metadata
-                except Exception as e:
-                    logger.error(f"Taxonomic collapse failed for {level}: {e}")
-                    self.tables.setdefault(table_type, {})[level] = None
-                    self.metadata.setdefault(table_type, {})[level] = None
-                finally:
-                    progress.update(ct_task, advance=1)
+                # Store results
+                self.tables.setdefault(table_type, {})[level] = table
+                self.metadata.setdefault(table_type, {})[level] = metadata
+                progress.update(ct_task, advance=1)
+                
             progress.update(ct_task, description=_format_task_desc(ct_desc))
 
     def _apply_preprocessing(self, level: str) -> None:
