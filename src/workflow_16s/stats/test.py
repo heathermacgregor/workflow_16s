@@ -532,7 +532,7 @@ def spearman_correlation(
     metadata: pd.DataFrame,
     continuous_column: str,
     alpha: float = 0.01,
-    min_samples: int = 10000  # New parameter to enforce minimum sample size
+    min_samples: int = 1 # New parameter to enforce minimum sample size
 ) -> pd.DataFrame:
     """Spearman correlations with enhanced missing value handling."""
     df = table_to_df(table)
@@ -544,6 +544,8 @@ def spearman_correlation(
     
     # Check for sufficient non-missing values
     non_missing_count = metadata[continuous_column].notna().sum()
+    print(non_missing_count)
+    print(metadata[continuous_column])
     if non_missing_count < min_samples:
         logger.error(
             f"Cannot compute correlations for '{continuous_column}': "
