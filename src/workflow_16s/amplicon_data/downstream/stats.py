@@ -335,9 +335,9 @@ class StatisticalAnalysis:
                         except Exception as e:
                             logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
                         finally:
-                            progress.update(stats_task, advance=1)
+                            progress.update(main_task, advance=1)
                     
-                progress.update(stats_task, description=_format_task_desc(stats_desc))
+                progress.update(main_task, description=_format_task_desc(stats_desc))
         self.advanced_results['core_microbiome'] = core_results
         return core_results
 
