@@ -48,7 +48,7 @@ class Maps:
 
     def generate_sample_maps(
         self, 
-        nfc_facility_data: Optional[pd.DataFrame] = None,
+        nfc_facility_data: pd.DataFrame = None,
         **kwargs
     ) -> Dict[str, Any]:
         if 'nfc_facility_data' in kwargs:
