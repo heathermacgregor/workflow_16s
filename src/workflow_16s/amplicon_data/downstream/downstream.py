@@ -138,7 +138,7 @@ class Downstream:
         return data.metadata, data.tables
 
     def _run_analysis(self):
-        self.maps = self._plot_sample_maps()
+        #self.maps = self._plot_sample_maps()
         self.stats = self._stats()
         self.alpha_diversity = self._alpha_diversity()
         self.beta_diversity = self._beta_diversity()
