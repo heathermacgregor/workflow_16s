@@ -21,10 +21,6 @@ from biom.table import Table
 # ================================== LOCAL IMPORTS =================================== #
 
 from workflow_16s import constants
-from workflow_16s.amplicon_data.alpha_diversity import AlphaDiversity
-from workflow_16s.amplicon_data.beta_diversity import Ordination
-from workflow_16s.amplicon_data.feature_selection import FeatureSelection
-from workflow_16s.amplicon_data.maps import Maps
 from workflow_16s.amplicon_data.statistical_analyses import (
     run_statistical_tests_for_group, TopFeaturesAnalyzer
 )
@@ -33,7 +29,11 @@ from workflow_16s.function.faprotax import (
     faprotax_functions_for_taxon, get_faprotax_parsed
 )
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+from workflow_16s.amplicon_data.downstream.alpha import AlphaDiversity
+from workflow_16s.amplicon_data.downstream.beta import Ordination
+from workflow_16s.amplicon_data.downstream.feature_selection import FeatureSelection
 from workflow_16s.amplicon_data.downstream.input import DownstreamDataLoader as InputData
+from workflow_16s.amplicon_data.downstream.maps import Maps
 from workflow_16s.amplicon_data.downstream.tables import PrepData 
 from workflow_16s.amplicon_data.downstream.stats import StatisticalAnalysis
 
@@ -122,6 +122,7 @@ class Downstream:
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
+        logger.info(sorted(list(self.metadata["raw"]["genus"].columns)))
         self.metadata, self.tables = self._prep_data()
         self._run_analysis()
         
