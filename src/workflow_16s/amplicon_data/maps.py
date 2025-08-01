@@ -61,7 +61,12 @@ class Maps:
         if not self.maps_config.get('enabled', False):
             return {}
         color_columns = self.color_columns
-        if nfc_facility_data:
+        # Safely check for valid facilities data
+        has_valid_facility_data = (
+            nfc_facility_data is not None 
+            and not nfc_facility_data.empty
+        )
+        if has_valid_facility_data:
             color_columns.append('facility_match')
         meta = self.meta
         valid_columns = [col for col in color_columns if col in meta]
