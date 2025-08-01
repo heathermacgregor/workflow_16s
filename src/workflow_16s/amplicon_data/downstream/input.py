@@ -33,6 +33,74 @@ logger = logging.getLogger("workflow_16s")
 
 # ================================= DEFAULT VALUES =================================== #
 
+def collapse_ena_columns(df, ena_suffix='_ena'):
+    # Create a copy of the DataFrame to avoid modifying the original
+    new_df = df.copy()
+    
+    # Identify all columns ending with the suffix
+    ena_columns = [col for col in new_df.columns if col.endswith(ena_suffix)]
+    
+    # Sort columns by length in descending order to handle nested suffixes
+    ena_columns_sorted = sorted(ena_columns, key=len, reverse=True)
+    
+    for ena_col in ena_columns_sorted:
+        # Skip if the column is exactly the suffix (e.g., '_ena')
+        if ena_col == ena_suffix:
+            continue
+        
+        # Determine the base column name by removing the suffix
+        base_col = ena_col[:-len(ena_suffix)]
+        
+        if base_col in new_df.columns:
+            # Combine values: prioritize base_col, fill missing from ena_col
+            new_df[base_col] = new_df[base_col].combine_first(new_df[ena_col])
+        else:
+            # Create base_col from ena_col if it doesn't exist
+            new_df[base_col] = new_df[ena_col]
+        
+        # Drop the ena_col after processing
+        new_df = new_df.drop(columns=[ena_col])
+    
+    return new_df
+
+def collapse_ph_columns(df):
+    """
+    Collapses all columns in the dataframe that start with 'ph' followed by a non-alphabet character or exactly 'ph'
+    into a single 'ph' column. The first non-null value from these columns is retained for each row.
+    
+    Parameters:
+    df (pd.DataFrame): Input dataframe
+    
+    Returns:
+    pd.DataFrame: Dataframe with 'ph' columns collapsed into a single 'ph' column
+    """
+    # Compile regex pattern to match columns starting with 'ph' followed by non-alphabet or exactly 'ph'
+    pattern = re.compile(r'^ph[^a-zA-Z]|^ph$')
+    ph_columns = [col for col in df.columns if pattern.match(col)]
+    
+    # Return original dataframe if no ph_columns found
+    if not ph_columns:
+        return df
+    
+    # Prioritize exact 'ph' column if present
+    if 'ph' in ph_columns:
+        ph_columns.remove('ph')
+        ph_columns = ['ph'] + sorted(ph_columns)
+    else:
+        ph_columns = sorted(ph_columns)
+    
+    # Create a temporary DataFrame with the selected columns
+    temp_df = df[ph_columns]
+    
+    # Backfill values along rows and take the first column to get the first non-null value
+    new_ph = temp_df.bfill(axis=1).iloc[:, 0]
+    
+    # Drop original ph_columns and add the new coalesced column
+    df = df.drop(columns=ph_columns)
+    df['ph'] = new_ph
+    
+    return df
+
 def check_coordinate_completeness(df):
     """
     Check completeness of latitude and longitude coordinates in a DataFrame.
@@ -588,6 +656,8 @@ class DownstreamDataLoader:
             metadata = metadata.loc[:, ~metadata.columns.duplicated()]
         # Attempt to fill in missing latitude/longitude
         metadata = fill_missing_coordinates(metadata)
+        metadata = collapse_ph_columns(metadata)
+        metadata = collapse_ena_columns(metadata)
         return metadata
 
     def _find_metadata_paths(self, table_level, table_dir) -> List[Path]:
