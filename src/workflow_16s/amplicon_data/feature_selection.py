@@ -117,48 +117,66 @@ class FeatureSelection:
                 output_dir.mkdir(parents=True, exist_ok=True)
     
                 try:
-                    if debug_mode:
-                        time.sleep(3)
-                        return
-                    if table_type == "clr_transformed" and method == "chi_squared":
-                        logger.warning(
-                            "Skipping chi_squared feature selection for CLR data."
-                        )
-                        data_storage[method] = None
+                    # Define output files
+                    selected_features_file = output_dir / 'selected_features.csv'
+                    feature_importances_file = output_dir / 'feature_importances.csv'
+                    
+                    # Check if output files exist
+                    if selected_features_file.exists() and feature_importances_file.exists():
+                        logger.info(f"Skipping {method} for {table_type}/{level} - output exists")
+                        selected_features = pd.read_csv(selected_features_file, index_col=0).index.tolist()
+                        feature_importances = pd.read_csv(feature_importances_file, index_col=0)
+                        model_result = {
+                            'selected_features': selected_features,
+                            'feature_importances': feature_importances,
+                            'figures': None  # Mark as loaded from disk
+                        }
                     else:
-                        table = self.tables[table_type][level]
-                        X = table_to_df(table)
-                        X.index = X.index.str.lower()
-                        y = self.meta.set_index("#sampleid")[[self.group_column]]
-                        y.index = y.index.astype(str).str.lower()
-                        idx = X.index.intersection(y.index)
-                        X, y = X.loc[idx], y.loc[idx]
+                        if debug_mode:
+                            time.sleep(3)
+                            model_result = None
+                        elif table_type == "clr_transformed" and method == "chi_squared":
+                            logger.warning(
+                                "Skipping chi_squared feature selection for CLR data."
+                            )
+                            model_result = None
+                        else:
+                            table = self.tables[table_type][level]
+                            X = table_to_df(table)
+                            X.index = X.index.str.lower()
+                            y = self.meta.set_index("#sampleid")[[self.group_column]]
+                            y.index = y.index.astype(str).str.lower()
+                            idx = X.index.intersection(y.index)
+                            X, y = X.loc[idx], y.loc[idx]
 
-                        use_permutation_importance = False if method == "select_k_best" else self.permutation_importance
+                            use_permutation_importance = False if method == "select_k_best" else self.permutation_importance
+                                        
+                            model_result = catboost_feature_selection(
+                                metadata=y,
+                                features=X,
+                                output_dir=output_dir,
+                                group_col=self.group_column,
+                                method=method,
+                                n_top_features=self.n_top_features,
+                                step_size=self.step_size,
+                                use_permutation_importance=use_permutation_importance,
+                                thread_count=self.n_threads,
+                                progress=progress, 
+                                task_id=cb_task,
+                            )
                                     
-                        model_result = catboost_feature_selection(
-                            metadata=y,
-                            features=X,
-                            output_dir=output_dir,
-                            group_col=self.group_column,
-                            method=method,
-                            n_top_features=self.n_top_features,
-                            step_size=self.step_size,
-                            use_permutation_importance=use_permutation_importance,
-                            thread_count=self.n_threads,
-                            progress=progress, 
-                            task_id=cb_task,
-                        )
-                                
-                        # Log if no figures were generated
-                        if not any(model_result['figures'].values()):
-                            logger.warning(f"No figures generated for {table_type}/{level}/{method}")
-                                
-                        data_storage[method] = model_result
+                    # Store results
+                    data_storage[method] = model_result
+                    
+                    # Log if no figures were generated (only for newly run models)
+                    if (model_result is not None and 
+                        model_result.get('figures') is not None and 
+                        not any(model_result['figures'].values())):
+                        logger.warning(f"No figures generated for {table_type}/{level}/{method}")
                                     
                 except Exception as e:
                     logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
-                    data_storage = None
+                    data_storage[method] = None
                                 
                 finally:
                     progress.update(cb_task, advance=1)
