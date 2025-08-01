@@ -76,7 +76,7 @@ class AlphaDiversity:
         output_dir: Optional[Path] = None,
     ) -> None:
         self.run_for_col(self.group_column, output_dir)
-        if 'facility_match' in self.meta.columns:
+        if 'facility_match' in self.metadata.columns:
             self.run_for_col('facility_match', output_dir)
             
     def run_for_col(
