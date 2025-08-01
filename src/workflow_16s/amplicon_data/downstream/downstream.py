@@ -122,6 +122,8 @@ class Downstream:
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
+        logger.info(self.metadata.keys())
+        logger.info(self.metadata["raw"]["genus"])
         logger.info(sorted(list(self.metadata["raw"]["genus"].columns)))
         self.metadata, self.tables = self._prep_data()
         self._run_analysis()
