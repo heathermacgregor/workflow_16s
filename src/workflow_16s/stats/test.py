@@ -532,40 +532,37 @@ def spearman_correlation(
     metadata: pd.DataFrame,
     continuous_column: str,
     alpha: float = 0.01,
-    min_samples: int = 1 # New parameter to enforce minimum sample size
+    min_samples: int = 5
 ) -> pd.DataFrame:
-    """Spearman correlations with enhanced missing value handling."""
+    """Spearman correlations with type validation and conversion"""
     df = table_to_df(table)
     
-    # Validate continuous column presence
+    # Validate continuous column
     if continuous_column not in metadata.columns:
-        logger.error(f"Continuous column '{continuous_column}' not found in metadata")
+        logger.error(f"Column '{continuous_column}' not found in metadata")
         return pd.DataFrame()
     
-    # Check for sufficient non-missing values
+    # Check sufficient non-missing values
     non_missing_count = metadata[continuous_column].notna().sum()
-    print(non_missing_count)
-    print(metadata[continuous_column])
     if non_missing_count < min_samples:
-        logger.error(
-            f"Cannot compute correlations for '{continuous_column}': "
-            f"Only {non_missing_count} non-missing values (min_samples={min_samples})"
-        )
+        logger.error(f"Only {non_missing_count} valid values for '{continuous_column}'")
         return pd.DataFrame()
     
-    # Merge with explicit handling of missing values
     try:
         merged = merge_table_with_meta(df, metadata, continuous_column)
-        # Drop samples missing the continuous variable
         merged = merged.dropna(subset=[continuous_column])
     except KeyError as e:
         logger.error(f"Merge error: {str(e)}")
         return pd.DataFrame()
     
-    # Log sample size information
     logger.info(
         f"Correlation analysis for '{continuous_column}': "
         f"{len(merged)} samples with valid data"
+    )
+    
+    # Convert continuous variable to numeric
+    merged[continuous_column] = pd.to_numeric(
+        merged[continuous_column], errors='coerce'
     )
     
     results = []
@@ -573,16 +570,26 @@ def spearman_correlation(
         merged.columns.drop(continuous_column), 
         desc=f"Correlations for {continuous_column}"
     ):
+        # Convert feature to numeric
+        merged[feature] = pd.to_numeric(merged[feature], errors='coerce')
+        
+        # Skip non-numeric features
+        if not pd.api.types.is_numeric_dtype(merged[feature]):
+            logger.warning(f"Skipping non-numeric feature: {feature}")
+            continue
+            
         # Pairwise complete observations
         valid_idx = merged[[feature, continuous_column]].dropna().index
         n_valid = len(valid_idx)
         
         if n_valid < min_samples:
-            continue  # Skip features with insufficient data
+            continue
             
-        subset = merged.loc[valid_idx]
         try:
-            rho, p_val = spearmanr(subset[feature], subset[continuous_column])
+            rho, p_val = spearmanr(
+                merged.loc[valid_idx, feature], 
+                merged.loc[valid_idx, continuous_column]
+            )
             results.append({
                 'feature': feature,
                 'rho': rho,
@@ -590,27 +597,19 @@ def spearman_correlation(
                 'n_samples': n_valid
             })
         except Exception as e:
-            logger.warning(f"Failed correlation for {feature}: {str(e)}")
+            logger.warning(f"Correlation failed for {feature}: {str(e)}")
     
     if not results:
-        logger.warning("No valid correlations computed")
         return pd.DataFrame()
     
     result_df = pd.DataFrame(results)
-    
-    # Multiple testing correction
     result_df['p_adj'] = result_df['p_value'] * len(result_df)
-    result_df['p_adj'] = result_df['p_adj'].clip(upper=1.0)  # Cap at 1.0
-    
-    # Filter significant results
+    result_df['p_adj'] = result_df['p_adj'].clip(upper=1.0)
     sig_df = result_df[result_df['p_adj'] <= alpha].sort_values(
         'rho', key=abs, ascending=False
     )
     
-    logger.info(
-        f"Found {len(sig_df)} significant correlations for '{continuous_column}' "
-        f"(α={alpha}, min_samples={min_samples})"
-    )
+    logger.info(f"Found {len(sig_df)} significant correlations")
     return sig_df
 
 
