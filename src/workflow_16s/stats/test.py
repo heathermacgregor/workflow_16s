@@ -532,7 +532,7 @@ def spearman_correlation(
     metadata: pd.DataFrame,
     continuous_column: str,
     alpha: float = 0.01,
-    min_samples: int = 10  # New parameter to enforce minimum sample size
+    min_samples: int = 10000  # New parameter to enforce minimum sample size
 ) -> pd.DataFrame:
     """Spearman correlations with enhanced missing value handling."""
     df = table_to_df(table)
