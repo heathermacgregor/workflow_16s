@@ -174,7 +174,7 @@ def alpha_diversity(
 
     # Compute each metric for all samples
     for metric in metrics:
-        if metric in PHYLO_METRICS and tree is None:
+        if metric in constants.PHYLO_METRICS and tree is None:
             logger.warning(f"Skipping {metric} - phylogenetic tree not provided")
             continue
             
