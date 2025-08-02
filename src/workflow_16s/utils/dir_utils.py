@@ -41,7 +41,7 @@ class SubDirs:
         self.raw_seq_data_per_dataset = self.seq_data_per_dataset / 'raw'
         self.trimmed_seq_data_per_dataset = self.seq_data_per_dataset / 'trimmed'
         self.qiime_data_per_dataset = self.data_per_dataset / 'qiime'
-        self.final = self.main / 'final_for_adam'
+        self.final = self.main / 'final_2'
         self.tables = self.final / 'tables'
         self.figures = self.final / 'figures'
         self.create_dirs()
