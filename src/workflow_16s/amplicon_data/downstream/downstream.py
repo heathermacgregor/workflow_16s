@@ -205,14 +205,14 @@ class Downstream:
         return alpha.results
 
     def _beta_diversity(self):
-        if not self.config.get("beta_diversity", {}).get('enabled', False):
+        if not self.config.get("ordination", {}).get('enabled', False):
             return
         beta = Ordination(self.config, self.metadata, self.tables, self.verbose)
         beta.run(output_dir=self.output_dir)
         return beta.results
 
     def _catboost_feature_selection(self):
-        if not self.config.get("machine_learning", {}).get('enabled', False):
+        if not self.config.get("ml", {}).get('enabled', False):
             return
         cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
         cb.run(output_dir=self.output_dir)
