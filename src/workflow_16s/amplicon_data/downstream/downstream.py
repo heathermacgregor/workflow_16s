@@ -108,7 +108,7 @@ class Downstream:
         self.maps: Optional[Dict[str, Any]] = None
         self.stats: Optional[Dict[str, Any]] = None
         self.alpha_diversity: Optional[Dict[str, Any]] = None
-        self.beta_diversity: Optional[Dict[str, Any]] = None
+        self.ordination: Optional[Dict[str, Any]] = None
         self.most_important_features: Optional[Dict[str, Any]] = None
         self.catboost_models: Optional[Dict[str, Any]] = None
         
@@ -139,9 +139,13 @@ class Downstream:
 
     def _run_analysis(self):
         #self.maps = self._plot_sample_maps()
+        logger.info("Stats")
         self.stats = self._stats()
+        logger.info("Alpha")
         self.alpha_diversity = self._alpha_diversity()
-        self.beta_diversity = self._beta_diversity()
+        logger.info("Beta")
+        self.ordination = self._beta_diversity()
+        logger.info("ML")
         self.catboost_models = self._catboost_feature_selection()
 
     def _plot_sample_maps(self):
