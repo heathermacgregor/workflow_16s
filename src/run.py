@@ -305,7 +305,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
     verbose = False
     try:
-       
+        """
         amplicon_data = Downstream(
             config=config,
             project_dir=project_dir,
@@ -321,7 +321,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
             existing_subsets=existing_subsets,
             verbose=verbose        
         )
-         """
+         
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
