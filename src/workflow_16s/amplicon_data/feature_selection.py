@@ -129,18 +129,16 @@ class FeatureSelection:
                     else:
                         # Define required files for this task
                         required_files = [
-                            output_dir / method / "results.json",
                             output_dir / method / "best_model.cbm",
                             output_dir / method / "feature_importances.csv",
                             output_dir / method / "grid_search_results.csv",
-                            output_dir / method / "best_confusion_matrix.png",
-                            output_dir / method / "best_roc_curve.png",
-                            output_dir / method / "best_precision_recall_curve.png",
-                            output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.png",
-                            output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.png",
-                            output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.png",
-                            output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.png",
-                            output_dir / method / "figs" / f"shap.summary.waterfall.{self.n_top_features}.png",
+                            output_dir / method / "best_confusion_matrix.html",
+                            output_dir / method / "best_roc_curve.html",
+                            output_dir / method / "best_precision_recall_curve.html",
+                            output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
+                            output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
+                            output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
+                            output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
                         ]
                         
                         # Check if all files exist
@@ -148,24 +146,40 @@ class FeatureSelection:
                         
                         if all_files_exist:
                             logger.info(f"Loading existing results for {table_type}/{level}/{method}")
-                            # Load results from JSON
-                            with open(output_dir / method / "results.json", 'r') as f:
-                                result = json.load(f)
                             
-                            # Create dummy figures dict to satisfy checks
-                            result['figures'] = {
-                                'roc': True,
-                                'prc': True,
-                                'confusion_matrix': True,
-                                'shap_summary_bar': True,
-                                'shap_summary_beeswarm': True,
-                                'shap_summary_heatmap': True,
-                                'shap_summary_force': True,
-                                'shap_dependency': True
+                            # Load CatBoost model
+                            model = cb.CatBoostClassifier()
+                            model.load_model(str(output_dir / method / "best_model.cbm"))
+                            
+                            # Load feature importances
+                            feature_importances = pd.read_csv(output_dir / method / "feature_importances.csv")
+                            
+                            # Load grid search results
+                            grid_search_results = pd.read_csv(output_dir / method / "grid_search_results.csv")
+                            
+                            # Create figures dictionary with HTML content
+                            figures = {
+                                'confusion_matrix': (output_dir / method / "best_confusion_matrix.html").read_text(),
+                                'roc': (output_dir / method / "best_roc_curve.html").read_text(),
+                                'prc': (output_dir / method / "best_precision_recall_curve.html").read_text(),
+                                'shap_summary_bar': (output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
+                                'shap_summary_beeswarm': (output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
+                                'shap_summary_heatmap': (output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
+                                'shap_summary_force': (output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
+                                'shap_dependency': None  # Placeholder
+                            }
+                            
+                            # Create result dictionary
+                            result = {
+                                'model': model,
+                                'feature_importances': feature_importances,
+                                'grid_search_results': grid_search_results,
+                                'figures': figures
                             }
                             
                             data_storage[method] = result
                         else:
+                            logger.info(f"Running model for {table_type}/{level}/{method}")
                             # Run model normally if files are missing
                             table = self.tables[table_type][level]
                             X = table_to_df(table)
