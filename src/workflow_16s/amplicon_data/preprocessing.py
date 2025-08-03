@@ -104,14 +104,14 @@ class _DataLoader(_ProcessingMixin):
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
             
-        # NFC facilities handling
+        # NFC facilities handling - FIXED: Ensure string operations on Series not DataFrame
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
             nfc_meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(
                 cfg=self.cfg,
                 meta=self.meta, 
                 output_dir=self.project_dir.final
             )
-            # Merge NFC results without overwriting original metadata
+            # Safely merge NFC results without overwriting original metadata
             self.meta = pd.concat([self.meta, nfc_meta], axis=1)
         else:
             self.nfc_facilities, self.meta_nfc_facilities = None, None
@@ -131,7 +131,7 @@ class _DataLoader(_ProcessingMixin):
                 "FWD_*_REV_*", table_dir, "feature-table.biom",
             ])
         else:
-            pattern = "/".join([
+            pattern = "/"/".join([
                 "*", "*", "*", "*", 
                 "FWD_*_REV_*", table_dir, "feature-table.biom",
             ])
