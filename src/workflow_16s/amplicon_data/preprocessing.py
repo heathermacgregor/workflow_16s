@@ -4,7 +4,7 @@
 import glob
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -38,7 +38,6 @@ class _DataLoader(_ProcessingMixin):
         "asv": ("table", "asv"), 
         "genus": ("table_6", "l6")
     }
-    TAXONOMY_LEVELS = ["phylum", "class", "order", "family", "genus"]
 
     def __init__(
         self, 
@@ -70,7 +69,7 @@ class _DataLoader(_ProcessingMixin):
         metadata_paths = [paths["metadata"] 
                           for subset_id, paths in self.existing_subsets.items()]
         if self.verbose:
-            logger.info(f"Found {len(metadata_paths)} metadata files")
+            (f"Found {len(metadata_paths)} metadata files")
         return metadata_paths
 
     def _get_metadata_paths_glob(self) -> List[Path]:
@@ -88,7 +87,7 @@ class _DataLoader(_ProcessingMixin):
         return paths
 
     def _load_metadata(self) -> None:
-        if self.existing_subsets is None:
+        if self.existing_subsets == None:
             paths = self._get_metadata_paths_glob()
         else:
             paths = self._get_metadata_paths()
@@ -104,15 +103,13 @@ class _DataLoader(_ProcessingMixin):
             )
             self.meta = self.meta.loc[:, ~self.meta.columns.duplicated()]
             
-        # NFC facilities handling - FIXED: Ensure string operations on Series not DataFrame
+        # If enabled, find samples within a threshold distance from NFC facilities
         if self.cfg.get("nfc_facilities", {}).get("enabled", False):
-            nfc_meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(
+            self.meta, self.nfc_facilities, self.meta_nfc_facilities = find_nearby_nfc_facilities(
                 cfg=self.cfg,
                 meta=self.meta, 
                 output_dir=self.project_dir.final
             )
-            # Safely merge NFC results without overwriting original metadata
-            self.meta = pd.concat([self.meta, nfc_meta], axis=1)
         else:
             self.nfc_facilities, self.meta_nfc_facilities = None, None
             
@@ -131,7 +128,7 @@ class _DataLoader(_ProcessingMixin):
                 "FWD_*_REV_*", table_dir, "feature-table.biom",
             ])
         else:
-            pattern = "/"/".join([
+            pattern = "/".join([
                 "*", "*", "*", "*", 
                 "FWD_*_REV_*", table_dir, "feature-table.biom",
             ])
@@ -143,7 +140,7 @@ class _DataLoader(_ProcessingMixin):
         return [Path(p) for p in globbed]
 
     def _load_biom_table(self) -> None:
-        if self.existing_subsets is None:
+        if self.existing_subsets == None:
             biom_paths = self._get_biom_paths_glob()
         else:
             biom_paths = self._get_biom_paths()
@@ -151,17 +148,6 @@ class _DataLoader(_ProcessingMixin):
         if not biom_paths:
             raise FileNotFoundError("No BIOM files found")
         self.table = import_merged_table_biom(biom_paths, "table", self.verbose)
-        
-        # Validate genus-level table format
-        if self.mode == "genus":
-            obs_ids = self.table.ids(axis='observation')
-            if obs_ids.size > 0:
-                first_id = obs_ids[0]
-                if not first_id.startswith('g__'):
-                    logger.warning(
-                        f"First feature ID in genus table: '{first_id}' "
-                        "doesn't start with 'g__'. May not be genus-level."
-                    )
     
     def _filter_and_align(self) -> None:
         self.table, self.meta = update_table_and_meta(
@@ -182,8 +168,6 @@ class _DataLoader(_ProcessingMixin):
 class _TableProcessor(_ProcessingMixin):
     """Processes feature tables through various transformations and taxonomical collapses."""
     
-    TAXONOMY_LEVELS = ["phylum", "class", "order", "family", "genus"]
-    
     def __init__(
         self,
         config: Dict,
@@ -198,6 +182,7 @@ class _TableProcessor(_ProcessingMixin):
         self.project_dir, self.output_dir = project_dir, output_dir
         self.meta = meta
         self.tables: Dict[str, Dict[str, Table]] = {"raw": {mode: table}}
+        self.levels = ["phylum", "class", "order", "family", "genus"]
         
         self._apply_preprocessing()
         self._collapse_taxa()
@@ -221,89 +206,75 @@ class _TableProcessor(_ProcessingMixin):
             self.tables.setdefault("clr_transformed", {})[self.mode] = table
 
     def _collapse_taxa(self) -> None:
-        """Collapses taxonomy only from ASV-level to higher ranks"""
         with get_progress_bar() as progress:
-            total_tasks = len(self.tables) * len(self.TAXONOMY_LEVELS)
-            task = progress.add_task(
-                _format_task_desc("Collapsing taxonomy"), 
-                total=total_tasks
-            )
+            ct_desc = "Collapsing taxonomy"
+            ct_task = progress.add_task(
+                _format_task_desc(ct_desc), 
+                total=len(self.tables) * len(self.levels)
+            )   
             
             for table_type in list(self.tables.keys()):
+                table_desc = f"{table_type.replace('_', ' ').title()}"
+                table_task = progress.add_task(
+                    _format_task_desc(table_desc),
+                    parent=ct_task,
+                    total=len(self.levels)
+                )
+                levels = self.levels
                 base_table = self.tables[table_type][self.mode]
+                logger.info(base_table.shape)
                 processed = {}
-                
-                for level in self.TAXONOMY_LEVELS:
-                    # Update task description
-                    desc = f"{table_type.title()} → {level.title()}"
-                    progress.update(task, description=_format_task_desc(desc))
-                    
-                    # Skip invalid collapses
-                    if self.mode != "asv" and level != "genus":
-                        logger.warning(
-                            f"Skipping {level} collapse - requires ASV input. "
-                            f"Current mode: {self.mode}"
-                        )
-                        processed[level] = None
-                        progress.update(task, advance=1)
-                        continue
-                    
+                if self.mode != "asv":
+                    processed["genus"] = base_table
+                    levels = levels[:-1]
+                for level in levels:
+                    level_desc = f"{table_desc} → {level.title()}"
+                    progress.update(
+                        table_task, 
+                        description=_format_task_desc(level_desc)
+                    )
                     try:
-                        # Handle genus mode differently
-                        if self.mode == "genus" and level == "genus":
-                            processed["genus"] = base_table
-                            if self.verbose:
-                                logger.debug(f"Using existing genus table for {table_type}")
-                        else:
-                            start_time = time.perf_counter()
-                            processed[level] = collapse_taxa(base_table, level)
-                            duration = time.perf_counter() - start_time
-                            if self.verbose:
-                                logger.debug(
-                                    f"Collapsed {table_type} to {level} "
-                                    f"({base_table.shape} → {processed[level].shape}) "
-                                    f"in {duration:.2f}s"
-                                )
+                        start_time = time.perf_counter()
+                        processed[level] = collapse_taxa(
+                            base_table, 
+                            level, 
+                            progress, table_task
+                        )
+                        duration = time.perf_counter() - start_time
+                        logger.debug(
+                            f"Collapsed {table_type} to {level} ({base_table.shape} → {processed[level].shape}) in {duration:.2f}s"
+                        )
                     except Exception as e:
                         logger.error(
                             f"Taxonomic collapse failed for {table_type}/{level}: {e}"
                         )
                         processed[level] = None
                     finally:
-                        progress.update(task, advance=1)
-                
+                        progress.update(table_task, advance=1)
+                        progress.update(ct_task, advance=1)
+                    
                 self.tables[table_type] = processed
+                progress.remove_task(table_task)
     
     def _create_presence_absence(self) -> None:
         if not self.config.get("features", {}).get("presence_absence", False):
             return
-            
         with get_progress_bar() as progress:
-            total_tasks = len(self.TAXONOMY_LEVELS)
-            task = progress.add_task(
-                _format_task_desc("Creating Presence/Absence"),
-                total=total_tasks
+            pa_desc = "Converting to Presence/Absence"
+            pa_task = progress.add_task(
+                _format_task_desc(pa_desc),
+                total=len(self.levels)  
             )
             processed = {}
             
-            for level in self.TAXONOMY_LEVELS:
-                # Skip invalid levels
-                if self.mode != "asv" and level != "genus":
-                    progress.update(task, advance=1)
-                    continue
-                    
-                # Update description
-                desc = f"Presence/Absence → {level.title()}"
-                progress.update(task, description=_format_task_desc(desc))
-                
+            for level in self.levels:
+                level_desc = f"Converting to Presence/Absence → {level.capitalize()}"
+                progress.update(
+                    pa_task, 
+                    description=_format_task_desc(level_desc)
+                )
                 try:
-                    collapsed_table = self.tables["raw"].get(level)
-                    if collapsed_table is None:
-                        logger.warning(
-                            f"No table found for {level}, skipping Presence/Absence"
-                        )
-                        continue
-                        
+                    collapsed_table = self.tables["raw"][level]
                     start_time = time.perf_counter()
                     processed[level] = presence_absence(collapsed_table)
                     duration = time.perf_counter() - start_time
@@ -315,27 +286,30 @@ class _TableProcessor(_ProcessingMixin):
                     logger.error(f"Presence/Absence failed for {level}: {e}")
                     processed[level] = None
                 finally:
-                    progress.update(task, advance=1)
+                    progress.update(pa_task, advance=1)
                 
             self.tables["presence_absence"] = processed
+            progress.update(
+                pa_task, 
+                description=_format_task_desc(pa_desc)
+            )
             
     def _save_tables(self) -> None:
+        # Create directory if it doesn't exist
         base = Path(self.project_dir.data) / "merged" / "table"
         base.mkdir(parents=True, exist_ok=True)
     
+        # Prepare export tasks
         export_tasks = []
         for table_type, levels in self.tables.items():
             tdir = base / table_type
             tdir.mkdir(parents=True, exist_ok=True)
             for level, table in levels.items():
-                # Skip null tables from skipped operations
-                if table is None:
-                    continue
-                    
-                out = tdir / f"{level}.biom"
+                out = tdir / f"{level}.biom"  # Simplified filename
                 out.parent.mkdir(parents=True, exist_ok=True)
                 export_tasks.append((table, out))
     
+        # Use ThreadPoolExecutor for parallel exports
         max_workers = self.config.get("threads", 4)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
@@ -343,6 +317,7 @@ class _TableProcessor(_ProcessingMixin):
                 future = executor.submit(export_h5py, table, out_path)
                 futures[future] = (table_type, level, out_path)
     
+            # Track progress
             with get_progress_bar() as progress:
                 task = progress.add_task(
                     _format_task_desc("Exporting tables"), 
@@ -353,7 +328,9 @@ class _TableProcessor(_ProcessingMixin):
                     try:
                         future.result()
                         if self.verbose:
-                            logger.debug(f"Exported {table_type}/{level} to {out_path}")
+                            logger.debug(
+                                f"Exported {table_type}/{level} to {out_path}"
+                            )
                     except Exception as e:
                         logger.error(f"Failed to export {out_path}: {str(e)}")
                     finally:
