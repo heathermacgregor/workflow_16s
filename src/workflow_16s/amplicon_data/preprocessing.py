@@ -238,7 +238,7 @@ class _TableProcessor(_ProcessingMixin):
                         )
                         duration = time.perf_counter() - start_time
                         logger.debug(
-                            f"Collapsed {table_type} to {level} in {duration:.2f}s"
+                            f"Collapsed {table_type} to {level} ({base_table.shape} → {processed[level].shape}) in {duration:.2f}s"
                         )
                     except Exception as e:
                         logger.error(
