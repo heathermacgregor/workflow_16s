@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
+import catboost as cb
 import pandas as pd
 import numpy as np
 from biom.table import Table
