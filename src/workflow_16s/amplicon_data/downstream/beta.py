@@ -194,7 +194,7 @@ class Ordination:
                     future = executor.submit(
                         self._run_single_ordination,
                         table=table_aligned,
-                        meta=metadata_aligned,
+                        metadata=metadata_aligned,
                         symbol_col=self.group_column,  
                         table_type=table_type,
                         level=level,
