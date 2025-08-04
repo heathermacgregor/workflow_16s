@@ -387,44 +387,11 @@ def _apply_common_layout(
     Returns:
         Configured Plotly figure.
     """
-    layout_updates = {
-        'template': 'heather',
-        'height': height,
-        'width': width,
-        'plot_bgcolor': '#fff',
-        'font_size': 45,
-        'showlegend': False,
-        'xaxis': {
-            'showticklabels': False,
-            'zeroline': True,
-            'showline': True,
-            'linewidth': 2,
-            'linecolor': 'black',
-            'mirror': True
-        },
-        'yaxis': {
-            'showticklabels': False,
-            'zeroline': True,
-            'showline': True,
-            'linewidth': 2,
-            'linecolor': 'black',
-            'mirror': True
-        }
-    }
-    
-    if title:
-        layout_updates.update({
-            'title_text': title,
-            'title_x': 0.5
-        })
-    
     fig.update_layout(
         xaxis_title=x_title,
-        yaxis_title=y_title,
-        **layout_updates
+        yaxis_title=y_title
     )
     return fig
-
 
 # ================================ VISUALIZATIONS ================================== #
 
