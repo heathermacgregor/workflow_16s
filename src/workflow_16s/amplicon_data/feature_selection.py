@@ -115,8 +115,8 @@ class FeatureSelection:
                 _init_dict_level(self.models, table_type, level)
                 data_storage = self.models[table_type][level]
                 # Initialize output directory and path
-                output_dir = output_dir / 'ml' / self.group_column / table_type / level 
-                output_dir.mkdir(parents=True, exist_ok=True)
+                tmp_output_dir = output_dir / 'ml' / self.group_column / table_type / level 
+                tmp_output_dir.mkdir(parents=True, exist_ok=True)
     
                 try:
                     if debug_mode:
@@ -130,16 +130,16 @@ class FeatureSelection:
                     else:
                         # Define required files for this task
                         required_files = [
-                            output_dir / method / "best_model.cbm",
-                            output_dir / method / "feature_importances.csv",
-                            output_dir / method / "grid_search_results.csv",
-                            output_dir / method / "best_confusion_matrix.html",
-                            output_dir / method / "best_roc_curve.html",
-                            output_dir / method / "best_precision_recall_curve.html",
-                            output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
-                            output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
-                            output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
-                            output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
+                            tmp_output_dir / method / "best_model.cbm",
+                            tmp_output_dir / method / "feature_importances.csv",
+                            tmp_output_dir / method / "grid_search_results.csv",
+                            tmp_output_dir / method / "best_confusion_matrix.html",
+                            tmp_output_dir / method / "best_roc_curve.html",
+                            tmp_output_dir / method / "best_precision_recall_curve.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
                         ]
                         
                         # Check if all files exist
@@ -150,23 +150,23 @@ class FeatureSelection:
                             
                             # Load CatBoost model
                             model = cb.CatBoostClassifier()
-                            model.load_model(str(output_dir / method / "best_model.cbm"))
+                            model.load_model(str(tmp_output_dir / method / "best_model.cbm"))
                             
                             # Load feature importances
-                            feature_importances = pd.read_csv(output_dir / method / "feature_importances.csv")
+                            feature_importances = pd.read_csv(tmp_output_dir / method / "feature_importances.csv")
                             
                             # Load grid search results
-                            grid_search_results = pd.read_csv(output_dir / method / "grid_search_results.csv")
+                            grid_search_results = pd.read_csv(tmp_output_dir / method / "grid_search_results.csv")
                             
                             # Create figures dictionary with HTML content
                             figures = {
-                                'confusion_matrix': (output_dir / method / "best_confusion_matrix.html").read_text(),
-                                'roc': (output_dir / method / "best_roc_curve.html").read_text(),
-                                'prc': (output_dir / method / "best_precision_recall_curve.html").read_text(),
-                                'shap_summary_bar': (output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
-                                'shap_summary_beeswarm': (output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
-                                'shap_summary_heatmap': (output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
-                                'shap_summary_force': (output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
+                                'confusion_matrix': (tmp_output_dir / method / "best_confusion_matrix.html").read_text(),
+                                'roc': (tmp_output_dir / method / "best_roc_curve.html").read_text(),
+                                'prc': (tmp_output_dir / method / "best_precision_recall_curve.html").read_text(),
+                                'shap_summary_bar': (tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
+                                'shap_summary_beeswarm': (tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
+                                'shap_summary_heatmap': (tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
+                                'shap_summary_force': (tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
                                 'shap_dependency': None  # Placeholder
                             }
                             
@@ -195,7 +195,7 @@ class FeatureSelection:
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
-                                output_dir=output_dir / method,
+                                output_dir=tmp_output_dir / method,
                                 group_col=self.group_column,
                                 method=method,
                                 n_top_features=self.n_top_features,
@@ -216,7 +216,7 @@ class FeatureSelection:
                             result_to_save = model_result.copy()
                             result_to_save.pop('model', None)
                             result_to_save.pop('figures', None)
-                            with open(output_dir / method / "results.json", 'w') as f:
+                            with open(tmp_output_dir / method / "results.json", 'w') as f:
                                 json.dump(result_to_save, f, indent=4)
                                     
                 except Exception as e:
