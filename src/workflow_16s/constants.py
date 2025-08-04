@@ -297,7 +297,7 @@ DEFAULT_PARAM_GRID = {
     'border_count': [32]#, 64, 128]
 }
 DEFAULT_LOSS_FUNCTION = 'Logloss'
-DEFAULT_THREAD_COUNT = 4
+DEFAULT_THREAD_COUNT = 8
 
 # ==================================================================================== #
 # FIGURES
