@@ -32,13 +32,16 @@ largecolorset = list(
 # Define the plot template
 pio.templates["heather"] = go.layout.Template(
   layout={
+    'height': constants.DEFAULT_HEIGHT,
+    'width': constants.DEFAULT_WIDTH,
     'title': {
       'font': {
         'family': 'HelveticaNeue-CondensedBold, Helvetica, Sans-serif',
-        'size': 40,
+        'size': 45,
         'color': '#000' # Black
       }
     },
+    'title_x': 0.5,
     'font': {
       'family': 'Helvetica Neue, Helvetica, Sans-serif',
       'size': 26,
@@ -51,7 +54,7 @@ pio.templates["heather"] = go.layout.Template(
       'showgrid': False,
       'zeroline': True,
       'showline': True,
-      'linewidth': 7,
+      'linewidth': 3,
       'linecolor': 'black',
       'automargin': True,
       'mirror': True
@@ -60,11 +63,12 @@ pio.templates["heather"] = go.layout.Template(
       'showgrid': False,
       'zeroline': True,
       'showline': True,
-      'linewidth': 7,
+      'linewidth': 3,
       'linecolor': 'black',
       'automargin': True,
       'mirror': True
-    }
+    },
+    'showlegend': False
   }
 )
 pio.templates.default = "heather" 
@@ -137,25 +141,6 @@ def plotly_show_and_save(
                 log_ok(f"Saved figure to '{target}'.")
             except Exception as e:
                 logger.error(f"Failed to save figure: {str(e)}")
-              
-
-#TODO: Delete this class if it is unused
-class PlotlyFigure:
-    def __init__(
-        self,
-        fig,
-        output_path: Union[str, Path] = None,
-        show: bool = False
-    ):
-        self.fig = fig
-        self.output_path = Path(output_path)
-        self.show = show
-
-        plotly_show_and_save(
-            fig=self.fig,
-            show=self.show,
-            output_path=self.output_path    
-        )
 
 
 def marker_color_map(
@@ -831,8 +816,8 @@ def _apply_common_layout(
     x_title: str,
     y_title: str,
     title: str = None,
-    height: int = constants.DEFAULT_HEIGHT,
-    width: int = constants.DEFAULT_WIDTH
+    height: int = DEFAULT_HEIGHT,
+    width: int = DEFAULT_WIDTH
 ) -> go.Figure:
     """
     Apply consistent layout to figures.
@@ -848,40 +833,9 @@ def _apply_common_layout(
     Returns:
         Configured Plotly figure.
     """
-    layout_updates = {
-        'template': 'heather',
-        'height': height,
-        'width': width,
-        'plot_bgcolor': '#fff',
-        'font_size': 45,
-        'showlegend': False,
-        'xaxis': {
-            'showticklabels': False,
-            'zeroline': True,
-            'showline': True,
-            'linewidth': 2,
-            'linecolor': 'black',
-            'mirror': True
-        },
-        'yaxis': {
-            'showticklabels': False,
-            'zeroline': True,
-            'showline': True,
-            'linewidth': 2,
-            'linecolor': 'black',
-            'mirror': True
-        }
-    }
-    
-    if title:
-        layout_updates.update({
-            'title_text': title,
-            'title_x': 0.5
-        })
-    
     fig.update_layout(
         xaxis_title=x_title,
-        yaxis_title=y_title,
-        **layout_updates
+        yaxis_title=y_title
     )
     return fig
+
