@@ -105,8 +105,8 @@ class AlphaDiversity:
                 data_storage = self.results[group_column][table_type][level]
                 if output_dir:
                     # Initialize output directory and path
-                    output_dir = output_dir / 'alpha_diversity' / table_type / level
-                    output_dir.mkdir(parents=True, exist_ok=True)
+                    tmp_output_dir = output_dir / 'alpha_diversity' / table_type / level
+                    tmp_output_dir.mkdir(parents=True, exist_ok=True)
 
                 try:
                     # Prepare data
@@ -127,13 +127,13 @@ class AlphaDiversity:
                     # Store and save results
                     data_storage['results'] = alpha_df
                     data_storage['stats'] = stats_df
-                    if output_dir:
+                    if tmp_output_dir:
                         alpha_df.to_csv(
-                            output_dir / 'alpha_diversity.tsv', 
+                            tmp_output_dir / 'alpha_diversity.tsv', 
                             sep='\t', index=True
                         )
                         stats_df.to_csv(
-                            output_dir / f'stats_{group_column}.tsv', 
+                            tmp_output_dir / f'stats_{group_column}.tsv', 
                             sep='\t', index=True
                         )
                     
@@ -146,11 +146,11 @@ class AlphaDiversity:
                         )
                         # Store and save results
                         data_storage['correlations'] = corr_results
-                        if output_dir:
+                        if tmp_output_dir:
                             pd.DataFrame.from_dict(
                                 [corr_results], orient='index'
                             ).to_csv(
-                                output_dir / f'correlations_{group_column}.tsv', 
+                                tmp_output_dir / f'correlations_{group_column}.tsv', 
                                 sep='\t', index=True
                             )
 
@@ -170,7 +170,7 @@ class AlphaDiversity:
                                 metadata=self.metadata[table_type][level],
                                 group_column=group_column,
                                 metric=metric,
-                                output_dir=output_dir,
+                                output_dir=tmp_output_dir,
                                 show=False,
                                 verbose=self.verbose,
                                 add_points=self.plot_config.get('add_points', True),
@@ -181,7 +181,7 @@ class AlphaDiversity:
                             
                         stats_fig = create_alpha_diversity_stats_plot(
                             stats_df=stats_df,
-                            output_dir=output_dir,
+                            output_dir=tmp_output_dir,
                             verbose=self.verbose,
                             effect_size_threshold=self.plot_config.get('effect_size_threshold', 0.5)
                         )
@@ -190,7 +190,7 @@ class AlphaDiversity:
                         if self.corr_config.get('enabled', False):
                             corr_figures = plot_alpha_correlations(
                                 corr_results,
-                                output_dir=output_dir,
+                                output_dir=tmp_output_dir,
                                 top_n=self.corr_config.get('top_n_correlations', 10)
                             )
                             fig_storage['correlations'] = corr_figures
