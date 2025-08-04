@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Third‑Party Imports
+import catboost as cb
 import pandas as pd
 import numpy as np
 from biom.table import Table
@@ -113,8 +114,8 @@ class FeatureSelection:
                 _init_dict_level(self.models, table_type, level)
                 data_storage = self.models[table_type][level]
                 # Initialize output directory and path
-                output_dir = output_dir / 'ml' / self.group_column / table_type / level 
-                output_dir.mkdir(parents=True, exist_ok=True)
+                tmp_output_dir = output_dir / 'ml' / self.group_column / table_type / level 
+                tmp_output_dir.mkdir(parents=True, exist_ok=True)
     
                 try:
                     if debug_mode:
@@ -126,36 +127,89 @@ class FeatureSelection:
                         )
                         data_storage[method] = None
                     else:
-                        table = self.tables[table_type][level]
-                        metadata = self.metadata[table_type][level]
-                        X = table_to_df(table)
-                        X.index = X.index.str.lower()
-                        y = metadata.set_index("#sampleid")[[self.group_column]]
-                        y.index = y.index.astype(str).str.lower()
-                        idx = X.index.intersection(y.index)
-                        X, y = X.loc[idx], y.loc[idx]
-
-                        use_permutation_importance = False if method == "select_k_best" else self.permutation_importance
-                                    
-                        model_result = catboost_feature_selection(
-                            metadata=y,
-                            features=X,
-                            output_dir=output_dir,
-                            group_col=self.group_column,
-                            method=method,
-                            n_top_features=self.n_top_features,
-                            step_size=self.step_size,
-                            use_permutation_importance=use_permutation_importance,
-                            thread_count=self.n_threads,
-                            progress=progress, 
-                            task_id=cb_task,
-                        )
-                                
+                        # Define required files for this task
+                        required_files = [
+                            tmp_output_dir / method / "best_model.cbm",
+                            tmp_output_dir / method / "feature_importances.csv",
+                            tmp_output_dir / method / "grid_search_results.csv",
+                            tmp_output_dir / method / "best_confusion_matrix.html",
+                            tmp_output_dir / method / "best_roc_curve.html",
+                            tmp_output_dir / method / "best_precision_recall_curve.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
+                            tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
+                        ]
+                        
+                        # Check if all files exist
+                        all_files_exist = all(f.exists() for f in required_files)
+                        
+                        if all_files_exist:
+                            logger.info(f"Loading existing results for {table_type}/{level}/{method}")
+                            
+                            # Load CatBoost model
+                            model = cb.CatBoostClassifier()
+                            model.load_model(str(tmp_output_dir / method / "best_model.cbm"))
+                            
+                            # Load feature importances
+                            feature_importances = pd.read_csv(tmp_output_dir / method / "feature_importances.csv")
+                            
+                            # Load grid search results
+                            grid_search_results = pd.read_csv(tmp_output_dir / method / "grid_search_results.csv")
+                            
+                            # Create figures dictionary with HTML content
+                            figures = {
+                                'confusion_matrix': (tmp_output_dir / method / "best_confusion_matrix.html").read_text(),
+                                'roc': (tmp_output_dir / method / "best_roc_curve.html").read_text(),
+                                'prc': (tmp_output_dir / method / "best_precision_recall_curve.html").read_text(),
+                                'shap_summary_bar': (tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
+                                'shap_summary_beeswarm': (tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
+                                'shap_summary_heatmap': (tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
+                                'shap_summary_force': (tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
+                                'shap_dependency': None  # Placeholder
+                            }
+                            
+                            # Create result dictionary
+                            model_result = {
+                                'model': model,
+                                'feature_importances': feature_importances,
+                                'grid_search_results': grid_search_results,
+                                'figures': figures
+                            }
+                            
+                            
+                        else:
+                            logger.info(f"Running model for {table_type}/{level}/{method}")
+                            # Run model normally if files are missing
+                            table = self.tables[table_type][level]
+                            metadata = self.metadata[table_type][level]
+                            X = table_to_df(table)
+                            X.index = X.index.str.lower()
+                            y = metadata.set_index("#sampleid")[[self.group_column]]
+                            y.index = y.index.astype(str).str.lower()
+                            idx = X.index.intersection(y.index)
+                            X, y = X.loc[idx], y.loc[idx]
+    
+                            use_permutation_importance = False if method == "select_k_best" else self.permutation_importance
+                                        
+                            model_result = catboost_feature_selection(
+                                metadata=y,
+                                features=X,
+                                output_dir=tmp_output_dir,
+                                group_col=self.group_column,
+                                method=method,
+                                n_top_features=self.n_top_features,
+                                step_size=self.step_size,
+                                use_permutation_importance=use_permutation_importance,
+                                thread_count=self.n_threads,
+                                progress=progress, 
+                                task_id=cb_task,
+                            )
+                        
+                        data_storage[method] = model_result        
                         # Log if no figures were generated
                         if not any(model_result['figures'].values()):
                             logger.warning(f"No figures generated for {table_type}/{level}/{method}")
-                                
-                        data_storage[method] = model_result
                                     
                 except Exception as e:
                     logger.error(f"Model training failed for {table_type}/{level}/{method}: {e}")
