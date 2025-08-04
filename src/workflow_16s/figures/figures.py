@@ -816,8 +816,8 @@ def _apply_common_layout(
     x_title: str,
     y_title: str,
     title: str = None,
-    height: int = DEFAULT_HEIGHT,
-    width: int = DEFAULT_WIDTH
+    height: int = constants.DEFAULT_HEIGHT,
+    width: int = constants.DEFAULT_WIDTH
 ) -> go.Figure:
     """
     Apply consistent layout to figures.
