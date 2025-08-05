@@ -109,7 +109,7 @@ class Downstream:
         self.stats: Optional[Dict[str, Any]] = {}
         self.alpha_diversity: Optional[Dict[str, Any]] = {}
         self.ordination: Optional[Dict[str, Any]] = {}
-        self.important_features: Optional[Dict[str, Any]] = {}
+        self.top_features: Optional[Dict[str, Any]] = {}
         self.models: Optional[Dict[str, Any]] = {}
         
         logger.info("Running downstream analysis pipeline...")
