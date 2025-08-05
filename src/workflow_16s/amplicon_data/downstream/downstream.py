@@ -216,7 +216,7 @@ class Downstream:
             return
         cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
         cb.run(output_dir=self.output_dir)
-        return cb.moodels
+        return cb.models
 
     def _top_features(self):
         placeholder = ''
