@@ -105,12 +105,12 @@ class Downstream:
         # Initialize result containers
         self.metadata: Dict[str, Any] = {}
         self.tables: Dict[str, Any] = {}
-        #self.maps: Optional[Dict[str, Any]] = None
-        #self.stats: Optional[Dict[str, Any]] = None
-        #self.alpha_diversity: Optional[Dict[str, Any]] = None
-        #self.ordination: Optional[Dict[str, Any]] = None
-        #self.most_important_features: Optional[Dict[str, Any]] = None
-        #self.catboost_models: Optional[Dict[str, Any]] = None
+        self.maps: Optional[Dict[str, Any]] = {}
+        self.stats: Optional[Dict[str, Any]] = {}
+        self.alpha_diversity: Optional[Dict[str, Any]] = {}
+        self.ordination: Optional[Dict[str, Any]] = {}
+        self.most_important_features: Optional[Dict[str, Any]] = {}
+        self.catboost_models: Optional[Dict[str, Any]] = {}
         
         logger.info("Running downstream analysis pipeline...")
         self._execute_pipeline()
@@ -157,7 +157,7 @@ class Downstream:
 
     def _stats(self):
         if not self.config.get("stats", {}).get('enabled', False):
-            return
+            return {}
 
         stats = StatisticalAnalysis(
             config=self.config,
@@ -199,21 +199,21 @@ class Downstream:
 
     def _alpha_diversity(self):
         if not self.config.get("alpha_diversity", {}).get('enabled', False):
-            return
+            return {}
         alpha = AlphaDiversity(self.config, self.metadata, self.tables)
         alpha.run(output_dir=self.output_dir)
         return alpha.results
 
     def _beta_diversity(self):
         if not self.config.get("ordination", {}).get('enabled', False):
-            return
+            return {}
         beta = Ordination(self.config, self.metadata, self.tables, self.verbose)
         beta.run(output_dir=self.output_dir)
         return beta.results
 
     def _catboost_feature_selection(self):
         if not self.config.get("ml", {}).get('enabled', False):
-            return
+            return {}
         cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
         cb.run(output_dir=self.output_dir)
         return cb.models
