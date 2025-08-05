@@ -327,7 +327,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     finally:
         print_data_dicts(amplicon_data)
         
-    output_path = Path(project_dir.final) / "analysis_report.html"
+    output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
     try:
         generate_html_report(
             amplicon_data=amplicon_data,
