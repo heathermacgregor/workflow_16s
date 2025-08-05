@@ -168,13 +168,31 @@ class FeatureSelection:
                                 'shap_summary_force': (tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
                                 'shap_dependency': None  # Placeholder
                             }
+
+                            def html_to_plotly(html_content: str) -> go.Figure:
+                                soup = BeautifulSoup(html_content, 'html.parser')
+                                
+                                # Find the script tag containing Plotly JSON data
+                                script_tag = soup.find('script', type='application/json')
+                                if not script_tag:
+                                    raise ValueError("Plotly JSON data not found in HTML")
+                                
+                                # Load JSON and create figure
+                                fig_json = json.loads(script_tag.string)
+                                return go.Figure(fig_json)
+                            plotly_figures = {}
+                            for key, html_content in figures.items():
+                                if html_content is None:
+                                    plotly_figures[key] = None  # Keep placeholder as None
+                                else:
+                                    plotly_figures[key] = html_to_plotly(html_content)
                             
                             # Create result dictionary
                             model_result = {
                                 'model': model,
                                 'feature_importances': feature_importances,
                                 'grid_search_results': grid_search_results,
-                                'figures': figures
+                                'figures': plotly_figures
                             }
                             
                             
