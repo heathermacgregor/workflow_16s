@@ -105,12 +105,12 @@ class Downstream:
         # Initialize result containers
         self.metadata: Dict[str, Any] = {}
         self.tables: Dict[str, Any] = {}
-        self.maps: Optional[Dict[str, Any]] = None
-        self.stats: Optional[Dict[str, Any]] = None
-        self.alpha_diversity: Optional[Dict[str, Any]] = None
-        self.ordination: Optional[Dict[str, Any]] = None
-        self.most_important_features: Optional[Dict[str, Any]] = None
-        self.catboost_models: Optional[Dict[str, Any]] = None
+        #self.maps: Optional[Dict[str, Any]] = None
+        #self.stats: Optional[Dict[str, Any]] = None
+        #self.alpha_diversity: Optional[Dict[str, Any]] = None
+        #self.ordination: Optional[Dict[str, Any]] = None
+        #self.most_important_features: Optional[Dict[str, Any]] = None
+        #self.catboost_models: Optional[Dict[str, Any]] = None
         
         logger.info("Running downstream analysis pipeline...")
         self._execute_pipeline()
