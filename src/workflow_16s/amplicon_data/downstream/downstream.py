@@ -109,8 +109,8 @@ class Downstream:
         self.stats: Optional[Dict[str, Any]] = {}
         self.alpha_diversity: Optional[Dict[str, Any]] = {}
         self.ordination: Optional[Dict[str, Any]] = {}
-        self.most_important_features: Optional[Dict[str, Any]] = {}
-        self.catboost_models: Optional[Dict[str, Any]] = {}
+        self.important_features: Optional[Dict[str, Any]] = {}
+        self.models: Optional[Dict[str, Any]] = {}
         
         logger.info("Running downstream analysis pipeline...")
         self._execute_pipeline()
@@ -146,7 +146,7 @@ class Downstream:
         logger.info("Beta")
         self.ordination = self._beta_diversity()
         logger.info("ML")
-        self.catboost_models = self._catboost_feature_selection()
+        self.models = self._catboost_feature_selection()
 
     def _plot_sample_maps(self):
         if not self.config.get("maps", {}).get('enabled', False):
