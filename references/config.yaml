@@ -112,7 +112,7 @@ features: # Feature table pre-processing
   presence_absence: True
 
 stats: # Statistical analyses
-  enabled: True
+  enabled: False
   tables:
     raw:
       enabled: True
@@ -142,7 +142,7 @@ stats: # Statistical analyses
         - "kruskal_bonferroni"
 
 alpha_diversity: # Alpha diversity
-  enabled: True
+  enabled: False
   plots: 
     enabled: True
     add_points: True
@@ -244,7 +244,7 @@ faprotax: # Functional prediction
   enabled: True
 
 maps:
-  enabled: True
+  enabled: False
   color_columns:
     - "dataset_name"
     - "nuclear_contamination_status"
@@ -254,7 +254,7 @@ maps:
     - "facility_match"
     
 violin_plots: # Violin plots of top important features
-  enabled: True
+  enabled: False
   n: 50  # Number of features to plot per category
   
 feature_maps:
@@ -272,7 +272,7 @@ ml: # Machine learning
     enabled: True
   tables:
     raw:
-      enabled: True
+      enabled: False
       levels:
         - 'genus'
       methods:
@@ -282,7 +282,7 @@ ml: # Machine learning
         - 'lasso'
         - 'shap'
     filtered:
-      enabled: True
+      enabled: False
       levels:
         - 'genus'
       methods:
@@ -292,7 +292,7 @@ ml: # Machine learning
         - 'lasso'
         - 'shap'
     normalized:
-      enabled: True
+      enabled: False
       levels:
         - 'genus'
       methods:
