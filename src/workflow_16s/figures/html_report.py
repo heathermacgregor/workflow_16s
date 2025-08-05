@@ -55,9 +55,13 @@ def _generate_plotly_selector_html(figures_dict: Dict[str, Any],
     
     def flatten_dict(d: Dict, parent_key: str = '', sep: str = ' > ') -> Dict[str, Any]:
         """Flatten nested dictionary and create display labels"""
+        if d is None:  # Handle None input
+            return {}
         items = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if v is None:  # Skip None values
+                continue
             if isinstance(v, dict) and not hasattr(v, 'to_plotly_json'):
                 items.extend(flatten_dict(v, new_key, sep=sep).items())
             else:
