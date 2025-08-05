@@ -308,7 +308,7 @@ ml: # Machine learning
       methods:
         - 'rfe'
         - 'select_k_best'
-        - 'chi_squared'
+        #- 'chi_squared'
         - 'lasso'
         - 'shap'
     presence_absence:
