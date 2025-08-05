@@ -325,8 +325,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
-        if verbose:
-            print_data_dicts(amplicon_data)
+        print_data_dicts(amplicon_data)
         
     output_path = Path(project_dir.final) / "analysis_report.html"
     try:
