@@ -16,6 +16,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from biom.table import Table
+from bs4 import BeautifulSoup
 
 # ================================== LOCAL IMPORTS =================================== #
 
