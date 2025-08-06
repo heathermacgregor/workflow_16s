@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # Third‑Party Imports
 import catboost as cb
 import pandas as pd
+import plotly.graph_objects as go
 import numpy as np
 from biom.table import Table
 
