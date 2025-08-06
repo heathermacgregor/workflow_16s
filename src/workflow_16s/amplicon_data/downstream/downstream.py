@@ -216,6 +216,8 @@ class Downstream:
             return {}
         cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
         cb.run(output_dir=self.output_dir)
+        logger.info(cb.models)
+        logger.info(cb)
         return cb.models
 
     def _top_features(self):
