@@ -112,7 +112,7 @@ features: # Feature table pre-processing
   presence_absence: True
 
 stats: # Statistical analyses
-  enabled: False
+  enabled: True
   tables:
     raw:
       enabled: True
