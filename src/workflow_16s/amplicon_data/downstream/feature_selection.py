@@ -145,8 +145,8 @@ class FeatureSelection:
                         
                         # Check if all files exist
                         all_files_exist = all(f.exists() for f in required_files)
-                        
-                        if all_files_exist:
+                        try_to_load_old = False
+                        if all_files_exist and try_to_load_old:
                             logger.info(f"Loading existing results for {table_type}/{level}/{method}")
                             
                             # Load CatBoost model
