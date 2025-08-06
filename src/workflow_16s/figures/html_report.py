@@ -492,6 +492,8 @@ def _prepare_ml_summary(
                 top_features = result.get("top_features", [])[:10]
                 for i, feat in enumerate(top_features, 1):
                     importance = feat_imp.get(feat, 0)
+                    print(feat)
+                    print(importance)
                     features_summary.append({
                         "Table Type": table_type,
                         "Level": level,
@@ -505,6 +507,7 @@ def _prepare_ml_summary(
                 if "shap_report" in result:
                     key = (table_type, level, method)
                     shap_reports[key] = result["shap_report"]
+                    print(result["shap_report"])
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
@@ -532,6 +535,7 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "ρ (Feature)": values.get("rho_feature", ""),
                 "ρ (Partner)": values.get("rho_partner", "")
             }
+            print(row)
             rows.append(row)
     
     if not rows:
@@ -705,21 +709,17 @@ def generate_html_report(
     stats_df = _prepare_stats_summary(amplicon_data.stats)
     
     # ML summary (with safety checks)
-    if group_col in amplicon_data.top_features:
-        group_data = amplicon_data.top_features[group_col]
-        group1_data = group_data.get(group_col_values[0], [])
-        group2_data = group_data.get(group_col_values[1], [])
-        
+    if amplicon_data.models:
         ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
             amplicon_data.models,
-            group1_data,
-            group2_data
+            [],   # Not used in function
+            []    # Not used in function
         )
     else:
         ml_metrics, ml_features, shap_reports = pd.DataFrame(), pd.DataFrame(), {}
     
     # Proper DataFrame emptiness check
-    if ml_metrics is not None and not ml_metrics.empty:
+    if not ml_metrics.empty:
         ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports)
     else:
         ml_html = "<p>No ML results</p>"
