@@ -507,10 +507,10 @@ def _prepare_ml_summary(
                 if "shap_report" in result:
                     key = (table_type, level, method)
                     shap_reports[key] = result["shap_report"]
-    
+    logger.info(metrics_summary)
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
-    
+    logger.info(metrics_df)
     return metrics_df, features_df, shap_reports
 
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
