@@ -534,7 +534,6 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "ρ (Feature)": values.get("rho_feature", ""),
                 "ρ (Partner)": values.get("rho_partner", "")
             }
-            logger.info(row)
             rows.append(row)
     
     if not rows:
