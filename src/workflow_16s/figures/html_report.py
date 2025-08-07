@@ -507,7 +507,6 @@ def _prepare_ml_summary(
                 if "shap_report" in result:
                     key = (table_type, level, method)
                     shap_reports[key] = result["shap_report"]
-                    logger.info(result["shap_report"])
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
@@ -535,6 +534,7 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "ρ (Feature)": values.get("rho_feature", ""),
                 "ρ (Partner)": values.get("rho_partner", "")
             }
+            logger.info(row)
             rows.append(row)
     
     if not rows:
@@ -592,6 +592,7 @@ def _format_ml_section(
     shap_html = ""
     if shap_reports:
         shap_df = _prepare_shap_table(shap_reports)
+        logger.info(shap_df)
         if not shap_df.empty:
             shap_html = """
             <h3>SHAP Analysis</h3>
