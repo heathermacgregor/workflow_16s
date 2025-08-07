@@ -475,6 +475,7 @@ def _prepare_ml_summary(
                     continue
                 
                 test_scores = result.get("test_scores", {})
+                logger.info(test_scores)
                 metrics = {
                     "Table Type": table_type,
                     "Level": level,
@@ -486,14 +487,13 @@ def _prepare_ml_summary(
                     "ROC AUC": f"{test_scores.get('roc_auc', 0):.4f}",
                     "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
                 }
+                logger.info(metrics)
                 metrics_summary.append(metrics)
                 
                 feat_imp = result.get("feature_importances", {})
                 top_features = result.get("top_features", [])[:10]
                 for i, feat in enumerate(top_features, 1):
                     importance = feat_imp.get(feat, 0)
-                    logger.info(feat)
-                    logger.info(importance)
                     features_summary.append({
                         "Table Type": table_type,
                         "Level": level,
@@ -535,7 +535,6 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "ρ (Feature)": values.get("rho_feature", ""),
                 "ρ (Partner)": values.get("rho_partner", "")
             }
-            logger.info(row)
             rows.append(row)
     
     if not rows:
@@ -593,7 +592,6 @@ def _format_ml_section(
     shap_html = ""
     if shap_reports:
         shap_df = _prepare_shap_table(shap_reports)
-        logger.info(shap_df)
         if not shap_df.empty:
             shap_html = """
             <h3>SHAP Analysis</h3>
