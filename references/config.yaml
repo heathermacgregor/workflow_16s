@@ -142,7 +142,7 @@ stats: # Statistical analyses
         - "kruskal_bonferroni"
 
 alpha_diversity: # Alpha diversity
-  enabled: False
+  enabled: True
   plots: 
     enabled: True
     add_points: True
@@ -179,7 +179,7 @@ alpha_diversity: # Alpha diversity
     #- 'dominance'
   
 ordination: # Beta diversity + ordination
-  enabled: False
+  enabled: True
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
   tables:
@@ -254,7 +254,7 @@ maps:
     - "facility_match"
     
 violin_plots: # Violin plots of top important features
-  enabled: False
+  enabled: True
   n: 50  # Number of features to plot per category
   
 feature_maps:
@@ -305,6 +305,10 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
+        - 'family'
+        - 'order'
+        - 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
@@ -315,6 +319,10 @@ ml: # Machine learning
       enabled: True
       levels:
         - 'genus'
+        - 'family'
+        - 'order'
+        - 'class'
+        - 'phylum'
       methods:
         - 'rfe'
         - 'select_k_best'
