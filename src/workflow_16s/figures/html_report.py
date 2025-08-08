@@ -167,14 +167,17 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     # Ordination figures
     ordination_figures = {}
     for table_type, levels in amplicon_data.ordination.items():
-        for level, methods in levels.items():
-            for method, data in methods.items():
-                if data and 'figures' in data and data['figures']:
-                    if table_type not in ordination_figures:
-                        ordination_figures[table_type] = {}
-                    if level not in ordination_figures[table_type]:
-                        ordination_figures[table_type][level] = {}
-                    ordination_figures[table_type][level][method] = data['figures']
+        for level, level_data in levels.items():
+            # Check if this level has a 'figures' subkey
+            if 'figures' in level_data and level_data['figures']:
+                if table_type not in ordination_figures:
+                    ordination_figures[table_type] = {}
+                if level not in ordination_figures[table_type]:
+                    ordination_figures[table_type][level] = {}
+                
+                # Iterate through visualization methods in figures
+                for method, method_figures in level_data['figures'].items():
+                    ordination_figures[table_type][level][method] = method_figures
     figures['ordination'] = ordination_figures
 
     # Alpha diversity figures
