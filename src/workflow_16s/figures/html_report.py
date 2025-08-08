@@ -20,6 +20,7 @@ from workflow_16s.utils.io import import_js_as_str
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
+logger.setLevel(logging.DEBUG)  # Set to DEBUG for better troubleshooting
 
 script_dir = Path(__file__).parent  
 tables_js_path = script_dir / "tables.js"  
@@ -456,6 +457,17 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
+def _validate_models_structure(models: dict):
+    """Log structure of models dictionary for debugging"""
+    from pprint import pformat
+    logger.debug("Models structure:\n" + pformat({
+        k1: {
+            k2: list(v2.keys()) 
+            for k2, v2 in v1.items()
+        } 
+        for k1, v1 in models.items()
+    }, depth=3))
+
 def _prepare_ml_summary(
     models: Dict, 
     top_group_1: List[Dict], 
@@ -471,23 +483,32 @@ def _prepare_ml_summary(
     for table_type, levels in models.items():
         for level, methods in levels.items():
             for method, result in methods.items():
-                if not result:
+                # Validate result structure
+                if not result or not isinstance(result, dict):
+                    logger.warning(f"Invalid result for {table_type}/{level}/{method}")
+                    continue
+                    
+                # Check for required keys
+                if "test_scores" not in result:
+                    logger.error(f"Missing 'test_scores' in {table_type}/{level}/{method}")
+                    continue
+                    
+                if "top_features" not in result:
+                    logger.error(f"Missing 'top_features' in {table_type}/{level}/{method}")
                     continue
                 
-                test_scores = result.get("test_scores", {})
-                logger.info(test_scores)
+                test_scores = result["test_scores"]
                 metrics = {
                     "Table Type": table_type,
                     "Level": level,
                     "Method": method,
                     "Top Features": len(result.get("top_features", [])),
-                    "Accuracy": f"{test_scores.get('accuracy', 0):.4f}",
-                    "F1 Score": f"{test_scores.get('f1', 0):.4f}",
-                    "MCC": f"{test_scores.get('mcc', 0):.4f}",
-                    "ROC AUC": f"{test_scores.get('roc_auc', 0):.4f}",
-                    "PR AUC": f"{test_scores.get('pr_auc', 0):.4f}"
+                    "Accuracy": f"{test_scores.get('accuracy', 'N/A')}",
+                    "F1 Score": f"{test_scores.get('f1', 'N/A')}",
+                    "MCC": f"{test_scores.get('mcc', 'N/A')}",
+                    "ROC AUC": f"{test_scores.get('roc_auc', 'N/A')}",
+                    "PR AUC": f"{test_scores.get('pr_auc', 'N/A')}"
                 }
-                logger.info(metrics)
                 metrics_summary.append(metrics)
                 
                 feat_imp = result.get("feature_importances", {})
@@ -500,17 +521,16 @@ def _prepare_ml_summary(
                         "Method": method,
                         "Rank": i,
                         "Feature": feat,
-                        "Importance": f"{importance:.4f}"
+                        "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                     })
                 
                 # Capture SHAP report if available
                 if "shap_report" in result:
                     key = (table_type, level, method)
                     shap_reports[key] = result["shap_report"]
-    logger.info(metrics_summary)
+    
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
-    logger.info(metrics_df)
     return metrics_df, features_df, shap_reports
 
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
@@ -524,15 +544,15 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
                 "Level": level,
                 "Method": method,
                 "Feature": feature,
-                "Mean |SHAP|": values.get("mean_shap", ""),
-                "Beeswarm Interpretation": values.get("beeswarm_interpretation", ""),
-                "Spearman's ρ": values.get("spearman_rho", ""),
-                "Dependency plot interpretation Relationship": values.get("dependency_relationship", ""),
-                "Partner Feature": values.get("partner_feature", ""),
-                "Interaction Strength": values.get("interaction_strength", ""),
-                "Relationship": values.get("interaction_relationship", ""),
-                "ρ (Feature)": values.get("rho_feature", ""),
-                "ρ (Partner)": values.get("rho_partner", "")
+                "Mean |SHAP|": values.get("mean_shap", "N/A"),
+                "Beeswarm Interpretation": values.get("beeswarm_interpretation", "N/A"),
+                "Spearman's ρ": values.get("spearman_rho", "N/A"),
+                "Dependency plot interpretation Relationship": values.get("dependency_relationship", "N/A"),
+                "Partner Feature": values.get("partner_feature", "N/A"),
+                "Interaction Strength": values.get("interaction_strength", "N/A"),
+                "Relationship": values.get("interaction_relationship", "N/A"),
+                "ρ (Feature)": values.get("rho_feature", "N/A"),
+                "ρ (Partner)": values.get("rho_partner", "N/A")
             }
             rows.append(row)
     
@@ -551,64 +571,67 @@ def _format_ml_section(
     ml_features: pd.DataFrame,
     shap_reports: Dict
 ) -> str:
-    if ml_metrics is None or ml_metrics.empty:
-        return "<p>No ML results available</p>"
-    
-    ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
-    
-    tooltip_map = {
-        "MCC": "Balanced classifier metric (-1 to 1) that considers all confusion matrix values...",
-        "ROC AUC": "Probability that random positive ranks higher than random negative...",
-        "F1 Score": "Balance between precision and recall...",
-        "PR AUC": "Positive-class focused metric for imbalanced data..."
-    }
-    ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
-    
-    enhanced_metrics = f"""
-    <div class="table-container" id="container-ml-metrics-table">
-        {ml_metrics_html}
-        <div class="table-controls">
-            <div class="pagination-controls">
-                <span>Rows per page:</span>
-                <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
-                <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
+    try:
+        if ml_metrics is None or ml_metrics.empty:
+            return "<p>No ML results available</p>"
+        
+        ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
+        
+        tooltip_map = {
+            "MCC": "Balanced classifier metric (-1 to 1) that considers all confusion matrix values...",
+            "ROC AUC": "Probability that random positive ranks higher than random negative...",
+            "F1 Score": "Balance between precision and recall...",
+            "PR AUC": "Positive-class focused metric for imbalanced data..."
+        }
+        ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
+        
+        enhanced_metrics = f"""
+        <div class="table-container" id="container-ml-metrics-table">
+            {ml_metrics_html}
+            <div class="table-controls">
+                <div class="pagination-controls">
+                    <span>Rows per page:</span>
+                    <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="-1">All</option>
+                    </select>
+                    <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
+                    <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
+                </div>
             </div>
         </div>
-    </div>
-    """
-    
-    features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None else "<p>No feature importance data available</p>"
-    
-    # SHAP Analysis table
-    shap_html = ""
-    if shap_reports:
-        shap_df = _prepare_shap_table(shap_reports)
-        logger.info(shap_df)
-        if not shap_df.empty:
-            shap_html = """
-            <h3>SHAP Analysis</h3>
-            <p>Comprehensive SHAP analysis for top features across all models:</p>
-            """ + _add_table_functionality(shap_df, 'shap-table')
-    
-    return f"""
-    <div class="ml-section">
-        <h3>Model Performance</h3>
-        {enhanced_metrics}
+        """
         
-        <h3>Top Features by Importance</h3>
-        {features_html}
+        features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None and not ml_features.empty else "<p>No feature importance data available</p>"
         
-        {shap_html}
-    </div>
-    """
+        # SHAP Analysis table
+        shap_html = ""
+        if shap_reports:
+            shap_df = _prepare_shap_table(shap_reports)
+            if not shap_df.empty:
+                shap_html = """
+                <h3>SHAP Analysis</h3>
+                <p>Comprehensive SHAP analysis for top features across all models:</p>
+                """ + _add_table_functionality(shap_df, 'shap-table')
+        
+        return f"""
+        <div class="ml-section">
+            <h3>Model Performance</h3>
+            {enhanced_metrics}
+            
+            <h3>Top Features by Importance</h3>
+            {features_html}
+            
+            {shap_html}
+        </div>
+        """
+    except Exception as e:
+        logger.exception("Error formatting ML section")
+        return f"<div class='error'>Error in ML section: {str(e)}</div>"
 
 def _add_header_tooltips(
     table_html: str, 
@@ -709,6 +732,9 @@ def generate_html_report(
     
     # ML summary (with safety checks)
     if amplicon_data.models:
+        # Add structure validation for debugging
+        _validate_models_structure(amplicon_data.models)
+        
         ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
             amplicon_data.models,
             [],   # Not used in function
