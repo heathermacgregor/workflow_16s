@@ -689,6 +689,91 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     </div>
     """
 
+def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
+    """Prepare HTML section for advanced statistical analysis results"""
+    if not advanced_results:
+        return "<p>No advanced statistical analysis results available.</p>"
+    
+    html_content = "<div class='advanced-stats-section'>"
+    html_content += "<h3>Advanced Statistical Analyses</h3>"
+    
+    # Core Microbiome Results
+    if 'core_microbiome' in advanced_results:
+        html_content += "<h4>Core Microbiome Analysis</h4>"
+        core_data = []
+        for group_col, table_types in advanced_results['core_microbiome'].items():
+            for table_type, levels in table_types.items():
+                for level, groups in levels.items():
+                    for group_value, df in groups.items():
+                        if isinstance(df, pd.DataFrame):
+                            core_data.append({
+                                "Group Column": group_col,
+                                "Table Type": table_type,
+                                "Level": level,
+                                "Group Value": group_value,
+                                "Core Features": len(df)
+                            })
+        if core_data:
+            core_df = pd.DataFrame(core_data)
+            html_content += _add_table_functionality(core_df, 'core-microbiome-table')
+        else:
+            html_content += "<p>No core microbiome results</p>"
+    
+    # Correlation Results
+    if 'correlations' in advanced_results:
+        html_content += "<h4>Correlation Analysis</h4>"
+        corr_data = []
+        for var, table_types in advanced_results['correlations'].items():
+            for table_type, levels in table_types.items():
+                for level, df in levels.items():
+                    if isinstance(df, pd.DataFrame):
+                        num_sig = (df['p_value'] < 0.05).sum() if 'p_value' in df.columns else 0
+                        corr_data.append({
+                            "Variable": var,
+                            "Table Type": table_type,
+                            "Level": level,
+                            "Features Tested": len(df),
+                            "Significant (p<0.05)": num_sig
+                        })
+        if corr_data:
+            corr_df = pd.DataFrame(corr_data)
+            html_content += _add_table_functionality(corr_df, 'correlation-table')
+        else:
+            html_content += "<p>No correlation results</p>"
+    
+    # Network Analysis Results
+    if 'networks' in advanced_results:
+        html_content += "<h4>Microbial Network Analysis</h4>"
+        network_data = []
+        for method, table_types in advanced_results['networks'].items():
+            for table_type, levels in table_types.items():
+                for level, data in levels.items():
+                    if 'edges' in data and isinstance(data['edges'], pd.DataFrame):
+                        edges = data['edges']
+                        network_data.append({
+                            "Method": method,
+                            "Table Type": table_type,
+                            "Level": level,
+                            "Edges": len(edges),
+                            "Positive Edges": (edges['correlation'] > 0).sum(),
+                            "Negative Edges": (edges['correlation'] < 0).sum()
+                        })
+        if network_data:
+            network_df = pd.DataFrame(network_data)
+            html_content += _add_table_functionality(network_df, 'network-table')
+        else:
+            html_content += "<p>No network analysis results</p>"
+    
+    # Summary Report
+    if 'summary_path' in advanced_results:
+        html_content += f"""
+        <h4>Comprehensive Analysis Report</h4>
+        <p>Detailed report available at: <code>{advanced_results['summary_path']}</code></p>
+        """
+    
+    html_content += "</div>"
+    return html_content
+
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
@@ -715,55 +800,121 @@ def generate_html_report(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tables_html = f"""
-    <div class="subsection">
-        <h3>Top Features</h3>
-    """
+    # Start tables HTML with overall summary section
+    tables_html = "<div class=\"subsection\">"
     
-    # Loop through top_features
+    # Add overall statistical summary section
+    if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'summary' in amplicon_data.stats:
+        summary = amplicon_data.stats['summary']
+        
+        # Create overall stats table
+        overall_data = [
+            {"Metric": "Total tests run", "Value": summary['total_tests_run']},
+            {"Metric": "Group columns analyzed", "Value": ", ".join(summary['group_columns_analyzed'])}
+        ]
+        df_overall = pd.DataFrame(overall_data)
+        overall_table1_html = _add_table_functionality(df_overall, 'overall-stats-table1')
+        
+        # Create test-specific stats table
+        test_data = []
+        for test, count in summary['significant_features_by_test'].items():
+            effect_stats = summary['effect_sizes_summary'].get(test, {})
+            test_data.append({
+                "Test": test,
+                "Significant Features": count,
+                "Effect Size Mean": effect_stats.get('mean', 'N/A'),
+                "Effect Size Std": effect_stats.get('std', 'N/A'),
+                "Effect Size Min": effect_stats.get('min', 'N/A'),
+                "Effect Size Max": effect_stats.get('max', 'N/A')
+            })
+        df_by_test = pd.DataFrame(test_data)
+        overall_table2_html = _add_table_functionality(df_by_test, 'overall-stats-table2')
+        
+        # Top features across tests
+        if 'top_features' in amplicon_data.stats and not amplicon_data.stats['top_features'].empty:
+            top_features_df = amplicon_data.stats['top_features']
+            overall_top_features_html = _add_table_functionality(top_features_df, 'overall-top-features-table')
+        else:
+            overall_top_features_html = "<p>No overall top features data</p>"
+        
+        # Recommendations
+        if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
+            recs = amplicon_data.stats['recommendations']
+            rec_html = "<ul>"
+            for rec in recs:
+                rec_html += f"<li>{rec}</li>"
+            rec_html += "</ul>"
+        else:
+            rec_html = "<p>No recommendations</p>"
+
+        # Add advanced statistical analysis section if available
+        if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
+            advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['advanced'])
+            tables_html += """
+            <div class="subsection">
+                <h3>Advanced Statistical Analyses</h3>
+                {advanced_html}
+            </div>
+            """.format(advanced_html=advanced_html)
+            
+        tables_html += f"""
+        <h3>Overall Analysis Summary</h3>
+        <h4>Summary Statistics</h4>
+        {overall_table1_html}
+        <h4>Test-Specific Summary</h4>
+        {overall_table2_html}
+        <h4>Top Features Across All Tests</h4>
+        {overall_top_features_html}
+        <h4>Analysis Recommendations</h4>
+        {rec_html}
+        """
+    else:
+        tables_html += "<p>No overall statistical summary available.</p>"
+    
+    tables_html += "</div>"  # Close overall summary subsection
+    
+    # Start group-specific analysis section
+    tables_html += "<div class=\"subsection\">"
+    tables_html += "<h3>Group-Specific Analysis</h3>"
+    
+    # Loop through top_features for group-specific features
     for col, val_dict in amplicon_data.top_features.items():
         for val, features in val_dict.items():
             group_key = f"{col}={val}"
-            df = _prepare_features_table(features, max_features, group_key)  # Use loop variable
+            df = _prepare_features_table(features, max_features, group_key)
             tables_html += f"""
             <h4>Features associated with {group_key}</h4>
             {_add_table_functionality(df, f'{group_key}-table')}
             """
     
-    # Stats summary
-    stats_df = _prepare_stats_summary(amplicon_data.stats)
+    # Stats summary (per-test details)
+    if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'test_results' in amplicon_data.stats:
+        stats_df = _prepare_stats_summary(amplicon_data.stats['test_results'])
+    else:
+        stats_df = pd.DataFrame()
     
-    # ML summary (with safety checks)
+    tables_html += f"""
+    <h3>Statistical Test Summary</h3>
+    {_add_table_functionality(stats_df, 'stats-table')}
+    """
+    
+    # ML summary
     if amplicon_data.models:
-        # Add structure validation for debugging
         _validate_models_structure(amplicon_data.models)
-        
         ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
             amplicon_data.models,
-            [],   # Not used in function
-            []    # Not used in function
+            [],   # Not used
+            []    # Not used
         )
     else:
         ml_metrics, ml_features, shap_reports = pd.DataFrame(), pd.DataFrame(), {}
     
-    # Proper DataFrame emptiness check
-    if not ml_metrics.empty:
-        ml_html = _format_ml_section(ml_metrics, ml_features, shap_reports)
-    else:
-        ml_html = "<p>No ML results</p>"
-    
-    # Append final sections
     tables_html += f"""
-    </div>
-    <div class="subsection">
-        <h3>Statistical Summary</h3>
-        {_add_table_functionality(stats_df, 'stats-table')}
-    </div>
-    <div class="subsection">
-        <h3>Machine Learning Results</h3>
-        {ml_html}
-    </div>
+    <h3>Machine Learning Results</h3>
+    {_format_ml_section(ml_metrics, ml_features, shap_reports)}
     """
+    
+    tables_html += "</div>"  # Close group-specific subsection
     
     sections = _prepare_sections(figures_dict, include_sections)
     sections_html = "\n".join(_section_html(s) for s in sections)
@@ -789,9 +940,6 @@ def generate_html_report(
     plotly_js_tag = (
         f'<script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>'
     )
-
-    # Note: We no longer need to prepare a separate plot_data dictionary 
-    # since the Plotly selector handles its own data internally
     
     try:
         table_js = import_js_as_str(tables_js_path)
@@ -801,7 +949,6 @@ def generate_html_report(
     
     try:
         css_content = css_path.read_text(encoding='utf-8')
-        # CSS already includes all necessary Plotly selector styles
     except Exception as e:
         logger.error(f"Error reading CSS file: {e}")
         css_content = ""
