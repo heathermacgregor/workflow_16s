@@ -68,7 +68,7 @@ class FunctionalAnnotation:
             with get_progress_bar() as progress:
                 task = progress.add_task(description=_format_task_desc("Annotating most important features"), total=len(features))
                 for future in as_completed(future_to_idx):
-                    idx = future_to_idx(future)
+                    idx = future_to_idx[future]
                     results[idx] = future.result()
                     progress.update(task, advance=1)
         
@@ -91,7 +91,7 @@ class Downstream:
         config: Dict, 
         project_dir: Any, 
         mode: str = constants.DEFAULT_MODE, 
-        existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
+        existing_subsets: Optional[Dict[str, Dict[str, Path]] = None,
         verbose: bool = False
     ):
         self.config, self.project_dir, self.verbose = config, project_dir, verbose
@@ -195,7 +195,15 @@ class Downstream:
             network_methods=['sparcc', 'spearman'],
             network_threshold=0.3
         )
-        return stats.results
+        
+        # Store all statistical results including summary, top features, and recommendations
+        return {
+            'test_results': stats.results,
+            'advanced': stats.advanced_results,
+            'summary': summary,
+            'top_features': top_features,
+            'recommendations': recommendations
+        }
 
     def _alpha_diversity(self):
         if not self.config.get("alpha_diversity", {}).get('enabled', False):
