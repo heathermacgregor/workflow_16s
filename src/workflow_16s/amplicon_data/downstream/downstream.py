@@ -91,7 +91,7 @@ class Downstream:
         config: Dict, 
         project_dir: Any, 
         mode: str = constants.DEFAULT_MODE, 
-        existing_subsets: Optional[Dict[str, Dict[str, Path]] = None,
+        existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
         verbose: bool = False
     ):
         self.config, self.project_dir, self.verbose = config, project_dir, verbose
