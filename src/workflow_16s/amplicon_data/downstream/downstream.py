@@ -35,7 +35,7 @@ from workflow_16s.amplicon_data.downstream.feature_selection import FeatureSelec
 from workflow_16s.amplicon_data.downstream.input import DownstreamDataLoader as InputData
 from workflow_16s.amplicon_data.downstream.maps import Maps
 from workflow_16s.amplicon_data.downstream.tables import PrepData 
-from workflow_16s.amplicon_data.downstream.stats import StatisticalAnalysis
+from workflow_16s.amplicon_data.downstream.stats import run_statistical_analysis_with_loading
 
 # ==================================== FUNCTIONS ===================================== #
 
@@ -50,13 +50,15 @@ class FunctionalAnnotation:
         self,
         config: Dict
     ):
+        self.config = config
         if self.config.get("faprotax", {}).get('enabled', False):
             self.db = get_faprotax_parsed()
         self._faprotax_cache: Dict[str, Any] = {}
 
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         if taxon not in self._faprotax_cache:
-            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(taxon, db, include_references=False)
+            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(taxon, self.db, include_references=False)
+        return self._faprotax_cache[taxon]
     
     def _annotate_features(self, features):
         features = list(features)
@@ -78,26 +80,40 @@ class FunctionalAnnotation:
         # Annotate features across all groups and conditions
         for feature in features:
             feature["faprotax_function"] = taxon_map.get(feature["feature"], [])
-        return result
+        return results
 
 class Downstream:
-    """Main class for orchestrating 16S amplicon data analysis pipeline."""
+    """Main class for orchestrating 16S amplicon data analysis pipeline with result loading."""
+    
     ModeConfig = {
         "asv": ("table", "asv"), 
         "genus": ("table_6", "l6")
     }
+    
     def __init__(
         self, 
         config: Dict, 
         project_dir: Any, 
         mode: str = constants.DEFAULT_MODE, 
         existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
-        verbose: bool = False
+        verbose: bool = False,
+        # New parameters for result loading
+        load_existing_results: bool = True,
+        max_result_age_hours: Optional[float] = 24,
+        force_recalculate_stats: List[str] = None,
+        invalidate_results_patterns: List[str] = None
     ):
         self.config, self.project_dir, self.verbose = config, project_dir, verbose
         self.output_dir = self.project_dir.final
         self.existing_subsets = existing_subsets
         self.mode = 'genus' if self.config.get("target_subfragment_mode", constants.DEFAULT_MODE) == 'any' else 'asv'
+        
+        # Result loading configuration
+        self.load_existing_results = load_existing_results
+        self.max_result_age_hours = max_result_age_hours
+        self.force_recalculate_stats = force_recalculate_stats or []
+        self.invalidate_results_patterns = invalidate_results_patterns or []
+        
         self._validate_mode()
 
         self.group_columns = self.config.get("group_columns", [])
@@ -112,6 +128,9 @@ class Downstream:
         self.top_features: Optional[Dict[str, Any]] = {}
         self.models: Optional[Dict[str, Any]] = {}
         
+        # Statistics about result loading
+        self.analysis_statistics = {}
+        
         logger.info("Running downstream analysis pipeline...")
         self._execute_pipeline()
       
@@ -122,7 +141,7 @@ class Downstream:
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
-        logger.info(sorted(list(self.metadata["raw"]["genus"].columns)))
+        logger.info(f"Available metadata columns: {sorted(list(self.metadata['raw']['genus'].columns))}")
         self.metadata, self.tables = self._prep_data()
         self._run_analysis()
         
@@ -138,15 +157,80 @@ class Downstream:
         return data.metadata, data.tables
 
     def _run_analysis(self):
+        """Run all analysis steps with optimized result loading."""
+        # Handle result invalidation if requested
+        if self.invalidate_results_patterns:
+            self._invalidate_existing_results()
+        
+        # Run analyses in optimized order
         #self.maps = self._plot_sample_maps()
-        logger.info("Stats")
-        self.stats = self._stats()
-        logger.info("Alpha")
+        logger.info("Running Statistical Analysis with result loading...")
+        self.stats = self._stats_with_loading()
+        logger.info("Running Alpha Diversity Analysis...")
         self.alpha_diversity = self._alpha_diversity()
-        logger.info("Beta")
+        logger.info("Running Beta Diversity Analysis...")
         self.ordination = self._beta_diversity()
-        logger.info("ML")
+        logger.info("Running Machine Learning Feature Selection...")
         self.models = self._catboost_feature_selection()
+        
+        # Log final statistics
+        self._log_analysis_summary()
+
+    def _invalidate_existing_results(self):
+        """Invalidate specific result patterns before analysis."""
+        logger.info(f"Invalidating results matching patterns: {self.invalidate_results_patterns}")
+        
+        stats_dir = self.project_dir.final / 'stats'
+        if not stats_dir.exists():
+            logger.info("No stats directory found, nothing to invalidate")
+            return
+        
+        total_deleted = 0
+        for pattern in self.invalidate_results_patterns:
+            deleted_count = self._delete_matching_results(stats_dir, pattern)
+            total_deleted += deleted_count
+            logger.info(f"Pattern '{pattern}': deleted {deleted_count} files")
+        
+        logger.info(f"Total invalidated files: {total_deleted}")
+    
+    def _delete_matching_results(self, stats_dir: Path, pattern: str) -> int:
+        """Delete result files matching a specific pattern."""
+        deleted_count = 0
+        
+        # Pattern matching logic
+        for group_dir in stats_dir.iterdir():
+            if not group_dir.is_dir():
+                continue
+                
+            for table_dir in group_dir.iterdir():
+                if not table_dir.is_dir():
+                    continue
+                    
+                for level_dir in table_dir.iterdir():
+                    if not level_dir.is_dir():
+                        continue
+                        
+                    for result_file in level_dir.glob('*.tsv'):
+                        # Check if file matches pattern
+                        full_path = f"{group_dir.name}_{table_dir.name}_{level_dir.name}_{result_file.stem}"
+                        
+                        if (pattern in full_path or 
+                            pattern == result_file.stem or
+                            pattern == f"{table_dir.name}_{level_dir.name}" or
+                            pattern == group_dir.name or
+                            pattern == table_dir.name):
+                            
+                            result_file.unlink()
+                            deleted_count += 1
+                            
+                            # Also delete correlation matrices for network analysis
+                            if result_file.stem == 'network_analysis':
+                                corr_file = level_dir / f"{result_file.stem}_correlation_matrix.tsv"
+                                if corr_file.exists():
+                                    corr_file.unlink()
+                                    deleted_count += 1
+        
+        return deleted_count
 
     def _plot_sample_maps(self):
         if not self.config.get("maps", {}).get('enabled', False):
@@ -155,55 +239,70 @@ class Downstream:
         maps.generate_sample_maps(nfc_facility_data=self.nfc_facilities)
         return maps.maps
 
-    def _stats(self):
+    def _stats_with_loading(self):
+        """Run statistical analysis with enhanced result loading."""
         if not self.config.get("stats", {}).get('enabled', False):
+            logger.info("Statistical analysis disabled in configuration")
             return {}
 
-        stats = StatisticalAnalysis(
+        logger.info(f"Statistical analysis configuration:")
+        logger.info(f"  - Load existing results: {self.load_existing_results}")
+        logger.info(f"  - Max file age: {self.max_result_age_hours} hours" if self.max_result_age_hours else "  - No age limit")
+        logger.info(f"  - Force recalculate patterns: {self.force_recalculate_stats}")
+
+        # Use the enhanced statistical analysis with result loading
+        with run_statistical_analysis_with_loading(
             config=self.config,
             tables=self.tables,
             metadata=self.metadata,
             mode=self.mode,
             group_columns=self.group_columns,
-            project_dir=self.project_dir
-        )
-        # Check for configuration issues
-        issues = stats.validate_configuration()
-        if issues['errors']:
-            logger.error("Configuration errors:")
-            for error in issues['errors']:
-                logger.error(f"  - {error}")
+            project_dir=self.project_dir,
+            load_existing=self.load_existing_results,
+            max_file_age_hours=self.max_result_age_hours,
+            force_recalculate=self.force_recalculate_stats
+        ) as stats:
+            
+            # Store loading statistics
+            self.analysis_statistics['stats'] = stats.get_load_report()
+            
+            # Check for configuration issues
+            issues = stats.validate_configuration()
+            if issues['errors']:
+                logger.error("Configuration errors:")
+                for error in issues['errors']:
+                    logger.error(f"  - {error}")
+                raise ValueError("Statistical analysis configuration validation failed")
+            
+            if issues['warnings']:
+                logger.warning("Configuration warnings:")
+                for warning in issues['warnings']:
+                    logger.warning(f"  - {warning}")
 
-        # Get summary statistics
-        summary = stats.get_summary_statistics()
-        logger.info(f"Total tests run: {summary['total_tests_run']}")
-        
-        # Get top features across all tests
-        top_features = stats.get_top_features_across_tests(n_features=20)
-        logger.info(top_features)
-        
-        # Get analysis recommendations
-        recommendations = stats.get_analysis_recommendations()
-        for rec in recommendations:
-            logger.info(f"- {rec}")
-
-        # Run all advanced analyses
-        results = stats.run_comprehensive_analysis(
-            prevalence_threshold=0.8,
-            abundance_threshold=0.01,
-            continuous_variables=['ph', 'facility_distance_km'],
-            network_methods=['sparcc', 'spearman'],
-            network_threshold=0.3
-        )
-        
-        # Store all statistical results including summary, top features, and recommendations
-        return {
-            'test_results': stats.results,
-            'advanced': stats.advanced_results,
-            'summary': summary,
-            'top_features': top_features,
-            'recommendations': recommendations
-        }
+            # Get summary statistics
+            summary = stats.get_summary_statistics_optimized()
+            logger.info(f"Statistical Analysis Summary:")
+            logger.info(f"  - Total tests run: {summary['total_tests_run']}")
+            logger.info(f"  - Group columns analyzed: {len(summary['group_columns_analyzed'])}")
+            
+            # Log loading performance
+            load_stats = summary.get('performance_metrics', {}).get('load_statistics', {})
+            if load_stats:
+                total_tasks = load_stats.get('total_tasks', 0)
+                loaded_tasks = load_stats.get('loaded_from_files', 0)
+                calculated_tasks = load_stats.get('calculated_fresh', 0)
+                
+                if total_tasks > 0:
+                    load_percentage = (loaded_tasks / total_tasks) * 100
+                    logger.info(f"  - Results loaded from files: {loaded_tasks}/{total_tasks} ({load_percentage:.1f}%)")
+                    logger.info(f"  - Results calculated fresh: {calculated_tasks}/{total_tasks} ({100-load_percentage:.1f}%)")
+            
+            # Store all statistical results
+            return {
+                'test_results': stats.results,
+                'summary': summary,
+                'load_statistics': stats.get_load_report()
+            }
 
     def _alpha_diversity(self):
         if not self.config.get("alpha_diversity", {}).get('enabled', False):
@@ -224,28 +323,153 @@ class Downstream:
             return {}
         cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
         cb.run(output_dir=self.output_dir)
-        logger.info(cb.models)
-        logger.info(cb)
+        logger.info(f"Feature selection models: {cb.models}")
         return cb.models
 
     def _top_features(self):
-        placeholder = ''
-
+        """Generate top features plots if enabled."""
         if self.config.get("violin_plots", {}).get('enabled', False) or self.config.get("feature_maps", {}).get('enabled', False):
-            features_plots = top_features_plots(
-                output_dir=self.output_dir, 
-                config=self.config, 
-                top_features=self.top_features, 
-                tables=self.tables, 
-                meta=self.metadata, 
-                nfc_facilities=self.nfc_facilities, 
-                verbose=self.verbose
-            )
+            if self.top_features:
+                features_plots = top_features_plots(
+                    output_dir=self.output_dir, 
+                    config=self.config, 
+                    top_features=self.top_features, 
+                    tables=self.tables, 
+                    meta=self.metadata, 
+                    nfc_facilities=self.nfc_facilities, 
+                    verbose=self.verbose
+                )
+                return features_plots
+        return None
 
     def _functional_annotation(self):
-        placeholder = ''
+        """Run functional annotation if enabled."""
+        if not self.config.get("faprotax", {}).get('enabled', False):
+            return None
+            
         faprotax = FunctionalAnnotation(self.config)
-        annotations = faprotax._annotate_features()
+        if self.top_features:
+            # Extract features from top_features for annotation
+            features_to_annotate = []
+            # Implementation depends on structure of self.top_features
+            annotations = faprotax._annotate_features(features_to_annotate)
+            return annotations
+        return None
+
+    def _log_analysis_summary(self):
+        """Log a comprehensive summary of the analysis."""
+        logger.info("=" * 60)
+        logger.info("DOWNSTREAM ANALYSIS SUMMARY")
+        logger.info("=" * 60)
+        
+        # Log what was enabled/disabled
+        enabled_modules = []
+        disabled_modules = []
+        
+        modules = [
+            ('stats', 'Statistical Analysis'),
+            ('alpha_diversity', 'Alpha Diversity'),
+            ('ordination', 'Beta Diversity/Ordination'),
+            ('ml', 'Machine Learning Feature Selection'),
+            ('maps', 'Sample Maps'),
+            ('faprotax', 'Functional Annotation')
+        ]
+        
+        for config_key, module_name in modules:
+            if self.config.get(config_key, {}).get('enabled', False):
+                enabled_modules.append(module_name)
+            else:
+                disabled_modules.append(module_name)
+        
+        logger.info(f"Enabled modules: {', '.join(enabled_modules)}")
+        if disabled_modules:
+            logger.info(f"Disabled modules: {', '.join(disabled_modules)}")
+        
+        # Log result loading statistics
+        if self.analysis_statistics:
+            stats_info = self.analysis_statistics.get('stats', {})
+            summary_info = stats_info.get('summary', {})
+            
+            if summary_info:
+                logger.info(f"Statistical Analysis Performance:")
+                logger.info(f"  - Total tasks: {summary_info.get('total_tasks', 'N/A')}")
+                logger.info(f"  - Loaded from cache: {summary_info.get('loaded_from_files', 'N/A')}")
+                logger.info(f"  - Calculated fresh: {summary_info.get('calculated_fresh', 'N/A')}")
+        
+        # Log data dimensions
+        if self.tables and self.metadata:
+            logger.info(f"Data Summary:")
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    table = self.tables[table_type][level]
+                    metadata = self.metadata[table_type][level]
+                    logger.info(f"  - {table_type}/{level}: {table.shape[1]} samples, {table.shape[0]} features")
+        
+        logger.info("=" * 60)
+
+    def get_analysis_report(self) -> Dict[str, Any]:
+        """Get a comprehensive report of the analysis."""
+        report = {
+            'config': self.config,
+            'mode': self.mode,
+            'group_columns': self.group_columns,
+            'load_settings': {
+                'load_existing_results': self.load_existing_results,
+                'max_result_age_hours': self.max_result_age_hours,
+                'force_recalculate_stats': self.force_recalculate_stats,
+                'invalidate_results_patterns': self.invalidate_results_patterns
+            },
+            'analysis_statistics': self.analysis_statistics,
+            'results_summary': {}
+        }
+        
+        # Add result summaries
+        if self.stats:
+            report['results_summary']['stats'] = {
+                'enabled': True,
+                'load_statistics': self.stats.get('load_statistics', {})
+            }
+        
+        if self.alpha_diversity:
+            report['results_summary']['alpha_diversity'] = {'enabled': True}
+        
+        if self.ordination:
+            report['results_summary']['ordination'] = {'enabled': True}
+            
+        if self.models:
+            report['results_summary']['ml_models'] = {'enabled': True}
+        
+        return report
+
+    def force_recalculate_next_run(self, patterns: List[str]):
+        """Set patterns to force recalculation in the next analysis run."""
+        self.force_recalculate_stats.extend(patterns)
+        logger.info(f"Added patterns for forced recalculation: {patterns}")
+
+    def invalidate_and_rerun_stats(self, patterns: List[str]):
+        """Invalidate specific results and rerun statistical analysis."""
+        logger.info(f"Invalidating and recalculating statistical results for patterns: {patterns}")
+        
+        # Invalidate existing results
+        stats_dir = self.project_dir.final / 'stats'
+        total_deleted = 0
+        for pattern in patterns:
+            deleted_count = self._delete_matching_results(stats_dir, pattern)
+            total_deleted += deleted_count
+        
+        logger.info(f"Invalidated {total_deleted} result files")
+        
+        # Rerun statistical analysis with force recalculation
+        if self.config.get("stats", {}).get('enabled', False):
+            original_patterns = self.force_recalculate_stats.copy()
+            self.force_recalculate_stats.extend(patterns)
+            
+            try:
+                self.stats = self._stats_with_loading()
+                logger.info("Statistical analysis completed successfully")
+            finally:
+                # Restore original force recalculate patterns
+                self.force_recalculate_stats = original_patterns
 
 
 # ===================================== IMPORTS ====================================== #
