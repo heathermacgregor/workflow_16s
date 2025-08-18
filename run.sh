@@ -27,7 +27,7 @@ while getopts ":T" opt; do
             ENABLE_TIMESTAMPS=false
             ;;
         \?)
-            log "❌ Invalid option: -$OPTARG" >&2
+            log "[ ✗ ] 🔴 Invalid option: -$OPTARG" >&2
             exit 1
             ;;
     esac
@@ -36,20 +36,20 @@ shift $((OPTIND-1))  # Remove processed options
 
 # Dependency Checks
 check_conda() {
-    log "🔍 Checking Conda availability..."
+    log "[ 𖦞 ] 🔵 Checking Conda availability..."
     if ! command -v conda &>/dev/null; then
-        log "❌ Critical: Conda not found in PATH"
+        log "[ ✗ ] 🔴 Critical: Conda not found in PATH"
         exit 1
     fi
 }
 
 # Environment Management
 validate_environment() {
-    log "🔍 Scanning for Conda environments..."
+    log "[ 𖦞 ] 🔵 Scanning for Conda environments..."
     
     # Check for exact match first
     if conda env list | grep -qw "^${ENV_NAME}"; then
-        log "✅ Found exact environment match: ${ENV_NAME}"
+        log "[ ✓ ] 🟢 Found exact environment match: ${ENV_NAME}"
         return
     fi
 
@@ -63,32 +63,32 @@ validate_environment() {
         return
     fi
 
-    log "❌ No valid environment found matching:"
+    log "[ ✗ ] 🔴 No valid environment found matching:"
     log "   - Exact name: ${ENV_NAME}"
     log "   - Name suffix: workflow_16s"
     exit 1
 }
 
 activate_environment() {
-    log "🔄 Initializing Conda..."
+    log "[ ↺ ] 🔵 Initializing Conda..."
     source "$(conda info --base)/etc/profile.d/conda.sh"
 
-    log "🔄 Activating ${ENV_NAME}..."
+    log "[ ↺ ] 🔵 Activating ${ENV_NAME}..."
     if ! conda activate "${ENV_NAME}"; then
-        log "❌ Failed to activate environment: ${ENV_NAME}"
+        log "[ ✗ ] 🔴 Failed to activate environment: ${ENV_NAME}"
         exit 1
     fi
-    log "✅ Environment activated: ${CONDA_DEFAULT_ENV}"
+    log "[ ✓ ] 🟢 Environment activated: ${CONDA_DEFAULT_ENV}"
 }
 
 # Script Validation
 validate_python_script() {
-    log "🔍 Verifying workflow script..."
+    log "Verifying workflow script..."
     if [[ ! -f "${PYTHON_SCRIPT}" ]]; then
-        log "❌ Missing Python script: ${PYTHON_SCRIPT}"
+        log "[ ✗ ] 🔴 Missing Python script: ${PYTHON_SCRIPT}"
         exit 1
     fi
-    log "✅ Script validated: $(realpath "${PYTHON_SCRIPT}")"
+    log "[ ✓ ] 🟢 Script validated: $(realpath "${PYTHON_SCRIPT}")"
 }
 
 # Main Execution
@@ -98,12 +98,12 @@ main() {
     activate_environment
     validate_python_script
 
-    log "🔄 Running workflow script..."
+    log "[ ↺ ] 🔵 Running workflow script..."
     python "${PYTHON_SCRIPT}"
 
-    log "🔄 Deactivating environment..."
+    log "[ ↺ ] 🔵 Deactivating environment..."
     conda deactivate
-    log "✅ Workflow completed successfully"
+    log "[ ✓ ] 🟢 Workflow completed successfully"
 }
 
 # Execute main function
