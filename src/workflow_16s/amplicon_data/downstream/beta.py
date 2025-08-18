@@ -233,6 +233,27 @@ class Ordination:
     ):
         try:
             progress.update(method_task, description=_format_task_desc(method_desc))
+            # Check if we should skip calculation and load existing figures
+            if self.config.get('ordination', {}).get('load_existing_figures', False):
+                required_color_cols = [col for col in self.color_columns if col in metadata.columns]
+                if not required_color_cols:
+                    logger.info(f"Skipping ordination {method} for {table_type}/{level}: no valid color columns")
+                    progress.update(method_task, completed=1, visible=False)
+                    return (table_type, level, method, None, None)
+                
+                all_exist = True
+                for color_col in required_color_cols:
+                    fname = f"{method}.{table_type}.0-1.{color_col}.html"
+                    file_path = output_dir / fname
+                    if not file_path.exists():
+                        all_exist = False
+                        break
+                        
+                if all_exist:
+                    logger.info(f"Skipping ordination {method} for {table_type}/{level}: all figures exist")
+                    progress.update(method_task, completed=1, visible=False)
+                    return (table_type, level, method, None, None)
+            
             result, figures = self._run_test(  
                 table=table,
                 metadata=metadata,
@@ -317,4 +338,3 @@ class Ordination:
         except Exception as e:
             logger.error(f"Plotting failed for {method} ({table_type}/{level}): {e}")
             return result, {}
-          
