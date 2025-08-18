@@ -38,7 +38,7 @@ shift $((OPTIND-1))  # Remove processed options
 check_conda() {
     log "【 𖦞 】 🟦 Checking Conda availability..."
     if ! command -v conda &>/dev/null; then
-        log "【 ✗ 】 🟥 Critical: Conda not found in PATH"
+        log "【 ✗ 】 🟥 Critical: Conda not found in PATH!"
         exit 1
     fi
 }
@@ -73,9 +73,9 @@ activate_environment() {
     log "【 ↺ 】 🟦 Initializing Conda..."
     source "$(conda info --base)/etc/profile.d/conda.sh"
 
-    log "【 ↺ 】 🟦 Activating ${ENV_NAME}..."
+    log "【 ↺ 】 🟦 Activating Conda environment (${ENV_NAME})..."
     if ! conda activate "${ENV_NAME}"; then
-        log "【 ✗ 】 🟥 Failed to activate environment: ${ENV_NAME}"
+        log "【 ✗ 】 🟥 Failed to activate environment (${ENV_NAME})"
         exit 1
     fi
     log "【 ✓ 】 🟩 Environment activated: ${CONDA_DEFAULT_ENV}"
@@ -101,7 +101,7 @@ main() {
     log "【 ↺ 】 🟦 Running workflow script..."
     python "${PYTHON_SCRIPT}"
 
-    log "【 ↺ 】 🟦 Deactivating environment..."
+    log "【 ↺ 】 🟦 Deactivating Conda environment (${ENV_NAME})..."
     conda deactivate
     log "【 ✓ 】 🟩 Workflow completed successfully"
 }
