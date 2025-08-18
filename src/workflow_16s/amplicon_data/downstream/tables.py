@@ -121,9 +121,9 @@ class PrepData:
                 self.tables.setdefault(table_type, {})[level] = table
                 self.metadata.setdefault(table_type, {})[level] = metadata
                 
-                logger.info(
-                    f"Preprocessing: {initial_samples:.6} → {table.shape[0]:.6} samples, "
-                    f"{initial_features:.6} → {table.shape[1]:.6} features"
+                logger.info( 
+                    f"Preprocessing: {initial_samples} → {table.shape[0]} samples, " 
+                    f"{initial_features} → {table.shape[1]} features" 
                 )
 
         
