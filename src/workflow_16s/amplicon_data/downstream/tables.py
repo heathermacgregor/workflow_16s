@@ -117,12 +117,15 @@ class PrepData:
                     continue
                     
                 table, metadata = update_table_and_metadata(table, metadata)
+                # Set defaults
                 self.tables.setdefault(table_type, {})[level] = table
                 self.metadata.setdefault(table_type, {})[level] = metadata
+                
                 logger.info(
-                    f"Preprocessing: {initial_samples}→{table.shape[0]} samples, "
-                    f"{initial_features}→{table.shape[1]} features"
+                    f"Preprocessing: {initial_samples:.6} → {table.shape[0]:.6} samples, "
+                    f"{initial_features:.6} → {table.shape[1]:.6} features"
                 )
+
         
     def _create_presence_absence(self, table_type: str, level: str) -> None:
         if not bool(self.config.get("features", {}).get("presence_absence", False)):
