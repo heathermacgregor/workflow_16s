@@ -50,7 +50,7 @@ from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
-from workflow_16s.amplicon_data.downstream.downstream import Downstream
+from workflow_16s.amplicon_data.downstream.downstream import Downstream, DownstreamResultsAnalyzer
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 import workflow_16s.custom_tmp_config
@@ -322,6 +322,11 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
             verbose=verbose        
         )
         """
+        analyzer = DownstreamResultsAnalyzer(downstream_results=amplicon_data, config=config, verbose=True)
+        results = analyzer.run_comprehensive_analysis(output_dir='comprehensive_analysis')
+        logger.info(results['consensus_features'])
+        logger.info(results['narrative'])
+        logger.info(results['dashboard_components'])
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
