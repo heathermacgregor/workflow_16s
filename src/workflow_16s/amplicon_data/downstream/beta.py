@@ -9,6 +9,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from functools import lru_cache
 
 # Third‑Party Imports
 import pandas as pd
@@ -38,38 +40,60 @@ logger = logging.getLogger("workflow_16s")
 # Global lock for UMAP operations to prevent thread conflicts
 umap_lock = threading.Lock()
 
+# =================================== DATA CLASSES ================================== #
+
+@dataclass
+class OrdinationTask:
+    """Represents a single ordination task with all necessary parameters."""
+    table_type: str
+    level: str
+    method: str
+    
+    def __str__(self):
+        return f"{self.table_type}/{self.level}/{self.method}"
+
+@dataclass  
+class OrdinationConfig:
+    """Configuration for ordination methods."""
+    key: str
+    func: Callable
+    plot_func: Callable
+    name: str
+    plot_kwargs: Dict = None
+    
+    def __post_init__(self):
+        if self.plot_kwargs is None:
+            self.plot_kwargs = {}
+
 # =================================== FUNCTIONS ====================================== #
 
 class Ordination:
     """Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures."""
     
+    # Class constants for better memory efficiency
+    KNOWN_METHODS = frozenset(["pca", "pcoa", "tsne", "umap"])
+    DEFAULT_METHODS = {
+        "raw": ("pca",),
+        "filtered": ("pca", "pcoa"),
+        "normalized": ("pca", "pcoa", "tsne", "umap"),
+        "clr_transformed": ("pca", "pcoa", "tsne", "umap"),
+        "presence_absence": ("pcoa", "tsne", "umap")
+    }
+    
+    DEFAULT_COLOR_COLUMNS = (
+        constants.DEFAULT_DATASET_COLUMN,
+        constants.DEFAULT_GROUP_COLUMN,
+        "env_feature", 
+        "env_material", 
+        "country"
+    )
+    
+    # Use dataclass for better structure
     TEST_CONFIG = {
-        "pca": {
-            "key": "pca", 
-            "func": calculate_pca, 
-            "plot_func": plot_pca, 
-            "name": "PCA"
-        },
-        "pcoa": {
-            "key": "pcoa", 
-            "func": calculate_pcoa, 
-            "plot_func": plot_pcoa, 
-            "name": "PCoA"
-        },
-        "tsne": {
-            "key": "tsne",
-            "func": calculate_tsne,
-            "plot_func": plot_mds,
-            "name": "t‑SNE",
-            "plot_kwargs": {"mode": "TSNE"},
-        },
-        "umap": {
-            "key": "umap",
-            "func": calculate_umap,
-            "plot_func": plot_mds,
-            "name": "UMAP",
-            "plot_kwargs": {"mode": "UMAP"},
-        },
+        "pca": OrdinationConfig("pca", calculate_pca, plot_pca, "PCA"),
+        "pcoa": OrdinationConfig("pcoa", calculate_pcoa, plot_pcoa, "PCoA"),
+        "tsne": OrdinationConfig("tsne", calculate_tsne, plot_mds, "t‑SNE", {"mode": "TSNE"}),
+        "umap": OrdinationConfig("umap", calculate_umap, plot_mds, "UMAP", {"mode": "UMAP"}),
     }
 
     def __init__(
@@ -79,39 +103,33 @@ class Ordination:
         tables: Dict[str, Dict[str, Table]],
         verbose: bool = False
     ):
-        self.config, self.verbose = config, verbose
-        self.metadata, self.tables = metadata, tables
-        self.color_columns = config['maps'].get(
-            "color_columns",
-            [
-                constants.DEFAULT_DATASET_COLUMN, 
-                constants.DEFAULT_GROUP_COLUMN,
-                "env_feature", "env_material", "country"
-            ],
-        )
+        self.config = config
+        self.verbose = verbose
+        self.metadata = metadata
+        self.tables = tables
+        
+        # Use tuple for immutable sequence (better memory)
+        self.color_columns = tuple(config['maps'].get(
+            "color_columns", 
+            self.DEFAULT_COLOR_COLUMNS
+        ))
+        
         self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)  
         self.results = {}
         
+        # Early return optimization
         ordination_config = self.config.get('ordination', {})
         if not ordination_config.get('enabled', False):
             logger.info("Beta diversity analysis (ordination) disabled")
-            self.tasks = []
+            self.tasks = ()
             return
             
-        self.tasks = self.get_enabled_tasks()          
-        if len(self.tasks) == 0:
+        self.tasks = self._get_enabled_tasks()          
+        if not self.tasks:
             logger.info("No methods for beta diversity analysis (ordination) enabled")
 
-    def get_enabled_tasks(self):  # Fixed: added self parameter
-        KNOWN_METHODS = ["pca", "pcoa", "tsne", "umap"]
-        DEFAULT_METHODS = {
-            "raw": ["pca"],
-            "filtered": ["pca", "pcoa"],
-            "normalized": ["pca", "pcoa", "tsne", "umap"],
-            "clr_transformed": ["pca", "pcoa", "tsne", "umap"],
-            "presence_absence": ["pcoa", "tsne", "umap"]
-        }
-        
+    def _get_enabled_tasks(self) -> Tuple[OrdinationTask, ...]:
+        """Get enabled tasks as immutable tuple for better performance."""
         ordination_config = self.config.get('ordination', {})
         table_config = ordination_config.get('tables', {})
         tasks = []
@@ -121,220 +139,257 @@ class Ordination:
             if not table_type_config.get('enabled', False):
                 continue
                 
-            enabled_levels = [
-                l for l in table_type_config.get('levels', levels.keys()) 
-                if l in levels.keys()
-            ]
-            enabled_methods = [
-                m for m in table_type_config.get('methods', DEFAULT_METHODS.get(table_type, ["pca"])) 
-                if m in KNOWN_METHODS
-            ]
+            # Use set intersection for better performance
+            available_levels = set(levels.keys())
+            enabled_levels = set(table_type_config.get('levels', available_levels))
+            valid_levels = available_levels & enabled_levels
             
-            for level in enabled_levels:
-                for method in enabled_methods:  
-                    tasks.append((table_type, level, method))  
+            # Use set intersection for methods too
+            default_methods = set(self.DEFAULT_METHODS.get(table_type, ("pca",)))
+            enabled_methods = set(table_type_config.get('methods', default_methods))
+            valid_methods = self.KNOWN_METHODS & enabled_methods
+            
+            for level in valid_levels:
+                for method in valid_methods:  
+                    tasks.append(OrdinationTask(table_type, level, method))
         
-        return tasks
+        return tuple(tasks)  # Return immutable tuple
 
-    def run(
-        self,
-        output_dir: Optional[Path] = None,
-    ):
-        # Initialize results storage
-        for table_type, level, method in self.tasks:
-            if table_type not in self.results:
-                self.results[table_type] = {}
-            if level not in self.results[table_type]:
-                self.results[table_type][level] = {'figures': {}}
+    def _initialize_results(self) -> None:
+        """Initialize results storage structure efficiently."""
+        for task in self.tasks:
+            if task.table_type not in self.results:
+                self.results[task.table_type] = {}
+            if task.level not in self.results[task.table_type]:
+                self.results[task.table_type][task.level] = {'figures': {}}
+
+    @lru_cache(maxsize=32)
+    def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> bool:
+        """Check if we should skip calculation due to existing figures (cached)."""
+        if not self.config.get('ordination', {}).get('load_existing_figures', False):
+            return False
+            
+        # Get metadata for this specific task
+        metadata = self.metadata[task.table_type][task.level]
+        required_color_cols = [col for col in self.color_columns if col in metadata.columns]
         
-        # Handle no tasks case
+        if not required_color_cols:
+            logger.info(f"Skipping ordination {task}: no valid color columns")
+            return True
+        
+        # Check if all required files exist
+        for color_col in required_color_cols:
+            fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
+            if not (output_dir / fname).exists():
+                return False
+                
+        logger.info(f"Skipping ordination {task}: all figures exist")
+        return True
+
+    def _calculate_optimal_workers(self) -> int:
+        """Calculate optimal number of worker threads."""
+        cpu_count = os.cpu_count() or 1
+        # For I/O bound tasks with some CPU computation, use more threads
+        # but cap at reasonable limit to avoid resource contention
+        return min(6, max(2, cpu_count // 2 + 1))
+
+    def run(self, output_dir: Optional[Path] = None) -> None:
+        """Run ordination analysis with optimized parallel processing."""
+        # Early returns
         if not self.tasks:
             return
             
-        # Set default output directory
+        self._initialize_results()
+        
         if output_dir is None:
             output_dir = Path(self.config['output_dir'])
             
         with get_progress_bar() as progress:
-            stats_desc = f"Running beta diversity"
+            stats_desc = "Running beta diversity"
             stats_task = progress.add_task(  
                 _format_task_desc(stats_desc),
                 total=len(self.tasks)
             )
             
-            # Calculate thread count safely
-            cpu_count = os.cpu_count() or 1
-            max_workers = min(4, max(1, cpu_count // 2))
+            max_workers = self._calculate_optimal_workers()
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = []
-                future_to_key = {}
-    
-                for table_type, level, method in self.tasks:
-                    method_desc = (
-                        f"{table_type.replace('_', ' ').title()} ({level.title()})"
-                        f" → {self.TEST_CONFIG[method]['name']}"  
-                    )
-                    
-                    # Create progress task for this method
-                    method_task = progress.add_task(
-                        _format_task_desc(method_desc),
-                        total=1
-                    )
-                    
-                    # Prepare output directory
-                    table_output_dir = output_dir / 'ordination' / table_type / level
-                    table_output_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Align table and metadata
-                    table = self.tables[table_type][level]
-                    metadata = self.metadata[table_type][level]
-                    table_aligned, metadata_aligned = update_table_and_meta(table, metadata)  
-                        
-                    future = executor.submit(
+                # Submit all tasks at once for better scheduling
+                future_to_task = {
+                    executor.submit(
                         self._run_single_ordination,
-                        table=table_aligned,
-                        metadata=metadata_aligned,
-                        symbol_col=self.group_column,  
-                        table_type=table_type,
-                        level=level,
-                        method=method,
-                        output_dir=table_output_dir,
-                        progress=progress,
-                        method_task=method_task,
-                        method_desc=method_desc
-                    )
-                    futures.append(future)
-                    future_to_key[future] = (table_type, level, method)
-        
-                errors = {}
+                        task,
+                        output_dir,
+                        progress
+                    ): task for task in self.tasks
+                }
+    
+                # Process completed futures with timeout
+                errors = []
                 try:
-                    for future in as_completed(futures, timeout=2*3600):
-                        key = future_to_key[future]
+                    for future in as_completed(future_to_task, timeout=2*3600):
+                        task = future_to_task[future]
                         try:
                             result = future.result()
-                            # Store results
-                            table_type, level, method, ord_result, figures = result
-                            self.results[table_type][level][method] = ord_result
-                            self.results[table_type][level]['figures'][method] = figures
+                            if result:  # Only store non-None results
+                                self._store_result(*result)
                         except Exception as e:
-                            errors[key] = str(e)
-                            logger.error(f"Ordination failed for {key}: {str(e)}")
+                            error_msg = f"Ordination failed for {task}: {str(e)}"
+                            errors.append(error_msg)
+                            logger.error(error_msg)
                         finally:
-                            progress.update(stats_task, advance=1)  
+                            progress.update(stats_task, advance=1)
+                            
                 except TimeoutError:
                     logger.warning("Ordination timeout - proceeding with completed results")
                 
-            progress.update(stats_task, description=_format_task_desc(stats_desc))  
-
-    def _run_single_ordination(
-        self, table, metadata, symbol_col, table_type, level, method, 
-        output_dir, progress, method_task, method_desc
-    ):
-        try:
-            progress.update(method_task, description=_format_task_desc(method_desc))
-            # Check if we should skip calculation and load existing figures
-            if self.config.get('ordination', {}).get('load_existing_figures', False):
-                required_color_cols = [col for col in self.color_columns if col in metadata.columns]
-                if not required_color_cols:
-                    logger.info(f"Skipping ordination {method} for {table_type}/{level}: no valid color columns")
-                    progress.update(method_task, completed=1, visible=False)
-                    return (table_type, level, method, None, None)
+                # Log summary of errors if any
+                if errors:
+                    logger.warning(f"Completed with {len(errors)} errors out of {len(self.tasks)} tasks")
                 
-                all_exist = True
-                for color_col in required_color_cols:
-                    fname = f"{method}.{table_type}.0-1.{color_col}.html"
-                    file_path = output_dir / fname
-                    if not file_path.exists():
-                        all_exist = False
-                        break
-                        
-                if all_exist:
-                    logger.info(f"Skipping ordination {method} for {table_type}/{level}: all figures exist")
-                    progress.update(method_task, completed=1, visible=False)
-                    return (table_type, level, method, None, None)
-            
-            result, figures = self._run_test(  
-                table=table,
-                metadata=metadata,
-                symbol_col=symbol_col,
-                table_type=table_type,
-                level=level,
-                method=method,
-                output_dir=output_dir
-            )
-            # Mark method task as complete
-            progress.update(method_task, completed=1, visible=False)
-            return table_type, level, method, result, figures
-        except Exception as e:
-            logger.error(f"Ordination {method} failed for {table_type}/{level}: {e}")
-            progress.update(method_task, completed=1, visible=False)
-            return table_type, level, method, None, None
+            progress.update(stats_task, description=_format_task_desc(stats_desc))
 
-    def _run_test(
-        self, table, metadata, symbol_col, table_type, level, method, output_dir
-    ):
-        method_config = self.TEST_CONFIG[method]
-        method_params = {}
+    def _store_result(self, table_type: str, level: str, method: str, 
+                     ord_result: Any, figures: Dict) -> None:
+        """Store ordination results efficiently."""
+        level_results = self.results[table_type][level]
+        level_results[method] = ord_result
+        level_results['figures'][method] = figures
+
+    def _run_single_ordination(self, task: OrdinationTask, output_dir: Path, 
+                              progress) -> Optional[Tuple]:
+        """Run a single ordination task with optimized error handling."""
+        method_desc = (
+            f"{task.table_type.replace('_', ' ').title()} ({task.level.title()})"
+            f" → {self.TEST_CONFIG[task.method].name}"  
+        )
+        
+        # Create progress task for this method
+        method_task = progress.add_task(
+            _format_task_desc(method_desc),
+            total=1
+        )
         
         try:
-            # Special handling for PCoA
-            if method == "pcoa":
-                method_params["metric"] = self.config['ordination']['tables'][table_type].get("pcoa_metric", "braycurtis")
-                logger.debug(f"Using PCoA metric: {method_params['metric']}")  
+            progress.update(method_task, description=_format_task_desc(method_desc))
             
-            # Special handling for UMAP/TSNE thread safety
-            if method in ["tsne", "umap"]:
-                method_params["n_jobs"] = 1
+            # Prepare output directory
+            table_output_dir = output_dir / 'ordination' / task.table_type / task.level
+            table_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Check if we should skip
+            if self._should_skip_existing(task, table_output_dir):
+                return None
+            
+            # Get aligned data
+            table = self.tables[task.table_type][task.level]
+            metadata = self.metadata[task.table_type][task.level]
+            table_aligned, metadata_aligned = update_table_and_meta(table, metadata)
+            
+            result, figures = self._run_test(  
+                table=table_aligned,
+                metadata=metadata_aligned,
+                symbol_col=self.group_column,  
+                task=task,
+                output_dir=table_output_dir
+            )
+            
+            return task.table_type, task.level, task.method, result, figures
+            
+        except Exception as e:
+            logger.error(f"Ordination {task} failed: {e}")
+            return None
+        finally:
+            progress.update(method_task, completed=1, visible=False)
+
+    def _get_method_parameters(self, task: OrdinationTask) -> Dict:
+        """Get method-specific parameters efficiently."""
+        params = {}
+        
+        if task.method == "pcoa":
+            table_config = self.config['ordination']['tables'].get(task.table_type, {})
+            params["metric"] = table_config.get("pcoa_metric", "braycurtis")
+            logger.debug(f"Using PCoA metric: {params['metric']}")
+        elif task.method in ("tsne", "umap"):
+            params["n_jobs"] = 1  # Thread safety
+            
+        return params
+
+    def _run_test(self, table: Table, metadata: pd.DataFrame, symbol_col: str,
+                 task: OrdinationTask, output_dir: Path) -> Tuple[Any, Dict]:
+        """Run ordination test with optimized parameter handling."""
+        method_config = self.TEST_CONFIG[task.method]
+        method_params = self._get_method_parameters(task)
+        
+        try:
+            # Thread-safe execution for UMAP/t-SNE
+            if task.method in ("tsne", "umap"):
                 with umap_lock:
                     os.environ['NUMBA_NUM_THREADS'] = '1'
-                    result = method_config["func"](table=table, **method_params)
+                    result = method_config.func(table=table, **method_params)
             else:
-                result = method_config["func"](table=table, **method_params)
+                result = method_config.func(table=table, **method_params)
                 
         except Exception as e:
-            logger.error(f"Failed {method_config['key']} for {table_type}: {e}")
+            logger.error(f"Failed {task}: {e}")
             return None, {}
 
+        # Generate figures
         try:
-            figures = {}
-            pkwargs = method_config.get("plot_kwargs", {})
+            figures = self._generate_figures(
+                result, metadata, symbol_col, task, output_dir, method_config
+            )
+            return result, figures
             
-            for color_col in self.color_columns:
-                if color_col not in metadata.columns:
-                    logger.warning(f"Color column '{color_col}' not found in metadata")
-                    continue
-    
-                # Prepare plot parameters
-                plot_params = {
-                    "metadata": metadata,
-                    "color_col": color_col,
-                    "symbol_col": symbol_col,
-                    "transformation": table_type,
-                    "output_dir": output_dir,
-                    **pkwargs
-                }
-                
-                # Method-specific parameters
-                if method == "pca":
-                    plot_params.update({
-                        "components": result["components"],
-                        "proportion_explained": result["exp_var_ratio"],
-                    })
-                elif method == "pcoa":
-                    plot_params.update({
-                        "components": result.samples,
-                        "proportion_explained": result.proportion_explained,
-                    })
-                else:  # t-SNE/UMAP
-                    plot_params["df"] = result
-    
-                fig, _ = method_config["plot_func"](**plot_params)
+        except Exception as e:
+            logger.error(f"Plotting failed for {task}: {e}")
+            return result, {}
+
+    def _generate_figures(self, result: Any, metadata: pd.DataFrame, 
+                         symbol_col: str, task: OrdinationTask, 
+                         output_dir: Path, method_config: OrdinationConfig) -> Dict:
+        """Generate figures with optimized parameter preparation."""
+        figures = {}
+        
+        # Filter valid color columns once
+        valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
+        
+        if not valid_color_cols:
+            logger.warning(f"No valid color columns found for {task}")
+            return figures
+        
+        # Base plot parameters
+        base_params = {
+            "metadata": metadata,
+            "symbol_col": symbol_col,
+            "transformation": task.table_type,
+            "output_dir": output_dir,
+            **method_config.plot_kwargs
+        }
+        
+        # Method-specific parameters
+        if task.method == "pca":
+            base_params.update({
+                "components": result["components"],
+                "proportion_explained": result["exp_var_ratio"],
+            })
+        elif task.method == "pcoa":
+            base_params.update({
+                "components": result.samples,
+                "proportion_explained": result.proportion_explained,
+            })
+        else:  # t-SNE/UMAP
+            base_params["df"] = result
+
+        # Generate figures for each valid color column
+        for color_col in valid_color_cols:
+            try:
+                plot_params = {**base_params, "color_col": color_col}
+                fig, _ = method_config.plot_func(**plot_params)
                 if fig:
                     figures[color_col] = fig
-                    
-            return result, figures
-
-        except Exception as e:
-            logger.error(f"Plotting failed for {method} ({table_type}/{level}): {e}")
-            return result, {}
+            except Exception as e:
+                logger.warning(f"Failed to generate figure for {task} with color {color_col}: {e}")
+                continue
+                
+        return figures
