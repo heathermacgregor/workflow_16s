@@ -2,7 +2,6 @@
 
 # Standard Library Imports
 import logging
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -12,23 +11,18 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import seaborn as sns
-
 import textwrap
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
+from workflow_16s import constants
 from workflow_16s.figures.figures import (
-    plotly_show_and_save,
-    largecolorset,
-    plot_legend,
-    attach_legend_to_figure
+    attach_legend_to_figure, largecolorset, plot_legend, plotly_show_and_save    
 )
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
 sns.set_style('whitegrid')  # Set seaborn style globally
-warnings.filterwarnings("ignore") # Suppress warnings
 
 # ================================= GLOBAL VARIABLES ================================= #
 
@@ -53,12 +47,11 @@ DEFAULT_COLOR_COL_ANCOM = 'p'
 
 # ================================== CORE HELPERS =================================== #
 
-def _validate_metadata(
+def _validate_col_in_metadata(
     metadata: pd.DataFrame, 
     required_cols: List[str]
 ) -> None:
-    """
-    Validate presence of required columns in metadata.
+    """Validate presence of required columns in metadata.
     
     Args:
         metadata:      DataFrame containing sample metadata.
@@ -73,18 +66,17 @@ def _validate_metadata(
 
 
 def _prepare_visualization_data(
-    components: pd.DataFrame,
+    data: pd.DataFrame,
     metadata: pd.DataFrame,
     color_col: str,
     symbol_col: str,
     placeholder: str = 'unknown',
     verbose: bool = False
 ) -> pd.DataFrame:
-    """
-    Prepare merged component and metadata data for visualization.
+    """Prepare merged component and metadata data for visualization.
     
     Args:
-        components:  DataFrame with ordination components.
+        data:        DataFrame with data.
         metadata:    DataFrame with sample metadata.
         color_col:   Column to use for point coloring.
         symbol_col:  Column to use for point symbols.
@@ -98,11 +90,11 @@ def _prepare_visualization_data(
         ValueError: If no common samples exist between datasets
     """
     # Create copies to avoid modifying originals
-    comp_copy = components.copy()
+    data_copy = data.copy()
     meta_copy = metadata.copy()
     
     # Standardize indices to lowercase strings with whitespace trimming
-    comp_copy.index = comp_copy.index.astype(str).str.strip().str.lower()
+    data_copy.index = data_copy.index.astype(str).str.strip().str.lower()
     
     # Handle metadata index - prefer '#sampleid' column if available
     if '#sampleid' in meta_copy.columns:
@@ -119,14 +111,14 @@ def _prepare_visualization_data(
     
     # ------------------ DUPLICATE HANDLING ------------------ #
     # Identify and remove duplicate indices
-    comp_duplicates = comp_copy.index.duplicated(keep='first')
+    data_duplicates = data_copy.index.duplicated(keep='first')
     meta_duplicates = meta_copy.index.duplicated(keep='first')
     
     if verbose:
-        if comp_duplicates.any():
-            dup_samples = comp_copy.index[comp_duplicates].unique()
+        if data_duplicates.any():
+            dup_samples = data_copy.index[data_duplicates].unique()
             logger.warning(
-                f"Found {len(dup_samples)} duplicate samples in components: "
+                f"Found {len(dup_samples)} duplicate samples in data: "
                 f"{list(dup_samples)[:5]}{'...' if len(dup_samples) > 5 else ''}"
             )
         if meta_duplicates.any():
@@ -137,17 +129,17 @@ def _prepare_visualization_data(
             )
     
     # Remove duplicates keeping first occurrence
-    comp_copy = comp_copy[~comp_duplicates]
+    data_copy = data_copy[~data_duplicates]
     meta_copy = meta_copy[~meta_duplicates]
     # -------------------------------------------------------- #
     
     if verbose:
         # Log sample IDs for debugging
-        logger.debug(f"Components index (first 5): {comp_copy.index.tolist()[:5]}")
+        logger.debug(f"data index (first 5): {data_copy.index.tolist()[:5]}")
         logger.debug(f"Metadata index (first 5): {meta_copy.index.tolist()[:5]}")
     
     # Find common samples
-    common_idx = comp_copy.index.intersection(meta_copy.index)
+    common_idx = data_copy.index.intersection(meta_copy.index)
     if verbose:
         logger.info(
             f"Found {len(common_idx)} common samples after duplicate removal"
@@ -155,18 +147,18 @@ def _prepare_visualization_data(
     
     # Handle no common samples case with detailed diagnostics
     if len(common_idx) == 0:
-        comp_samples = set(comp_copy.index)
+        data_samples = set(data_copy.index)
         meta_samples = set(meta_copy.index)
         
-        comp_only = comp_samples - meta_samples
-        meta_only = meta_samples - comp_samples
+        data_only = data_samples - meta_samples
+        meta_only = meta_samples - data_samples
 
         logger.critical(
-            "CRITICAL ERROR: No common samples between components and metadata!"
+            "CRITICAL ERROR: No common samples between data and metadata!"
         )
         logger.critical(
-            f"Components-only samples ({len(comp_only)}): "
-            f"{list(comp_only)[:5]}{'...' if len(comp_only) > 5 else ''}"
+            f"data-only samples ({len(data_only)}): "
+            f"{list(data_only)[:5]}{'...' if len(data_only) > 5 else ''}"
         )
         logger.critical(
             f"Metadata-only samples ({len(meta_only)}): "
@@ -175,31 +167,30 @@ def _prepare_visualization_data(
         
         # Look for partial matches
         partial_matches = []
-        for comp_id in list(comp_samples)[:10]:  # Check first 10
+        for data_id in list(data_samples)[:10]:  # Check first 10
             for meta_id in meta_samples:
-                if comp_id in meta_id or meta_id in comp_id:
-                    partial_matches.append(f"{comp_id} ~ {meta_id}")
+                if data_id in meta_id or meta_id in data_id:
+                    partial_matches.append(f"{data_id} ~ {meta_id}")
                     break
         
         if partial_matches:
             logger.critical(f"Possible partial matches: {partial_matches[:5]}")
         
-        raise ValueError("No common samples between components and metadata")
+        raise ValueError("No common samples between data and metadata")
     
     # Filter to common samples
     meta_filtered = meta_copy.loc[common_idx].copy()
-    comp_filtered = comp_copy.loc[common_idx].copy()
+    data_filtered = data_copy.loc[common_idx].copy()
     
-    # ======== CRITICAL FIX: PREVENT DUPLICATE COLUMNS ======== #
-    # Remove existing color/symbol columns from components to prevent duplicates
+    # Remove existing color/symbol columns from data to prevent duplicates
     for col in [color_col, symbol_col]:
-        if col in comp_filtered.columns:
+        if col in data_filtered.columns:
             if verbose:
                 logger.warning(
-                    f"Removing existing '{col}' column from components "
+                    f"Removing existing '{col}' column from data "
                     f"to prevent duplication"
                 )
-            comp_filtered = comp_filtered.drop(columns=col)
+            data_filtered = data_filtered.drop(columns=col)
     # ========================================================= #
     
     # Handle missing metadata columns
@@ -212,8 +203,8 @@ def _prepare_visualization_data(
                 )
             meta_filtered[col] = placeholder
     
-    # Merge components with metadata
-    merged = comp_filtered.join(
+    # Merge data with metadata
+    merged = data_filtered.join(
         meta_filtered[[color_col, symbol_col]], 
         how='inner'
     )
@@ -265,7 +256,6 @@ def _create_colordict(
     # Handle DataFrame input (extract first column)
     if isinstance(data, pd.DataFrame):
         if data.shape[1] != 1:
-            #raise ValueError("Color data must be a single column")
             data = data.iloc[:, 0]
     
     categories = sorted(data.astype(str).unique())
@@ -412,16 +402,16 @@ def create_geographical_map(
     Generate interactive geographical map with distinct layers for samples and NFC facilities.
     
     Args:
-        metadata:    DataFrame containing geographic coordinates.
-        color_col:   Column to use for coloring sample points.
-        lat_col:     Column containing latitude values.
-        lon_col:     Column containing longitude values.
-        projection:  Map projection type.
-        output_dir:  Directory to save outputs.
-        show:        Display figure interactively.
-        verbose:     Enable debug logging.
-        size:        Sample marker size.
-        opacity:     Sample marker opacity.
+        metadata:      DataFrame containing geographic coordinates.
+        color_col:     Column to use for coloring sample points.
+        lat_col:       Column containing latitude values.
+        lon_col:       Column containing longitude values.
+        projection:    Map projection type.
+        output_dir:    Directory to save outputs.
+        show:          Display figure interactively.
+        verbose:       Enable debug logging.
+        size:          Sample marker size.
+        opacity:       Sample marker opacity.
         facilities_df: DataFrame containing NFC facilities data (requires 'facility_latitude_deg' 
                        and 'facility_longitude_deg' columns)
         
@@ -473,7 +463,11 @@ def create_geographical_map(
         facility_text = []
         for _, row in facilities.iterrows():
             try:
-                facility_text.append(f"{row['facility']} \n{row['country']}  \n{row['facility_type']} \n{row['facility_capacity']} \n{row['facility_status']} \n{row['facility_start_year']}-{row['facility_end_year']}")
+                facility_text.append(
+                    f"{row['facility']} \n{row['country']}  \n{row['facility_type']} "
+                    f"\n{row['facility_capacity']} \n{row['facility_status']} "
+                    f"\n{row['facility_start_year']}-{row['facility_end_year']}"
+                )
             except KeyError:
                 facility_text.append(f"{row['facility']}")
         # Add facility trace with distinct style
@@ -557,7 +551,7 @@ def create_ordination_plot(
         Tuple containing figure and color mapping dictionary.
     """
     # Validate inputs
-    _validate_metadata(metadata, [color_col, symbol_col, '#sampleid'])
+    _validate_col_in_metadata(metadata, [color_col, symbol_col, '#sampleid'])
     if not isinstance(color_col, str):
         raise TypeError(f"color_col must be a string, got {type(color_col)}")
     
@@ -633,9 +627,6 @@ def create_ordination_plot(
         plot_dir.mkdir(parents=True, exist_ok=True)
         file_stem = f"{ordination_type.lower()}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"
         plotly_show_and_save(fig, show, plot_dir / file_stem, ['png', 'html'], verbose=True)
-        #_save_figure_and_legend(
-        #    fig, colordict, color_col, plot_dir, file_stem, show, verbose
-        #)
         
     return fig, colordict
 
@@ -727,8 +718,8 @@ def create_ubiquity_plot(
     
     fig.update_layout(
         template='heather',
-        height=DEFAULT_HEIGHT,
-        width=DEFAULT_WIDTH,
+        height=constants.DEFAULT_HEIGHT,
+        width=constants.DEFAULT_WIDTH,
         title='Feature Ubiquity Comparison',
         xaxis_title='Contaminated',
         yaxis_title='Pristine'
@@ -785,14 +776,14 @@ def create_violin_plot(
     # Remove NaNs
     plot_data_remove = plot_data.dropna(subset=[feature, status_col])
     final_count = len(plot_data_remove)
-    if verbose:
-        logger.info(
-                f"Violin plot preprocessing for '{feature}': "
-                f"Initial samples={initial_count}, "
-                f"NaNs in status={nan_status}, "
-                f"NaNs in feature={nan_feature}, "
-                f"Final samples={final_count}"
-        )
+    
+    logger.debug(
+        f"Violin plot preprocessing for '{feature}': "
+        f"Initial samples={initial_count}, "
+        f"NaNs in status={nan_status}, "
+        f"NaNs in feature={nan_feature}, "
+        f"Final samples={final_count}"
+    )
 
     # Handle empty data case
     if plot_data.empty:
@@ -836,8 +827,7 @@ def create_ancom_plot(
     show: bool = False,
     reverse_x_axis: bool = True
 ) -> Tuple[go.Figure, Dict]:
-    """
-    Generate ANCOM volcano plot.
+    """Generate ANCOM volcano plot.
     
     Args:
         data:           ANCOM results DataFrame.
@@ -865,8 +855,8 @@ def create_ancom_plot(
     
     fig.update_layout(
         template='heather',
-        width=DEFAULT_WIDTH,
-        height=DEFAULT_HEIGHT,
+        width=constants.DEFAULT_WIDTH,
+        height=constants.DEFAULT_HEIGHT,
         xaxis_title='CLR',
         yaxis_title='W statistic'
     )
@@ -896,8 +886,7 @@ def create_correlation_heatmap(
     output_dir: Union[Path, None] = None,
     show: bool = False
 ) -> go.Figure:
-    """
-    Generate correlation matrix heatmap.
+    """Generate correlation matrix heatmap.
     
     Args:
         data:         Correlation matrix DataFrame.
@@ -917,14 +906,9 @@ def create_correlation_heatmap(
     fig.update_layout(
         template='heather',
         height=1200,
-        coloraxis_colorbar=dict(
-            thickness=30,
-            len=0.85,
-            x=1.05,
-            y=0.5,
-            yanchor='middle',
-            tickfont=dict(size=14)
-    ))
+        coloraxis_colorbar=dict(thickness=30, len=0.85, x=1.05, y=0.5, yanchor='middle',
+                                tickfont=dict(size=14))
+    )
 
     if output_dir:
         plot_dir = output_dir / 'correlation'
@@ -943,13 +927,13 @@ def sample_map_categorical(
     nfc_facilities_data: Optional[pd.DataFrame] = None,
     show: bool = False,
     output_dir: Union[str, Path, None] = None, 
-    projection_type: str = DEFAULT_PROJECTION, 
-    height: int = DEFAULT_HEIGHT, 
-    size: int = DEFAULT_SIZE_MAP, 
-    opacity: float = DEFAULT_OPACITY_MAP,
-    lat: str = DEFAULT_LATITUDE_COL, 
-    lon: str = DEFAULT_LONGITUDE_COL,
-    color_col: str = DEFAULT_COLOR_COL,
+    projection_type: str = constants.DEFAULT_PROJECTION, 
+    height: int = constants.DEFAULT_HEIGHT, 
+    size: int = constants.DEFAULT_SIZE_MAP, 
+    opacity: float = constants.DEFAULT_OPACITY_MAP,
+    lat: str = constants.DEFAULT_LATITUDE_COL, 
+    lon: str = constants.DEFAULT_LONGITUDE_COL,
+    color_col: str = constants.DEFAULT_COLOR_COL,
     limit_axes: bool = False,
     verbose: bool = False
 ) -> Tuple[go.Figure, Dict]:
@@ -976,9 +960,9 @@ def pca(
     components: pd.DataFrame, 
     proportion_explained: np.ndarray, 
     metadata: pd.DataFrame,
-    color_col: str = DEFAULT_COLOR_COL, 
+    color_col: str = constants.DEFAULT_COLOR_COL, 
     color_map: Dict = None,
-    symbol_col: str = DEFAULT_SYMBOL_COL,
+    symbol_col: str = constants.DEFAULT_SYMBOL_COL,
     show: bool = False,
     output_dir: Union[str, Path] = None, 
     transformation: str = None,
@@ -1008,10 +992,10 @@ def pcoa(
     components: pd.DataFrame, 
     proportion_explained: np.ndarray, 
     metadata: pd.DataFrame,
-    metric: str = DEFAULT_METRIC,
+    metric: str = constants.DEFAULT_METRIC,
     color_map: Dict = None,
-    color_col: str = DEFAULT_COLOR_COL, 
-    symbol_col: str = DEFAULT_SYMBOL_COL,
+    color_col: str = constants.DEFAULT_COLOR_COL, 
+    symbol_col: str = constants.DEFAULT_SYMBOL_COL,
     show: bool = False,
     output_dir: Union[str, Path] = None, 
     transformation: str = None,
@@ -1071,7 +1055,7 @@ def heatmap_feature_abundance(
     table: pd.DataFrame, 
     show: bool = False,
     output_dir: Union[str, Path] = None,
-    feature_type: str = DEFAULT_FEATURE_TYPE,
+    feature_type: str = constants.DEFAULT_FEATURE_TYPE,
 ) -> go.Figure:
     """API endpoint for feature abundance heatmap"""
     output_path = Path(output_dir) if output_dir else None
@@ -1116,7 +1100,7 @@ def violin_feature(
     feature: str, 
     output_dir: Union[str, Path], 
     sub_output_dir: str = 'faprotax',
-    status_col: str = DEFAULT_SYMBOL_COL, 
+    status_col: str = constants.DEFAULT_SYMBOL_COL, 
     show: bool = False
 ) -> go.Figure:
     """API endpoint for violin plot"""
@@ -1136,10 +1120,10 @@ def ancom(
     data: pd.DataFrame,
     min_W: float,
     output_dir: Union[str, Path] = None,
-    color_col: str = DEFAULT_COLOR_COL_ANCOM,
+    color_col: str = constants.DEFAULT_COLOR_COL_ANCOM,
     show: bool = False,
     reverse_x_axis: bool = True,
-    feature_type: str = DEFAULT_FEATURE_TYPE_ANCOM
+    feature_type: str = constants.DEFAULT_FEATURE_TYPE_ANCOM
 ) -> Tuple[go.Figure, Any]:
     """API endpoint for ANCOM plot"""
     output_path = Path(output_dir) if output_dir else None
@@ -1158,7 +1142,7 @@ def plot_correlation_matrix(
     data: pd.DataFrame,
     show: bool = False,
     output_dir: Union[str, Path] = None,
-    feature_type: str = DEFAULT_FEATURE_TYPE
+    feature_type: str = constants.DEFAULT_FEATURE_TYPE
 ) -> go.Figure:
     """API endpoint for correlation matrix"""
     output_path = Path(output_dir) if output_dir else None
@@ -1533,7 +1517,7 @@ def create_feature_abundance_map(
     metadata = metadata.copy()
     
     # Validate inputs
-    _validate_metadata(metadata, [lat_col, lon_col, '#sampleid'])
+    _validate_col_in_metadata(metadata, [lat_col, lon_col, '#sampleid'])
     
     # Prepare abundance data
     if feature_name not in feature_abundance.columns:
