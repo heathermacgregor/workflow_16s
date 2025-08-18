@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, NamedTuple
 import warnings
 import multiprocessing as mp
+import os
+from datetime import datetime, timedelta
 
 # Third‑Party Imports
 import pandas as pd
@@ -40,6 +42,7 @@ class TaskResult(NamedTuple):
     test: str
     result: Optional[pd.DataFrame]
     error: Optional[str]
+    loaded_from_file: bool = False
 
 class DataCache:
     """Lightweight caching for preprocessed data."""
@@ -70,6 +73,98 @@ class DataCache:
     def clear(self) -> None:
         self._cache.clear()
         self._access_order.clear()
+
+# ========================== RESULT LOADING UTILITIES ========================== #
+
+class ResultLoader:
+    """Handles loading and validation of existing results."""
+    
+    def __init__(self, base_path: Path, max_age_hours: Optional[float] = None):
+        self.base_path = base_path
+        self.max_age_hours = max_age_hours
+        self._load_cache = {}
+    
+    def should_load_result(self, result_path: Path) -> bool:
+        """Check if result should be loaded based on existence and age."""
+        if not result_path.exists():
+            return False
+        
+        if self.max_age_hours is None:
+            return True
+        
+        # Check file age
+        file_mtime = datetime.fromtimestamp(result_path.stat().st_mtime)
+        age_threshold = datetime.now() - timedelta(hours=self.max_age_hours)
+        
+        return file_mtime > age_threshold
+    
+    def load_result(self, result_path: Path) -> Optional[pd.DataFrame]:
+        """Load result from file with error handling."""
+        cache_key = str(result_path)
+        
+        # Check cache first
+        if cache_key in self._load_cache:
+            return self._load_cache[cache_key]
+        
+        try:
+            if result_path.suffix.lower() in ['.tsv', '.txt']:
+                result = pd.read_csv(result_path, sep='\t', index_col=0)
+            elif result_path.suffix.lower() == '.csv':
+                result = pd.read_csv(result_path, index_col=0)
+            else:
+                logger.warning(f"Unsupported file format: {result_path}")
+                return None
+            
+            # Basic validation
+            if result.empty:
+                logger.warning(f"Empty result file: {result_path}")
+                return None
+            
+            # Cache the result
+            self._load_cache[cache_key] = result
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Failed to load result from {result_path}: {e}")
+            return None
+    
+    def get_existing_results(
+        self, 
+        group_column: str, 
+        tasks: List[Tuple[str, str, str]]
+    ) -> Dict[str, Dict]:
+        """Get all existing results for a group column."""
+        existing_results = {}
+        
+        for table_type, level, test in tasks:
+            output_dir = self.base_path / group_column / table_type / level
+            
+            # Check for main result file
+            result_path = output_dir / f'{test}.tsv'
+            
+            if self.should_load_result(result_path):
+                result = self.load_result(result_path)
+                if result is not None:
+                    # Initialize nested structure
+                    if table_type not in existing_results:
+                        existing_results[table_type] = {}
+                    if level not in existing_results[table_type]:
+                        existing_results[table_type][level] = {}
+                    
+                    existing_results[table_type][level][test] = result
+                    
+                    # Load additional files for network analysis
+                    if test == 'network_analysis':
+                        corr_path = output_dir / f'{test}_correlation_matrix.tsv'
+                        if corr_path.exists():
+                            # Store path for later reference
+                            existing_results[table_type][level][f'{test}_correlation_matrix_path'] = corr_path
+        
+        return existing_results
+    
+    def clear_cache(self):
+        """Clear the loading cache."""
+        self._load_cache.clear()
 
 # ========================== CONFIGURATION ========================== #
 
@@ -245,7 +340,7 @@ def run_single_statistical_test(
         elif test == 'spearman_correlation':
             # Skip if column not found
             if group_column not in metadata_aligned.columns:
-                return TaskResult(task_id, table_type, level, test, None, "Column not found")
+                return TaskResult(task_id, table_type, level, test, None, "Column not found", False)
             
             result = test_func(
                 table=table_aligned,
@@ -265,15 +360,15 @@ def run_single_statistical_test(
             output_path = output_dir / f'{test}.tsv'
             result.to_csv(output_path, sep='\t', index=True)
         
-        return TaskResult(task_id, table_type, level, test, result, None)
+        return TaskResult(task_id, table_type, level, test, result, None, False)
         
     except Exception as e:
         error_msg = f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
         logger.error(error_msg)
-        return TaskResult(task_id, table_type, level, test, None, error_msg)
+        return TaskResult(task_id, table_type, level, test, None, error_msg, False)
 
 class StatisticalAnalysis:
-    """Highly optimized Statistical Analysis class."""
+    """Highly optimized Statistical Analysis class with result loading."""
     
     def __init__(
         self,
@@ -284,7 +379,10 @@ class StatisticalAnalysis:
         group_columns: List,
         project_dir: Union[str, Path],
         max_workers: Optional[int] = None,
-        use_process_pool: bool = False
+        use_process_pool: bool = False,
+        load_existing: bool = True,
+        max_file_age_hours: Optional[float] = None,
+        force_recalculate: List[str] = None
     ) -> None:
         self.config = config
         self.project_dir = Path(project_dir) if isinstance(project_dir, str) else project_dir
@@ -293,12 +391,21 @@ class StatisticalAnalysis:
         self.metadata = metadata
         self.group_columns = group_columns
         
+        # Result loading configuration
+        self.load_existing = load_existing
+        self.max_file_age_hours = max_file_age_hours
+        self.force_recalculate = set(force_recalculate or [])
+        
         # Optimization settings
         self.max_workers = max_workers or min(mp.cpu_count(), 8)
         self.use_process_pool = use_process_pool
         
-        # Initialize caching
+        # Initialize caching and result loader
         self._data_cache = DataCache()
+        self.result_loader = ResultLoader(
+            self.project_dir / 'stats', 
+            max_file_age_hours
+        ) if load_existing else None
         
         # Add NFC facilities if enabled
         if (self.config.get("nfc_facilities", {}).get('enabled', False) and 
@@ -311,6 +418,12 @@ class StatisticalAnalysis:
         
         self.results: Dict = {}
         self.advanced_results: Dict = {}
+        self.load_statistics = {
+            'total_tasks': 0,
+            'loaded_from_files': 0,
+            'calculated_fresh': 0,
+            'load_time_saved_seconds': 0
+        }
         
         # Pre-validate configuration
         validation_issues = self.validate_configuration()
@@ -339,8 +452,28 @@ class StatisticalAnalysis:
         
         return cached_data
     
+    def _should_force_recalculate(self, group_column: str, table_type: str, level: str, test: str) -> bool:
+        """Check if a specific task should be force recalculated."""
+        if not self.force_recalculate:
+            return False
+        
+        # Check various patterns for force recalculation
+        patterns = [
+            f"{group_column}_{table_type}_{level}_{test}",  # Specific task
+            f"{table_type}_{level}_{test}",                 # Specific test
+            f"{group_column}_{test}",                       # Test for specific group
+            test,                                           # All instances of test
+            f"{table_type}_{level}",                        # All tests for table/level
+            group_column,                                   # All tests for group
+            table_type                                      # All tests for table type
+        ]
+        
+        return any(pattern in self.force_recalculate for pattern in patterns)
+    
     def _run_optimized_analysis(self) -> None:
-        """Run analysis with parallel processing and optimizations."""
+        """Run analysis with parallel processing and result loading."""
+        start_time = datetime.now()
+        
         # Process each group column
         for group_column in self.group_columns:
             col_name = group_column['name']
@@ -354,38 +487,93 @@ class StatisticalAnalysis:
             print(f"Values: {col_values}")
             
             self.results[col_name] = self._run_parallel_for_group(col_name, col_values)
+        
+        # Calculate time savings
+        end_time = datetime.now()
+        analysis_time = (end_time - start_time).total_seconds()
+        self.load_statistics['analysis_time_seconds'] = analysis_time
+        
+        # Log loading statistics
+        self._log_load_statistics()
     
     def _run_parallel_for_group(self, group_column: str, group_values: List[Any]) -> Dict:
-        """Run statistical analysis with parallel processing."""
+        """Run statistical analysis with parallel processing and result loading."""
         tasks = get_enabled_tasks_optimized(self.config, self.tables)
         if not tasks:
             return {}
         
-        # Separate parallel-safe and sequential tasks
+        self.load_statistics['total_tasks'] += len(tasks)
+        
+        # Load existing results if enabled
+        existing_results = {}
+        remaining_tasks = []
+        
+        if self.load_existing and self.result_loader:
+            existing_results = self.result_loader.get_existing_results(group_column, tasks)
+            
+            # Filter out tasks that have existing results and don't need recalculation
+            for table_type, level, test in tasks:
+                should_force = self._should_force_recalculate(group_column, table_type, level, test)
+                
+                if (not should_force and 
+                    table_type in existing_results and 
+                    level in existing_results[table_type] and 
+                    test in existing_results[table_type][level]):
+                    
+                    self.load_statistics['loaded_from_files'] += 1
+                    logger.info(f"Loaded existing result: {group_column}/{table_type}/{level}/{test}")
+                else:
+                    remaining_tasks.append((table_type, level, test))
+                    if should_force:
+                        logger.info(f"Force recalculating: {group_column}/{table_type}/{level}/{test}")
+        else:
+            remaining_tasks = tasks
+        
+        self.load_statistics['calculated_fresh'] += len(remaining_tasks)
+        
+        # Separate parallel-safe and sequential tasks from remaining tasks
         parallel_tasks = []
         sequential_tasks = []
         
-        for table_type, level, test in tasks:
+        for table_type, level, test in remaining_tasks:
             if TEST_CONFIG[test].get('parallel_safe', True):
                 parallel_tasks.append((table_type, level, test))
             else:
                 sequential_tasks.append((table_type, level, test))
         
-        group_stats = {}
+        group_stats = existing_results.copy()  # Start with loaded results
         
         # Process parallel tasks
         if parallel_tasks:
-            group_stats.update(
-                self._process_parallel_tasks(parallel_tasks, group_column, group_values)
+            calculated_results = self._process_parallel_tasks(
+                parallel_tasks, group_column, group_values
             )
+            group_stats = self._merge_results(group_stats, calculated_results)
         
         # Process sequential tasks
         if sequential_tasks:
-            group_stats.update(
-                self._process_sequential_tasks(sequential_tasks, group_column, group_values)
+            calculated_results = self._process_sequential_tasks(
+                sequential_tasks, group_column, group_values
             )
+            group_stats = self._merge_results(group_stats, calculated_results)
         
         return group_stats
+    
+    def _merge_results(self, existing: Dict, new: Dict) -> Dict:
+        """Merge existing and newly calculated results."""
+        merged = existing.copy()
+        
+        for table_type, levels in new.items():
+            if table_type not in merged:
+                merged[table_type] = {}
+            
+            for level, tests in levels.items():
+                if level not in merged[table_type]:
+                    merged[table_type][level] = {}
+                
+                merged[table_type][level].update(tests)
+        
+        return merged
     
     def _process_parallel_tasks(
         self, 
@@ -396,10 +584,13 @@ class StatisticalAnalysis:
         """Process tasks in parallel."""
         results = {}
         
+        if not tasks:
+            return results
+        
         # Prepare task data
         task_data_list = []
         for table_type, level, test in tasks:
-            output_dir = self.project_dir.final / 'stats' / group_column / table_type / level
+            output_dir = self.project_dir / 'stats' / group_column / table_type / level
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Get cached data
@@ -423,7 +614,7 @@ class StatisticalAnalysis:
             
             # Collect results with progress tracking
             with get_progress_bar() as progress:
-                task_desc = f"Parallel analysis for '{group_column}'"
+                task_desc = f"Parallel analysis for '{group_column}' ({len(tasks)} tasks)"
                 task_id = progress.add_task(_format_task_desc(task_desc), total=len(future_to_task))
                 
                 for future in as_completed(future_to_task):
@@ -449,8 +640,11 @@ class StatisticalAnalysis:
         """Process tasks sequentially."""
         results = {}
         
+        if not tasks:
+            return results
+        
         with get_progress_bar() as progress:
-            task_desc = f"Sequential analysis for '{group_column}'"
+            task_desc = f"Sequential analysis for '{group_column}' ({len(tasks)} tasks)"
             task_id = progress.add_task(_format_task_desc(task_desc), total=len(tasks))
             
             for table_type, level, test in tasks:
@@ -478,6 +672,25 @@ class StatisticalAnalysis:
         
         return results
     
+    def _log_load_statistics(self) -> None:
+        """Log statistics about loaded vs calculated results."""
+        stats = self.load_statistics
+        total = stats['total_tasks']
+        loaded = stats['loaded_from_files']
+        calculated = stats['calculated_fresh']
+        
+        if total > 0:
+            load_percentage = (loaded / total) * 100
+            logger.info(f"Analysis Statistics:")
+            logger.info(f"  Total tasks: {total}")
+            logger.info(f"  Loaded from files: {loaded} ({load_percentage:.1f}%)")
+            logger.info(f"  Calculated fresh: {calculated} ({100-load_percentage:.1f}%)")
+            
+            if loaded > 0:
+                # Rough estimate of time saved (assuming 10 seconds per loaded task)
+                estimated_time_saved = loaded * 10
+                logger.info(f"  Estimated time saved: ~{estimated_time_saved:.0f} seconds")
+    
     def get_effect_size_optimized(self, test_name: str, row: pd.Series) -> Optional[float]:
         """Optimized effect size extraction."""
         test_config = TEST_CONFIG.get(test_name)
@@ -504,7 +717,8 @@ class StatisticalAnalysis:
             'effect_sizes_summary': {},
             'group_columns_analyzed': list(self.results.keys()),
             'performance_metrics': {
-                'cache_hit_ratio': len(self._data_cache._cache) / max(1, len(self._data_cache._access_order))
+                'cache_hit_ratio': len(self._data_cache._cache) / max(1, len(self._data_cache._access_order)),
+                'load_statistics': self.load_statistics.copy()
             }
         }
         
@@ -554,6 +768,88 @@ class StatisticalAnalysis:
         
         return summary
     
+    def force_recalculate_tasks(self, patterns: List[str]) -> None:
+        """Add patterns to force recalculation list."""
+        self.force_recalculate.update(patterns)
+        logger.info(f"Added force recalculation patterns: {patterns}")
+    
+    def clear_result_cache(self, group_column: str = None) -> None:
+        """Clear cached results for a specific group or all groups."""
+        if self.result_loader:
+            if group_column:
+                # Clear specific group cache
+                cache_keys_to_remove = [
+                    key for key in self.result_loader._load_cache.keys()
+                    if f"/{group_column}/" in key
+                ]
+                for key in cache_keys_to_remove:
+                    del self.result_loader._load_cache[key]
+                logger.info(f"Cleared result cache for group: {group_column}")
+            else:
+                self.result_loader.clear_cache()
+                logger.info("Cleared all result caches")
+    
+    def get_load_report(self) -> Dict:
+        """Get detailed report of what was loaded vs calculated."""
+        return {
+            'summary': self.load_statistics.copy(),
+            'settings': {
+                'load_existing': self.load_existing,
+                'max_file_age_hours': self.max_file_age_hours,
+                'force_recalculate_patterns': list(self.force_recalculate)
+            }
+        }
+    
+    def invalidate_results(
+        self, 
+        group_column: str = None, 
+        table_type: str = None, 
+        level: str = None, 
+        test: str = None
+    ) -> int:
+        """Invalidate (delete) specific result files to force recalculation.
+        
+        Returns the number of files deleted.
+        """
+        deleted_count = 0
+        stats_dir = self.project_dir / 'stats'
+        
+        if not stats_dir.exists():
+            return 0
+        
+        # Build search patterns
+        if group_column and table_type and level and test:
+            # Specific test file
+            file_path = stats_dir / group_column / table_type / level / f'{test}.tsv'
+            if file_path.exists():
+                file_path.unlink()
+                deleted_count += 1
+                # Also delete correlation matrix for network analysis
+                if test == 'network_analysis':
+                    corr_path = stats_dir / group_column / table_type / level / f'{test}_correlation_matrix.tsv'
+                    if corr_path.exists():
+                        corr_path.unlink()
+                        deleted_count += 1
+        else:
+            # Pattern-based deletion
+            for group_dir in stats_dir.iterdir():
+                if group_dir.is_dir() and (not group_column or group_dir.name == group_column):
+                    for table_dir in group_dir.iterdir():
+                        if table_dir.is_dir() and (not table_type or table_dir.name == table_type):
+                            for level_dir in table_dir.iterdir():
+                                if level_dir.is_dir() and (not level or level_dir.name == level):
+                                    for result_file in level_dir.glob('*.tsv'):
+                                        if not test or result_file.stem == test or result_file.stem.startswith(f'{test}_'):
+                                            result_file.unlink()
+                                            deleted_count += 1
+        
+        if deleted_count > 0:
+            logger.info(f"Invalidated {deleted_count} result files")
+            # Clear relevant cache entries
+            self.clear_result_cache(group_column)
+        
+        return deleted_count
+    
     def validate_configuration(self) -> Dict[str, List[str]]:
         """Optimized configuration validation."""
         issues = {'errors': [], 'warnings': [], 'info': []}
@@ -598,6 +894,8 @@ class StatisticalAnalysis:
     def cleanup(self) -> None:
         """Clean up resources and caches."""
         self._data_cache.clear()
+        if self.result_loader:
+            self.result_loader.clear_cache()
         logger.info("Statistical analysis cleanup completed")
     
     def __enter__(self):
@@ -655,3 +953,45 @@ def batch_save_results(results: Dict, base_path: Path, format: str = 'tsv') -> N
                 result.to_csv(path, sep='\t', index=True)
             except Exception as e:
                 logger.error(f"Save failed for {path}: {e}")
+
+def run_statistical_analysis_with_loading(
+    config: Dict,
+    tables: Dict,
+    metadata: Dict,
+    mode: str,
+    group_columns: List,
+    project_dir: Union[str, Path],
+    load_existing: bool = True,
+    max_file_age_hours: Optional[float] = 24,
+    force_recalculate: List[str] = None,
+    **kwargs
+) -> StatisticalAnalysis:
+    """Convenience function to run statistical analysis with loading options.
+    
+    Args:
+        config: Analysis configuration
+        tables: Dictionary of tables
+        metadata: Dictionary of metadata
+        mode: Analysis mode
+        group_columns: List of group columns to analyze
+        project_dir: Project directory path
+        load_existing: Whether to load existing results (default: True)
+        max_file_age_hours: Maximum age of files to load (None for no limit)
+        force_recalculate: List of patterns to force recalculation
+        **kwargs: Additional arguments passed to StatisticalAnalysis
+    
+    Returns:
+        StatisticalAnalysis instance with results
+    """
+    return StatisticalAnalysis(
+        config=config,
+        tables=tables,
+        metadata=metadata,
+        mode=mode,
+        group_columns=group_columns,
+        project_dir=project_dir,
+        load_existing=load_existing,
+        max_file_age_hours=max_file_age_hours,
+        force_recalculate=force_recalculate or [],
+        **kwargs
+    )
