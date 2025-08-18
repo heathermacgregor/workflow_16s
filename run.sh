@@ -49,7 +49,7 @@ validate_environment() {
     
     # Check for exact match first
     if conda env list | grep -qw "^${ENV_NAME}"; then
-        log "【 ✓ 】 🟩 Found exact environment match: ${ENV_NAME}"
+        log "【 ✓ 】 🟩 Found exact match: ${ENV_NAME}"
         return
     fi
 
@@ -63,9 +63,9 @@ validate_environment() {
         return
     fi
 
-    log "【 ✗ 】 🟥 No valid environment found matching:"
-    log "   - Exact name: ${ENV_NAME}"
-    log "   - Name suffix: workflow_16s"
+    log "【 ✗ 】 🟥 No valid Conda environment found matching:"
+    log "            - Exact name: ${ENV_NAME}"
+    log "            - Name suffix: workflow_16s"
     exit 1
 }
 
