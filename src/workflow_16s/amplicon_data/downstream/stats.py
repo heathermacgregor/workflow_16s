@@ -399,7 +399,7 @@ class StatisticalAnalysis:
         # Prepare task data
         task_data_list = []
         for table_type, level, test in tasks:
-            output_dir = self.project_dir / 'stats' / group_column / table_type / level
+            output_dir = self.project_dir.final / 'stats' / group_column / table_type / level
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Get cached data
