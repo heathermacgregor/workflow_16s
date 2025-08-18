@@ -7,6 +7,7 @@ import os
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from itertools import product
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -18,16 +19,11 @@ import numpy as np
 from biom.table import Table
 from bs4 import BeautifulSoup
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
-from workflow_16s.models.feature_selection import (
-    catboost_feature_selection,
-)
-from workflow_16s.utils.data import (
-    table_to_df, update_table_and_meta
-)
+from workflow_16s.models.feature_selection import catboost_feature_selection
+from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
@@ -35,10 +31,23 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 logger = logging.getLogger("workflow_16s")
 debug_mode = False
 
-# ================================= DEFAULT VALUES =================================== #
+# =================================== FUNCTIONS ====================================== #
+
+def html_to_plotly(html_content: str) -> go.Figure:
+    soup = BeautifulSoup(html_content, 'html.parser')
+                                
+    # Find the script tag containing Plotly JSON data
+    script_tag = soup.find('script', type='application/json')
+    if not script_tag:
+        raise ValueError("Plotly JSON data not found in HTML")
+        
+    # Load JSON and create figure
+    fig_json = json.loads(script_tag.string)
+    return go.Figure(fig_json)
+    
 
 class FeatureSelection:
-    """Performs feature selection"""
+    """Feature selection class"""
     def __init__(
         self, 
         config: Dict, 
@@ -48,9 +57,7 @@ class FeatureSelection:
     ):
         self.config = config
         ml_config = self.config.get('ml', {})
-        if not ml_config.get('enabled', False):
-            logger.info("ML feature selection disabled")
-            return
+            
         self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)
         self.n_top_features = ml_config.get('num_features', 100)
         self.step_size = ml_config.get('step_size', 100)
@@ -83,16 +90,10 @@ class FeatureSelection:
             if not table_type_config.get('enabled', False):
                 continue
                 
-            enabled_levels = [
-                l for l in table_type_config.get('levels', levels.keys()) 
-            ]
-            enabled_methods = [
-                m for m in table_type_config.get('methods', ["rfe"]) 
-            ]
+            enabled_levels = [l for l in table_type_config.get('levels', levels.keys())]
+            enabled_methods = [m for m in table_type_config.get('methods', ["rfe"])]
             
-            for level in enabled_levels:
-                for method in enabled_methods:  
-                    tasks.append((table_type, level, method))  
+            tasks = [(table_type, level, method) for level, method in product(enabled_levels, enabled_methods)]
         
         return tasks
       
@@ -116,8 +117,8 @@ class FeatureSelection:
                 _init_dict_level(self.models, table_type, level)
                 data_storage = self.models[table_type][level]
                 # Initialize output directory and path
-                tmp_output_dir = output_dir / 'ml' / self.group_column / table_type / level 
-                tmp_output_dir.mkdir(parents=True, exist_ok=True)
+                output_subdir = output_dir / 'ml' / self.group_column / table_type / level 
+                output_subdir.mkdir(parents=True, exist_ok=True)
     
                 try:
                     if debug_mode:
@@ -129,59 +130,48 @@ class FeatureSelection:
                         )
                         data_storage[method] = None
                     else:
-                        # Define required files for this task
+                        # Define required output files for this task
                         required_files = [
-                            tmp_output_dir / method / "best_model.cbm",
-                            tmp_output_dir / method / "feature_importances.csv",
-                            tmp_output_dir / method / "grid_search_results.csv",
-                            tmp_output_dir / method / "best_confusion_matrix.html",
-                            tmp_output_dir / method / "best_roc_curve.html",
-                            tmp_output_dir / method / "best_precision_recall_curve.html",
-                            tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
-                            tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
-                            tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
-                            tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
+                            output_subdir / method / "best_model.cbm",
+                            output_subdir / method / "feature_importances.csv",
+                            output_subdir / method / "grid_search_results.csv",
+                            output_subdir / method / "best_confusion_matrix.html",
+                            output_subdir / method / "best_roc_curve.html",
+                            output_subdir / method / "best_precision_recall_curve.html",
+                            output_subdir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
+                            output_subdir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
+                            output_subdir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
+                            output_subdir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
                         ]
                         
                         # Check if all files exist
                         all_files_exist = all(f.exists() for f in required_files)
-                        try_to_load_old = False
+                        try_to_load_old = self.config.get('ml', {}).get('load_old', True)
                         if all_files_exist and try_to_load_old:
                             logger.info(f"Loading existing results for {table_type}/{level}/{method}")
                             
                             # Load CatBoost model
                             model = cb.CatBoostClassifier()
-                            model.load_model(str(tmp_output_dir / method / "best_model.cbm"))
+                            model.load_model(str(output_subdir / method / "best_model.cbm"))
                             
                             # Load feature importances
-                            feature_importances = pd.read_csv(tmp_output_dir / method / "feature_importances.csv")
+                            feature_importances = pd.read_csv(output_subdir / method / "feature_importances.csv")
                             
                             # Load grid search results
-                            grid_search_results = pd.read_csv(tmp_output_dir / method / "grid_search_results.csv")
+                            grid_search_results = pd.read_csv(output_subdir / method / "grid_search_results.csv")
                             
                             # Create figures dictionary with HTML content
                             figures = {
-                                'confusion_matrix': (tmp_output_dir / method / "best_confusion_matrix.html").read_text(),
-                                'roc': (tmp_output_dir / method / "best_roc_curve.html").read_text(),
-                                'prc': (tmp_output_dir / method / "best_precision_recall_curve.html").read_text(),
-                                'shap_summary_bar': (tmp_output_dir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
-                                'shap_summary_beeswarm': (tmp_output_dir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
-                                'shap_summary_heatmap': (tmp_output_dir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
-                                'shap_summary_force': (tmp_output_dir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
+                                'confusion_matrix': (output_subdir / method / "best_confusion_matrix.html").read_text(),
+                                'roc': (output_subdir / method / "best_roc_curve.html").read_text(),
+                                'prc': (output_subdir / method / "best_precision_recall_curve.html").read_text(),
+                                'shap_summary_bar': (output_subdir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
+                                'shap_summary_beeswarm': (output_subdir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
+                                'shap_summary_heatmap': (output_subdir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
+                                'shap_summary_force': (output_subdir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
                                 'shap_dependency': None  # Placeholder
                             }
 
-                            def html_to_plotly(html_content: str) -> go.Figure:
-                                soup = BeautifulSoup(html_content, 'html.parser')
-                                
-                                # Find the script tag containing Plotly JSON data
-                                script_tag = soup.find('script', type='application/json')
-                                if not script_tag:
-                                    raise ValueError("Plotly JSON data not found in HTML")
-                                
-                                # Load JSON and create figure
-                                fig_json = json.loads(script_tag.string)
-                                return go.Figure(fig_json)
                             plotly_figures = {}
                             for key, html_content in figures.items():
                                 if html_content is None:
@@ -200,7 +190,7 @@ class FeatureSelection:
                             
                         else:
                             logger.info(f"Running model for {table_type}/{level}/{method}")
-                            # Run model normally if files are missing
+                            
                             table = self.tables[table_type][level]
                             metadata = self.metadata[table_type][level]
                             X = table_to_df(table)
@@ -215,7 +205,7 @@ class FeatureSelection:
                             model_result = catboost_feature_selection(
                                 metadata=y,
                                 features=X,
-                                output_dir=tmp_output_dir,
+                                output_dir=output_subdir,
                                 group_col=self.group_column,
                                 method=method,
                                 n_top_features=self.n_top_features,
