@@ -247,7 +247,8 @@ th {
 
 /* ============================== DYNAMIC TABLE STYLES ============================== */
 .dynamic-table {
-    table-layout: fixed;
+    table-layout: auto;
+    width: 100%;
 }
 
 .dynamic-table th {
@@ -258,6 +259,7 @@ th {
     white-space: nowrap;
     user-select: none;
     transition: background-color 0.2s ease;
+    max-width: 200ch;
 }
 
 .dynamic-table th:hover {
@@ -286,6 +288,7 @@ th {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 200ch;
 }
 
 .resizable-handle {
