@@ -272,7 +272,7 @@ def run_single_statistical_test(
         logger.error(error_msg)
         return TaskResult(task_id, table_type, level, test, None, error_msg)
 
-class OptimizedStatisticalAnalysis:
+class StatisticalAnalysis:
     """Highly optimized Statistical Analysis class."""
     
     def __init__(
