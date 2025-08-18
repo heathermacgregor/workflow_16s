@@ -83,7 +83,7 @@ activate_environment() {
 
 # Script Validation
 validate_python_script() {
-    log "Verifying workflow script..."
+    log "【 ↺ 】 🟦 Verifying workflow script..."
     if [[ ! -f "${PYTHON_SCRIPT}" ]]; then
         log "【 ✗ 】 🟥 Missing Python script: ${PYTHON_SCRIPT}"
         exit 1
