@@ -385,7 +385,7 @@ class StatisticalAnalysis:
         force_recalculate: List[str] = None
     ) -> None:
         self.config = config
-        self.project_dir = Path(project_dir) if isinstance(project_dir, str) else project_dir
+        self.project_dir = Path(project_dir.final) if isinstance(project_dir.final, str) else project_dir.final
         self.mode = mode
         self.tables = tables
         self.metadata = metadata
