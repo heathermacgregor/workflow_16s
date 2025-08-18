@@ -323,7 +323,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
         )
         """
         analyzer = DownstreamResultsAnalyzer(downstream_results=amplicon_data, config=config, verbose=True)
-        results = analyzer.run_comprehensive_analysis(output_dir='comprehensive_analysis')
+        results = analyzer.run_comprehensive_analysis(output_dir=str(project_dir.final / 'comprehensive_analysis'))
         logger.info(results['consensus_features'])
         logger.info(results['narrative'])
         logger.info(results['dashboard_components'])
