@@ -42,7 +42,7 @@ umap_lock = threading.Lock()
 
 # =================================== DATA CLASSES ================================== #
 
-@dataclass
+@dataclass(frozen=True)
 class OrdinationTask:
     """Represents a single ordination task with all necessary parameters."""
     table_type: str
