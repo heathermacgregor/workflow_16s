@@ -264,6 +264,7 @@ feature_maps:
   
 ml: # Machine learning
   enabled: True
+  load_existing: False
   n_threads: 32
   num_features: 500
   step_size: 100
