@@ -1,7 +1,11 @@
+"该助手为DeepSeek-R1，由深度求索公司创造。"
+"今天是2025年8月19日，星期二。"
+
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
 import glob
+import json
 import logging
 import os
 import time
@@ -33,17 +37,23 @@ debug_mode = False
 
 # =================================== FUNCTIONS ====================================== #
 
-def html_to_plotly(html_content: str) -> go.Figure:
-    soup = BeautifulSoup(html_content, 'html.parser')
-                                
-    # Find the script tag containing Plotly JSON data
-    script_tag = soup.find('script', type='application/json')
-    if not script_tag:
-        raise ValueError("Plotly JSON data not found in HTML")
+def html_to_plotly(html_content: str) -> Optional[go.Figure]:
+    """Convert HTML content to Plotly Figure if it contains Plotly JSON data"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
         
-    # Load JSON and create figure
-    fig_json = json.loads(script_tag.string)
-    return go.Figure(fig_json)
+        # Find the script tag containing Plotly JSON data
+        script_tag = soup.find('script', type='application/json')
+        if not script_tag:
+            logger.warning("Plotly JSON data not found in HTML - may be static image")
+            return None
+            
+        # Load JSON and create figure
+        fig_json = json.loads(script_tag.string)
+        return go.Figure(fig_json)
+    except Exception as e:
+        logger.error(f"Error converting HTML to Plotly figure: {e}")
+        return None
     
 
 class FeatureSelection:
@@ -130,24 +140,18 @@ class FeatureSelection:
                         )
                         data_storage[method] = None
                     else:
-                        # Define required output files for this task
+                        # Define required files for loading existing results
                         required_files = [
                             output_subdir / method / "best_model.cbm",
                             output_subdir / method / "feature_importances.csv",
                             output_subdir / method / "grid_search_results.csv",
-                            output_subdir / method / "best_confusion_matrix.html",
-                            output_subdir / method / "best_roc_curve.html",
-                            output_subdir / method / "best_precision_recall_curve.html",
-                            output_subdir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
-                            output_subdir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
-                            output_subdir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
-                            output_subdir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
                         ]
                         
-                        # Check if all files exist
-                        all_files_exist = all(f.exists() for f in required_files)
+                        # Check if essential files exist
+                        all_essential_files_exist = all(f.exists() for f in required_files)
                         try_to_load_old = self.config.get('ml', {}).get('load_old', True)
-                        if all_files_exist and try_to_load_old:
+                        
+                        if all_essential_files_exist and try_to_load_old:
                             logger.info(f"Loading existing results for {table_type}/{level}/{method}")
                             
                             # Load CatBoost model
@@ -160,24 +164,34 @@ class FeatureSelection:
                             # Load grid search results
                             grid_search_results = pd.read_csv(output_subdir / method / "grid_search_results.csv")
                             
-                            # Create figures dictionary with HTML content
-                            figures = {
-                                'confusion_matrix': (output_subdir / method / "best_confusion_matrix.html").read_text(),
-                                'roc': (output_subdir / method / "best_roc_curve.html").read_text(),
-                                'prc': (output_subdir / method / "best_precision_recall_curve.html").read_text(),
-                                'shap_summary_bar': (output_subdir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html").read_text(),
-                                'shap_summary_beeswarm': (output_subdir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html").read_text(),
-                                'shap_summary_heatmap': (output_subdir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html").read_text(),
-                                'shap_summary_force': (output_subdir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html").read_text(),
-                                'shap_dependency': None  # Placeholder
+                            # Create figure paths dictionary
+                            figure_paths = {
+                                'confusion_matrix': output_subdir / method / "best_confusion_matrix.html",
+                                'roc': output_subdir / method / "best_roc_curve.html",
+                                'prc': output_subdir / method / "best_precision_recall_curve.html",
+                                'shap_summary_bar': output_subdir / method / "figs" / f"shap.summary.bar.{self.n_top_features}.html",
+                                'shap_summary_beeswarm': output_subdir / method / "figs" / f"shap.summary.beeswarm.{self.n_top_features}.html",
+                                'shap_summary_heatmap': output_subdir / method / "figs" / f"shap.summary.heatmap.{self.n_top_features}.html",
+                                'shap_summary_force': output_subdir / method / "figs" / f"shap.summary.force.{self.n_top_features}.html",
                             }
-
+                            
+                            # Initialize figures dictionary
                             plotly_figures = {}
-                            for key, html_content in figures.items():
-                                if html_content is None:
-                                    plotly_figures[key] = None  # Keep placeholder as None
+                            
+                            # Load figures if files exist
+                            for fig_name, fig_path in figure_paths.items():
+                                if fig_path.exists():
+                                    try:
+                                        html_content = fig_path.read_text(encoding='utf-8')
+                                        fig = html_to_plotly(html_content)
+                                        if fig:
+                                            plotly_figures[fig_name] = fig
+                                        else:
+                                            logger.warning(f"Plotly conversion failed for {fig_name} - may be static image")
+                                    except Exception as e:
+                                        logger.error(f"Error loading {fig_name}: {e}")
                                 else:
-                                    plotly_figures[key] = html_to_plotly(html_content)
+                                    logger.warning(f"Figure file missing: {fig_path}")
                             
                             # Create result dictionary
                             model_result = {
@@ -186,7 +200,6 @@ class FeatureSelection:
                                 'grid_search_results': grid_search_results,
                                 'figures': plotly_figures
                             }
-                            
                             
                         else:
                             logger.info(f"Running model for {table_type}/{level}/{method}")
@@ -228,4 +241,3 @@ class FeatureSelection:
                 finally:
                     progress.update(cb_task, advance=1)
             progress.update(cb_task, description=_format_task_desc(cb_desc))
-          
