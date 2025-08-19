@@ -16,6 +16,7 @@ from functools import lru_cache
 import pandas as pd
 import numpy as np
 from biom.table import Table
+import plotly.io as pio
 
 # Local Imports
 from workflow_16s import constants
@@ -186,6 +187,24 @@ class Ordination:
         logger.info(f"Skipping ordination {task}: all figures exist")
         return True
 
+    def _load_existing_figures(self, task: OrdinationTask, output_dir: Path) -> Dict[str, Any]:
+        """Load existing figures from HTML files."""
+        figures = {}
+        metadata = self.metadata[task.table_type][task.level]
+        valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
+        
+        for color_col in valid_color_cols:
+            fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
+            file_path = output_dir / fname
+            try:
+                fig = pio.read_html(file_path)[0]
+                figures[color_col] = fig
+                logger.info(f"Loaded existing figure: {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load existing figure {file_path}: {e}")
+                
+        return figures
+
     def _calculate_optimal_workers(self) -> int:
         """Calculate optimal number of worker threads."""
         cpu_count = os.cpu_count() or 1
@@ -277,9 +296,11 @@ class Ordination:
             table_output_dir = output_dir / 'ordination' / task.table_type / task.level
             table_output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Check if we should skip
+            # Check if we should skip and load existing figures
             if self._should_skip_existing(task, table_output_dir):
-                return None
+                figures = self._load_existing_figures(task, table_output_dir)
+                if figures:
+                    return task.table_type, task.level, task.method, None, figures
             
             # Get aligned data
             table = self.tables[task.table_type][task.level]
