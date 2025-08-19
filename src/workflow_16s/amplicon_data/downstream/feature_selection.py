@@ -1,4 +1,3 @@
-
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
@@ -148,8 +147,10 @@ class FeatureSelection:
                         # Check if essential files exist
                         all_essential_files_exist = all(f.exists() for f in required_files)
                         try_to_load_old = self.config.get('ml', {}).get('load_old', True)
+                        load_existing = self.config.get('ml', {}).get('load_existing', True)
                         
-                        if all_essential_files_exist and try_to_load_old:
+                        # MODIFIED: Check both load_existing flag and file existence
+                        if all_essential_files_exist and try_to_load_old and load_existing:
                             logger.info(f"Loading existing results for {table_type}/{level}/{method}")
                             
                             # Load CatBoost model
