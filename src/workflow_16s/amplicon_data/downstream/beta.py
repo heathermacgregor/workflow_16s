@@ -190,7 +190,7 @@ class Ordination:
         # Check if all required files exist
         for color_col in required_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / fname
+            file_path = output_dir / task.method / fname
             logger.debug(f"Checking if file exists: {file_path}")
             if not file_path.exists():
                 logger.debug(f"File not found: {file_path}")
