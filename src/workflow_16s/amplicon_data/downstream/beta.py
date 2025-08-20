@@ -208,7 +208,7 @@ class Ordination:
         
         for color_col in valid_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / fname
+            file_path = output_dir / task.method  / fname
             logger.info(f"Attempting to load: {file_path}")
             try:
                 # Check if file exists and is readable
