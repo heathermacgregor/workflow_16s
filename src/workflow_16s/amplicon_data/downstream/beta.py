@@ -190,7 +190,7 @@ class Ordination:
         # Check if all required files exist
         for color_col in required_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / task.method / fname
+            file_path = output_dir / fname
             logger.debug(f"Checking if file exists: {file_path}")
             if not file_path.exists():
                 logger.debug(f"File not found: {file_path}")
@@ -206,9 +206,14 @@ class Ordination:
         metadata = self.metadata[task.table_type][task.level]
         valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
         
+        # Check if plotly.io has read_html method
+        if not hasattr(pio, 'read_html'):
+            logger.error("Plotly version does not support read_html method. Cannot load existing figures.")
+            return figures
+        
         for color_col in valid_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / task.method  / fname
+            file_path = output_dir / fname
             logger.info(f"Attempting to load: {file_path}")
             try:
                 # Check if file exists and is readable
@@ -230,6 +235,26 @@ class Ordination:
                 logger.debug(f"Traceback: {traceback.format_exc()}")
                 
         return figures
+
+    def _store_figure_paths(self, task: OrdinationTask, output_dir: Path) -> Dict[str, str]:
+        """Store file paths to existing figures instead of loading them."""
+        logger.info(f"Storing figure paths for {task}")
+        figure_paths = {}
+        metadata = self.metadata[task.table_type][task.level]
+        valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
+        
+        for color_col in valid_color_cols:
+            fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
+            file_path = output_dir / fname
+            logger.info(f"Checking figure path: {file_path}")
+            
+            if file_path.exists() and file_path.stat().st_size > 0:
+                figure_paths[color_col] = str(file_path)
+                logger.info(f"Found existing figure: {file_path}")
+            else:
+                logger.warning(f"Figure file not found or empty: {file_path}")
+                
+        return figure_paths
 
     def _calculate_optimal_workers(self) -> int:
         """Calculate optimal number of worker threads."""
@@ -253,6 +278,15 @@ class Ordination:
         if output_dir is None:
             output_dir = Path(self.config['output_dir'])
             logger.debug(f"Using output directory: {output_dir}")
+            
+        # Check if we can load existing figures
+        ordination_config = self.config.get('ordination', {})
+        if ordination_config.get('load_existing_figures', False) and not hasattr(pio, 'read_html'):
+            logger.error("Plotly version does not support read_html method. Cannot load existing figures.")
+            logger.info("Will store file paths instead for downstream use")
+            ordination_config['load_existing_figures'] = False
+            # Update the config to reflect this change
+            self.config['ordination']['load_existing_figures'] = False
             
         with get_progress_bar() as progress:
             stats_desc = "Running beta diversity"
@@ -339,13 +373,22 @@ class Ordination:
             
             # Check if we should skip and load existing figures
             if self._should_skip_existing(task, table_output_dir):
-                logger.info(f"Loading existing figures for {task}")
-                figures = self._load_existing_figures(task, table_output_dir)
-                if figures:
-                    logger.info(f"Returning loaded figures for {task}")
-                    return task.table_type, task.level, task.method, None, figures
+                logger.info(f"Checking existing figures for {task}")
+                
+                # Try to load figures if possible, otherwise store paths
+                if hasattr(pio, 'read_html'):
+                    figures = self._load_existing_figures(task, table_output_dir)
+                    if figures:
+                        logger.info(f"Returning loaded figures for {task}")
+                        return task.table_type, task.level, task.method, None, figures
                 else:
-                    logger.info(f"No figures loaded for {task}, proceeding with calculation")
+                    # Store file paths instead of loading figures
+                    figure_paths = self._store_figure_paths(task, table_output_dir)
+                    if figure_paths:
+                        logger.info(f"Returning figure paths for {task}")
+                        return task.table_type, task.level, task.method, None, figure_paths
+                
+                logger.info(f"No figures loaded for {task}, proceeding with calculation")
             
             # Get aligned data
             logger.debug(f"Getting aligned data for {task}")
