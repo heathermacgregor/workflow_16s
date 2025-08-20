@@ -128,9 +128,12 @@ class Ordination:
         self.tasks = self._get_enabled_tasks()          
         if not self.tasks:
             logger.info("No methods for beta diversity analysis (ordination) enabled")
+        else:
+            logger.info(f"Found {len(self.tasks)} ordination tasks to process")
 
     def _get_enabled_tasks(self) -> Tuple[OrdinationTask, ...]:
         """Get enabled tasks as immutable tuple for better performance."""
+        logger.debug("Determining enabled ordination tasks")
         ordination_config = self.config.get('ordination', {})
         table_config = ordination_config.get('tables', {})
         tasks = []
@@ -138,6 +141,7 @@ class Ordination:
         for table_type, levels in self.tables.items():
             table_type_config = table_config.get(table_type, {})
             if not table_type_config.get('enabled', False):
+                logger.debug(f"Skipping table type {table_type}: disabled in config")
                 continue
                 
             # Use set intersection for better performance
@@ -153,11 +157,14 @@ class Ordination:
             for level in valid_levels:
                 for method in valid_methods:  
                     tasks.append(OrdinationTask(table_type, level, method))
+                    logger.debug(f"Added task: {table_type}/{level}/{method}")
         
+        logger.info(f"Total tasks identified: {len(tasks)}")
         return tuple(tasks)  # Return immutable tuple
 
     def _initialize_results(self) -> None:
         """Initialize results storage structure efficiently."""
+        logger.debug("Initializing results structure")
         for task in self.tasks:
             if task.table_type not in self.results:
                 self.results[task.table_type] = {}
@@ -167,7 +174,9 @@ class Ordination:
     @lru_cache(maxsize=32)
     def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> bool:
         """Check if we should skip calculation due to existing figures (cached)."""
+        logger.debug(f"Checking if we should skip existing figures for {task}")
         if not self.config.get('ordination', {}).get('load_existing_figures', False):
+            logger.debug("Skipping disabled in config")
             return False
             
         # Get metadata for this specific task
@@ -181,7 +190,10 @@ class Ordination:
         # Check if all required files exist
         for color_col in required_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            if not (output_dir / fname).exists():
+            file_path = output_dir / fname
+            logger.debug(f"Checking if file exists: {file_path}")
+            if not file_path.exists():
+                logger.debug(f"File not found: {file_path}")
                 return False
                 
         logger.info(f"Skipping ordination {task}: all figures exist")
@@ -189,6 +201,7 @@ class Ordination:
 
     def _load_existing_figures(self, task: OrdinationTask, output_dir: Path) -> Dict[str, Any]:
         """Load existing figures from HTML files."""
+        logger.info(f"Loading existing figures for {task}")
         figures = {}
         metadata = self.metadata[task.table_type][task.level]
         valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
@@ -196,13 +209,25 @@ class Ordination:
         for color_col in valid_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
-            logger.info(file_path)
+            logger.info(f"Attempting to load: {file_path}")
             try:
+                # Check if file exists and is readable
+                if not file_path.exists():
+                    logger.warning(f"File does not exist: {file_path}")
+                    continue
+                    
+                if file_path.stat().st_size == 0:
+                    logger.warning(f"File is empty: {file_path}")
+                    continue
+                    
+                logger.debug(f"Reading HTML file: {file_path}")
                 fig = pio.read_html(file_path)[0]
                 figures[color_col] = fig
-                logger.info(f"Loaded existing figure: {file_path}")
+                logger.info(f"Successfully loaded existing figure: {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to load existing figure {file_path}: {e}")
+                import traceback
+                logger.debug(f"Traceback: {traceback.format_exc()}")
                 
         return figures
 
@@ -211,18 +236,23 @@ class Ordination:
         cpu_count = os.cpu_count() or 1
         # For I/O bound tasks with some CPU computation, use more threads
         # but cap at reasonable limit to avoid resource contention
-        return min(6, max(2, cpu_count // 2 + 1))
+        optimal = min(6, max(2, cpu_count // 2 + 1))
+        logger.debug(f"Calculated optimal workers: {optimal}")
+        return optimal
 
     def run(self, output_dir: Optional[Path] = None) -> None:
         """Run ordination analysis with optimized parallel processing."""
         # Early returns
         if not self.tasks:
+            logger.info("No tasks to run")
             return
             
+        logger.info(f"Starting ordination with {len(self.tasks)} tasks")
         self._initialize_results()
         
         if output_dir is None:
             output_dir = Path(self.config['output_dir'])
+            logger.debug(f"Using output directory: {output_dir}")
             
         with get_progress_bar() as progress:
             stats_desc = "Running beta diversity"
@@ -232,9 +262,11 @@ class Ordination:
             )
             
             max_workers = self._calculate_optimal_workers()
+            logger.info(f"Using {max_workers} worker threads")
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks at once for better scheduling
+                logger.debug("Submitting tasks to executor")
                 future_to_task = {
                     executor.submit(
                         self._run_single_ordination,
@@ -247,6 +279,7 @@ class Ordination:
                 # Process completed futures with timeout
                 errors = []
                 try:
+                    logger.debug("Waiting for tasks to complete")
                     for future in as_completed(future_to_task, timeout=2*3600):
                         task = future_to_task[future]
                         try:
@@ -257,6 +290,8 @@ class Ordination:
                             error_msg = f"Ordination failed for {task}: {str(e)}"
                             errors.append(error_msg)
                             logger.error(error_msg)
+                            import traceback
+                            logger.debug(f"Traceback: {traceback.format_exc()}")
                         finally:
                             progress.update(stats_task, advance=1)
                             
@@ -268,10 +303,12 @@ class Ordination:
                     logger.warning(f"Completed with {len(errors)} errors out of {len(self.tasks)} tasks")
                 
             progress.update(stats_task, description=_format_task_desc(stats_desc))
+        logger.info("Ordination completed")
 
     def _store_result(self, table_type: str, level: str, method: str, 
                      ord_result: Any, figures: Dict) -> None:
         """Store ordination results efficiently."""
+        logger.debug(f"Storing result for {table_type}/{level}/{method}")
         level_results = self.results[table_type][level]
         level_results[method] = ord_result
         level_results['figures'][method] = figures
@@ -284,6 +321,8 @@ class Ordination:
             f" → {self.TEST_CONFIG[task.method].name}"  
         )
         
+        logger.info(f"Starting ordination task: {task}")
+        
         # Create progress task for this method
         method_task = progress.add_task(
             _format_task_desc(method_desc),
@@ -295,19 +334,26 @@ class Ordination:
             
             # Prepare output directory
             table_output_dir = output_dir / 'ordination' / task.table_type / task.level
+            logger.debug(f"Creating output directory: {table_output_dir}")
             table_output_dir.mkdir(parents=True, exist_ok=True)
             
             # Check if we should skip and load existing figures
             if self._should_skip_existing(task, table_output_dir):
+                logger.info(f"Loading existing figures for {task}")
                 figures = self._load_existing_figures(task, table_output_dir)
                 if figures:
+                    logger.info(f"Returning loaded figures for {task}")
                     return task.table_type, task.level, task.method, None, figures
+                else:
+                    logger.info(f"No figures loaded for {task}, proceeding with calculation")
             
             # Get aligned data
+            logger.debug(f"Getting aligned data for {task}")
             table = self.tables[task.table_type][task.level]
             metadata = self.metadata[task.table_type][task.level]
             table_aligned, metadata_aligned = update_table_and_meta(table, metadata)
             
+            logger.debug(f"Running test for {task}")
             result, figures = self._run_test(  
                 table=table_aligned,
                 metadata=metadata_aligned,
@@ -316,48 +362,60 @@ class Ordination:
                 output_dir=table_output_dir
             )
             
+            logger.info(f"Completed task {task}")
             return task.table_type, task.level, task.method, result, figures
             
         except Exception as e:
             logger.error(f"Ordination {task} failed: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None
         finally:
             progress.update(method_task, completed=1, visible=False)
 
     def _get_method_parameters(self, task: OrdinationTask) -> Dict:
         """Get method-specific parameters efficiently."""
+        logger.debug(f"Getting method parameters for {task.method}")
         params = {}
         
         if task.method == "pcoa":
             table_config = self.config['ordination']['tables'].get(task.table_type, {})
             params["metric"] = table_config.get("pcoa_metric", "braycurtis")
-            logger.debug(f"Using PCoA metric: {params['metric']}")
+            logger.info(f"Using PCoA metric: {params['metric']}")
         elif task.method in ("tsne", "umap"):
             params["n_jobs"] = 1  # Thread safety
+            logger.debug(f"Setting n_jobs=1 for {task.method} for thread safety")
             
         return params
 
     def _run_test(self, table: Table, metadata: pd.DataFrame, symbol_col: str,
                  task: OrdinationTask, output_dir: Path) -> Tuple[Any, Dict]:
         """Run ordination test with optimized parameter handling."""
+        logger.info(f"Running {task.method} calculation for {task.table_type}/{task.level}")
         method_config = self.TEST_CONFIG[task.method]
         method_params = self._get_method_parameters(task)
         
         try:
             # Thread-safe execution for UMAP/t-SNE
             if task.method in ("tsne", "umap"):
+                logger.debug(f"Acquiring lock for {task.method}")
                 with umap_lock:
                     os.environ['NUMBA_NUM_THREADS'] = '1'
+                    logger.debug(f"Running {task.method} with thread safety")
                     result = method_config.func(table=table, **method_params)
             else:
+                logger.debug(f"Running {task.method}")
                 result = method_config.func(table=table, **method_params)
                 
         except Exception as e:
             logger.error(f"Failed {task}: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None, {}
 
         # Generate figures
         try:
+            logger.debug(f"Generating figures for {task}")
             figures = self._generate_figures(
                 result, metadata, symbol_col, task, output_dir, method_config
             )
@@ -365,12 +423,15 @@ class Ordination:
             
         except Exception as e:
             logger.error(f"Plotting failed for {task}: {e}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return result, {}
 
     def _generate_figures(self, result: Any, metadata: pd.DataFrame, 
                          symbol_col: str, task: OrdinationTask, 
                          output_dir: Path, method_config: OrdinationConfig) -> Dict:
         """Generate figures with optimized parameter preparation."""
+        logger.debug(f"Generating figures for {task}")
         figures = {}
         
         # Filter valid color columns once
@@ -406,12 +467,17 @@ class Ordination:
         # Generate figures for each valid color column
         for color_col in valid_color_cols:
             try:
+                logger.debug(f"Generating figure for {task} with color column: {color_col}")
                 plot_params = {**base_params, "color_col": color_col}
                 fig, _ = method_config.plot_func(**plot_params)
                 if fig:
                     figures[color_col] = fig
+                    logger.debug(f"Successfully generated figure for {color_col}")
             except Exception as e:
                 logger.warning(f"Failed to generate figure for {task} with color {color_col}: {e}")
+                import traceback
+                logger.debug(f"Traceback: {traceback.format_exc()}")
                 continue
                 
+        logger.info(f"Generated {len(figures)} figures for {task}")
         return figures
