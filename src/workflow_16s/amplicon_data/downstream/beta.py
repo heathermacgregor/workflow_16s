@@ -196,6 +196,7 @@ class Ordination:
         for color_col in valid_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
+            logger.info(file_path)
             try:
                 fig = pio.read_html(file_path)[0]
                 figures[color_col] = fig
