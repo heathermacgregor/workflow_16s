@@ -174,10 +174,10 @@ class Ordination:
     @lru_cache(maxsize=32)
     def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> bool:
         """Check if we should skip calculation due to existing figures (cached)."""
-        logger.debug(f"Checking if we should skip existing figures for {task}")
+        logger.info(f"Checking if we should skip calculation for task: {task}")
         load_existing_enabled = self.config.get('ordination', {}).get('load_existing', False)
         if not load_existing_enabled:
-            logger.debug(f"Skipping disabled in config: {load_existing_enabled}")
+            logger.info(f"Skipping disabled in config: {load_existing_enabled}")
             return False
             
         # Check if color columns exist in metadata
@@ -191,9 +191,9 @@ class Ordination:
         for color_col in required_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
-            logger.debug(f"Checking if file exists: {file_path}")
+            logger.info(f"Checking if file exists: {file_path}")
             if not file_path.exists():
-                logger.debug(f"File not found: {file_path}")
+                logger.info(f"File not found: {file_path}")
                 return False
                 
         logger.info(f"Skipping ordination {task}: all figures exist")
