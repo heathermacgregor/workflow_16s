@@ -372,7 +372,7 @@ class Ordination:
                     
                 else:
                     # Store file paths instead of loading figures
-                    figure_paths = self._store_figure_paths(task, table_output_dir)
+                    figure_paths = self._store_figure_paths(task, task_output_dir)
                     if figure_paths:
                         logger.info(f"Returning figure paths for {task}")
                         return task.table_type, task.level, task.method, None, figure_paths
@@ -391,7 +391,7 @@ class Ordination:
                 metadata=metadata_aligned,
                 symbol_col=self.group_column,  
                 task=task,
-                output_dir=table_output_dir
+                output_dir=task_output_dir
             )
             
             logger.info(f"Completed task {task}")
