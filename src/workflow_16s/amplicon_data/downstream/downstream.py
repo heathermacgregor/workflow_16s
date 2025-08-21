@@ -298,6 +298,7 @@ class Downstream:
                     logger.info(f"  - Results calculated fresh: {calculated_tasks}/{total_tasks} ({100-load_percentage:.1f}%)")
             
             # Store all statistical results
+            self.stats_obj = stats
             return {
                 'test_results': stats.results,
                 'summary': summary,
@@ -321,24 +322,105 @@ class Downstream:
     def _catboost_feature_selection(self):
         if not self.config.get("ml", {}).get('enabled', False):
             return {}
-        cb = FeatureSelection(self.config, self.metadata, self.tables, self.verbose)
-        cb.run(output_dir=self.output_dir)
-        logger.info(f"Feature selection models: {cb.models}")
-        return cb.models
+        results = {}
+        for group_column in self.group_columns:
+            if group_column['type'] == 'bool':
+                cb = FeatureSelection(self.config, self.metadata, self.tables, group_column['name'], self.verbose)
+                cb.run(output_dir=self.output_dir)
+                logger.info(f"Feature selection models: {cb.models}")
+                results[group_column['name']] = cb.models
+        return results
 
-    def _top_features(self):
+     def _top_features(self) -> None:
+        if not self.config.get("top_features", {}).get('enabled', False):
+            return {}
+        if not self.top_features["stats"]:
+            self.top_features["stats"] = {}
+
+        all_features = {}
+        for group_column in self.group_columns:
+            all_features_group_column = self._process_group_features_stats(group_column)
+            all_features[group_column['name']] = all_features_group_column
+            
+    def _process_group_features_stats(self, group_column) -> None:
+        """Helper to identify top features for a specific group"""
+        group_column_name = group_column['name']
+        group_column_type = group_column['type']
+        group_column_values = group_column['values']
+        
+        if not self.stats['test_results'][group_column_name]:
+            logger.warning(
+              f"No statistics calculated for group '{group_column_name}'. Skipping top features."
+            )
+            return
+            
+        n = self.config.get('top_features', {}).get('n', 20) # Number of top features
+        
+        # Initialize storage for this group
+        self.top_features["stats"][group_column_name] = {}
+        all_features = []
+        with self.stats_obj as stats:
+            for table_type, levels in self.stats['test_results'][group_column_name].items():  # 1. Table Types
+                for level, tests in levels.items():           # 2. Taxonomic Levels
+                    for test_name, df in tests.items():       # 3. Test Names
+                        if df is None or not isinstance(df, pd.DataFrame):
+                            continue
+                        if "p_value" not in df.columns:
+                            continue
+                        # Get significant features for the table_type / level / test    
+                        sig_df = df[df["p_value"] < 0.05].copy()
+                        if sig_df.empty:
+                            continue
+                        # Get effect size for each row
+                        sig_df["effect"] = sig_df.apply(
+                            lambda row: stats.get_effect_size_optimized(test_name, row), axis=1
+                        )
+                        sig_df = sig_df.dropna(subset=["effect"])
+    
+                        for _, row in sig_df.iterrows():
+                            all_features.append({
+                                "feature": row["feature"],
+                                "table_type": table_type,
+                                "level": level,  
+                                "method": "statistical_test",
+                                "test": test_name,
+                                "effect": row["effect"],
+                                "p_value": row["p_value"],
+                                "effect_dir": "positive" if row["effect"] > 0 else "negative",
+                            })
+            
+                
+            group_1_features = [f for f in all_features if f["effect"] > 0]
+            group_2_features = [f for f in all_features if f["effect"] < 0]
+    
+            group_1_features.sort(key=lambda d: (-d["effect"], d["p_value"]))
+            group_2_features.sort(key=lambda d: (d["effect"], d["p_value"]))
+            
+            # Store results
+            self.top_features["stats"][group_column_name][group_column_values[0]] = group_1_features[:n]
+            self.top_features["stats"][group_column_name][group_column_values[1]] = group_2_features[:n]
+            
+            logger.info(
+                f"Top features for {group_column_name}: "
+                f"{group_column_values[0]} ({len(group_1_features)}), "
+                f"{group_column_values[1]} ({len(group_2_features)})"
+            )
+            return all_features
+
+    def _top_features_plots_stats(self):
         """Generate top features plots if enabled."""
-        if self.config.get("violin_plots", {}).get('enabled', False) or self.config.get("feature_maps", {}).get('enabled', False):
-            if self.top_features:
+        if self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False):# or self.config.get("feature_maps", {}).get('enabled', False):
+            if self.top_features["stats"]:
                 features_plots = top_features_plots(
                     output_dir=self.output_dir, 
                     config=self.config, 
-                    top_features=self.top_features, 
+                    top_features=self.top_features["stats"], 
                     tables=self.tables, 
                     meta=self.metadata, 
                     nfc_facilities=self.nfc_facilities, 
                     verbose=self.verbose
                 )
+                logger.info(features_plots)
                 return features_plots
         return None
 
@@ -348,10 +430,10 @@ class Downstream:
             return None
             
         faprotax = FunctionalAnnotation(self.config)
-        if self.top_features:
+        if :
             # Extract features from top_features for annotation
             features_to_annotate = []
-            # Implementation depends on structure of self.top_features
+            # Implementation depends on structure of 
             annotations = faprotax._annotate_features(features_to_annotate)
             return annotations
         return None
