@@ -60,12 +60,13 @@ class FeatureSelection:
         config: Dict, 
         metadata: pd.DataFrame,
         tables: Dict[str, Dict[str, Table]],
+        group_column: str = constants.DEFAULT_GROUP_COLUMN,
         verbose: bool = False
     ):
         self.config = config
         ml_config = self.config.get('ml', {})
             
-        self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)
+        self.group_column = group_column
         self.n_top_features = ml_config.get('num_features', 100)
         self.step_size = ml_config.get('step_size', 100)
         self.permutation_importance = ml_config.get('permutation_importance', {}).get('enabled', True)
