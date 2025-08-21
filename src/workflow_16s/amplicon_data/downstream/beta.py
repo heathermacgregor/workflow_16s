@@ -71,15 +71,37 @@ class OrdinationConfig:
 
 # =================================== FUNCTIONS ====================================== #
 
-def load_plotly_from_html(file_path):
-    with open(file_path) as f:
-        html = f.read()
+import json
+from bs4 import BeautifulSoup
+import plotly.graph_objects as go
 
-    call_arg_str = re.findall(r'Plotly\.newPlot\((.*)\)', html[-2**16:])[0]
-    logger.info(call_arg_str)
-    call_args = json.loads(f'[{call_arg_str}]')
-    plotly_json = {'data': call_args[1], 'layout': call_args[2]}    
-    return plotly.io.from_json(json.dumps(plotly_json))
+def load_plotly_from_html(html_file_path):
+    # Read the HTML file
+    with open(html_file_path, 'r') as file:
+        html_content = file.read()
+    
+    # Parse HTML using BeautifulSoup
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Find the script tag with type "application/json"
+    script_tag = soup.find('script', type='application/json')
+    if not script_tag:
+        raise ValueError("No JSON data found in the HTML file.")
+    
+    # Parse the JSON data
+    plotly_data = json.loads(script_tag.string)
+    
+    # Reconstruct the Plotly figure
+    fig = go.Figure(
+        data=plotly_data['data'],
+        layout=plotly_data['layout']
+    )
+    
+    # Optional: Apply config if needed
+    if 'config' in plotly_data:
+        fig.update_layout(**plotly_data['config'])
+    
+    return fig
 
 class Ordination:
     """Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures."""
