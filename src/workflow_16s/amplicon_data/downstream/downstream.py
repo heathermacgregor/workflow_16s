@@ -99,7 +99,7 @@ class Downstream:
         verbose: bool = False,
         # New parameters for result loading
         load_existing_results: bool = True,
-        max_result_age_hours: Optional[float] = 24,
+        max_result_age_hours: Optional[float] = None,
         force_recalculate_stats: List[str] = None,
         invalidate_results_patterns: List[str] = None
     ):
@@ -135,14 +135,17 @@ class Downstream:
         self._execute_pipeline()
       
     def _validate_mode(self) -> None:
+        """Make sure that the mode variable is recognized in self.ModeConfig."""
         if self.mode not in self.ModeConfig:
             raise ValueError(f"Invalid mode: {self.mode}")
           
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
+        # Load data
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
-        logger.info(f"Available metadata columns: {sorted(list(self.metadata['raw']['genus'].columns))}")
+        # Prepare data for analysis
         self.metadata, self.tables = self._prep_data()
+        # Run analysis
         self._run_analysis()
         
         if self.verbose:
@@ -157,20 +160,25 @@ class Downstream:
         return data.metadata, data.tables
 
     def _run_analysis(self):
-        """Run all analysis steps with optimized result loading."""
+        """Run all analysis steps."""
         # Handle result invalidation if requested
         if self.invalidate_results_patterns:
             self._invalidate_existing_results()
         
-        # Run analyses in optimized order
-        #self.maps = self._plot_sample_maps()
-        logger.info("Running Statistical Analysis with result loading...")
-        self.stats = self._stats_with_loading()
-        logger.info("Running Alpha Diversity Analysis...")
+        # Run analyses 
+        logger.info("Plotting sample maps...")
+        self.maps = self._plot_sample_maps()
+        
+        logger.info("Running statistical analysis...")
+        self.stats = self._stats()
+        
+        logger.info("Running alpha diversity analysis...")
         self.alpha_diversity = self._alpha_diversity()
-        logger.info("Running Beta Diversity Analysis...")
+        
+        logger.info("Running beta diversity analysis...")
         self.ordination = self._beta_diversity()
-        logger.info("Running Machine Learning Feature Selection...")
+        
+        logger.info("Running machine learning feature selection...")
         self.models = self._catboost_feature_selection()
         
         # Log final statistics
@@ -234,13 +242,13 @@ class Downstream:
 
     def _plot_sample_maps(self):
         if not self.config.get("maps", {}).get('enabled', False):
-            return
+            return {}
         maps = Maps(self.config, self.metadata, Path(self.output_dir) / 'sample_maps', self.verbose)
         maps.generate_sample_maps(nfc_facility_data=self.nfc_facilities)
         return maps.maps
 
-    def _stats_with_loading(self):
-        """Run statistical analysis with enhanced result loading."""
+    def _stats(self):
+        """Run statistical analysis."""
         if not self.config.get("stats", {}).get('enabled', False):
             logger.info("Statistical analysis disabled in configuration")
             return {}
