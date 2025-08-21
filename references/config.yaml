@@ -245,7 +245,7 @@ faprotax: # Functional prediction
   enabled: True
 
 maps:
-  enabled: False
+  enabled: True
   color_columns:
     - "dataset_name"
     - "nuclear_contamination_status"
