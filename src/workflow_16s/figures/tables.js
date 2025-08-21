@@ -33,7 +33,22 @@ function initializePlotlySelectors() {
                 // The plot will be displayed by the embedded script in each selector
             }
         }
+        
+        // Fix Plotly container styling after initialization
+        fixPlotlyContainers();
     });
+}
+
+// ============================ FIX PLOTLY CONTAINER STYLING ============================ //
+function fixPlotlyContainers() {
+    // Wait for Plotly to initialize, then fix container styling
+    setTimeout(() => {
+        document.querySelectorAll('.plotly-selector-plot .svg-container').forEach(container => {
+            // Remove problematic inline styles that cause layout issues
+            container.style.height = 'auto';
+            container.style.minHeight = '400px'; // Set a reasonable minimum height
+        });
+    }, 100);
 }
 
 // ============================ IMPROVED TABLE INITIALIZATION ============================ //
@@ -97,7 +112,10 @@ function initializePlot(plotId) {
         case 'plotly':
             Plotly.newPlot(container, plotInfo.data, plotInfo.layout, { 
                 responsive: true,
-                displayModeBar: false
+                displayModeBar: true
+            }).then(() => {
+                // Fix Plotly container styling after plot is rendered
+                fixPlotlyContainers();
             });
             break;
         case 'image':
@@ -128,6 +146,8 @@ function toggleSection(event) {
         plotlyDivs.forEach(div => {
             if (window.Plotly) {
                 Plotly.Plots.resize(div);
+                // Fix container styling after resize
+                setTimeout(fixPlotlyContainers, 50);
             }
         });
     }, 400); // Wait for CSS transition to complete
@@ -148,6 +168,8 @@ function toggleAllSections(expand) {
             document.querySelectorAll('.js-plotly-plot').forEach(div => {
                 if (window.Plotly) {
                     Plotly.Plots.resize(div);
+                    // Fix container styling after resize
+                    setTimeout(fixPlotlyContainers, 50);
                 }
             });
         }, 500);
@@ -436,6 +458,8 @@ window.addEventListener('resize', debounce(() => {
     document.querySelectorAll('.js-plotly-plot').forEach(div => {
         if (window.Plotly) {
             Plotly.Plots.resize(div);
+            // Fix container styling after resize
+            setTimeout(fixPlotlyContainers, 50);
         }
     });
 }, 250));
@@ -447,5 +471,6 @@ window.TableUtils = {
     changePageSize,
     goToPage,
     showFigure,
-    initializePlot
+    initializePlot,
+    fixPlotlyContainers
 };
