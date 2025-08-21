@@ -35,6 +35,9 @@ from workflow_16s.stats.beta_diversity import (
 from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
+import json
+import re
+
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
@@ -67,6 +70,14 @@ class OrdinationConfig:
             self.plot_kwargs = {}
 
 # =================================== FUNCTIONS ====================================== #
+
+def load_plotly_from_html(file_path):
+    with open(file_path) as f:
+        html = f.read()
+    call_arg_str = re.findall(r'Plotly\.newPlot\((.*)\)', html[-2**16:])[0]
+    call_args = json.loads(f'[{call_arg_str}]')
+    plotly_json = {'data': call_args[1], 'layout': call_args[2]}    
+    return plotly.io.from_json(json.dumps(plotly_json))
 
 class Ordination:
     """Performs ordination analyses (PCA, PCoA, t-SNE, UMAP) and stores figures."""
@@ -193,6 +204,9 @@ class Ordination:
             if not file_path.exists():
                 logger.info(f"File not found: {file_path}")
                 return False
+            if file_path.stat().st_size == 0:
+                logger.info(f"File is empty: {file_path}")
+                return False
                 
         logger.info(f"Skipping ordination {task}: all figures exist")
         return True
@@ -204,29 +218,16 @@ class Ordination:
         metadata = self.metadata[task.table_type][task.level]
         valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
         
-        # Check if plotly.io has read_html method
-        if not hasattr(pio, 'read_html'):
-            logger.error("Plotly version does not support read_html method. Cannot load existing figures.")
-            return figures
-        
         for color_col in valid_color_cols:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
             logger.info(f"Attempting to load: {file_path}")
             try:
-                # Check if file exists and is readable
-                if not file_path.exists():
-                    logger.warning(f"File does not exist: {file_path}")
-                    continue
-                    
-                if file_path.stat().st_size == 0:
-                    logger.warning(f"File is empty: {file_path}")
-                    continue
-                    
                 logger.debug(f"Reading HTML file: {file_path}")
-                fig = pio.read_html(file_path)[0]
+                fig = load_plotly_from_html(file_path)
                 figures[color_col] = fig
                 logger.info(f"Successfully loaded existing figure: {file_path}")
+                    
             except Exception as e:
                 logger.warning(f"Failed to load existing figure {file_path}: {e}")
                 import traceback
@@ -374,11 +375,11 @@ class Ordination:
                 logger.info(f"Checking existing figures for {task}")
                 
                 # Try to load figures if possible, otherwise store paths
-                if hasattr(pio, 'read_html'):
-                    figures = self._load_existing_figures(task, table_output_dir)
-                    if figures:
-                        logger.info(f"Returning loaded figures for {task}")
-                        return task.table_type, task.level, task.method, None, figures
+                figures = self._load_existing_figures(task, table_output_dir)
+                if figures:
+                    logger.info(f"Returning loaded figures for {task}")
+                    return task.table_type, task.level, task.method, None, figures
+                    
                 else:
                     # Store file paths instead of loading figures
                     figure_paths = self._store_figure_paths(task, table_output_dir)
