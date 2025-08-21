@@ -75,8 +75,8 @@ def load_plotly_from_html(file_path):
     with open(file_path) as f:
         html = f.read()
 
-    logger.info(html)
     call_arg_str = re.findall(r'Plotly\.newPlot\((.*)\)', html[-2**16:])[0]
+    logger.info(call_arg_str)
     call_args = json.loads(f'[{call_arg_str}]')
     plotly_json = {'data': call_args[1], 'layout': call_args[2]}    
     return plotly.io.from_json(json.dumps(plotly_json))
