@@ -431,9 +431,12 @@ class Downstream:
             return None
             
         faprotax = FunctionalAnnotation(self.config)
-        if :
-            # Extract features from top_features for annotation
+        if self.top_features:
             features_to_annotate = []
+            # Extract features from top_features for annotation
+            for name, value in self.top_features.items():
+                for f in self.top_features[name][value]:
+                    all_taxa.append(f['feature'])
             # Implementation depends on structure of 
             annotations = faprotax._annotate_features(features_to_annotate)
             return annotations
