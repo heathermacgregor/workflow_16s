@@ -345,7 +345,11 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                     parts = line.split('`')
                     if len(parts) >= 2:
                         feature = parts[1]
+                        logger.info(parts[2])
+                        logger.info(parts[2].split('=')[-1])
+                        logger.info(parts[2].split('=')[-1].strip())
                         value = parts[2].split('=')[-1].strip().rstrip(')')
+                        logger.info(value)
                         if feature not in shap_data:
                             shap_data[feature] = {}
                         shap_data[feature]['mean_shap'] = value
@@ -371,7 +375,12 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                     parts = line.split('`')
                     if len(parts) >= 2:
                         feature = parts[1]
+                        logger.info(parts[2])
+                        logger.info(line.split('shows a ')[1])
+                        logger.info(line.split('shows a ')[1].split('(')[0])
+                        
                         relationship = line.split('shows a ')[1].split('(')[0].strip() if 'shows a ' in line else ''
+                        logger.info(relationship)
                         rho = line.split('ρ = ')[-1].rstrip(')') if 'ρ = ' in line else ''
                         if feature not in shap_data:
                             shap_data[feature] = {}
