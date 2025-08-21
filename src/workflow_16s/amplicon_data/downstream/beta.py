@@ -102,29 +102,26 @@ class Ordination:
         config: Dict, 
         metadata: pd.DataFrame,
         tables: Dict[str, Dict[str, Table]],
+        group_column: str = constants.DEFAULT_GROUP_COLUMN,
         verbose: bool = False
     ):
         self.config = config
         self.verbose = verbose
         self.metadata = metadata
         self.tables = tables
+        self.group_column = group_column
         
-        # Use tuple for immutable sequence (better memory)
-        self.color_columns = tuple(config['maps'].get(
-            "color_columns", 
-            self.DEFAULT_COLOR_COLUMNS
-        ))
+        self.color_columns = tuple(config['maps'].get("color_columns", self.DEFAULT_COLOR_COLUMNS))
         
-        self.group_column = config.get("group_column", constants.DEFAULT_GROUP_COLUMN)  
         self.results = {}
         
-        # Early return optimization
+        # Check if ordination is enabled
         ordination_config = self.config.get('ordination', {})
         if not ordination_config.get('enabled', False):
             logger.info("Beta diversity analysis (ordination) disabled")
             self.tasks = ()
             return
-            
+        # Check which ordination tasks are enabled    
         self.tasks = self._get_enabled_tasks()          
         if not self.tasks:
             logger.info("No methods for beta diversity analysis (ordination) enabled")
@@ -132,24 +129,25 @@ class Ordination:
             logger.info(f"Found {len(self.tasks)} ordination tasks to process")
 
     def _get_enabled_tasks(self) -> Tuple[OrdinationTask, ...]:
-        """Get enabled tasks as immutable tuple for better performance."""
-        logger.debug("Determining enabled ordination tasks")
-        ordination_config = self.config.get('ordination', {})
-        table_config = ordination_config.get('tables', {})
+        """Get enabled tasks."""
+        logger.debug("Retrieving enabled ordination tasks from the config file")
+
         tasks = []
         
+        ordination_config = self.config.get('ordination', {})
+        table_config = ordination_config.get('tables', {})        
         for table_type, levels in self.tables.items():
             table_type_config = table_config.get(table_type, {})
             if not table_type_config.get('enabled', False):
                 logger.debug(f"Skipping table type {table_type}: disabled in config")
                 continue
                 
-            # Use set intersection for better performance
+            # Get valid levels   
             available_levels = set(levels.keys())
             enabled_levels = set(table_type_config.get('levels', available_levels))
             valid_levels = available_levels & enabled_levels
-            
-            # Use set intersection for methods too
+
+            # Get valid methods
             default_methods = set(self.DEFAULT_METHODS.get(table_type, ("pca",)))
             enabled_methods = set(table_type_config.get('methods', default_methods))
             valid_methods = self.KNOWN_METHODS & enabled_methods
@@ -159,8 +157,8 @@ class Ordination:
                     tasks.append(OrdinationTask(table_type, level, method))
                     logger.debug(f"Added task: {table_type}/{level}/{method}")
         
-        logger.info(f"Total tasks identified: {len(tasks)}")
-        return tuple(tasks)  # Return immutable tuple
+        logger.debug(f"Retrieved {len(tasks)} tasks")
+        return tuple(tasks) 
 
     def _initialize_results(self) -> None:
         """Initialize results storage structure efficiently."""
