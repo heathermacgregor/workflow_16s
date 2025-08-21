@@ -331,9 +331,10 @@ class Downstream:
                 results[group_column['name']] = cb.models
         return results
 
-     def _top_features(self) -> None:
+    def _top_features(self) -> None:
         if not self.config.get("top_features", {}).get('enabled', False):
             return {}
+                
         if not self.top_features["stats"]:
             self.top_features["stats"] = {}
 
