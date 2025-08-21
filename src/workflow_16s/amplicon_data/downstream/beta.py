@@ -175,14 +175,14 @@ class Ordination:
     def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> bool:
         """Check if we should skip calculation due to existing figures (cached)."""
         logger.debug(f"Checking if we should skip existing figures for {task}")
-        if not self.config.get('ordination', {}).get('load_existing_figures', False):
-            logger.debug("Skipping disabled in config")
+        load_existing_enabled = self.config.get('ordination', {}).get('load_existing', False)
+        if not load_existing_enabled:
+            logger.debug(f"Skipping disabled in config: {load_existing_enabled}")
             return False
             
-        # Get metadata for this specific task
+        # Check if color columns exist in metadata
         metadata = self.metadata[task.table_type][task.level]
         required_color_cols = [col for col in self.color_columns if col in metadata.columns]
-        
         if not required_color_cols:
             logger.info(f"Skipping ordination {task}: no valid color columns")
             return True
