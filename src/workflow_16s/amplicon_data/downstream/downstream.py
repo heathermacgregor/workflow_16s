@@ -323,9 +323,12 @@ class Downstream:
     def _beta_diversity(self):
         if not self.config.get("ordination", {}).get('enabled', False):
             return {}
-        beta = Ordination(self.config, self.metadata, self.tables, self.verbose)
-        beta.run(output_dir=self.output_dir)
-        return beta.results
+        results = {}
+        for group_column in self.group_columns:
+            beta = Ordination(self.config, self.metadata, self.tables, group_column['name'], self.verbose)
+            beta.run(output_dir=self.output_dir)
+            results[group_column['name']] = beta.results
+        return results
 
     def _catboost_feature_selection(self):
         if not self.config.get("ml", {}).get('enabled', False):
