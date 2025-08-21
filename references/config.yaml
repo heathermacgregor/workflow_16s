@@ -87,13 +87,13 @@ dataset_column: "dataset_name"
 group_columns:
   - name: "nuclear_contamination_status"
     type: "bool"
+    values:
+      - True
+      - False
   #- name: "facility_match"
   #  type: "bool"
   #- name: "facility_distance_km"
   #  type: "float"
-
-top_features:
-  n: 30
   
 nfc_facilities:
   enabled: True
@@ -256,6 +256,7 @@ maps:
 
 top_features:
   enabled: True
+  n: 30
   violin_plots: # Violin plots of top important features
     enabled: True
     n: 50  # Number of features to plot per category
