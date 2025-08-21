@@ -191,13 +191,13 @@ class Ordination:
             
         # Check if color columns exist in metadata
         metadata = self.metadata[task.table_type][task.level]
-        required_color_cols = [col for col in self.color_columns if col in metadata.columns]
-        if not required_color_cols:
+        required_color_columns = [col for col in self.color_columns if col in metadata.columns]
+        if not required_color_columns:
             logger.info(f"Skipping ordination {task}: no valid color columns")
             return True
         
         # Check if all required files exist
-        for color_col in required_color_cols:
+        for color_col in required_color_columns:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
             logger.info(f"Checking if file exists: {file_path}")
@@ -216,14 +216,14 @@ class Ordination:
         logger.info(f"Loading existing figures for {task}")
         figures = {}
         metadata = self.metadata[task.table_type][task.level]
-        valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
+        valid_color_columns = [col for col in self.color_columns if col in metadata.columns]
         
-        for color_col in valid_color_cols:
+        for color_col in valid_color_columns:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
             logger.info(f"Attempting to load: {file_path}")
             try:
-                logger.debug(f"Reading HTML file: {file_path}")
+                logger.info(f"Reading HTML file: {file_path}")
                 fig = load_plotly_from_html(file_path)
                 figures[color_col] = fig
                 logger.info(f"Successfully loaded existing figure: {file_path}")
@@ -240,9 +240,9 @@ class Ordination:
         logger.info(f"Storing figure paths for {task}")
         figure_paths = {}
         metadata = self.metadata[task.table_type][task.level]
-        valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
+        valid_color_columns = [col for col in self.color_columns if col in metadata.columns]
         
-        for color_col in valid_color_cols:
+        for color_col in valid_color_columns:
             fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
             file_path = output_dir / fname
             logger.info(f"Checking figure path: {file_path}")
@@ -276,16 +276,7 @@ class Ordination:
         
         if output_dir is None:
             output_dir = Path(self.config['output_dir'])
-            logger.debug(f"Using output directory: {output_dir}")
-            
-        # Check if we can load existing figures
-        ordination_config = self.config.get('ordination', {})
-        if ordination_config.get('load_existing_figures', False) and not hasattr(pio, 'read_html'):
-            logger.error("Plotly version does not support read_html method. Cannot load existing figures.")
-            logger.info("Will store file paths instead for downstream use")
-            ordination_config['load_existing_figures'] = False
-            # Update the config to reflect this change
-            self.config['ordination']['load_existing_figures'] = False
+            logger.info(f"Using output directory: {output_dir}")
             
         with get_progress_bar() as progress:
             stats_desc = "Running beta diversity"
@@ -366,16 +357,15 @@ class Ordination:
             progress.update(method_task, description=_format_task_desc(method_desc))
             
             # Prepare output directory
-            table_output_dir = output_dir / 'ordination' / task.table_type / task.level
-            logger.debug(f"Creating output directory: {table_output_dir}")
-            table_output_dir.mkdir(parents=True, exist_ok=True)
+            task_output_dir = output_dir / 'ordination' / task.table_type / task.level / task.method
+            task_output_dir.mkdir(parents=True, exist_ok=True)
             
             # Check if we should skip and load existing figures
-            if self._should_skip_existing(task, table_output_dir):
+            if self._should_skip_existing(task, task_output_dir):
                 logger.info(f"Checking existing figures for {task}")
                 
                 # Try to load figures if possible, otherwise store paths
-                figures = self._load_existing_figures(task, table_output_dir)
+                figures = self._load_existing_figures(task, task_output_dir)
                 if figures:
                     logger.info(f"Returning loaded figures for {task}")
                     return task.table_type, task.level, task.method, None, figures
