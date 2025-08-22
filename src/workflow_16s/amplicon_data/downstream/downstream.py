@@ -356,21 +356,19 @@ class Downstream:
         all_features = {}
         # Retrieve top features from the statistical analysis if enabled
         if self.config.get("stats", {}).get('enabled', False) and self.stats:
-            if not all_features["stats"]:
-                all_features["stats"] = {}
+            if not self.top_features["stats"]:
+                self.top_features["stats"] = {}
     
             for group_column in self.group_columns:
-                all_features_group_column = self._top_features_stats_group_column(group_column)
-                all_features["stats"][group_column['name']] = all_features_group_column
+                self._top_features_stats_group_column(group_column)
 
         # Retrieve top features from the ML feature selection if enabled
         if self.config.get("ml", {}).get('enabled', False) and self.models:
-            if not all_features["ml"]:
-                all_features["ml"] = {}
+            if not self.top_features["models"]:
+                self.top_features["models"] = {}
     
             for group_column in self.group_columns:
-                all_features_group_column = self._top_features_ml_group_column(group_column)
-                all_features["ml"][group_column['name']] = all_features_group_column
+                self._top_features_ml_group_column(group_column)
 
         logger.info(all_features)
         return all_features
@@ -386,7 +384,7 @@ class Downstream:
             return
             
         n = self.config.get('top_features', {}).get('n', 20) # Number of top features
-        
+        logger.info(n)
         # Initialize storage for this group
         self.top_features["stats"][group_column_name] = {}
         all_features = []
@@ -437,7 +435,6 @@ class Downstream:
                 f"{group_column_values[0]} ({len(group_1_features)}), "
                 f"{group_column_values[1]} ({len(group_2_features)})"
             )
-            return all_features
             
     def _top_features_ml_group_column(self, group_column) -> None:
         """Helper to identify top features for a specific group"""
@@ -452,7 +449,7 @@ class Downstream:
         n = self.config.get('top_features', {}).get('n', 20) # Number of top features
         
         # Initialize storage for this group
-        self.top_features["models"][group_column_name] = {}
+        
         features_summary = []
         for table_type, levels in self.models[group_column_name].items():  # 1. Table Types
             for level, methods in levels.items():                            # 2. Taxonomic Levels
@@ -480,8 +477,9 @@ class Downstream:
                             "Feature": feat,
                             "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                         })
-        return features_summary
-            
+        features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
+        self.top_features["models"][group_column_name] = features_df
+        
     def _top_features_plots_stats(self):
         """Generate top features plots if enabled."""
         if self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False) or self.config.get("feature_maps", {}).get('enabled', False):
