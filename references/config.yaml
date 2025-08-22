@@ -41,8 +41,8 @@ validate_16s: # Validate sequences based on sequence alignment
   enabled: False
   n_runs: 10
   run_targets:
-    - '16S'
-    - 'unknown'
+    - "16S"
+    - "unknown"
 
 cutadapt: # Trim sequences with CutAdapt before importing to QIIME
   enabled: False
@@ -58,7 +58,7 @@ qiime2: # QIIME
     script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
     hard_rerun: False
     trim:
-      enabled: True # Set to 'False' if cutadapt > enabled is 'True'
+      enabled: True # Set to "False" if cutadapt > enabled is "True"
     denoise:
       chimera_method: "consensus"
       denoise_algorithm: "DADA2"
@@ -82,7 +82,7 @@ group_column_values:
   - True
   - False 
 
-metadata_id_column: '#sampleid'
+metadata_id_column: "#sampleid"
 dataset_column: "dataset_name"
 group_columns:
   - name: "nuclear_contamination_status"
@@ -90,11 +90,7 @@ group_columns:
     values:
       - True
       - False
-  #- name: "facility_match"
-  #  type: "bool"
-  #- name: "facility_distance_km"
-  #  type: "float"
-  
+      
 nfc_facilities:
   enabled: True
   use_local: True
@@ -105,10 +101,10 @@ nfc_facilities:
   maps:
     enabled: True
 
-features: # Feature table pre-processing
+features: # Processing steps to perform on the merged feature table prior to analysis
   filter: True
-  normalize: False #True
-  clr_transform: False #True
+  normalize: True
+  clr_transform: True
   presence_absence: False #True
 
 stats: # Statistical analyses
@@ -158,25 +154,25 @@ alpha_diversity: # Alpha diversity
     raw:  
       enabled: True
       levels:  
-        - 'genus'
-        - 'family'
-        - 'class'
+        - "genus"
+        - "family"
+        - "class"
     normalized:
       enabled: True
       levels: 
-        - 'genus'
-        - 'family'
+        - "genus"
+        - "family"
   metrics:  
-    - 'shannon'
-    - 'observed_features'
-    - 'simpson'
-    - 'pielou_evenness'
-    #- 'chao1'
-    #- 'ace'
-    #- 'gini_index'
-    #- 'goods_coverage'
-    - 'heip_evenness' 
-    #- 'dominance'
+    - "shannon"
+    - "observed_features"
+    - "simpson"
+    - "pielou_evenness"
+    #- "chao1"
+    #- "ace"
+    #- "gini_index"
+    #- "goods_coverage"
+    - "heip_evenness" 
+    #- "dominance"
   
 ordination: # Beta diversity + ordination
   enabled: False #True
@@ -193,9 +189,9 @@ ordination: # Beta diversity + ordination
         #- "tsne"
         #- "umap"
       levels:
-        - 'genus'
-        - 'family'
-        - 'class'
+        - "genus"
+        - "family"
+        - "class"
     filtered:
       enabled: True
       pcoa_metric: "braycurtis"
@@ -205,8 +201,8 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
-        - 'phylum'
+        - "genus"
+        - "phylum"
     normalized:
       enabled: True
       pcoa_metric: "braycurtis"
@@ -216,8 +212,8 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
-        - 'phylum'
+        - "genus"
+        - "phylum"
     clr_transformed:
       enabled: True
       pcoa_metric: "euclidean"
@@ -227,8 +223,8 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
-        - 'phylum'
+        - "genus"
+        - "phylum"
     presence_absence:
       enabled: True
       pcoa_metric: "jaccard"
@@ -238,8 +234,8 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        - 'genus'
-        - 'phylum'
+        - "genus"
+        - "phylum"
 
 faprotax: # Functional prediction
   enabled: True
@@ -279,59 +275,59 @@ ml: # Machine learning
     raw:
       enabled: False
       levels:
-        - 'genus'
+        - "genus"
       methods:
-        - 'rfe'
-        - 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - "rfe"
+        - "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
     filtered:
       enabled: False
       levels:
-        - 'genus'
+        - "genus"
       methods:
-        - 'rfe'
-        - 'select_k_best'
-        #- 'chi_squared'
-        #- 'lasso'
-        #- 'shap'
+        - "rfe"
+        - "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
     normalized:
       enabled: False
       levels:
-        - 'genus'
+        - "genus"
       methods:
-        - 'rfe'
-        - 'select_k_best'
-        - 'chi_squared'
-        - 'lasso'
-        - 'shap'
+        - "rfe"
+        - "select_k_best"
+        - "chi_squared"
+        - "lasso"
+        - "shap"
     clr_transformed:
       enabled: True
       levels:
-        - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
+        - "genus"
+        - "family"
+        - "order"
+        - "class"
+        - "phylum"
       methods:
-        - 'rfe'
-        - 'select_k_best'
-        #- 'chi_squared'
-        - 'lasso'
-        - 'shap'
+        - "rfe"
+        - "select_k_best"
+        #- "chi_squared"
+        - "lasso"
+        - "shap"
     presence_absence:
       enabled: True
       levels:
-        - 'genus'
-        - 'family'
-        - 'order'
-        - 'class'
-        - 'phylum'
+        - "genus"
+        - "family"
+        - "order"
+        - "class"
+        - "phylum"
       methods:
-        - 'rfe'
-        - 'select_k_best'
-        - 'chi_squared'
-        - 'lasso'
-        - 'shap'
+        - "rfe"
+        - "select_k_best"
+        - "chi_squared"
+        - "lasso"
+        - "shap"
   
