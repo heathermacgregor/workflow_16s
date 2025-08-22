@@ -704,6 +704,327 @@ class StatisticalAnalysis:
             return float(row[alt_col])
         
         return None
+
+    def run_core_microbiome_analysis(
+        self, 
+        prevalence_threshold: float = 0.8, 
+        abundance_threshold: float = 0.01
+    ) -> Dict:
+        """Run core microbiome analysis for all groups."""
+        core_results = {}
+        
+        for group_column in self.group_columns:
+            col = group_column['name']
+            core_results[col] = {}
+            
+            with get_progress_bar() as progress:
+                main_desc = f"Running core microbiome analysis for '{col}'"
+                main_task = progress.add_task(_format_task_desc(main_desc), 
+                                            total=len(self.tables) * len(self.tables['raw']))
+                
+                for table_type in self.tables:
+                    for level in self.tables[table_type]:
+                        level_desc = f"{table_type.replace('_', ' ').title()} ({level.title()})"
+                        progress.update(main_task, description=_format_task_desc(level_desc))
+                        
+                        # Use cached data
+                        table_aligned, metadata_aligned = self._get_cached_data(table_type, level)
+                        
+                        try:
+                            core_features = core_microbiome(
+                                table=table_aligned,
+                                metadata=metadata_aligned,
+                                group_column=col,
+                                prevalence_threshold=prevalence_threshold,
+                                abundance_threshold=abundance_threshold
+                            )
+                            
+                            _init_nested_dict(core_results, [col, table_type, level])
+                            core_results[col][table_type][level] = core_features
+                            
+                            # Save results
+                            output_dir = self.project_dir / 'core_microbiome' / col / table_type / level
+                            output_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            for group, core_df in core_features.items():
+                                output_path = output_dir / f'core_features_{group}.tsv'
+                                core_df.to_csv(output_path, sep='\t', index=False)
+                                
+                        except Exception as e:
+                            logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
+                        finally:
+                            progress.update(main_task, advance=1)
+                    
+                progress.update(main_task, description=_format_task_desc(main_desc))
+        
+        self.advanced_results['core_microbiome'] = core_results
+        return core_results
+    
+    def run_batch_correlation_analysis(self, continuous_variables: List[str]) -> Dict:
+        """Run correlation analysis for multiple continuous variables."""
+        correlation_results = {}
+        
+        for var in continuous_variables:
+            correlation_results[var] = {}
+            
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    # Check if variable exists in metadata
+                    metadata = self.metadata[table_type][level]
+                    if var not in metadata.columns:
+                        continue
+                    
+                    # Filter out samples with missing values
+                    metadata = metadata.dropna(subset=[var])
+                    if len(metadata) < 5:  # Require min samples
+                        logger.warning(f"Skipping {var}/{table_type}/{level}: only {len(metadata)} valid samples")
+                        continue
+                    
+                    # Use cached data
+                    table_aligned, metadata_aligned = self._get_cached_data(table_type, level)
+                    
+                    try:
+                        result = spearman_correlation(
+                            table=table_aligned,
+                            metadata=metadata_aligned,
+                            continuous_column=var
+                        )
+                        
+                        _init_nested_dict(correlation_results, [var, table_type, level])
+                        correlation_results[var][table_type][level] = result
+                        
+                        # Save results
+                        output_dir = self.project_dir / 'correlations' / var / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        output_path = output_dir / 'spearman_correlations.tsv'
+                        result.to_csv(output_path, sep='\t', index=False)
+                        
+                    except Exception as e:
+                        logger.error(f"Correlation analysis failed for {var}/{table_type}/{level}: {e}")
+        
+        self.advanced_results['correlations'] = correlation_results
+        return correlation_results
+    
+    def run_network_analysis_batch(
+        self, 
+        methods: List[str] = ['sparcc', 'spearman'], 
+        threshold: float = 0.3
+    ) -> Dict:
+        """Run network analysis for multiple correlation methods."""
+        network_results = {}
+        
+        for method in methods:
+            network_results[method] = {}
+            
+            for table_type in self.tables:
+                for level in self.tables[table_type]:
+                    # Use cached data
+                    table_aligned, _ = self._get_cached_data(table_type, level)
+                    
+                    try:
+                        corr_matrix, edges_df = microbial_network_analysis(
+                            table=table_aligned,
+                            method=method,
+                            threshold=threshold
+                        )
+                        
+                        _init_nested_dict(network_results, [method, table_type, level])
+                        network_results[method][table_type][level] = {
+                            'correlation_matrix': corr_matrix,
+                            'edges': edges_df
+                        }
+                        
+                        # Save results
+                        output_dir = self.project_dir / 'networks' / method / table_type / level
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        corr_path = output_dir / 'correlation_matrix.tsv'
+                        edges_path = output_dir / 'network_edges.tsv'
+                        
+                        corr_matrix.to_csv(corr_path, sep='\t')
+                        edges_df.to_csv(edges_path, sep='\t', index=False)
+                        
+                        # Generate network statistics
+                        network_stats = self._calculate_network_statistics(edges_df)
+                        stats_path = output_dir / 'network_statistics.tsv'
+                        pd.DataFrame([network_stats]).to_csv(stats_path, sep='\t', index=False)
+                        
+                    except Exception as e:
+                        logger.error(f"Network analysis failed for {method}/{table_type}/{level}: {e}")
+        
+        self.advanced_results['networks'] = network_results
+        return network_results
+    
+    def _calculate_network_statistics(self, edges_df: pd.DataFrame) -> Dict:
+        """Calculate basic network statistics from edge list."""
+        if edges_df.empty:
+            return {
+                'total_edges': 0,
+                'positive_edges': 0,
+                'negative_edges': 0,
+                'mean_correlation': 0,
+                'unique_nodes': 0
+            }
+        
+        total_edges = len(edges_df)
+        positive_edges = (edges_df['correlation'] > 0).sum()
+        negative_edges = (edges_df['correlation'] < 0).sum()
+        mean_correlation = edges_df['correlation'].mean()
+        
+        # Count unique nodes
+        unique_nodes = len(
+            set(edges_df['source'].tolist() + edges_df['target'].tolist())
+        )
+        
+        return {
+            'total_edges': total_edges,
+            'positive_edges': positive_edges,
+            'negative_edges': negative_edges,
+            'mean_correlation': mean_correlation,
+            'unique_nodes': unique_nodes,
+            'density': total_edges / (unique_nodes * (unique_nodes - 1) / 2) if unique_nodes > 1 else 0
+        }
+    
+    def run_comprehensive_analysis(self, **kwargs) -> Dict:
+        """Run all available advanced analyses."""
+        comprehensive_results = {}
+        
+        logger.info("Starting comprehensive statistical analysis...")
+        
+        # 1. Core microbiome analysis
+        logger.info("Running core microbiome analysis...")
+        try:
+            core_results = self.run_core_microbiome_analysis(
+                prevalence_threshold=kwargs.get('prevalence_threshold', 0.8),
+                abundance_threshold=kwargs.get('abundance_threshold', 0.01)
+            )
+            comprehensive_results['core_microbiome'] = core_results
+        except Exception as e:
+            logger.error(f"Core microbiome analysis failed: {e}")
+        
+        # 2. Correlation analysis
+        continuous_vars = kwargs.get('continuous_variables', 
+                                   self.config.get('stats', {}).get('continuous_variables', []))
+        if continuous_vars:
+            logger.info("Running correlation analysis...")
+            try:
+                correlation_results = self.run_batch_correlation_analysis(continuous_vars)
+                comprehensive_results['correlations'] = correlation_results
+            except Exception as e:
+                logger.error(f"Correlation analysis failed: {e}")
+        
+        # 3. Network analysis
+        logger.info("Running network analysis...")
+        try:
+            network_methods = kwargs.get('network_methods', ['sparcc', 'spearman'])
+            network_threshold = kwargs.get('network_threshold', 0.3)
+            network_results = self.run_network_analysis_batch(
+                methods=network_methods,
+                threshold=network_threshold
+            )
+            comprehensive_results['networks'] = network_results
+        except Exception as e:
+            logger.error(f"Network analysis failed: {e}")
+        
+        # 4. Generate summary
+        logger.info("Generating comprehensive summary...")
+        try:
+            summary_path = self.project_dir / 'comprehensive_analysis_summary.md'
+            self.export_results_summary(summary_path)
+            comprehensive_results['summary_path'] = str(summary_path)
+        except Exception as e:
+            logger.error(f"Summary generation failed: {e}")
+        
+        # Store all results
+        self.advanced_results.update(comprehensive_results)
+        
+        logger.info("Comprehensive analysis completed!")
+        return comprehensive_results
+    
+    def get_top_features_across_tests(self, n_features: int = 10) -> pd.DataFrame:
+        """Get top features that appear consistently across multiple tests."""
+        feature_counts = {}
+        feature_effects = {}
+        
+        for group_col, group_results in self.results.items():
+            for table_type, levels in group_results.items():
+                for level, tests in levels.items():
+                    for test_name, result in tests.items():
+                        if isinstance(result, pd.DataFrame) and not result.empty:
+                            for _, row in result.iterrows():
+                                feature = row.get('feature', '')
+                                if feature:
+                                    # Count occurrences
+                                    if feature not in feature_counts:
+                                        feature_counts[feature] = 0
+                                        feature_effects[feature] = []
+                                    
+                                    feature_counts[feature] += 1
+                                    
+                                    # Store effect sizes
+                                    effect_size = self.get_effect_size(test_name, row)
+                                    if effect_size is not None:
+                                        feature_effects[feature].append(abs(effect_size))
+        
+        # Create summary DataFrame
+        summary_data = []
+        for feature, count in feature_counts.items():
+            effects = feature_effects[feature]
+            summary_data.append({
+                'feature': feature,
+                'test_count': count,
+                'mean_effect_size': np.mean(effects) if effects else 0,
+                'max_effect_size': np.max(effects) if effects else 0,
+                'effect_size_std': np.std(effects) if len(effects) > 1 else 0
+            })
+        
+        summary_df = pd.DataFrame(summary_data)
+        if not summary_df.empty:
+            # Sort by test count and mean effect size
+            summary_df = summary_df.sort_values(
+                ['test_count', 'mean_effect_size'], 
+                ascending=[False, False]
+            ).head(n_features)
+        
+        return summary_df
+    
+    def export_results_summary(self, output_path: Union[str, Path]) -> None:
+        """Export a comprehensive summary of all results."""
+        summary = self.get_summary_statistics()
+        
+        # Create summary report
+        report_lines = [
+            "# Statistical Analysis Summary Report",
+            f"Total tests executed: {summary['total_tests_run']}",
+            f"Group columns analyzed: {', '.join(summary['group_columns_analyzed'])}",
+            "",
+            "## Significant Features by Test Type",
+        ]
+        
+        for test_name, count in summary['significant_features_by_test'].items():
+            test_display_name = TEST_CONFIG.get(test_name, {}).get('name', test_name)
+            report_lines.append(f"- {test_display_name}: {count} significant features")
+        
+        report_lines.extend([
+            "",
+            "## Effect Size Summaries",
+        ])
+        
+        for test_name, stats in summary['effect_sizes_summary'].items():
+            test_display_name = TEST_CONFIG.get(test_name, {}).get('name', test_name)
+            report_lines.extend([
+                f"### {test_display_name}",
+                f"- Mean effect size: {stats['mean']:.4f}",
+                f"- Standard deviation: {stats['std']:.4f}",
+                f"- Range: {stats['min']:.4f} to {stats['max']:.4f}",
+                ""
+            ])
+        
+        # Write summary report
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(report_lines))
+        
+        logger.info(f"Summary report exported to {output_path}")
     
     def get_summary_statistics(self) -> Dict:
         """Generate summary statistics with vectorized operations."""
