@@ -180,6 +180,9 @@ class Downstream:
         
         logger.info("Running machine learning feature selection...")
         self.models = self._catboost_feature_selection()
+
+        logger.info("Running top features...")
+        self.top_features = self._top_features()
         
         # Log final statistics
         self._log_analysis_summary()
@@ -288,7 +291,7 @@ class Downstream:
                     logger.warning(f"  - {warning}")
 
             # Get summary statistics
-            summary = stats.get_summary_statistics_optimized()
+            summary = stats.get_summary_statistics()
             logger.info(f"Statistical Analysis Summary:")
             logger.info(f"  - Total tests run: {summary['total_tests_run']}")
             logger.info(f"  - Group columns analyzed: {len(summary['group_columns_analyzed'])}")
@@ -315,6 +318,7 @@ class Downstream:
 
     def _alpha_diversity(self):
         if not self.config.get("alpha_diversity", {}).get('enabled', False):
+            logger.info("Alpha diversity analysis disabled in configuration")
             return {}
         alpha = AlphaDiversity(self.config, self.metadata, self.tables)
         alpha.run(output_dir=self.output_dir)
@@ -322,6 +326,7 @@ class Downstream:
 
     def _beta_diversity(self):
         if not self.config.get("ordination", {}).get('enabled', False):
+            logger.info("Betta diversity (ordination) analysis disabled in configuration")
             return {}
         results = {}
         for group_column in self.group_columns:
@@ -332,6 +337,7 @@ class Downstream:
 
     def _catboost_feature_selection(self):
         if not self.config.get("ml", {}).get('enabled', False):
+            logger.info("CatBoost feature selection disabled in configuration")
             return {}
         results = {}
         for group_column in self.group_columns:
@@ -344,26 +350,39 @@ class Downstream:
 
     def _top_features(self) -> None:
         if not self.config.get("top_features", {}).get('enabled', False):
+            logger.info("Top features analysis disabled in configuration")
             return {}
-                
-        if not self.top_features["stats"]:
-            self.top_features["stats"] = {}
 
         all_features = {}
-        for group_column in self.group_columns:
-            all_features_group_column = self._process_group_features_stats(group_column)
-            all_features[group_column['name']] = all_features_group_column
+        # Retrieve top features from the statistical analysis if enabled
+        if self.config.get("stats", {}).get('enabled', False) and self.stats:
+            if not all_features["stats"]:
+                all_features["stats"] = {}
+    
+            for group_column in self.group_columns:
+                all_features_group_column = self._top_features_stats_group_column(group_column)
+                all_features["stats"][group_column['name']] = all_features_group_column
+
+        # Retrieve top features from the ML feature selection if enabled
+        if self.config.get("ml", {}).get('enabled', False) and self.models:
+            if not all_features["ml"]:
+                all_features["ml"] = {}
+    
+            for group_column in self.group_columns:
+                all_features_group_column = self._top_features_ml_group_column(group_column)
+                all_features["ml"][group_column['name']] = all_features_group_column
+
+        logger.info(all_features)
+        return all_features
             
-    def _process_group_features_stats(self, group_column) -> None:
+    def _top_features_stats_group_column(self, group_column) -> None:
         """Helper to identify top features for a specific group"""
         group_column_name = group_column['name']
         group_column_type = group_column['type']
         group_column_values = group_column['values']
         
         if not self.stats['test_results'][group_column_name]:
-            logger.warning(
-              f"No statistics calculated for group '{group_column_name}'. Skipping top features."
-            )
+            logger.warning(f"No statistics calculated for group '{group_column_name}'. Skipping top features.")
             return
             
         n = self.config.get('top_features', {}).get('n', 20) # Number of top features
@@ -373,8 +392,8 @@ class Downstream:
         all_features = []
         with self.stats_obj as stats:
             for table_type, levels in self.stats['test_results'][group_column_name].items():  # 1. Table Types
-                for level, tests in levels.items():           # 2. Taxonomic Levels
-                    for test_name, df in tests.items():       # 3. Test Names
+                for level, tests in levels.items():                                           # 2. Taxonomic Levels
+                    for test_name, df in tests.items():                                       # 3. Test Names
                         if df is None or not isinstance(df, pd.DataFrame):
                             continue
                         if "p_value" not in df.columns:
@@ -392,6 +411,7 @@ class Downstream:
                         for _, row in sig_df.iterrows():
                             all_features.append({
                                 "feature": row["feature"],
+                                "column": group_column_name,
                                 "table_type": table_type,
                                 "level": level,  
                                 "method": "statistical_test",
@@ -418,10 +438,53 @@ class Downstream:
                 f"{group_column_values[1]} ({len(group_2_features)})"
             )
             return all_features
+            
+    def _top_features_ml_group_column(self, group_column) -> None:
+        """Helper to identify top features for a specific group"""
+        group_column_name = group_column['name']
+        group_column_type = group_column['type']
+        group_column_values = group_column['values']
+        
+        if not self.models[group_column_name]:
+            logger.warning(f"No feature selection ran for group '{group_column_name}'. Skipping top features.")
+            return
+            
+        n = self.config.get('top_features', {}).get('n', 20) # Number of top features
+        
+        # Initialize storage for this group
+        self.top_features["models"][group_column_name] = {}
+        features_summary = []
+        for table_type, levels in self.models[group_column_name].items():  # 1. Table Types
+            for level, methods in levels.items():                            # 2. Taxonomic Levels
+                for method, results in methods.items():                        # 3. Methods
+                    # Validate result structure
+                    if not result or not isinstance(result, dict):
+                        logger.warning(f"Invalid result for {group_column}/{table_type}/{level}/{method}")
+                        continue
+                        
+                    # Check for required keys
+                    if "top_features" not in result:
+                        logger.error(f"Missing 'top_features' in {table_type}/{level}/{method}")
+                        continue
 
+                    feat_imp = result.get("feature_importances", {})
+                    top_features = result.get("top_features", [])[:10] # TODO: Edit this so that it's configurable
+                    for i, feat in enumerate(top_features, 1):
+                        importance = feat_imp.get(feat, 0)
+                        features_summary.append({
+                            "Column": group_column_name,
+                            "Table Type": table_type,
+                            "Level": level,
+                            "Method": method,
+                            "Rank": i,
+                            "Feature": feat,
+                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
+                        })
+        return features_summary
+            
     def _top_features_plots_stats(self):
         """Generate top features plots if enabled."""
-        if self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False):# or self.config.get("feature_maps", {}).get('enabled', False):
+        if self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False) or self.config.get("feature_maps", {}).get('enabled', False):
             if self.top_features["stats"]:
                 features_plots = top_features_plots(
                     output_dir=self.output_dir, 
@@ -432,13 +495,13 @@ class Downstream:
                     nfc_facilities=self.nfc_facilities, 
                     verbose=self.verbose
                 )
-                logger.info(features_plots)
                 return features_plots
         return None
 
     def _functional_annotation(self):
         """Run functional annotation if enabled."""
         if not self.config.get("faprotax", {}).get('enabled', False):
+            logger.info("Functional annotation disabled in configuration")
             return None
             
         faprotax = FunctionalAnnotation(self.config)
