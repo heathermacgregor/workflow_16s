@@ -248,7 +248,7 @@ def get_enabled_tasks_cached(
     # Implementation would mirror original but with optimized data structures
     return tuple(tasks)
 
-def get_enabled_tasks_optimized(
+def get_enabled_tasks(
     config: Dict, 
     tables: Dict[str, Dict[str, Table]]
 ) -> List[Tuple[str, str, str]]:
@@ -269,15 +269,15 @@ def get_enabled_tasks_optimized(
         type_config = table_config[table_type]
         available_levels = set(tables[table_type].keys())
         
-        # Efficiently filter levels
+        # Filter levels
         configured_levels = set(type_config.get('levels', available_levels))
         enabled_levels = available_levels & configured_levels
         
-        # Efficiently filter tests
+        # Filter tests
         configured_tests = set(type_config.get('tests', DEFAULT_TESTS.get(table_type, [])))
         enabled_tests = configured_tests & known_tests
         
-        # Generate tasks with list comprehension
+        # Generate tasks 
         tasks.extend([
             (table_type, level, test)
             for level in enabled_levels
@@ -297,7 +297,7 @@ def get_group_column_values_cached(
     # Implementation would deserialize and return cached values
     pass
 
-def get_group_column_values_optimized(group_column: Dict, metadata: pd.DataFrame) -> List[Any]:
+def get_group_column_values(group_column: Dict, metadata: pd.DataFrame) -> List[Any]:
     """Optimized group column value extraction."""
     if 'values' in group_column and group_column['values']:
         return group_column['values']
@@ -477,14 +477,10 @@ class StatisticalAnalysis:
         # Process each group column
         for group_column in self.group_columns:
             col_name = group_column['name']
-            # Use optimized value extraction
-            col_values = get_group_column_values_optimized(
-                group_column, 
-                self.metadata["raw"]["genus"]
-            )
+            col_values = get_group_column_values(group_column, self.metadata["raw"]["genus"])
             
-            print(f"Processing group column: {col_name}")
-            print(f"Values: {col_values}")
+            logger.info(f"Processing group column: {col_name}")
+            logger.info(f"Values: {col_values}")
             
             self.results[col_name] = self._run_parallel_for_group(col_name, col_values)
         
@@ -498,7 +494,7 @@ class StatisticalAnalysis:
     
     def _run_parallel_for_group(self, group_column: str, group_values: List[Any]) -> Dict:
         """Run statistical analysis with parallel processing and result loading."""
-        tasks = get_enabled_tasks_optimized(self.config, self.tables)
+        tasks = get_enabled_tasks(self.config, self.tables)
         if not tasks:
             return {}
         
@@ -511,7 +507,7 @@ class StatisticalAnalysis:
         if self.load_existing and self.result_loader:
             existing_results = self.result_loader.get_existing_results(group_column, tasks)
             
-            # Filter out tasks that have existing results and don't need recalculation
+            # Filter out tasks that have existing results and don't need to be recalculated
             for table_type, level, test in tasks:
                 should_force = self._should_force_recalculate(group_column, table_type, level, test)
                 
@@ -691,7 +687,7 @@ class StatisticalAnalysis:
                 estimated_time_saved = loaded * 10
                 logger.info(f"  Estimated time saved: ~{estimated_time_saved:.0f} seconds")
     
-    def get_effect_size_optimized(self, test_name: str, row: pd.Series) -> Optional[float]:
+    def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
         """Optimized effect size extraction."""
         test_config = TEST_CONFIG.get(test_name)
         if not test_config:
@@ -709,7 +705,7 @@ class StatisticalAnalysis:
         
         return None
     
-    def get_summary_statistics_optimized(self) -> Dict:
+    def get_summary_statistics(self) -> Dict:
         """Generate summary statistics with vectorized operations."""
         summary = {
             'total_tests_run': 0,
