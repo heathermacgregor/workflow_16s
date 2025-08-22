@@ -763,6 +763,72 @@ class StatisticalAnalysis:
                 }
         
         return summary
+
+    def get_analysis_recommendations(self) -> List[str]:
+        """Provide analysis recommendations based on data characteristics."""
+        recommendations = []
+        
+        # Analyze data characteristics
+        total_samples = 0
+        total_features = 0
+        
+        for table_type in self.tables:
+            for level in self.tables[table_type]:
+                table = self.tables[table_type][level]
+                df = table_to_df(table)
+                total_samples += len(df)
+                total_features += len(df.columns)
+        
+        avg_samples = total_samples / (len(self.tables) * max(1, len(self.tables.get(list(self.tables.keys())[0], {}))))
+        avg_features = total_features / (len(self.tables) * max(1, len(self.tables.get(list(self.tables.keys())[0], {}))))
+        
+        # Sample size recommendations
+        if avg_samples < 20:
+            recommendations.append(
+                "Small sample size detected. Consider using non-parametric tests "
+                "(Mann-Whitney U, Kruskal-Wallis) instead of parametric tests."
+            )
+        
+        if avg_samples > 100:
+            recommendations.append(
+                "Large sample size detected. Both parametric and non-parametric tests "
+                "should be reliable. Consider using enhanced statistical tests for "
+                "automatic test selection."
+            )
+        
+        # Feature recommendations
+        if avg_features > 1000:
+            recommendations.append(
+                "High-dimensional data detected. Consider using differential abundance "
+                "analysis with appropriate multiple testing correction."
+            )
+        
+        # Group structure recommendations
+        group_structures = []
+        for group_column in self.group_columns:
+            col_name = group_column['name']
+            for table_type in self.metadata:
+                for level in self.metadata[table_type]:
+                    metadata = self.metadata[table_type][level]
+                    if col_name in metadata.columns:
+                        n_groups = metadata[col_name].nunique()
+                        group_structures.append(n_groups)
+                        break
+        
+        if any(n > 2 for n in group_structures):
+            recommendations.append(
+                "Multiple groups detected. Consider using ANOVA or Kruskal-Wallis tests "
+                "for overall group differences, followed by post-hoc pairwise comparisons."
+            )
+        
+        # Network analysis recommendations
+        if avg_features > 50:
+            recommendations.append(
+                "Sufficient features for network analysis. Consider running microbial "
+                "co-occurrence network analysis to identify feature interactions."
+            )
+        
+        return recommendations
     
     def force_recalculate_tasks(self, patterns: List[str]) -> None:
         """Add patterns to force recalculation list."""
