@@ -491,55 +491,57 @@ def _prepare_ml_summary(
     metrics_summary = []
     features_summary = []
     shap_reports = {}
-    
-    for table_type, levels in models.items():
-        for level, methods in levels.items():
-            for method, result in methods.items():
-                # Validate result structure
-                if not result or not isinstance(result, dict):
-                    logger.warning(f"Invalid result for {table_type}/{level}/{method}")
-                    continue
+    for group_column, table_types in models.items():
+        for table_type, levels in table_types.items():
+            for level, methods in levels.items():
+                for method, result in methods.items():
+                    logger.info(f"Reading {group_column}/{table_type}/{level}/{method} results")
+                    # Validate result structure
+                    if not result or not isinstance(result, dict):
+                        logger.warning(f"Invalid result for {group_column}/{table_type}/{level}/{method}")
+                        continue
+                        
+                    # Check for required keys
+                    if "test_scores" not in result:
+                        logger.error(f"Missing 'test_scores' in {table_type}/{level}/{method}")
+                        continue
+                        
+                    if "top_features" not in result:
+                        logger.error(f"Missing 'top_features' in {table_type}/{level}/{method}")
+                        continue
                     
-                # Check for required keys
-                if "test_scores" not in result:
-                    logger.error(f"Missing 'test_scores' in {table_type}/{level}/{method}")
-                    continue
-                    
-                if "top_features" not in result:
-                    logger.error(f"Missing 'top_features' in {table_type}/{level}/{method}")
-                    continue
-                
-                test_scores = result["test_scores"]
-                metrics = {
-                    "Table Type": table_type,
-                    "Level": level,
-                    "Method": method,
-                    "Top Features": len(result.get("top_features", [])),
-                    "Accuracy": f"{test_scores.get('accuracy', 'N/A')}",
-                    "F1 Score": f"{test_scores.get('f1', 'N/A')}",
-                    "MCC": f"{test_scores.get('mcc', 'N/A')}",
-                    "ROC AUC": f"{test_scores.get('roc_auc', 'N/A')}",
-                    "PR AUC": f"{test_scores.get('pr_auc', 'N/A')}"
-                }
-                metrics_summary.append(metrics)
-                
-                feat_imp = result.get("feature_importances", {})
-                top_features = result.get("top_features", [])[:10]
-                for i, feat in enumerate(top_features, 1):
-                    importance = feat_imp.get(feat, 0)
-                    features_summary.append({
+                    test_scores = result["test_scores"]
+                    metrics = {
+                        "Column": column,
                         "Table Type": table_type,
                         "Level": level,
                         "Method": method,
-                        "Rank": i,
-                        "Feature": feat,
-                        "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
-                    })
-                
-                # Capture SHAP report if available
-                if "shap_report" in result:
-                    key = (table_type, level, method)
-                    shap_reports[key] = result["shap_report"]
+                        "Top Features": len(result.get("top_features", [])),
+                        "Accuracy": f"{test_scores.get('accuracy', 'N/A')}",
+                        "F1 Score": f"{test_scores.get('f1', 'N/A')}",
+                        "MCC": f"{test_scores.get('mcc', 'N/A')}",
+                        "ROC AUC": f"{test_scores.get('roc_auc', 'N/A')}",
+                        "PR AUC": f"{test_scores.get('pr_auc', 'N/A')}"
+                    }
+                    metrics_summary.append(metrics)
+                    
+                    feat_imp = result.get("feature_importances", {})
+                    top_features = result.get("top_features", [])[:10] # TODO: Edit this so that it's configurable
+                    for i, feat in enumerate(top_features, 1):
+                        importance = feat_imp.get(feat, 0)
+                        features_summary.append({
+                            "Table Type": table_type,
+                            "Level": level,
+                            "Method": method,
+                            "Rank": i,
+                            "Feature": feat,
+                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
+                        })
+                    
+                    # Capture SHAP report if available
+                    if "shap_report" in result:
+                        key = (table_type, level, method)
+                        shap_reports[key] = result["shap_report"]
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
@@ -548,10 +550,11 @@ def _prepare_ml_summary(
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section"""
     rows = []
-    for (table_type, level, method), report in shap_reports.items():
+    for (group_column, table_type, level, method), report in shap_reports.items():
         shap_data = _parse_shap_report(report)
         for feature, values in shap_data.items():
             row = {
+                "Column": group_column,
                 "Table Type": table_type,
                 "Level": level,
                 "Method": method,
@@ -570,7 +573,7 @@ def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
     
     if not rows:
         return pd.DataFrame(columns=[
-            "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
+            "Column", "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
             "Beeswarm Interpretation", "Spearman's ρ", 
             "Dependency plot interpretation Relationship", "Partner Feature", 
             "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
