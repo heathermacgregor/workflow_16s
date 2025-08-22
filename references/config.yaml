@@ -27,9 +27,9 @@ downstream:
 # UPSTREAM
 ##########################################################################################################################################
 
-pcr_primers_mode: "manual" # Toggle if PCR primers used are manually provided or predicted
-target_subfragment_mode: "any" # Target 16S subfragment
-blast_db_dir: "./blast/silva_16s/SILVA_16S_db" # BLAST DB directory
+pcr_primers_mode: "manual" # PCR primers are manually provided ("manual") or predicted based on sequence alignment ("auto")
+target_subfragment_mode: "any" # Specify a target 16S rRNA subfragment or "any"
+blast_db_dir: "./blast/silva_16s/SILVA_16S_db" # Path to the directory containing your BLAST DB
 
 fastqc:
   enabled: False
@@ -37,14 +37,14 @@ fastqc:
 seqkit:
   enabled: False
 
-validate_16s:
+validate_16s: # Validate sequences based on sequence alignment
   enabled: False
   n_runs: 10
   run_targets:
     - '16S'
     - 'unknown'
 
-cutadapt: # Run CutAdapt outside of QIIME
+cutadapt: # Trim sequences with CutAdapt before importing to QIIME
   enabled: False
   start_trim: 0
   end_trim: 0
@@ -112,7 +112,7 @@ features: # Feature table pre-processing
   presence_absence: False #True
 
 stats: # Statistical analyses
-  enabled: True
+  enabled: False #True
   tables:
     raw:
       enabled: True
@@ -142,7 +142,7 @@ stats: # Statistical analyses
         - "kruskal_bonferroni"
 
 alpha_diversity: # Alpha diversity
-  enabled: True
+  enabled: False #True
   plots: 
     enabled: True
     add_points: True
@@ -179,7 +179,7 @@ alpha_diversity: # Alpha diversity
     #- 'dominance'
   
 ordination: # Beta diversity + ordination
-  enabled: True
+  enabled: False #True
   #load_existing: True # NOT WORKING
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
