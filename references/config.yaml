@@ -307,15 +307,15 @@ ml: # Machine learning
       levels:
         - "genus"
         - "family"
-        - "order"
-        - "class"
-        - "phylum"
+        #- "order"
+        #- "class"
+        #- "phylum"
       methods:
         - "rfe"
         - "select_k_best"
         #- "chi_squared"
-        - "lasso"
-        - "shap"
+        #- "lasso"
+        #- "shap"
     presence_absence:
       enabled: True
       levels:
