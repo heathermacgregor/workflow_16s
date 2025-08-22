@@ -512,7 +512,7 @@ def _prepare_ml_summary(
                     
                     test_scores = result["test_scores"]
                     metrics = {
-                        "Column": column,
+                        "Column": group_column,
                         "Table Type": table_type,
                         "Level": level,
                         "Method": method,
