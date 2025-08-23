@@ -352,24 +352,23 @@ class Downstream:
         if not self.config.get("top_features", {}).get('enabled', False):
             logger.info("Top features analysis disabled in configuration")
             return {}
-
-        all_features = {}
-        # Retrieve top features from the statistical analysis if enabled
-        if self.config.get("stats", {}).get('enabled', False) and self.stats:
-            if not self.top_features["stats"]:
-                self.top_features["stats"] = {}
     
+        # Initialize top_features structure
+        all_features = {}
+        self.top_features = {
+            "stats": {},
+            "models": {}  # Ensure 'models' key exists
+        }
+        
+        # Rest of your existing code for processing stats and ML features...
+        if self.config.get("stats", {}).get('enabled', False) and self.stats:
             for group_column in self.group_columns:
                 self._top_features_stats_group_column(group_column)
-
-        # Retrieve top features from the ML feature selection if enabled
-        if self.config.get("ml", {}).get('enabled', False) and self.models:
-            if not self.top_features["models"]:
-                self.top_features["models"] = {}
     
+        if self.config.get("ml", {}).get('enabled', False) and self.models:
             for group_column in self.group_columns:
                 self._top_features_ml_group_column(group_column)
-
+    
         logger.info(all_features)
         return all_features
             
