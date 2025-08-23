@@ -550,11 +550,10 @@ def _prepare_ml_summary(
 def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section"""
     rows = []
-    for (group_column, table_type, level, method), report in shap_reports.items():
+    for (table_type, level, method), report in shap_reports.items():
         shap_data = _parse_shap_report(report)
         for feature, values in shap_data.items():
             row = {
-                "Column": group_column,
                 "Table Type": table_type,
                 "Level": level,
                 "Method": method,
