@@ -105,10 +105,10 @@ features: # Processing steps to perform on the merged feature table prior to ana
   filter: True
   normalize: True
   clr_transform: True
-  presence_absence: False #True
+  presence_absence: True
 
 stats: # Statistical analyses
-  enabled: False #True
+  enabled: True
   tables:
     raw:
       enabled: True
@@ -138,7 +138,7 @@ stats: # Statistical analyses
         - "kruskal_bonferroni"
 
 alpha_diversity: # Alpha diversity
-  enabled: False #True
+  enabled: True
   plots: 
     enabled: True
     add_points: True
@@ -175,7 +175,7 @@ alpha_diversity: # Alpha diversity
     #- "dominance"
   
 ordination: # Beta diversity + ordination
-  enabled: False #True
+  enabled: True
   #load_existing: True # NOT WORKING
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
@@ -255,11 +255,11 @@ top_features:
   n: 30
   violin_plots: # Violin plots of top important features
     enabled: True
-    n: 50  # Number of features to plot per category
+    n: 30  # Number of features to plot per category
   
 feature_maps:
   enabled: True
-  n: 50
+  n: 30
   
 ml: # Machine learning
   enabled: True
