@@ -452,7 +452,7 @@ class Downstream:
         features_summary = []
         for table_type, levels in self.models[group_column_name].items():  # 1. Table Types
             for level, methods in levels.items():                            # 2. Taxonomic Levels
-                for method, results in methods.items():                        # 3. Methods
+                for method, result in methods.items():                        # 3. Methods
                     # Validate result structure
                     if not result or not isinstance(result, dict):
                         logger.warning(f"Invalid result for {group_column}/{table_type}/{level}/{method}")
