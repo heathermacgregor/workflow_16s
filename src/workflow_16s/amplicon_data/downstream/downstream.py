@@ -182,7 +182,7 @@ class Downstream:
         self.models = self._catboost_feature_selection()
 
         logger.info("Running top features...")
-        self.top_features = self._top_features()
+        self._top_features()
         
         # Log final statistics
         self._log_analysis_summary()
@@ -356,7 +356,6 @@ class Downstream:
             return {}
     
         # Initialize top_features structure
-        all_features = {}
         self.top_features = {
             "stats": {},
             "models": {}  # Ensure 'models' key exists
@@ -371,8 +370,7 @@ class Downstream:
             for group_column in self.group_columns:
                 self._top_features_ml_group_column(group_column)
     
-        logger.info(all_features)
-        return all_features
+        logger.info(self.top_features)
             
     def _top_features_stats_group_column(self, group_column) -> None:
         """Helper to identify top features for a specific group"""
@@ -448,8 +446,6 @@ class Downstream:
             return
             
         n = self.config.get('top_features', {}).get('n', 20) # Number of top features
-        
-        # Initialize storage for this group
         
         features_summary = []
         for table_type, levels in self.models[group_column_name].items():  # 1. Table Types
