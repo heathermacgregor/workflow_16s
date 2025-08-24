@@ -31,7 +31,7 @@ from workflow_16s.figures.figures import combine_figures_as_subplots
 from workflow_16s.figures.models import (
     plot_confusion_matrix, plot_precision_recall_curve, plot_roc_curve, plot_shap
 )
-from workflow_16s.utils.progress import get_progress_bar
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -39,16 +39,16 @@ logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
-def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
-    """
-
+def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> Tuple[str, pd.DataFrame]:
+    """Generates a SHAP report and corresponding DataFrame with feature insights.
+    
     Args:
-        model:
-        X:
-        K:
+        model: Trained model compatible with SHAP.
+        X: Feature matrix used for explanation.
+        K: Number of top features to include.
         
     Returns:
-    
+        Tuple containing the report string and a DataFrame with detailed metrics.
     """
     expl = shap.Explainer(model, X)
     sv_exp = expl(X)
@@ -59,9 +59,22 @@ def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
     top_feats = list(X.columns[feat_idx])
     top_means = mean_abs[feat_idx]
 
+    # Initialize lists to store DataFrame data
+    features = []
+    mean_abs_shap = []
+    beeswarm_corr = []
+    beeswarm_direction = []
+    dependency_strength = []
+    dependency_trend = []
+    interaction_partner = []
+    interaction_strength = []
+    relationship_type = []
+
     lines = [f"**Top {K} features by average impact:**"]
     for feat, m in zip(top_feats, top_means):
         lines.append(f" • `{feat}` (mean |SHAP| = {m:.3f})")
+        features.append(feat)
+        mean_abs_shap.append(m)
     lines.append("")
 
     # Beeswarm interpretation
@@ -72,6 +85,8 @@ def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
         rho, _ = spearmanr(vals, shap_vals)
         dir_text = "higher → higher prediction" if rho > 0 else "higher → lower prediction"
         lines.append(f" • `{feat}`: {dir_text} (ρ = {rho:.2f})")
+        beeswarm_corr.append(rho)
+        beeswarm_direction.append("positive" if rho > 0 else "negative")
     lines.append("")
 
     # Dependency interpretation
@@ -85,52 +100,77 @@ def generate_shap_report(model, X: pd.DataFrame, K: int = 10) -> str:
         lines.append(
             f" • `{feat}` shows a {strength} {trend} monotonic relationship (ρ = {rho:.2f})"
         )
+        dependency_strength.append(strength)
+        dependency_trend.append(trend)
     lines.append("")
 
-    # Interactions with relationships
-    lines.append("**Interaction summaries among top features:**")
+    # Initialize interaction values as None
+    mean_abs_int = None
     try:
-        # TreeExplainer for SHAP interaction values
         int_explainer = shap.TreeExplainer(model)
-        int_vals = int_explainer.shap_interaction_values(X)  # (n_samples, n_features, n_features)
+        int_vals = int_explainer.shap_interaction_values(X)
         mean_abs_int = np.abs(int_vals).mean(axis=0)
     except Exception:
         lines.append("Could not compute SHAP interaction values.")
-        return "\n".join(lines)
 
+    # Interactions with relationships
+    lines.append("**Interaction summaries among top features:**")
     for i, feat in enumerate(top_feats):
         i_idx = X.columns.get_loc(feat)
-        inter_strengths = mean_abs_int[i_idx].copy()
-        inter_strengths[i_idx] = 0  # exclude self-interaction
-        j_idx = inter_strengths.argmax()
-        partner = X.columns[j_idx]
-        score = inter_strengths[j_idx]
+        
+        if mean_abs_int is not None:
+            inter_strengths = mean_abs_int[i_idx].copy()
+            inter_strengths[i_idx] = 0  # exclude self-interaction
+            j_idx = inter_strengths.argmax()
+            partner = X.columns[j_idx]
+            score = inter_strengths[j_idx]
 
-        # Characterize relationship
-        xi = X[feat].values
-        xj = X[partner].values
-        shap_i = sv[:, i_idx]
-        shap_j = sv[:, j_idx]
+            # Characterize relationship
+            xi = X[feat].values
+            xj = X[partner].values
+            shap_i = sv[:, i_idx]
+            shap_j = sv[:, j_idx]
 
-        rho_i = spearmanr(xj, shap_i)[0]
-        rho_j = spearmanr(xi, shap_j)[0]
+            rho_i = spearmanr(xj, shap_i)[0]
+            rho_j = spearmanr(xi, shap_j)[0]
 
-        if rho_i > 0 and rho_j > 0:
-            relation = "mutually reinforcing"
-        elif rho_i < 0 and rho_j < 0:
-            relation = "mutually diminishing"
-        elif rho_i * rho_j < 0:
-            relation = "opposing or balancing"
+            if rho_i > 0 and rho_j > 0:
+                relation = "mutually reinforcing"
+            elif rho_i < 0 and rho_j < 0:
+                relation = "mutually diminishing"
+            elif rho_i * rho_j < 0:
+                relation = "opposing or balancing"
+            else:
+                relation = "complex or weak"
+
+            lines.append(
+                f" • `{feat}` interacts most with `{partner}` "
+                f"(mean |interaction SHAP| = {score:.3f}); relationship: {relation} "
+                f"(ρ_feat→SHAP = {rho_j:.2f}, ρ_partner→SHAP = {rho_i:.2f})"
+            )
+            interaction_partner.append(partner)
+            interaction_strength.append(score)
+            relationship_type.append(relation)
         else:
-            relation = "complex or weak"
+            lines.append(f" • `{feat}`: No interaction data available")
+            interaction_partner.append(None)
+            interaction_strength.append(None)
+            relationship_type.append(None)
 
-        lines.append(
-            f" • `{feat}` interacts most with `{partner}` "
-            f"(mean |interaction SHAP| = {score:.3f}); relationship: {relation} "
-            f"(ρ_feat→SHAP = {rho_j:.2f}, ρ_partner→SHAP = {rho_i:.2f})"
-        )
+    # Create DataFrame
+    report_df = pd.DataFrame({
+        'feature': features,
+        'mean_abs_shap': mean_abs_shap,
+        'beeswarm_correlation': beeswarm_corr,
+        'beeswarm_direction': beeswarm_direction,
+        'dependency_strength': dependency_strength,
+        'dependency_trend': dependency_trend,
+        'interaction_partner': interaction_partner,
+        'interaction_strength': interaction_strength,
+        'relationship_type': relationship_type
+    })
 
-    return "\n".join(lines)
+    return "\n".join(lines), report_df
 
 
 def _validate_inputs(X_train, y_train, X_test, y_test):
@@ -917,22 +957,18 @@ def grid_search(
     total_combinations = len(param_combinations)
     total_folds = total_combinations * n_splits
     
-    # Setup progress bar
+    # Setup progress bar - create a parent task if not provided
     if progress is not None and task_id is None:
-        # Create parent task if not provided
-        task_id = progress.add_task(
-            description="Grid Search...",
-            total=total_folds
-        )
+        task_id = progress.add_task(description="Grid Search...", total=total_folds)
+        
     child_desc = f"Grid Search..."
     child_task = progress.add_task(
-        f"[white]{child_desc:<{constants.DEFAULT_N}}",
+        _format_task_desc(child_desc),
         parent=task_id,
         total=total_folds
     )
     logger.debug(
-        f"Starting grid search with {total_combinations} "
-        f"parameter combinations\n"
+        f"Starting grid search with {total_combinations} parameter combinations\n"
         f"Using {n_splits}-fold cross-validation"
     )
     
@@ -1098,9 +1134,12 @@ def grid_search(
     results_df = pd.DataFrame(results)
     results_df.to_csv(output_dir / "grid_search_results.csv", index=False)
     
-    logger.debug("\nGrid search completed")
-    logger.debug(f"Best parameters: {best_params}")
-    logger.debug(f"Best CV {refit}: {best_score:.4f}")
+    logger.debug(
+        f"Grid search completed\n"
+        f"Best parameters: {best_params}\n"
+        f"Best CV {refit}: {best_score:.4f}"
+    )
+    
     if test_scores:
         logger.debug("Test set performance:")
         for metric, score in test_scores.items():
@@ -1291,7 +1330,7 @@ def catboost_feature_selection(
             verbose=verbose
         )
 
-        shap_report = generate_shap_report(model=best_model, X=X_sample, K=20)
+        shap_report, shap_report_df = generate_shap_report(model=best_model, X=X_sample, K=20)
         logger.info(shap_report)
         
     except Exception as e:
@@ -1307,7 +1346,7 @@ def catboost_feature_selection(
         'top_features': top_features,
         'best_params': best_params,
         'test_scores': test_scores,
-        'shap_report': shap_report,
+        'shap_report': shap_report_df,
         'figures': {
             #'eval_plots': eval_fig,
             'roc': eval_fig[0],
