@@ -190,8 +190,8 @@ ordination: # Beta diversity + ordination
         #- "umap"
       levels:
         - "genus"
-        - "family"
-        - "class"
+        #- "family"
+        #- "class"
     filtered:
       enabled: True
       pcoa_metric: "braycurtis"
@@ -321,13 +321,13 @@ ml: # Machine learning
       levels:
         - "genus"
         - "family"
-        - "order"
-        - "class"
-        - "phylum"
+        #- "order"
+        #- "class"
+        #- "phylum"
       methods:
         - "rfe"
         - "select_k_best"
-        - "chi_squared"
-        - "lasso"
-        - "shap"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
   
