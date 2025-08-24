@@ -190,7 +190,6 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                 if 'figures' in data and data['figures']:
                     # Store figures directly under group_key -> level
                     alpha_figures[group_column][table_type][level] = data['figures']
-                    
     figures['alpha_diversity'] = alpha_figures
     
     # Sample maps
@@ -201,8 +200,8 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     shap_figures = {}
     for table_type, levels in amplicon_data.models.items():
         for level, methods in levels.items():
-            for method, model_result in methods.items():
-                if model_result and 'figures' in model_result:
+            for method, result in methods.items():
+                if result and 'figures' in result:
                     if table_type not in shap_figures:
                         shap_figures[table_type] = {}
                     if level not in shap_figures[table_type]:
@@ -210,14 +209,14 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                     
                     # Handle dependency plots as a list
                     transformed_figures = {}
-                    for fig_key, fig_value in model_result['figures'].items():
+                    for fig_key, fig_value in result['figures'].items():
                         if fig_key == 'shap_dependency' and isinstance(fig_value, list):
                             # Store each dependency plot individually
                             for i, dep_fig in enumerate(fig_value):
                                 transformed_figures[f'shap_dependency_{i}'] = dep_fig
                         else:
                             transformed_figures[fig_key] = fig_value
-                    
+                            
                     shap_figures[table_type][level][method] = transformed_figures
     figures['shap'] = shap_figures
 
@@ -324,7 +323,8 @@ def _section_html(sec: Dict) -> str:
         </div>
     </div>
     '''
-
+    
+'''
 def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
     """Parse SHAP report string into structured feature data"""
     shap_data = {}
@@ -409,6 +409,7 @@ def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
                         shap_data[feature]['rho_partner'] = rho_partner
     return shap_data
 
+
 def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
     """Combine SHAP reports from different models into single feature dictionary"""
     aggregated = {}
@@ -418,6 +419,7 @@ def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
             if feature not in aggregated:
                 aggregated[feature] = values
     return aggregated
+'''
 
 def _prepare_features_table(
     features: List[Dict], 
@@ -540,9 +542,9 @@ def _prepare_ml_summary(
                         })
                     
                     # Capture SHAP insights DataFrame if available
-                    if "shap_insights_df" in result:
+                    if "shap_report" in result:
                         key = (table_type, level, method)
-                        shap_insights[key] = result["shap_insights_df"]
+                        shap_insights[key] = result["shap_report"]
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
