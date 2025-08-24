@@ -401,7 +401,7 @@ class Downstream:
                             continue
                         # Get effect size for each row
                         sig_df["effect"] = sig_df.apply(
-                            lambda row: stats.get_effect_size_optimized(test_name, row), axis=1
+                            lambda row: stats.get_effect_size(test_name, row), axis=1
                         )
                         sig_df = sig_df.dropna(subset=["effect"])
     
