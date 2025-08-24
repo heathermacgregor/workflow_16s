@@ -313,7 +313,7 @@ class Downstream:
             return {
                 'recommendations': recommendations,
                 'test_results': stats.results,
-                'comprehensive_analysis_results': comprehensive_analysis,
+                'advanced': comprehensive_analysis,
                 'top_features': top_features,
                 'summary': summary,
                 'load_statistics': stats.get_load_report()
