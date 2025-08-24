@@ -480,6 +480,7 @@ def _validate_models_structure(models: dict):
         for k1, v1 in models.items()
     }, depth=3))
 
+
 def _prepare_ml_summary(
     models: Dict, 
     top_group_1: List[Dict], 
@@ -490,7 +491,7 @@ def _prepare_ml_summary(
 
     metrics_summary = []
     features_summary = []
-    shap_reports = {}
+    shap_insights = {}  # Changed from shap_reports to shap_insights
     for group_column, table_types in models.items():
         for table_type, levels in table_types.items():
             for level, methods in levels.items():
@@ -538,52 +539,56 @@ def _prepare_ml_summary(
                             "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                         })
                     
-                    # Capture SHAP report if available
-                    if "shap_report" in result:
+                    # Capture SHAP insights DataFrame if available
+                    if "shap_insights_df" in result:
                         key = (table_type, level, method)
-                        shap_reports[key] = result["shap_report"]
+                        shap_insights[key] = result["shap_insights_df"]
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
-    return metrics_df, features_df, shap_reports
+    return metrics_df, features_df, shap_insights
 
-def _prepare_shap_table(shap_reports: Dict) -> pd.DataFrame:
-    """Prepare comprehensive SHAP data table for ML section"""
+def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
+    """Prepare comprehensive SHAP data table for ML section using DataFrame"""
     rows = []
-    for (table_type, level, method), report in shap_reports.items():
-        shap_data = _parse_shap_report(report)
-        for feature, values in shap_data.items():
-            row = {
-                "Table Type": table_type,
-                "Level": level,
-                "Method": method,
-                "Feature": feature,
-                "Mean |SHAP|": values.get("mean_shap", "N/A"),
-                "Beeswarm Interpretation": values.get("beeswarm_interpretation", "N/A"),
-                "Spearman's ρ": values.get("spearman_rho", "N/A"),
-                "Dependency plot interpretation Relationship": values.get("dependency_relationship", "N/A"),
-                "Partner Feature": values.get("partner_feature", "N/A"),
-                "Interaction Strength": values.get("interaction_strength", "N/A"),
-                "Relationship": values.get("interaction_relationship", "N/A"),
-                "ρ (Feature)": values.get("rho_feature", "N/A"),
-                "ρ (Partner)": values.get("rho_partner", "N/A")
-            }
-            rows.append(row)
+    for (table_type, level, method), df in shap_insights.items():
+        # Add model identifier columns to the DataFrame
+        df_copy = df.copy()
+        df_copy["Table Type"] = table_type
+        df_copy["Level"] = level
+        df_copy["Method"] = method
+        rows.append(df_copy)
     
     if not rows:
         return pd.DataFrame(columns=[
-            "Column", "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
-            "Beeswarm Interpretation", "Spearman's ρ", 
-            "Dependency plot interpretation Relationship", "Partner Feature", 
-            "Interaction Strength", "Relationship", "ρ (Feature)", "ρ (Partner)"
+            "Table Type", "Level", "Method", "feature", "mean_abs_shap", 
+            "beeswarm_correlation", "beeswarm_direction", 
+            "dependency_strength", "dependency_trend", "interaction_partner", 
+            "interaction_strength", "relationship_type"
         ])
     
-    return pd.DataFrame(rows)
+    # Combine all DataFrames
+    combined_df = pd.concat(rows, ignore_index=True)
+    
+    # Rename columns for better display
+    column_mapping = {
+        "feature": "Feature",
+        "mean_abs_shap": "Mean |SHAP|",
+        "beeswarm_correlation": "Spearman's ρ",
+        "beeswarm_direction": "Beeswarm Interpretation",
+        "dependency_strength": "Dependency Strength",
+        "dependency_trend": "Dependency Trend",
+        "interaction_partner": "Partner Feature",
+        "interaction_strength": "Interaction Strength",
+        "relationship_type": "Relationship"
+    }
+    
+    return combined_df.rename(columns=column_mapping)
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
     ml_features: pd.DataFrame,
-    shap_reports: Dict
+    shap_insights: Dict  # Changed from shap_reports to shap_insights
 ) -> str:
     try:
         if ml_metrics is None or ml_metrics.empty:
@@ -624,8 +629,8 @@ def _format_ml_section(
         
         # SHAP Analysis table
         shap_html = ""
-        if shap_reports:
-            shap_df = _prepare_shap_table(shap_reports)
+        if shap_insights:
+            shap_df = _prepare_shap_table(shap_insights)
             if not shap_df.empty:
                 shap_html = """
                 <h3>SHAP Analysis</h3>
@@ -646,6 +651,7 @@ def _format_ml_section(
     except Exception as e:
         logger.exception("Error formatting ML section")
         return f"<div class='error'>Error in ML section: {str(e)}</div>"
+        
 
 def _add_header_tooltips(
     table_html: str, 
