@@ -273,7 +273,7 @@ class Downstream:
             max_file_age_hours=self.max_result_age_hours,
             force_recalculate=self.force_recalculate_stats
         ) as stats:
-            
+            stats.get_analysis_recommendations()
             # Store loading statistics
             self.analysis_statistics['stats'] = stats.get_load_report()
             
