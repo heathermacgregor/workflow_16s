@@ -344,7 +344,6 @@ class Downstream:
             if group_column['type'] == 'bool':
                 cb = FeatureSelection(self.config, self.metadata, self.tables, group_column['name'], self.verbose)
                 cb.run(output_dir=self.output_dir)
-                logger.info(f"Feature selection models: {cb.models}")
                 results[group_column['name']] = cb.models
         return results
 
