@@ -166,8 +166,8 @@ class Downstream:
             self._invalidate_existing_results()
         
         # Run analyses 
-        #logger.info("Plotting sample maps...")
-        #self.maps = self._plot_sample_maps()
+        logger.info("Plotting sample maps...")
+        self.maps = self._plot_sample_maps()
         
         logger.info("Running statistical analysis...")
         self.stats = self._stats()
