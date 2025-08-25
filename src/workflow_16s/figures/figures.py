@@ -3,12 +3,12 @@
 # Standard Library Imports
 import math
 import logging
-import warnings
 from pathlib import Path
 from typing import Dict, List, Union
 
 # Third Party Imports
 import colorcet as cc
+import json
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,12 +16,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
+
+# Local Imports
 from workflow_16s import constants
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger('workflow_16s')
-warnings.filterwarnings("ignore") # Suppress warnings
 
 # ================================= GLOBAL VARIABLES ================================= #
 
@@ -75,6 +76,64 @@ pio.templates.default = "heather"
 
 # ==================================== FUNCTIONS ===================================== #
 
+def save_plotly_html(
+  fig: go.Figure, 
+  filepath: Union[str, Path],
+  verbose: bool = True
+) -> None:
+    """Save a Plotly figure to an HTML file.
+
+    Args:
+        fig : The Plotly figure to save.
+        filepath : Path where the HTML file will be saved.
+        verbose : Verbosity flag.
+    """
+    # Convenience for optional INFO logging
+    log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
+    filepath = Path(filepath).expanduser().resolve()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fig.write_html(filepath, include_plotlyjs="cdn")
+        log_ok(f"Saved figure to '{filepath}'")
+    except Exception as e:
+        logger.error(f"Failed to save figure: {str(e)}")
+
+
+def load_plotly_html(
+  filepath: Union[str, Path],
+  verbose: bool = True
+) -> go.Figure:
+    """Load a Plotly figure from an HTML file.
+
+    Args:
+        filepath : Path to the saved HTML file.
+        verbose : Verbosity flag.
+
+    Returns:
+        The reloaded Plotly figure.
+    """
+    # Convenience for optional INFO logging
+    log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
+  
+    with open(filepath, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Extract the JSON figure data from the HTML
+    start_marker = "window.PLOTLYENV=window.PLOTLYENV || {};Plotly.newPlot("
+    start_idx = html_content.find(start_marker)
+    if start_idx == -1:
+        raise ValueError("Could not locate Plotly figure data in the HTML file.")
+    
+    start_idx = html_content.find("{", start_idx)  # JSON starts here
+    end_idx = html_content.find(");", start_idx)   # JSON ends here
+    json_str = html_content[start_idx:end_idx]
+
+    fig_dict = json.loads(json_str)
+    fig = pio.from_json(json.dumps(fig_dict))
+    log_ok(f"Imported figure from '{filepath}'")
+    return fig
+
+
 def plotly_show_and_save(
     fig,
     show: bool = False,
@@ -85,8 +144,7 @@ def plotly_show_and_save(
     verbose: bool = False,
     **write_kwargs
 ):
-    """
-    Save a Plotly figure to PNG and/or HTML formats and optionally display it.
+    """Save a Plotly figure to PNG and/or HTML formats.
     
     Args:
         fig:            Plotly Figure object to be saved/displayed.
