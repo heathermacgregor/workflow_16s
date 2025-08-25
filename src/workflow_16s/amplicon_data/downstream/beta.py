@@ -335,15 +335,15 @@ class Ordination:
         figures = self._load_existing_figures(task, task_output_dir)
         if figures:
             self.log_ok(f"Returning loaded figures for {task}")
-            return task.table_type, task.level, task.method, None, figures    
+            return None, figures    
         else: # Store file paths instead of loading figures
             figure_paths = self._store_figure_paths(task, task_output_dir)
             if figure_paths:
                 self.log_ok(f"Returning figure paths for {task}")
-                return task.table_type, task.level, task.method, None, figure_paths
+                return None, figure_paths
                 
         self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
-        return task.table_type, task.level, task.method, None, None
+        return None, None
         
     def _run_single_ordination(
         self, task: OrdinationTask, output_dir: Path, progress
@@ -367,11 +367,15 @@ class Ordination:
             # Check if we should skip and load existing figures
             if self._should_skip_existing(task, task_output_dir):
                 self.log_ok(f"Checking existing figures for {task}")
-                task.table_type, task.level, task.method, result, figures = self._skip_and_load_existing(task, task_output_dir)
-                if figures is not None:
-                    # Return existing figures and skip calculation
+                result, figures = self._skip_and_load_existing(task, task_output_dir)
+                # If we have figures, return them immediately to skip calculation
+                if figures:
+                    self.log_ok(f"Returning existing figures for {task}")
                     return task.table_type, task.level, task.method, result, figures
-            # If no figures found, continue with calculation            
+                
+                # If we have figure paths but couldn't load them, continue to calculation
+                self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
+                
             # Get aligned data
             self.log_ok(f"Getting aligned data for {task}")
             table = self.tables[task.table_type][task.level]
