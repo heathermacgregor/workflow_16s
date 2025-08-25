@@ -583,10 +583,10 @@ def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
     
     if not rows:
         return pd.DataFrame(columns=[
-            "Table Type", "Level", "Method", "feature", "mean_abs_shap", 
-            "beeswarm_correlation", "beeswarm_direction", 
-            "dependency_strength", "dependency_trend", "interaction_partner", 
-            "interaction_strength", "relationship_type"
+            "Table Type", "Level", "Method", "Feature", "Mean |SHAP|", 
+            "Spearman's ρ", "Beeswarm Interpretation", 
+            "Dependency Strength", "Dependency Trend", "Partner Feature", 
+            "Interaction Strength", "Relationship"
         ])
     
     # Combine all DataFrames
