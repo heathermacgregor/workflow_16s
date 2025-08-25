@@ -368,7 +368,9 @@ class Ordination:
             if self._should_skip_existing(task, task_output_dir):
                 self.log_ok(f"Checking existing figures for {task}")
                 task.table_type, task.level, task.method, result, figures = self._skip_and_load_existing(task, task_output_dir)
-                if figures:
+                if figures != None:
+                    pass
+                else:
                     return task.table_type, task.level, task.method, result, figures                    
             
             # Get aligned data
