@@ -135,7 +135,7 @@ class Ordination:
             logger.info(f"Found {len(self.tasks)} beta diversity analysis (ordination) tasks to process")
 
     def log_ok(self, msg):
-        return (lambda msg: logger.info(msg)) if self.verbose else (lambda *_: None)
+        return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
         
     def _get_enabled_tasks(self) -> Tuple[OrdinationTask, ...]:
         """Get enabled tasks."""
