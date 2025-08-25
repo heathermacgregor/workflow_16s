@@ -46,13 +46,12 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
 
 # ========================== PLOTLY SELECTOR INTEGRATION ========================== #
 
-def _generate_plotly_selector_html(figures_dict: Dict[str, Any], 
-                                 container_id: str = "plotly-container",
-                                 section_title: str = "Plots") -> str:
-    """
-    Generate HTML with interactive selection UI for nested dictionary of Plotly figures.
-    Integrated version for the amplicon analysis report.
-    """
+def _generate_plotly_selector_html(
+    figures_dict: Dict[str, Any], 
+    container_id: str = "plotly-container",
+    section_title: str = "Plots"
+) -> str:
+    """Generate HTML with interactive selection UI for a nested dictionary of Plotly figures."""
     
     def flatten_dict(d: Dict, parent_key: str = '', sep: str = ' > ') -> Dict[str, Any]:
         """Flatten nested dictionary and create display labels"""
@@ -161,6 +160,7 @@ def _generate_plotly_selector_html(figures_dict: Dict[str, Any],
     return html_template
 
 # ================================== CORE HELPERS =================================== #
+
 def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     figures = {}
     
@@ -234,6 +234,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     return figures
 
+
 def _convert_figure_to_serializable(fig):
     """Convert figure object to serializable dict"""
     try:
@@ -266,7 +267,8 @@ def _convert_figure_to_serializable(fig):
         logger.exception("Serializing figure failed")
         return {"type": "error", "error": str(exc)}
 
-def _flatten_figures_tree(tree, prefix="", delimiter=" - "):
+
+def _flatten_figures_tree(tree, prefix: str = "", delimiter: str = " - "):
     """Flatten a nested figures tree into a list of (path, figure) tuples"""
     flat = []
     if not isinstance(tree, dict):
@@ -279,6 +281,7 @@ def _flatten_figures_tree(tree, prefix="", delimiter=" - "):
         else:
             flat.append((new_prefix, value))
     return flat
+
 
 def _prepare_sections(
     figures: Dict,
@@ -308,121 +311,26 @@ def _prepare_sections(
 
     return sections
 
-def _section_html(sec: Dict) -> str:
+
+def _section_html(section: Dict) -> str:
     """Generate section HTML using the integrated Plotly selector"""
-    return f'''
-    <div class="section" id="{sec["id"]}">
-        <div class="section-header" onclick="toggleSection(event)">
-            <h2>{sec["title"]}</h2>
-            <span class="toggle-icon">▼</span>
-        </div>
-        <div class="section-content" id="{sec["id"]}-content">
-            <div class="subsection">
-                {sec["html_content"]}
+    html = (
+        f'''
+        <div class="section" id="{section["id"]}">
+            <div class="section-header" onclick="toggleSection(event)">
+                <h2>{section["title"]}</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content" id="{section["id"]}-content">
+                <div class="subsection">
+                    {section["html_content"]}
+                </div>
             </div>
         </div>
-    </div>
-    '''
+        '''
+    )
+    return html
     
-'''
-def _parse_shap_report(report: str) -> Dict[str, Dict[str, str]]:
-    """Parse SHAP report string into structured feature data"""
-    shap_data = {}
-    sections = report.split("\n\n")
-    
-    for section in sections:
-        section = section.strip()
-        if not section:
-            continue
-        
-        header, _, content = section.partition('\n')
-        header = header.strip().strip('*').strip()
-        
-        # Top features section
-        if "Top features by average impact" in header:
-            for line in content.split('\n'):
-                if '•' in line and '`' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        logger.info(parts[2])
-                        logger.info(parts[2].split('=')[-1])
-                        logger.info(parts[2].split('=')[-1].strip())
-                        value = parts[2].split('=')[-1].strip().rstrip(')')
-                        logger.info(value)
-                        if feature not in shap_data:
-                            shap_data[feature] = {}
-                        shap_data[feature]['mean_shap'] = value
-        
-        # Beeswarm interpretation
-        elif "Beeswarm interpretation" in header:
-            for line in content.split('\n'):
-                if '•' in line and '`' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        interpretation = parts[2].split(':', 1)[1].split('(')[0].strip()
-                        rho = line.split('ρ = ')[-1].rstrip(')') if 'ρ = ' in line else ''
-                        if feature not in shap_data:
-                            shap_data[feature] = {}
-                        shap_data[feature]['beeswarm_interpretation'] = interpretation
-                        shap_data[feature]['spearman_rho'] = rho
-        
-        # Dependency plot interpretations
-        elif "Dependency plot interpretations" in header:
-            for line in content.split('\n'):
-                if '•' in line and '`' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 2:
-                        feature = parts[1]
-                        logger.info(parts[2])
-                        logger.info(line.split('shows a ')[1])
-                        logger.info(line.split('shows a ')[1].split('(')[0])
-                        
-                        relationship = line.split('shows a ')[1].split('(')[0].strip() if 'shows a ' in line else ''
-                        logger.info(relationship)
-                        rho = line.split('ρ = ')[-1].rstrip(')') if 'ρ = ' in line else ''
-                        if feature not in shap_data:
-                            shap_data[feature] = {}
-                        shap_data[feature]['dependency_relationship'] = relationship
-                        shap_data[feature]['dependency_rho'] = rho
-        
-        # Interaction summaries
-        elif "Interaction summaries" in header:
-            for line in content.split('\n'):
-                if '•' in line and '`' in line:
-                    parts = line.split('`')
-                    if len(parts) >= 4:
-                        feature = parts[1]
-                        partner = parts[3]
-                        score = line.split('mean |interaction SHAP| = ')[1].split(')')[0] if 'mean |interaction SHAP| = ' in line else ''
-                        relationship = line.split('relationship: ')[1].split(' (ρ')[0] if 'relationship: ' in line else ''
-                        rho_feat = line.split('ρ_feat→SHAP = ')[1].split(',')[0] if 'ρ_feat→SHAP = ' in line else ''
-                        rho_partner = line.split('ρ_partner→SHAP = ')[1].split(')')[0] if 'ρ_partner→SHAP = ' in line else ''
-                        
-                        if feature not in shap_data:
-                            shap_data[feature] = {}
-                        shap_data[feature]['partner_feature'] = partner
-                        shap_data[feature]['interaction_strength'] = score
-                        shap_data[feature]['interaction_relationship'] = relationship
-                        shap_data[feature]['rho_feature'] = rho_feat
-                        shap_data[feature]['rho_partner'] = rho_partner
-    return shap_data
-
-
-def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
-    """Combine SHAP reports from different models into single feature dictionary"""
-    aggregated = {}
-    for report in shap_reports.values():
-        data = _parse_shap_report(report)
-        for feature, values in data.items():
-            if feature not in aggregated:
-                aggregated[feature] = values
-    return aggregated
-'''
-
-import pandas as pd
-from typing import List, Dict
 
 def _prepare_features_table(
     features: List[Dict], 
@@ -438,7 +346,8 @@ def _prepare_features_table(
     
     # Slice the list of features safely
     df = pd.DataFrame(features[:max_features])
-    
+    logger.info(type(df))
+    logger.info(df)
     # Rename columns if they exist
     rename_map = {
         "feature": "Feature",
@@ -943,23 +852,28 @@ def generate_html_report(
     tables_html += "<h3>Group-Specific Analysis</h3>"
     
     # Loop through top_features for group-specific features
-    for col, val_dict in amplicon_data.top_features.items():
-        logger.info(col)
-        logger.info(val_dict)
-        for val, features in val_dict.items():
-            group_key = f"{col}={val}"
-            logger.info(val)
-            logger.info(type(features))
-            logger.info(features)
-            try:
-                df = _prepare_features_table(features, max_features, group_key)
-                logger.info("Got features table")
-                tables_html += f"""
-                <h4>Features associated with {group_key}</h4>
-                {_add_table_functionality(df, f'{group_key}-table')}
-                """
-            except Exception as e:
-                logger.error(f"Failed to get features table: {e}")
+    for source, source_dict in amplicon_data.top_features.items():
+        for col, val_dict in source_dict:
+            logger.info(col)
+            logger.info(val_dict)
+            for val, features in val_dict.items():
+                group_key = f"{col}={val}"
+                logger.info(val)
+                logger.info(type(features))
+                logger.info(features)
+                logger.info(type(max_features))
+                logger.info(max_features)
+                logger.info(type(group_key))
+                logger.info(group_key)
+                try:
+                    df = _prepare_features_table(features, max_features, group_key)
+                    logger.info("Got features table")
+                    tables_html += f"""
+                    <h4>Features associated with {group_key}</h4>
+                    {_add_table_functionality(df, f'{group_key}-table')}
+                    """
+                except Exception as e:
+                    logger.error(f"Failed to get features table: {e}")
     
     # Stats summary (per-test details)
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'test_results' in amplicon_data.stats:
