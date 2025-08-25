@@ -306,8 +306,11 @@ class Downstream:
                     load_percentage = (loaded_tasks / total_tasks) * 100
                     logger.info(f"  - Results loaded from files: {loaded_tasks}/{total_tasks} ({load_percentage:.1f}%)")
                     logger.info(f"  - Results calculated fresh: {calculated_tasks}/{total_tasks} ({100-load_percentage:.1f}%)")
+            
+            # Run comprehensive analysis
             comprehensive_analysis = stats.run_comprehensive_analysis()
             top_features = stats.get_top_features_across_tests()
+            
             # Store all statistical results
             self.stats_obj = stats
             return {
