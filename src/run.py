@@ -336,7 +336,9 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     try:
         generate_html_report(
             amplicon_data=amplicon_data,
-            output_path=output_path
+            output_path=output_path,
+            max_features=20,
+            cfg=config
         )
         logger.info(f"HTML report generated at: {output_path}")
     except Exception as e:
