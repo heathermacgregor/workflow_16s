@@ -826,7 +826,7 @@ def generate_html_report(
         group_col_values = [True, False]
         
     figures_dict = _extract_figures(amplicon_data)
-    
+    logger.info("Extracted figures")
     include_sections = include_sections or [
         k for k, v in figures_dict.items() if v
     ]
@@ -843,7 +843,7 @@ def generate_html_report(
     # Add overall statistical summary section
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'summary' in amplicon_data.stats:
         summary = amplicon_data.stats['summary']
-        
+        logger.info("Got stats summary")
         # Create overall stats table
         overall_data = [
             {"Metric": "Total tests run", "Value": summary['total_tests_run']},
@@ -851,7 +851,7 @@ def generate_html_report(
         ]
         df_overall = pd.DataFrame(overall_data)
         overall_table1_html = _add_table_functionality(df_overall, 'overall-stats-table1')
-        
+        logger.info("Got overall-stats-table1")
         # Create test-specific stats table
         test_data = []
         for test, count in summary['significant_features_by_test'].items():
@@ -866,17 +866,20 @@ def generate_html_report(
             })
         df_by_test = pd.DataFrame(test_data)
         overall_table2_html = _add_table_functionality(df_by_test, 'overall-stats-table2')
-        
+        logger.info("Got overall-stats-table2")
         # Top features across tests
         if 'top_features' in amplicon_data.stats and not amplicon_data.stats['top_features'].empty:
             top_features_df = amplicon_data.stats['top_features']
+            logger.info("Got top_features_df")
             overall_top_features_html = _add_table_functionality(top_features_df, 'overall-top-features-table')
+            logger.info("Got overall-top-features-table")
         else:
             overall_top_features_html = "<p>No overall top features data</p>"
         
         # Recommendations
         if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
             recs = amplicon_data.stats['recommendations']
+            logger.info("Got recommendations")
             rec_html = "<ul>"
             for rec in recs:
                 rec_html += f"<li>{rec}</li>"
@@ -887,6 +890,7 @@ def generate_html_report(
         # Add advanced statistical analysis section if available
         if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
             advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['advanced'])
+            logger.info("Got advanced stats")
             tables_html += """
             <div class="subsection">
                 <h3>Advanced Statistical Analyses</h3>
@@ -919,6 +923,7 @@ def generate_html_report(
         for val, features in val_dict.items():
             group_key = f"{col}={val}"
             df = _prepare_features_table(features, max_features, group_key)
+            logger.info("Got features table")
             tables_html += f"""
             <h4>Features associated with {group_key}</h4>
             {_add_table_functionality(df, f'{group_key}-table')}
@@ -927,6 +932,7 @@ def generate_html_report(
     # Stats summary (per-test details)
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'test_results' in amplicon_data.stats:
         stats_df = _prepare_stats_summary(amplicon_data.stats['test_results'])
+        logger.info("Got stats summary")
     else:
         stats_df = pd.DataFrame()
     
@@ -943,6 +949,7 @@ def generate_html_report(
             [],   # Not used
             []    # Not used
         )
+        logger.info("Got ML data")
     else:
         ml_metrics, ml_features, shap_reports = pd.DataFrame(), pd.DataFrame(), {}
     
