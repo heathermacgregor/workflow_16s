@@ -335,15 +335,16 @@ class Ordination:
         figures = self._load_existing_figures(task, task_output_dir)
         if figures:
             self.log_ok(f"Returning loaded figures for {task}")
-            return None, figures    
-        else: # Store file paths instead of loading figures
-            figure_paths = self._store_figure_paths(task, task_output_dir)
-            if figure_paths:
-                self.log_ok(f"Returning figure paths for {task}")
-                return None, figure_paths
-                
+            return task.table_type, task.level, task.method, None, figures
+        
+        # Store file paths instead of loading figures
+        figure_paths = self._store_figure_paths(task, task_output_dir)
+        if figure_paths:
+            self.log_ok(f"Returning figure paths for {task}")
+            return task.table_type, task.level, task.method, None, figure_paths
+            
         self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
-        return None, None
+        return None, None, None, None, None
         
     def _run_single_ordination(
         self, task: OrdinationTask, output_dir: Path, progress
@@ -367,11 +368,12 @@ class Ordination:
             # Check if we should skip and load existing figures
             if self._should_skip_existing(task, task_output_dir):
                 self.log_ok(f"Checking existing figures for {task}")
-                result, figures = self._skip_and_load_existing(task, task_output_dir)
-                # If we have figures, return them immediately to skip calculation
-                if figures:
+                result_tuple = self._skip_and_load_existing(task, task_output_dir)
+                
+                # If we have a valid result tuple with figures, return it immediately
+                if result_tuple and result_tuple[4] is not None:  # Check if figures are not None
                     self.log_ok(f"Returning existing figures for {task}")
-                    return task.table_type, task.level, task.method, result, figures
+                    return result_tuple
                 
                 # If we have figure paths but couldn't load them, continue to calculation
                 self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
