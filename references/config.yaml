@@ -138,7 +138,7 @@ stats: # Statistical analyses
         - "kruskal_bonferroni"
 
 alpha_diversity: # Alpha diversity
-  enabled: True
+  enabled: False
   plots: 
     enabled: True
     add_points: True
@@ -175,7 +175,7 @@ alpha_diversity: # Alpha diversity
     #- "dominance"
   
 ordination: # Beta diversity + ordination
-  enabled: True
+  enabled: False
   load_existing: False
   max_workers: 2   # Max concurrent ordination tasks
   cpu_limit: 16    # CPU cores per ordination method
@@ -241,7 +241,7 @@ faprotax: # Functional prediction
   enabled: True
 
 maps:
-  enabled: True
+  enabled: False
   color_columns:
     - "dataset_name"
     - "nuclear_contamination_status"
@@ -262,7 +262,7 @@ feature_maps:
   n: 30
   
 ml: # Machine learning
-  enabled: True
+  enabled: False
   load_existing: False
   n_threads: 32
   num_features: 500
