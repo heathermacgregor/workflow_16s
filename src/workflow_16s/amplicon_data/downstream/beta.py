@@ -330,7 +330,7 @@ class Ordination:
         level_results[method] = ord_result
         level_results['figures'][method] = figures
 
-    def _skip_and_load_existing(self, task: OrdinationTask, output_dir: Path):
+    def _skip_and_load_existing(self, task: OrdinationTask, task_output_dir: Path):
         # Try to load figures if possible
         figures = self._load_existing_figures(task, task_output_dir)
         if figures:
