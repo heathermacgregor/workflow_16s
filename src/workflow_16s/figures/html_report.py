@@ -572,12 +572,14 @@ def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section using DataFrame"""
     rows = []
     for (table_type, level, method), df in shap_insights.items():
-        # Add model identifier columns to the DataFrame
-        df_copy = df.copy()
-        df_copy["Table Type"] = table_type
-        df_copy["Level"] = level
-        df_copy["Method"] = method
-        rows.append(df_copy)
+        # Check if df is a DataFrame and has data
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            # Add model identifier columns to the DataFrame
+            df_copy = df.copy()
+            df_copy["Table Type"] = table_type
+            df_copy["Level"] = level
+            df_copy["Method"] = method
+            rows.append(df_copy)
     
     if not rows:
         return pd.DataFrame(columns=[
@@ -604,6 +606,7 @@ def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
     }
     
     return combined_df.rename(columns=column_mapping)
+    
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
