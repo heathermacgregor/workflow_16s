@@ -51,6 +51,10 @@ class Maps:
         nfc_facility_data: Optional[pd.DataFrame] = None,
         **kwargs
     ) -> Dict[str, Any]:
+        if not self.maps_config.get('enabled', False):
+            return {}
+        
+        # Handle NFC facility data
         if 'nfc_facility_data' in kwargs:
             if self.verbose:
                 logger.warning(
@@ -58,33 +62,31 @@ class Maps:
                     "Using explicit value."
                 )
             del kwargs['nfc_facility_data']
-        if not self.maps_config.get('enabled', False):
-            return {}
+        
         color_columns = self.color_columns
-        if nfc_facility_data:
+        if nfc_facility_data is not None:
             color_columns.append('facility_match')
+
+        # Use one metadata file (raw/genus)
         metadata = self.metadata["raw"]["genus"]
-        valid_columns = [col for col in color_columns if col in metadata]
-        missing = set(self.color_columns) - set(valid_columns)
+        # Get valid color columns
+        valid_columns = [col for col in color_columns if col in metadata.columns]
+        missing = set(color_columns) - set(valid_columns)
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
 
-        meta = meta.set_index('#sampleid')
-      
-        with get_progress_bar() as progress:
-            plot_desc = f"Plotting sample maps"
-            plot_task = progress.add_task(
-              _format_task_desc(plot_desc), 
-              total=len(valid_columns)
-            )
+        # Set index to the metadata ID column for consistency
+        metadata = metadata.set_index(self.config.get('metadata_id_column', '#sampleid'))
 
+        # Plot sample maps colored by each (valid) color column
+        with get_progress_bar() as progress:
+            plot_desc = "Plotting sample maps"
+            plot_desc_fmt = _format_task_desc(plot_desc)
+            plot_task = progress.add_task(plot_desc_fmt, total=len(valid_columns))
             for col in valid_columns:
-                col_desc = f"Plotting sample maps → {col}"
-                progress.update(
-                    plot_task, 
-                    description=_format_task_desc(col_desc)
-                )
-                
+                col_desc = f"{plot_desc} → {col}"
+                col_desc_fmt = _format_task_desc(col_desc)
+                progress.update(plot_task, description=col_desc_fmt)
                 self.figures[col], _ = sample_map_categorical(
                     metadata=metadata,
                     nfc_facilities_data=nfc_facility_data,
@@ -92,11 +94,7 @@ class Maps:
                     color_col=col,
                     **kwargs,
                 )
-                
                 progress.update(plot_task, advance=1)
-            progress.update(
-                plot_task, 
-                description=_format_task_desc(plot_desc)
-            )
+            progress.update(plot_task, description=plot_desc_fmt)
         return self.figures
-      
+        
