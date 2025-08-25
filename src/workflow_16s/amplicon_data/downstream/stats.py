@@ -10,6 +10,8 @@ import warnings
 import multiprocessing as mp
 import os
 from datetime import datetime, timedelta
+import hashlib
+import json
 
 # Third‑Party Imports
 import pandas as pd
@@ -43,63 +45,100 @@ class TaskResult(NamedTuple):
     result: Optional[pd.DataFrame]
     error: Optional[str]
     loaded_from_file: bool = False
+    processing_time: float = 0.0
 
 class DataCache:
-    """Lightweight caching for preprocessed data."""
+    """Lightweight caching for preprocessed data with memory optimization."""
     def __init__(self, max_size: int = 128):
         self._cache = {}
         self._access_order = []
         self._max_size = max_size
+        self._memory_usage = 0
+        self._max_memory_mb = 1024  # 1GB max memory
     
     def get(self, key: str) -> Optional[Tuple]:
         if key in self._cache:
             # Move to end (most recently used)
             self._access_order.remove(key)
             self._access_order.append(key)
-            return self._cache[key]
+            return self._cache[key][0]  # Return data only
         return None
     
     def put(self, key: str, value: Tuple) -> None:
-        if key in self._cache:
-            self._access_order.remove(key)
-        elif len(self._cache) >= self._max_size:
-            # Remove least recently used
-            lru_key = self._access_order.pop(0)
-            del self._cache[lru_key]
+        # Estimate memory usage
+        item_size = self._estimate_size(value)
         
-        self._cache[key] = value
+        if key in self._cache:
+            # Update existing item
+            old_size = self._cache[key][1]
+            self._memory_usage -= old_size
+            self._access_order.remove(key)
+        elif len(self._cache) >= self._max_size or self._memory_usage + item_size > self._max_memory_mb * 1024 * 1024:
+            # Remove least recently used items until we have space
+            while (len(self._cache) >= self._max_size or 
+                   self._memory_usage + item_size > self._max_memory_mb * 1024 * 1024) and self._access_order:
+                lru_key = self._access_order.pop(0)
+                lru_size = self._cache[lru_key][1]
+                self._memory_usage -= lru_size
+                del self._cache[lru_key]
+        
+        self._cache[key] = (value, item_size)
+        self._memory_usage += item_size
         self._access_order.append(key)
+    
+    def _estimate_size(self, obj) -> int:
+        """Estimate object size in bytes."""
+        if isinstance(obj, (pd.DataFrame, pd.Series)):
+            return obj.memory_usage(deep=True).sum()
+        elif isinstance(obj, tuple):
+            return sum(self._estimate_size(item) for item in obj)
+        else:
+            return 1000  # Default estimate for other objects
     
     def clear(self) -> None:
         self._cache.clear()
         self._access_order.clear()
+        self._memory_usage = 0
 
 # ========================== RESULT LOADING UTILITIES ========================== #
 
 class ResultLoader:
-    """Handles loading and validation of existing results."""
+    """Handles loading and validation of existing results with enhanced caching."""
     
     def __init__(self, base_path: Path, max_age_hours: Optional[float] = None):
         self.base_path = base_path
         self.max_age_hours = max_age_hours
         self._load_cache = {}
+        self._metadata_cache = {}
     
-    def should_load_result(self, result_path: Path) -> bool:
-        """Check if result should be loaded based on existence and age."""
+    def should_load_result(self, result_path: Path, config_hash: str = None) -> bool:
+        """Check if result should be loaded based on existence, age, and configuration."""
         if not result_path.exists():
             return False
         
-        if self.max_age_hours is None:
-            return True
+        # Check file age if specified
+        if self.max_age_hours is not None:
+            file_mtime = datetime.fromtimestamp(result_path.stat().st_mtime)
+            age_threshold = datetime.now() - timedelta(hours=self.max_age_hours)
+            if file_mtime <= age_threshold:
+                return False
         
-        # Check file age
-        file_mtime = datetime.fromtimestamp(result_path.stat().st_mtime)
-        age_threshold = datetime.now() - timedelta(hours=self.max_age_hours)
+        # Check configuration compatibility if hash provided
+        if config_hash:
+            config_check_path = result_path.parent / ".config_hash"
+            if config_check_path.exists():
+                try:
+                    with open(config_check_path, 'r') as f:
+                        saved_hash = f.read().strip()
+                    if saved_hash != config_hash:
+                        return False  # Configuration has changed
+                except:
+                    pass
         
-        return file_mtime > age_threshold
+        return True
     
     def load_result(self, result_path: Path) -> Optional[pd.DataFrame]:
-        """Load result from file with error handling."""
+        """Load result from file with error handling and optimization."""
         cache_key = str(result_path)
         
         # Check cache first
@@ -107,10 +146,17 @@ class ResultLoader:
             return self._load_cache[cache_key]
         
         try:
+            # Read with optimized parameters
             if result_path.suffix.lower() in ['.tsv', '.txt']:
-                result = pd.read_csv(result_path, sep='\t', index_col=0)
+                result = pd.read_csv(
+                    result_path, sep='\t', index_col=0, 
+                    low_memory=False, memory_map=True
+                )
             elif result_path.suffix.lower() == '.csv':
-                result = pd.read_csv(result_path, index_col=0)
+                result = pd.read_csv(
+                    result_path, index_col=0, 
+                    low_memory=False, memory_map=True
+                )
             else:
                 logger.warning(f"Unsupported file format: {result_path}")
                 return None
@@ -120,6 +166,9 @@ class ResultLoader:
                 logger.warning(f"Empty result file: {result_path}")
                 return None
             
+            # Optimize memory usage
+            result = self._optimize_dataframe_memory(result)
+            
             # Cache the result
             self._load_cache[cache_key] = result
             return result
@@ -128,12 +177,34 @@ class ResultLoader:
             logger.warning(f"Failed to load result from {result_path}: {e}")
             return None
     
+    def _optimize_dataframe_memory(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Optimize DataFrame memory usage."""
+        for col in df.select_dtypes(include=['int64']).columns:
+            if df[col].min() >= np.iinfo(np.int32).min and df[col].max() <= np.iinfo(np.int32).max:
+                df[col] = df[col].astype(np.int32)
+            elif df[col].min() >= np.iinfo(np.int16).min and df[col].max() <= np.iinfo(np.int16).max:
+                df[col] = df[col].astype(np.int16)
+            elif df[col].min() >= 0 and df[col].max() <= 255:
+                df[col] = df[col].astype(np.uint8)
+        
+        for col in df.select_dtypes(include=['float64']).columns:
+            if col not in ['p_value', 'q_value']:  # Preserve precision for p-values
+                df[col] = pd.to_numeric(df[col], downcast='float')
+        
+        # Convert object columns to category where beneficial
+        for col in df.select_dtypes(include=['object']).columns:
+            if len(df[col].unique()) / len(df[col]) < 0.5:  # Cardinality threshold
+                df[col] = df[col].astype('category')
+        
+        return df
+    
     def get_existing_results(
         self, 
         group_column: str, 
-        tasks: List[Tuple[str, str, str]]
+        tasks: List[Tuple[str, str, str]],
+        config_hash: str = None
     ) -> Dict[str, Dict]:
-        """Get all existing results for a group column."""
+        """Get all existing results for a group column with configuration validation."""
         existing_results = {}
         
         for table_type, level, test in tasks:
@@ -142,7 +213,7 @@ class ResultLoader:
             # Check for main result file
             result_path = output_dir / f'{test}.tsv'
             
-            if self.should_load_result(result_path):
+            if self.should_load_result(result_path, config_hash):
                 result = self.load_result(result_path)
                 if result is not None:
                     # Initialize nested structure
@@ -156,15 +227,17 @@ class ResultLoader:
                     # Load additional files for network analysis
                     if test == 'network_analysis':
                         corr_path = output_dir / f'{test}_correlation_matrix.tsv'
-                        if corr_path.exists():
-                            # Store path for later reference
-                            existing_results[table_type][level][f'{test}_correlation_matrix_path'] = corr_path
+                        if corr_path.exists() and self.should_load_result(corr_path, config_hash):
+                            corr_result = self.load_result(corr_path)
+                            if corr_result is not None:
+                                existing_results[table_type][level][f'{test}_correlation_matrix'] = corr_result
         
         return existing_results
     
     def clear_cache(self):
         """Clear the loading cache."""
         self._load_cache.clear()
+        self._metadata_cache.clear()
 
 # ========================== CONFIGURATION ========================== #
 
@@ -175,47 +248,56 @@ TEST_CONFIG = {
     "fisher": {
         "key": "fisher", "func": fisher_exact_bonferroni,
         "name": "Fisher exact (Bonferroni)", "effect_col": "proportion_diff",
-        "alt_effect_col": "odds_ratio", "parallel_safe": True
+        "alt_effect_col": "odds_ratio", "parallel_safe": True,
+        "requires_group_values": True
     },
     "ttest": {
         "key": "ttest", "func": ttest,
         "name": "Student t‑test", "effect_col": "mean_difference",
-        "alt_effect_col": "cohens_d", "parallel_safe": True
+        "alt_effect_col": "cohens_d", "parallel_safe": True,
+        "requires_group_values": True
     },
     "mwu_bonferroni": {
         "key": "mwub", "func": mwu_bonferroni,
         "name": "Mann–Whitney U (Bonferroni)", "effect_col": "effect_size_r",
-        "alt_effect_col": "median_difference", "parallel_safe": True
+        "alt_effect_col": "median_difference", "parallel_safe": True,
+        "requires_group_values": True
     },
     "kruskal_bonferroni": {
         "key": "kwb", "func": kruskal_bonferroni,
         "name": "Kruskal–Wallis (Bonferroni)", "effect_col": "epsilon_squared",
-        "alt_effect_col": None, "parallel_safe": True
+        "alt_effect_col": None, "parallel_safe": True,
+        "requires_group_values": True
     },
     "enhanced_stats": {
         "key": "enhanced", "func": enhanced_statistical_tests,
         "name": "Enhanced Statistical Tests", "effect_col": "effect_size",
-        "alt_effect_col": None, "parallel_safe": False
+        "alt_effect_col": None, "parallel_safe": False,
+        "requires_group_values": False
     },
     "differential_abundance": {
         "key": "diffabund", "func": differential_abundance_analysis,
         "name": "Differential Abundance Analysis", "effect_col": "log2_fold_change",
-        "alt_effect_col": "fold_change", "parallel_safe": False
+        "alt_effect_col": "fold_change", "parallel_safe": False,
+        "requires_group_values": True
     },
     "anova": {
         "key": "anova", "func": anova,
         "name": "One-way ANOVA", "effect_col": "eta_squared",
-        "alt_effect_col": None, "parallel_safe": True
+        "alt_effect_col": None, "parallel_safe": True,
+        "requires_group_values": True
     },
     "spearman_correlation": {
         "key": "spearman", "func": spearman_correlation,
         "name": "Spearman Correlation", "effect_col": "rho",
-        "alt_effect_col": None, "parallel_safe": True
+        "alt_effect_col": None, "parallel_safe": True,
+        "requires_group_values": False
     },
     "network_analysis": {
         "key": "network", "func": microbial_network_analysis,
         "name": "Network Analysis", "effect_col": "correlation",
-        "alt_effect_col": "abs_correlation", "parallel_safe": False
+        "alt_effect_col": "abs_correlation", "parallel_safe": False,
+        "requires_group_values": False
     }
 }
 
@@ -235,18 +317,6 @@ def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
     for key in keys[:-1]:
         current = current.setdefault(key, {})
     current.setdefault(keys[-1], {})
-
-@lru_cache(maxsize=64)
-def get_enabled_tasks_cached(
-    config_hash: str,  # Hash of config for cache key
-    available_tables: Tuple[Tuple[str, Tuple[str, ...]]]  # Hashable representation
-) -> Tuple[Tuple[str, str, str], ...]:
-    """Cached version of get_enabled_tasks."""
-    # Note: This would need config deserialization in real implementation
-    # For now, showing the optimization pattern
-    tasks = []
-    # Implementation would mirror original but with optimized data structures
-    return tuple(tasks)
 
 def get_enabled_tasks(
     config: Dict, 
@@ -286,17 +356,6 @@ def get_enabled_tasks(
     
     return tasks
 
-@lru_cache(maxsize=32)
-def get_group_column_values_cached(
-    group_column_name: str,
-    group_column_type: str,
-    metadata_shape: Tuple[int, int],
-    unique_values_hash: str  # Hash of unique values
-) -> Tuple:
-    """Cached group column value extraction."""
-    # Implementation would deserialize and return cached values
-    pass
-
 def get_group_column_values(group_column: Dict, metadata: pd.DataFrame) -> List[Any]:
     """Optimized group column value extraction."""
     if 'values' in group_column and group_column['values']:
@@ -318,6 +377,7 @@ def run_single_statistical_test(
     """Optimized single test execution for parallel processing."""
     table_type, level, test, table, metadata, group_column, group_values, output_dir = task_data
     task_id = f"{table_type}_{level}_{test}"
+    start_time = time.time()
     
     try:
         # Prepare data once
@@ -340,7 +400,7 @@ def run_single_statistical_test(
         elif test == 'spearman_correlation':
             # Skip if column not found
             if group_column not in metadata_aligned.columns:
-                return TaskResult(task_id, table_type, level, test, None, "Column not found", False)
+                return TaskResult(task_id, table_type, level, test, None, "Column not found", False, 0)
             
             result = test_func(
                 table=table_aligned,
@@ -348,24 +408,57 @@ def run_single_statistical_test(
                 continuous_column=group_column
             )
         else:
-            result = test_func(
-                table=table_aligned,
-                metadata=metadata_aligned,
-                group_column=group_column,
-                group_column_values=group_values
-            )
+            # Check if test requires group values
+            if TEST_CONFIG[test].get("requires_group_values", True):
+                result = test_func(
+                    table=table_aligned,
+                    metadata=metadata_aligned,
+                    group_column=group_column,
+                    group_column_values=group_values
+                )
+            else:
+                result = test_func(
+                    table=table_aligned,
+                    metadata=metadata_aligned,
+                    group_column=group_column
+                )
         
         # Save results efficiently
         if isinstance(result, pd.DataFrame) and not result.empty:
             output_path = output_dir / f'{test}.tsv'
             result.to_csv(output_path, sep='\t', index=True)
+            
+            # Save configuration hash to validate future loads
+            config_hash_path = output_dir / ".config_hash"
+            if not config_hash_path.exists():
+                # Create a simple hash of test configuration
+                config_str = f"{test}_{table_type}_{level}"
+                config_hash = hashlib.md5(config_str.encode()).hexdigest()
+                with open(config_hash_path, 'w') as f:
+                    f.write(config_hash)
         
-        return TaskResult(task_id, table_type, level, test, result, None, False)
+        processing_time = time.time() - start_time
+        return TaskResult(task_id, table_type, level, test, result, None, False, processing_time)
         
     except Exception as e:
         error_msg = f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
         logger.error(error_msg)
-        return TaskResult(task_id, table_type, level, test, None, error_msg, False)
+        processing_time = time.time() - start_time
+        return TaskResult(task_id, table_type, level, test, None, error_msg, False, processing_time)
+
+def _calculate_config_hash(config: Dict, group_column: str, table_type: str, level: str, test: str) -> str:
+    """Calculate a hash for configuration to validate result compatibility."""
+    config_data = {
+        'group_column': group_column,
+        'table_type': table_type,
+        'level': level,
+        'test': test,
+        'test_config': TEST_CONFIG.get(test, {}),
+        'stats_config': config.get('stats', {})
+    }
+    
+    config_str = json.dumps(config_data, sort_keys=True, default=str)
+    return hashlib.md5(config_str.encode()).hexdigest()
 
 class StatisticalAnalysis:
     """Highly optimized Statistical Analysis class with result loading."""
@@ -385,7 +478,7 @@ class StatisticalAnalysis:
         force_recalculate: List[str] = None
     ) -> None:
         self.config = config
-        self.project_dir = Path(project_dir.final) if isinstance(project_dir.final, str) else project_dir.final
+        self.project_dir = Path(project_dir.final) if hasattr(project_dir, 'final') else Path(project_dir)
         self.mode = mode
         self.tables = tables
         self.metadata = metadata
@@ -422,7 +515,8 @@ class StatisticalAnalysis:
             'total_tasks': 0,
             'loaded_from_files': 0,
             'calculated_fresh': 0,
-            'load_time_saved_seconds': 0
+            'load_time_saved_seconds': 0,
+            'task_times': {}
         }
         
         # Pre-validate configuration
@@ -472,7 +566,7 @@ class StatisticalAnalysis:
     
     def _run_optimized_analysis(self) -> None:
         """Run analysis with parallel processing and result loading."""
-        start_time = datetime.now()
+        start_time = time.time()
         
         # Process each group column
         for group_column in self.group_columns:
@@ -485,8 +579,8 @@ class StatisticalAnalysis:
             self.results[col_name] = self._run_parallel_for_group(col_name, col_values)
         
         # Calculate time savings
-        end_time = datetime.now()
-        analysis_time = (end_time - start_time).total_seconds()
+        end_time = time.time()
+        analysis_time = end_time - start_time
         self.load_statistics['analysis_time_seconds'] = analysis_time
         
         # Log loading statistics
@@ -505,7 +599,16 @@ class StatisticalAnalysis:
         remaining_tasks = []
         
         if self.load_existing and self.result_loader:
-            existing_results = self.result_loader.get_existing_results(group_column, tasks)
+            # Calculate configuration hash for validation
+            config_hashes = {}
+            for table_type, level, test in tasks:
+                config_hashes[(table_type, level, test)] = _calculate_config_hash(
+                    self.config, group_column, table_type, level, test
+                )
+            
+            existing_results = self.result_loader.get_existing_results(
+                group_column, tasks, config_hash=config_hashes.get((table_type, level, test), None)
+            )
             
             # Filter out tasks that have existing results and don't need to be recalculated
             for table_type, level, test in tasks:
@@ -616,9 +719,13 @@ class StatisticalAnalysis:
                 for future in as_completed(future_to_task):
                     task_result = future.result()
                     
-                    # Store result
+                    # Store result and timing
                     _init_nested_dict(results, [task_result.table_type, task_result.level])
                     results[task_result.table_type][task_result.level][task_result.test] = task_result.result
+                    
+                    # Record processing time
+                    task_key = f"{task_result.table_type}_{task_result.level}_{task_result.test}"
+                    self.load_statistics['task_times'][task_key] = task_result.processing_time
                     
                     if task_result.error:
                         logger.warning(f"Task failed: {task_result.error}")
@@ -655,11 +762,17 @@ class StatisticalAnalysis:
                     group_column, group_values, output_dir
                 )
                 
+                start_time = time.time()
                 task_result = run_single_statistical_test(task_data)
+                processing_time = time.time() - start_time
                 
-                # Store result
+                # Store result and timing
                 _init_nested_dict(results, [task_result.table_type, task_result.level])
                 results[task_result.table_type][task_result.level][task_result.test] = task_result.result
+                
+                # Record processing time
+                task_key = f"{task_result.table_type}_{task_result.level}_{task_result.test}"
+                self.load_statistics['task_times'][task_key] = processing_time
                 
                 if task_result.error:
                     logger.warning(f"Task failed: {task_result.error}")
@@ -681,10 +794,21 @@ class StatisticalAnalysis:
             logger.info(f"  Total tasks: {total}")
             logger.info(f"  Loaded from files: {loaded} ({load_percentage:.1f}%)")
             logger.info(f"  Calculated fresh: {calculated} ({100-load_percentage:.1f}%)")
+            logger.info(f"  Total analysis time: {stats.get('analysis_time_seconds', 0):.2f} seconds")
+            
+            # Log timing statistics for calculated tasks
+            if stats['task_times']:
+                avg_time = sum(stats['task_times'].values()) / len(stats['task_times'])
+                max_time = max(stats['task_times'].values())
+                min_time = min(stats['task_times'].values())
+                
+                logger.info(f"  Task timing (calculated tasks):")
+                logger.info(f"    Average: {avg_time:.2f}s, Min: {min_time:.2f}s, Max: {max_time:.2f}s")
             
             if loaded > 0:
-                # Rough estimate of time saved (assuming 10 seconds per loaded task)
-                estimated_time_saved = loaded * 10
+                # Rough estimate of time saved (using average time for loaded tasks)
+                avg_task_time = (sum(stats['task_times'].values()) / len(stats['task_times'])) if stats['task_times'] else 10
+                estimated_time_saved = loaded * avg_task_time
                 logger.info(f"  Estimated time saved: ~{estimated_time_saved:.0f} seconds")
     
     def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
@@ -995,8 +1119,15 @@ class StatisticalAnalysis:
         # Create summary report
         report_lines = [
             "# Statistical Analysis Summary Report",
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"Total tests executed: {summary['total_tests_run']}",
             f"Group columns analyzed: {', '.join(summary['group_columns_analyzed'])}",
+            "",
+            "## Performance Metrics",
+            f"Analysis time: {summary['performance_metrics'].get('analysis_time_seconds', 0):.2f} seconds",
+            f"Cache hit ratio: {summary['performance_metrics'].get('cache_hit_ratio', 0):.2%}",
+            f"Results loaded from files: {summary['performance_metrics'].get('load_statistics', {}).get('loaded_from_files', 0)}",
+            f"Results calculated fresh: {summary['performance_metrics'].get('load_statistics', {}).get('calculated_fresh', 0)}",
             "",
             "## Significant Features by Test Type",
         ]
@@ -1017,6 +1148,7 @@ class StatisticalAnalysis:
                 f"- Mean effect size: {stats['mean']:.4f}",
                 f"- Standard deviation: {stats['std']:.4f}",
                 f"- Range: {stats['min']:.4f} to {stats['max']:.4f}",
+                f"- Count: {stats['count']}",
                 ""
             ])
         
@@ -1289,19 +1421,6 @@ class StatisticalAnalysis:
 
 # ========================== UTILITY FUNCTIONS ========================== #
 
-def optimize_dataframe_memory(df: pd.DataFrame) -> pd.DataFrame:
-    """Optimize DataFrame memory usage."""
-    for col in df.select_dtypes(include=['int64']).columns:
-        if df[col].min() >= np.iinfo(np.int32).min and df[col].max() <= np.iinfo(np.int32).max:
-            df[col] = df[col].astype(np.int32)
-        elif df[col].min() >= np.iinfo(np.int16).min and df[col].max() <= np.iinfo(np.int16).max:
-            df[col] = df[col].astype(np.int16)
-    
-    for col in df.select_dtypes(include=['float64']).columns:
-        df[col] = pd.to_numeric(df[col], downcast='float')
-    
-    return df
-
 def batch_save_results(results: Dict, base_path: Path, format: str = 'tsv') -> None:
     """Efficiently batch save results."""
     save_tasks = []
@@ -1378,5 +1497,3 @@ def run_statistical_analysis_with_loading(
         force_recalculate=force_recalculate or [],
         **kwargs
     )
-
-
