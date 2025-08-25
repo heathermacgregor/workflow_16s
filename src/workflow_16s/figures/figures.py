@@ -77,9 +77,9 @@ pio.templates.default = "heather"
 # ==================================== FUNCTIONS ===================================== #
 
 def save_plotly_html(
-  fig: go.Figure, 
-  filepath: Union[str, Path],
-  verbose: bool = True
+    fig: go.Figure, 
+    filepath: Union[str, Path],
+    verbose: bool = True
 ) -> None:
     """Save a Plotly figure to an HTML file.
 
@@ -100,8 +100,8 @@ def save_plotly_html(
 
 
 def load_plotly_html(
-  filepath: Union[str, Path],
-  verbose: bool = True
+    filepath: Union[str, Path],
+    verbose: bool = True
 ) -> go.Figure:
     """Load a Plotly figure from an HTML file.
 
