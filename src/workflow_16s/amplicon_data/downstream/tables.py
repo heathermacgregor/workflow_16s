@@ -125,7 +125,6 @@ class PrepData:
                     f"Preprocessing: {initial_samples} → {table.shape[0]} samples, " 
                     f"{initial_features} → {table.shape[1]} features" 
                 )
-
         
     def _create_presence_absence(self, table_type: str, level: str) -> None:
         if not bool(self.config.get("features", {}).get("presence_absence", False)):
