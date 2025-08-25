@@ -1,18 +1,18 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
+import hashlib
+import json
 import logging
+import multiprocessing as mp
+import os
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from datetime import datetime, timedelta
 from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, NamedTuple
-import warnings
-import multiprocessing as mp
-import os
-from datetime import datetime, timedelta
-import hashlib
-import json
 
 # Third‑Party Imports
 import pandas as pd
@@ -69,8 +69,7 @@ class DataCache:
         # Estimate memory usage
         item_size = self._estimate_size(value)
         
-        if key in self._cache:
-            # Update existing item
+        if key in self._cache: # Update existing item
             old_size = self._cache[key][1]
             self._memory_usage -= old_size
             self._access_order.remove(key)
@@ -161,19 +160,15 @@ class ResultLoader:
             else:
                 logger.warning(f"Unsupported file format: {result_path}")
                 return None
-            
             # Basic validation
             if result.empty:
                 logger.warning(f"Empty result file: {result_path}")
                 return None
-            
             # Optimize memory usage
             result = self._optimize_dataframe_memory(result)
-            
             # Cache the result
             self._load_cache[cache_key] = result
             return result
-            
         except Exception as e:
             logger.warning(f"Failed to load result from {result_path}: {e}")
             return None
@@ -192,8 +187,7 @@ class ResultLoader:
             if col not in ['p_value', 'q_value']:  # Preserve precision for p-values
                 df[col] = pd.to_numeric(df[col], downcast='float')
         
-        # Convert object columns to category where beneficial
-        for col in df.select_dtypes(include=['object']).columns:
+        for col in df.select_dtypes(include=['object']).columns: # Convert object columns to category 
             if len(df[col].unique()) / len(df[col]) < 0.5:  # Cardinality threshold
                 df[col] = df[col].astype('category')
         
@@ -217,22 +211,19 @@ class ResultLoader:
             if self.should_load_result(result_path, config_hash):
                 result = self.load_result(result_path)
                 if result is not None:
-                    # Initialize nested structure
-                    if table_type not in existing_results:
+                    if table_type not in existing_results: # Initialize nested structure
                         existing_results[table_type] = {}
                     if level not in existing_results[table_type]:
                         existing_results[table_type][level] = {}
                     
                     existing_results[table_type][level][test] = result
                     
-                    # Load additional files for network analysis
-                    if test == 'network_analysis':
+                    if test == 'network_analysis': # Load additional files for network analysis
                         corr_path = output_dir / f'{test}_correlation_matrix.tsv'
                         if corr_path.exists() and self.should_load_result(corr_path, config_hash):
                             corr_result = self.load_result(corr_path)
                             if corr_result is not None:
                                 existing_results[table_type][level][f'{test}_correlation_matrix'] = corr_result
-        
         return existing_results
     
     def clear_cache(self):
@@ -310,7 +301,7 @@ DEFAULT_TESTS = {
     "presence_absence": ["fisher"]
 }
 
-# ========================== OPTIMIZED FUNCTIONS ========================== #
+# ========================== FUNCTIONS ========================== #
 
 def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
     """Initialize nested dictionary levels efficiently."""
@@ -323,7 +314,7 @@ def get_enabled_tasks(
     config: Dict, 
     tables: Dict[str, Dict[str, Table]]
 ) -> List[Tuple[str, str, str]]:
-    """Optimized task enumeration with early filtering."""
+    """Task enumeration with early filtering."""
     stats_config = config.get('stats', {})
     table_config = stats_config.get('tables', {})
     
@@ -384,7 +375,6 @@ def run_single_statistical_test(
         # Prepare data once
         table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
         test_func = TEST_CONFIG[test]["func"]
-        
         # Handle different function signatures efficiently
         if test in {'enhanced_stats', 'differential_abundance'}:
             result = test_func(
@@ -402,7 +392,6 @@ def run_single_statistical_test(
             # Skip if column not found
             if group_column not in metadata_aligned.columns:
                 return TaskResult(task_id, table_type, level, test, None, "Column not found", False, 0)
-            
             result = test_func(
                 table=table_aligned,
                 metadata=metadata_aligned,
@@ -424,11 +413,10 @@ def run_single_statistical_test(
                     group_column=group_column
                 )
         
-        # Save results efficiently
+        # Save results
         if isinstance(result, pd.DataFrame) and not result.empty:
             output_path = output_dir / f'{test}.tsv'
             result.to_csv(output_path, sep='\t', index=True)
-            
             # Save configuration hash to validate future loads
             config_hash_path = output_dir / ".config_hash"
             if not config_hash_path.exists():
@@ -463,7 +451,6 @@ def _calculate_config_hash(config: Dict, group_column: str, table_type: str, lev
 
 class StatisticalAnalysis:
     """Highly optimized Statistical Analysis class with result loading."""
-    
     def __init__(
         self,
         config: Dict,
