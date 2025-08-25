@@ -168,14 +168,12 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     ordination_figures = {}
     for table_type, levels in amplicon_data.ordination.items():
         for level, level_data in levels.items():
-            # Check if this level has a 'figures' subkey
             if 'figures' in level_data and level_data['figures']:
                 if table_type not in ordination_figures:
                     ordination_figures[table_type] = {}
                 if level not in ordination_figures[table_type]:
                     ordination_figures[table_type][level] = {}
                 
-                # Iterate through visualization methods in figures
                 for method, method_figures in level_data['figures'].items():
                     ordination_figures[table_type][level][method] = method_figures
     figures['ordination'] = ordination_figures
@@ -188,7 +186,6 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             alpha_figures[group_column].setdefault(table_type, {})
             for level, data in levels.items():
                 if 'figures' in data and data['figures']:
-                    # Store figures directly under group_key -> level
                     alpha_figures[group_column][table_type][level] = data['figures']
     figures['alpha_diversity'] = alpha_figures
     
@@ -199,7 +196,13 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     # SHAP figures
     shap_figures = {}
     for table_type, levels in amplicon_data.models.items():
+        # Ensure levels is a dictionary
+        if not isinstance(levels, dict):
+            continue
         for level, methods in levels.items():
+            # Ensure methods is a dictionary
+            if not isinstance(methods, dict):
+                continue
             for method, result in methods.items():
                 if result and 'figures' in result:
                     if table_type not in shap_figures:
@@ -207,11 +210,9 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                     if level not in shap_figures[table_type]:
                         shap_figures[table_type][level] = {}
                     
-                    # Handle dependency plots as a list
                     transformed_figures = {}
                     for fig_key, fig_value in result['figures'].items():
                         if fig_key == 'shap_dependency' and isinstance(fig_value, list):
-                            # Store each dependency plot individually
                             for i, dep_fig in enumerate(fig_value):
                                 transformed_figures[f'shap_dependency_{i}'] = dep_fig
                         else:
@@ -227,9 +228,8 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             group_key = f"{col}={val}"
             violin_figures.setdefault(col, {})
             for feature in features:
-                if isinstance(feature, dict):
-                    if feature.get('violin_figure'):
-                        violin_figures[col][feature['feature']] = feature['violin_figure']
+                if isinstance(feature, dict) and feature.get('violin_figure'):
+                    violin_figures[col][feature['feature']] = feature['violin_figure']
     figures['violin'] = violin_figures
 
     return figures
@@ -482,6 +482,17 @@ def _validate_models_structure(models: dict):
         for k1, v1 in models.items()
     }, depth=3))
 
+class NumpySafeJSONEncoder(json.JSONEncoder):
+    def default(self, obj) -> Any:  
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        return super().default(obj)
 
 def _prepare_ml_summary(
     models: Dict, 
@@ -493,18 +504,25 @@ def _prepare_ml_summary(
 
     metrics_summary = []
     features_summary = []
-    shap_insights = {}  # Changed from shap_reports to shap_insights
+    shap_insights = {}
     for group_column, table_types in models.items():
+        # Ensure table_types is a dictionary
+        if not isinstance(table_types, dict):
+            continue
         for table_type, levels in table_types.items():
+            # Ensure levels is a dictionary
+            if not isinstance(levels, dict):
+                continue
             for level, methods in levels.items():
+                # Ensure methods is a dictionary
+                if not isinstance(methods, dict):
+                    continue
                 for method, result in methods.items():
                     logger.info(f"Reading {group_column}/{table_type}/{level}/{method} results")
-                    # Validate result structure
                     if not result or not isinstance(result, dict):
                         logger.warning(f"Invalid result for {group_column}/{table_type}/{level}/{method}")
                         continue
                         
-                    # Check for required keys
                     if "test_scores" not in result:
                         logger.error(f"Missing 'test_scores' in {table_type}/{level}/{method}")
                         continue
@@ -529,7 +547,7 @@ def _prepare_ml_summary(
                     metrics_summary.append(metrics)
                     
                     feat_imp = result.get("feature_importances", {})
-                    top_features = result.get("top_features", [])[:10] # TODO: Edit this so that it's configurable
+                    top_features = result.get("top_features", [])[:10]
                     for i, feat in enumerate(top_features, 1):
                         importance = feat_imp.get(feat, 0)
                         features_summary.append({
@@ -541,7 +559,6 @@ def _prepare_ml_summary(
                             "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                         })
                     
-                    # Capture SHAP insights DataFrame if available
                     if "shap_report" in result:
                         key = (table_type, level, method)
                         shap_insights[key] = result["shap_report"]
@@ -549,6 +566,7 @@ def _prepare_ml_summary(
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
     return metrics_df, features_df, shap_insights
+
 
 def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
     """Prepare comprehensive SHAP data table for ML section using DataFrame"""
