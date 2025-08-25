@@ -944,8 +944,13 @@ def generate_html_report(
     
     # Loop through top_features for group-specific features
     for col, val_dict in amplicon_data.top_features.items():
+        logger.info(col)
+        logger.info(val_dict)
         for val, features in val_dict.items():
             group_key = f"{col}={val}"
+            logger.info(val)
+            logger.info(type(features))
+            logger.info(features)
             try:
                 df = _prepare_features_table(features, max_features, group_key)
                 logger.info("Got features table")
