@@ -421,34 +421,55 @@ def _aggregate_shap_data(shap_reports: Dict) -> Dict[str, Dict[str, str]]:
     return aggregated
 '''
 
+import pandas as pd
+from typing import List, Dict
+
 def _prepare_features_table(
     features: List[Dict], 
-    max_features: int,
+    max_features: int,  # Ensure this is an integer
     category: str
 ) -> pd.DataFrame:
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
     
+    # Validate max_features is an integer
+    if not isinstance(max_features, int):
+        raise TypeError("max_features must be an integer")
+    
+    # Slice the list of features safely
     df = pd.DataFrame(features[:max_features])
-    df = df.rename(columns={
+    
+    # Rename columns if they exist
+    rename_map = {
         "feature": "Feature",
         "level": "Taxonomic Level",
         "test": "Test",
         "effect": "Effect Size",
         "p_value": "P-value",
         "effect_dir": "Direction"
-    })
+    }
+    # Only rename columns that actually exist in the DataFrame
+    existing_columns = [col for col in rename_map.keys() if col in df.columns]
+    df = df.rename(columns={col: rename_map[col] for col in existing_columns})
     
+    # Handle faprotax_functions if present
     if "faprotax_functions" in df.columns:
         df["Functions"] = df["faprotax_functions"].apply(
             lambda x: ", ".join(x) if isinstance(x, list) else ""
         )
     
-    df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
+    # Format numeric columns if they exist
+    if "Effect Size" in df.columns:
+        df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
+    if "P-value" in df.columns:
+        df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
     
-    return df[["Feature", "Taxonomic Level", "Test", "Effect Size", 
-               "P-value", "Direction", "Functions"]]
+    # Select final columns, excluding any that might be missing
+    output_columns = ["Feature", "Taxonomic Level", "Test", "Effect Size", 
+                      "P-value", "Direction", "Functions"]
+    available_columns = [col for col in output_columns if col in df.columns]
+    
+    return df[available_columns]
 
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
@@ -925,17 +946,23 @@ def generate_html_report(
     for col, val_dict in amplicon_data.top_features.items():
         for val, features in val_dict.items():
             group_key = f"{col}={val}"
-            df = _prepare_features_table(features, max_features, group_key)
-            logger.info("Got features table")
-            tables_html += f"""
-            <h4>Features associated with {group_key}</h4>
-            {_add_table_functionality(df, f'{group_key}-table')}
-            """
+            try:
+                df = _prepare_features_table(features, max_features, group_key)
+                logger.info("Got features table")
+                tables_html += f"""
+                <h4>Features associated with {group_key}</h4>
+                {_add_table_functionality(df, f'{group_key}-table')}
+                """
+            except Exception as e:
+                logger.error(f"Failed to get features table: {e}")
     
     # Stats summary (per-test details)
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'test_results' in amplicon_data.stats:
-        stats_df = _prepare_stats_summary(amplicon_data.stats['test_results'])
-        logger.info("Got stats summary")
+        try:
+            stats_df = _prepare_stats_summary(amplicon_data.stats['test_results'])
+            logger.info("Got stats summary")
+        except Exception as e:
+            logger.error(f"Failed to get stats summary: {e}")
     else:
         stats_df = pd.DataFrame()
     
