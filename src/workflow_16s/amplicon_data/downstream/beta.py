@@ -373,6 +373,7 @@ class Ordination:
                 # If we have a valid result tuple with figures, return it immediately
                 if result_tuple and result_tuple[4] is not None:  # Check if figures are not None
                     self.log_ok(f"Returning existing figures for {task}")
+                    self.log_ok(result_tuple[4])
                     return result_tuple
                 
                 # If we have figure paths but couldn't load them, continue to calculation
