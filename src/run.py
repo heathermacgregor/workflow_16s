@@ -305,7 +305,6 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
     verbose = False
     try:
-        
         amplicon_data = Downstream(
             config=config,
             project_dir=project_dir,
@@ -324,9 +323,6 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
         """
         analyzer = DownstreamResultsAnalyzer(downstream_results=amplicon_data, config=config, verbose=True)
         results = analyzer.run_comprehensive_analysis(output_dir=str(project_dir.final / 'comprehensive_analysis'))
-        #logger.info(results['consensus_features'])
-        #logger.info(results['narrative'])
-        #logger.info(results['dashboard_components'])
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
