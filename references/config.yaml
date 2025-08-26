@@ -146,7 +146,7 @@ alpha_diversity: # Alpha diversity
     effect_size_threshold: 0.5
   parametric: False  # Statistical test type
   correlation_analysis: 
-    enabled: False #True
+    enabled: True
     max_categories: 20       # Max unique values for categorical variables
     min_group_size: 5        # Min samples per group for valid comparison
     top_n_correlations: 20   # Number of top associations to show
@@ -155,10 +155,10 @@ alpha_diversity: # Alpha diversity
       enabled: True
       levels:  
         - "genus"
-        - "family"
-        - "class"
+        #- "family"
+        #- "class"
     normalized:
-      enabled: True
+      enabled: False #True
       levels: 
         - "genus"
         - "family"
@@ -175,13 +175,13 @@ alpha_diversity: # Alpha diversity
     #- "dominance"
   
 ordination: # Beta diversity + ordination
-  enabled: False
-  load_existing: False
-  max_workers: 2   # Max concurrent ordination tasks
-  cpu_limit: 16    # CPU cores per ordination method
+  enabled: True
+  load_existing: False # BROKEN
+  max_workers: 2       # Max concurrent ordination tasks
+  cpu_limit: 16        # CPU cores per ordination method
   tables:
     raw:
-      enabled: True
+      enabled: False #True
       pcoa_metric: "braycurtis"
       methods:
         #- "pca"
@@ -193,7 +193,7 @@ ordination: # Beta diversity + ordination
         #- "family"
         #- "class"
     filtered:
-      enabled: True
+      enabled: False #True
       pcoa_metric: "braycurtis"
       methods:
         #- "pca"
@@ -212,10 +212,10 @@ ordination: # Beta diversity + ordination
         - "tsne"
         - "umap"
       levels:
-        - "genus"
+        #- "genus"
         - "phylum"
     clr_transformed:
-      enabled: True
+      enabled: False #True
       pcoa_metric: "euclidean"
       methods:
         - "pca"
@@ -226,7 +226,7 @@ ordination: # Beta diversity + ordination
         - "genus"
         - "phylum"
     presence_absence:
-      enabled: True
+      enabled: False #True
       pcoa_metric: "jaccard"
       methods:
         #- "pca"
@@ -278,7 +278,7 @@ ml: # Machine learning
         - "genus"
       methods:
         - "rfe"
-        - "select_k_best"
+        #- "select_k_best"
         #- "chi_squared"
         #- "lasso"
         #- "shap"
@@ -305,28 +305,28 @@ ml: # Machine learning
     clr_transformed:
       enabled: True
       levels:
-        - "genus"
+        #- "genus"
         - "family"
         #- "order"
         #- "class"
         #- "phylum"
       methods:
         - "rfe"
-        - "select_k_best"
+        #- "select_k_best"
         #- "chi_squared"
         #- "lasso"
         #- "shap"
     presence_absence:
       enabled: True
       levels:
-        - "genus"
+        #- "genus"
         - "family"
         #- "order"
         #- "class"
         #- "phylum"
       methods:
         - "rfe"
-        - "select_k_best"
+        #- "select_k_best"
         #- "chi_squared"
         #- "lasso"
         #- "shap"
