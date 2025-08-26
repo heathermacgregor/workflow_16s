@@ -19,8 +19,7 @@ from skbio.stats.ordination import OrdinationResults
 from statsmodels.stats.multitest import multipletests
 from biom.table import Table
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.statistical_analyses import (
     run_statistical_tests_for_group, TopFeaturesAnalyzer
@@ -903,7 +902,7 @@ class DownstreamResultsAnalyzer:
         
         if self.models:
             # Extract ML feature importance
-            ml_features = self.()
+            ml_features = self._extract_ml_importance()
             
             # Cross-validation performance
             cv_results = self._cross_validate_models()
