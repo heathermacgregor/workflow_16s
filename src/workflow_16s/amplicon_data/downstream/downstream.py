@@ -57,7 +57,11 @@ class FunctionalAnnotation:
 
     def _get_cached_faprotax(self, taxon: str) -> List[str]:
         if taxon not in self._faprotax_cache:
-            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(taxon, self.db, include_references=False)
+            self._faprotax_cache[taxon] = faprotax_functions_for_taxon(
+                taxon=taxon, 
+                faprotax_db=self.db, 
+                include_references=False
+            )
         return self._faprotax_cache[taxon]
     
     def _annotate_features(self, features):
@@ -66,9 +70,16 @@ class FunctionalAnnotation:
         results = [None] * len(features)
 
         with ThreadPoolExecutor() as executor:
-            future_to_idx = {executor.submit(self._get_cached_faprotax, taxon): idx for idx, taxon in enumerate(features)}
+            future_to_idx = {
+                executor.submit(
+                    self._get_cached_faprotax, 
+                    taxon
+                ): idx for idx, taxon in enumerate(features)
+            }
             with get_progress_bar() as progress:
-                task = progress.add_task(description=_format_task_desc("Annotating most important features"), total=len(features))
+                task_desc = "Annotating most important features"
+                task_desc_fmt = _format_task_desc(task_desc)
+                task = progress.add_task(description=task_desc_fmt, total=len(features))
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx[future]
                     results[idx] = future.result()
@@ -83,7 +94,8 @@ class FunctionalAnnotation:
         return results
 
 class Downstream:
-    """Main class for orchestrating 16S amplicon data analysis pipeline with result loading."""
+    """Main class for orchestrating 16S amplicon data analysis pipeline with 
+    result loading."""
     
     ModeConfig = {
         "asv": ("table", "asv"), 
@@ -94,28 +106,33 @@ class Downstream:
         self, 
         config: Dict, 
         project_dir: Any, 
-        mode: str = constants.DEFAULT_MODE, 
         existing_subsets: Optional[Dict[str, Dict[str, Path]]] = None,
         verbose: bool = False,
-        # New parameters for result loading
+        # Parameters for result loading
         load_existing_results: bool = True,
         max_result_age_hours: Optional[float] = None,
         force_recalculate_stats: List[str] = None,
         invalidate_results_patterns: List[str] = None
     ):
-        self.config, self.project_dir, self.verbose = config, project_dir, verbose
+        self.config = config
+        self.verbose = verbose
+        self.project_dir = project_dir
         self.output_dir = self.project_dir.final
         self.existing_subsets = existing_subsets
-        self.mode = 'genus' if self.config.get("target_subfragment_mode", constants.DEFAULT_MODE) == 'any' else 'asv'
-        
-        # Result loading configuration
+
+        # Result loading 
         self.load_existing_results = load_existing_results
         self.max_result_age_hours = max_result_age_hours
         self.force_recalculate_stats = force_recalculate_stats or []
         self.invalidate_results_patterns = invalidate_results_patterns or []
-        
-        self._validate_mode()
 
+        # Get the mode setting from the config
+        default_mode = self.config.get("target_subfragment_mode", 
+                                       constants.DEFAULT_MODE)
+        self.mode = 'genus' if default_mode == 'any' else 'asv'
+        self._validate_mode()
+        
+        # Get the group columns from the config
         self.group_columns = self.config.get("group_columns", [])
         
         # Initialize result containers
@@ -131,32 +148,35 @@ class Downstream:
         # Statistics about result loading
         self.analysis_statistics = {}
         
-        logger.info("Running downstream analysis pipeline...")
+        # Execute pipeline
         self._execute_pipeline()
       
     def _validate_mode(self) -> None:
-        """Make sure that the mode variable is recognized in self.ModeConfig."""
+        """Make sure that the `mode` variable is recognized in ModeConfig."""
         if self.mode not in self.ModeConfig:
             raise ValueError(f"Invalid mode: {self.mode}")
           
     def _execute_pipeline(self):
         """Execute the analysis pipeline in sequence."""
+        logger.info("Running downstream analysis pipeline...")
         # Load data
         self.metadata, self.tables, self.nfc_facilities = self._load_data()
         # Prepare data for analysis
         self.metadata, self.tables = self._prep_data()
         # Run analysis
         self._run_analysis()
-        
-        if self.verbose:
-            logger.info("AmpliconData analysis finished.")
+        logger.info("Downstream analysis finished.")
 
     def _load_data(self):
-        data = InputData(self.config, self.mode, self.project_dir, self.existing_subsets)
+        data = InputData(
+            self.config, self.mode, self.project_dir, self.existing_subsets
+        )
         return data.metadata, data.tables, data.nfc_facilities
     
     def _prep_data(self):
-        data = PrepData(self.config, self.tables, self.metadata, self.mode, self.project_dir)
+        data = PrepData(
+            self.config, self.tables, self.metadata, self.mode, self.project_dir
+        )
         return data.metadata, data.tables
 
     def _run_analysis(self):
@@ -170,13 +190,13 @@ class Downstream:
         self.maps = self._plot_sample_maps()
         
         logger.info("Running statistical analysis...")
-        self.stats = self._stats()
+        self._stats()
         
         logger.info("Running alpha diversity analysis...")
-        self.alpha_diversity = self._alpha_diversity()
+        self._alpha_diversity()
         
         logger.info("Running beta diversity analysis...")
-        self.ordination = self._beta_diversity()
+        self._beta_diversity()
         
         logger.info("Running machine learning feature selection...")
         self.models = self._catboost_feature_selection()
@@ -187,61 +207,7 @@ class Downstream:
         # Log final statistics
         self._log_analysis_summary()
 
-    def _invalidate_existing_results(self):
-        """Invalidate specific result patterns before analysis."""
-        logger.info(f"Invalidating results matching patterns: {self.invalidate_results_patterns}")
-        
-        stats_dir = self.project_dir.final / 'stats'
-        if not stats_dir.exists():
-            logger.info("No stats directory found, nothing to invalidate")
-            return
-        
-        total_deleted = 0
-        for pattern in self.invalidate_results_patterns:
-            deleted_count = self._delete_matching_results(stats_dir, pattern)
-            total_deleted += deleted_count
-            logger.info(f"Pattern '{pattern}': deleted {deleted_count} files")
-        
-        logger.info(f"Total invalidated files: {total_deleted}")
-    
-    def _delete_matching_results(self, stats_dir: Path, pattern: str) -> int:
-        """Delete result files matching a specific pattern."""
-        deleted_count = 0
-        
-        # Pattern matching logic
-        for group_dir in stats_dir.iterdir():
-            if not group_dir.is_dir():
-                continue
-                
-            for table_dir in group_dir.iterdir():
-                if not table_dir.is_dir():
-                    continue
-                    
-                for level_dir in table_dir.iterdir():
-                    if not level_dir.is_dir():
-                        continue
-                        
-                    for result_file in level_dir.glob('*.tsv'):
-                        # Check if file matches pattern
-                        full_path = f"{group_dir.name}_{table_dir.name}_{level_dir.name}_{result_file.stem}"
-                        
-                        if (pattern in full_path or 
-                            pattern == result_file.stem or
-                            pattern == f"{table_dir.name}_{level_dir.name}" or
-                            pattern == group_dir.name or
-                            pattern == table_dir.name):
-                            
-                            result_file.unlink()
-                            deleted_count += 1
-                            
-                            # Also delete correlation matrices for network analysis
-                            if result_file.stem == 'network_analysis':
-                                corr_file = level_dir / f"{result_file.stem}_correlation_matrix.tsv"
-                                if corr_file.exists():
-                                    corr_file.unlink()
-                                    deleted_count += 1
-        
-        return deleted_count
+
 
     def _plot_sample_maps(self):
         if not self.config.get("maps", {}).get('enabled', False):
@@ -323,38 +289,48 @@ class Downstream:
             }
 
     def _alpha_diversity(self):
-        if not self.config.get("alpha_diversity", {}).get('enabled', False):
+        enabled = self.config.get("alpha_diversity", {}).get('enabled', False)
+        if not enabled:
             logger.info("Alpha diversity analysis disabled in configuration")
             return {}
+            
         alpha = AlphaDiversity(self.config, self.metadata, self.tables)
         alpha.run(output_dir=self.output_dir)
-        return alpha.results
+        
+        self.alpha_diversity = alpha.results
 
     def _beta_diversity(self):
-        if not self.config.get("ordination", {}).get('enabled', False):
+        enabled = self.config.get("ordination", {}).get('enabled', False)
+        if not enabled:
             logger.info("Betta diversity (ordination) analysis disabled in configuration")
             return {}
+            
         results = {}
         for group_column in self.group_columns:
             beta = Ordination(self.config, self.metadata, self.tables, group_column['name'], self.verbose)
             beta.run(output_dir=self.output_dir)
             results[group_column['name']] = beta.results
-        return results
+            
+        self.ordination = results
 
     def _catboost_feature_selection(self):
-        if not self.config.get("ml", {}).get('enabled', False):
+        enabled = self.config.get("ml", {}).get('enabled', False)
+        if not enablead:
             logger.info("CatBoost feature selection disabled in configuration")
             return {}
+            
         results = {}
         for group_column in self.group_columns:
             if group_column['type'] == 'bool':
                 cb = FeatureSelection(self.config, self.metadata, self.tables, group_column['name'], self.verbose)
                 cb.run(output_dir=self.output_dir)
                 results[group_column['name']] = cb.models
-        return results
+                
+        self.stats = results
 
     def _top_features(self) -> None:
-        if not self.config.get("top_features", {}).get('enabled', False):
+        enabled = self.config.get("top_features", {}).get('enabled', False)
+        if not enabled:
             logger.info("Top features analysis disabled in configuration")
             return {}
     
@@ -377,28 +353,45 @@ class Downstream:
             
     def _top_features_stats_group_column(self, group_column) -> None:
         """Helper to identify top features for a specific group"""
-        group_column_name = group_column['name']
-        group_column_type = group_column['type']
-        group_column_values = group_column['values']
+        n = self.config.get('top_features', {}).get('n', 20) # Number of top features
         
-        if not self.stats['test_results'][group_column_name]:
-            logger.warning(f"No statistics calculated for group '{group_column_name}'. Skipping top features.")
+        if not group_column['values']:
+            if group_column['type'] and group_column['type'] == 'bool':
+                group_column['values'] = [True, False]
+            else:
+                logger.warning(
+                    f"Group column (type `{group_column['type']`) values not found. "
+                    f"Skipping top features."
+                )
+                return
+        
+        if not self.stats['test_results'][group_column['name']]:
+            logger.warning(
+                f"No statistics calculated for group '{group_column['name']}'. "
+                f"Skipping top features."
+            )
             return
             
-        n = self.config.get('top_features', {}).get('n', 20) # Number of top features
-        logger.info(n)
+        if not len(group_column['values']) == 2:
+            logger.warning(
+                f"Number of group column values ({len(group_column['values'])}) is not 2. "
+                f"Skipping top features."
+            )
+            return
+            
         # Initialize storage for this group
-        self.top_features["stats"][group_column_name] = {}
+        self.top_features["stats"][group_column['name']] = {}
+        
         all_features = []
         with self.stats_obj as stats:
-            for table_type, levels in self.stats['test_results'][group_column_name].items():  # 1. Table Types
-                for level, tests in levels.items():                                           # 2. Taxonomic Levels
-                    for test_name, df in tests.items():                                       # 3. Test Names
+            for table_type, levels in self.stats['test_results'][group_column['name']].items(): # Table types
+                for level, tests in levels.items(): # Taxonomic levels
+                    for test_name, df in tests.items(): # Statistical test names
                         if df is None or not isinstance(df, pd.DataFrame):
                             continue
                         if "p_value" not in df.columns:
                             continue
-                        # Get significant features for the table_type / level / test    
+                        # Get significant features for the individual test   
                         sig_df = df[df["p_value"] < 0.05].copy()
                         if sig_df.empty:
                             continue
@@ -411,7 +404,7 @@ class Downstream:
                         for _, row in sig_df.iterrows():
                             all_features.append({
                                 "feature": row["feature"],
-                                "column": group_column_name,
+                                "column": group_column['name'],
                                 "table_type": table_type,
                                 "level": level,  
                                 "method": "statistical_test",
@@ -429,47 +422,49 @@ class Downstream:
             group_2_features.sort(key=lambda d: (d["effect"], d["p_value"]))
             
             # Store results
-            self.top_features["stats"][group_column_name][group_column_values[0]] = group_1_features[:n]
-            self.top_features["stats"][group_column_name][group_column_values[1]] = group_2_features[:n]
+            self.top_features["stats"][group_column['name']][group_column['values'][0]] = group_1_features[:n]
+            self.top_features["stats"][group_column['name']][group_column['values'][1]] = group_2_features[:n]
             
             logger.info(
-                f"Top features for {group_column_name}: "
-                f"{group_column_values[0]} ({len(group_1_features)}), "
-                f"{group_column_values[1]} ({len(group_2_features)})"
+                f"Top features for {group_column['name']}: "
+                f"{group_column['values'][0]} ({len(group_1_features)}), "
+                f"{group_column['values'][1]} ({len(group_2_features)})"
             )
             
     def _top_features_ml_group_column(self, group_column) -> None:
         """Helper to identify top features for a specific group"""
-        group_column_name = group_column['name']
-        group_column_type = group_column['type']
-        group_column_values = group_column['values']
-        
-        if not self.models[group_column_name]:
-            logger.warning(f"No feature selection ran for group '{group_column_name}'. Skipping top features.")
-            return
-            
         n = self.config.get('top_features', {}).get('n', 20) # Number of top features
         
+        if not self.models[group_column['name']]:
+            logger.warning(
+                f"No feature selection ran for group '{group_column['name']}'. "
+                f"Skipping top features."
+            )
+            return
+        
         features_summary = []
-        for table_type, levels in self.models[group_column_name].items():  # 1. Table Types
-            for level, methods in levels.items():                            # 2. Taxonomic Levels
-                for method, result in methods.items():                        # 3. Methods
+        for table_type, levels in self.models[group_column['name']].items(): # Table types
+            for level, methods in levels.items(): # Taxonomic levels
+                for method, result in methods.items(): # Feature selection methods
                     # Validate result structure
                     if not result or not isinstance(result, dict):
-                        logger.warning(f"Invalid result for {group_column}/{table_type}/{level}/{method}")
+                        logger.warning(
+                            f"Invalid result for {group_column['name']}/{table_type}/{level}/{method}"
+                        )
                         continue
                         
                     # Check for required keys
                     if "top_features" not in result:
-                        logger.error(f"Missing 'top_features' in {table_type}/{level}/{method}")
+                        logger.error(
+                            f"Missing 'top_features' in {group_column['name']}{table_type}/{level}/{method}"
+                        )
                         continue
 
                     feat_imp = result.get("feature_importances", {})
-                    top_features = result.get("top_features", [])[:10] # TODO: Edit this so that it's configurable
-                    for i, feat in enumerate(top_features, 1):
+                    for i, feat in enumerate(n, 1):
                         importance = feat_imp.get(feat, 0)
                         features_summary.append({
-                            "Column": group_column_name,
+                            "Column": group_column['name'],
                             "Table Type": table_type,
                             "Level": level,
                             "Method": method,
@@ -478,11 +473,13 @@ class Downstream:
                             "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                         })
         features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
-        self.top_features["models"][group_column_name] = features_df
+        self.top_features["models"][group_column['name']] = features_df
         
     def _top_features_plots_stats(self):
         """Generate top features plots if enabled."""
-        if self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False) or self.config.get("feature_maps", {}).get('enabled', False):
+        violin_plots_enabled = self.config.get('top_features', {}).get("violin_plots", {}).get('enabled', False)
+        feature_maps_enabled = self.config.get("feature_maps", {}).get('enabled', False)
+        if violin_plots_enabled or feature_maps_enabled:
             if self.top_features["stats"]:
                 features_plots = top_features_plots(
                     output_dir=self.output_dir, 
@@ -498,7 +495,8 @@ class Downstream:
 
     def _functional_annotation(self):
         """Run functional annotation if enabled."""
-        if not self.config.get("faprotax", {}).get('enabled', False):
+        enabled = self.config.get("faprotax", {}).get('enabled', False)
+        if not enabled:
             logger.info("Functional annotation disabled in configuration")
             return None
             
@@ -629,7 +627,62 @@ class Downstream:
                 # Restore original force recalculate patterns
                 self.force_recalculate_stats = original_patterns
 
-
+    def _invalidate_existing_results(self):
+        """Invalidate specific result patterns before analysis."""
+        logger.info(f"Invalidating results matching patterns: {self.invalidate_results_patterns}")
+        
+        stats_dir = self.project_dir.final / 'stats'
+        if not stats_dir.exists():
+            logger.info("No stats directory found, nothing to invalidate")
+            return
+        
+        total_deleted = 0
+        for pattern in self.invalidate_results_patterns:
+            deleted_count = self._delete_matching_results(stats_dir, pattern)
+            total_deleted += deleted_count
+            logger.info(f"Pattern '{pattern}': deleted {deleted_count} files")
+        
+        logger.info(f"Total invalidated files: {total_deleted}")
+    
+    def _delete_matching_results(self, stats_dir: Path, pattern: str) -> int:
+        """Delete result files matching a specific pattern."""
+        deleted_count = 0
+        
+        # Pattern matching logic
+        for group_dir in stats_dir.iterdir():
+            if not group_dir.is_dir():
+                continue
+                
+            for table_dir in group_dir.iterdir():
+                if not table_dir.is_dir():
+                    continue
+                    
+                for level_dir in table_dir.iterdir():
+                    if not level_dir.is_dir():
+                        continue
+                        
+                    for result_file in level_dir.glob('*.tsv'):
+                        # Check if file matches pattern
+                        full_path = f"{group_dir.name}_{table_dir.name}_{level_dir.name}_{result_file.stem}"
+                        
+                        if (pattern in full_path or 
+                            pattern == result_file.stem or
+                            pattern == f"{table_dir.name}_{level_dir.name}" or
+                            pattern == group_dir.name or
+                            pattern == table_dir.name):
+                            
+                            result_file.unlink()
+                            deleted_count += 1
+                            
+                            # Also delete correlation matrices for network analysis
+                            if result_file.stem == 'network_analysis':
+                                corr_file = level_dir / f"{result_file.stem}_correlation_matrix.tsv"
+                                if corr_file.exists():
+                                    corr_file.unlink()
+                                    deleted_count += 1
+        
+        return deleted_count
+        
 # ===================================== IMPORTS ====================================== #
 
 import numpy as np
