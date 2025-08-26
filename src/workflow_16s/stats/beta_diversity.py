@@ -36,15 +36,21 @@ SKLEARN_METRICS = {'euclidean', 'cityblock', 'minkowski', 'cosine', 'correlation
 
 # =============================== HELPER FUNCTIONS ==================================== #
 
-def validate_min_samples(df: pd.DataFrame, min_samples: int = 2) -> None:
+def validate_min_samples(
+    df: pd.DataFrame, 
+    min_samples: int = 2
+) -> None:
     """Validate that the input contains sufficient samples for analysis.
     
     Ensures the input DataFrame meets minimum sample requirements for downstream
     statistical analysis and dimensionality reduction techniques.
     
     Args:
-        df: Input data as pandas DataFrame with samples as rows and features as columns
-        min_samples: Minimum required number of samples (default: 2)
+        df :          
+            Input data as pandas DataFrame with samples as rows and features 
+            as columns.
+        min_samples : 
+            Minimum required number of samples (default: 2).
         
     Raises:
         ValueError: If number of samples is less than required minimum
@@ -60,7 +66,8 @@ def validate_component_count(n_components: int) -> None:
     for dimensionality reduction techniques.
     
     Args:
-        n_components: Requested number of components
+        n_components : 
+            Requested number of components.
         
     Raises:
         ValueError: If n_components is less than 1
@@ -69,7 +76,10 @@ def validate_component_count(n_components: int) -> None:
         raise ValueError("n_components must be ≥ 1")
 
 
-def safe_component_limit(df: pd.DataFrame, requested: int) -> int:
+def safe_component_limit(
+    df: pd.DataFrame, 
+    requested: int
+) -> int:
     """Determine safe number of components based on data dimensions.
     
     Computes the maximum possible components given data constraints:
@@ -77,8 +87,11 @@ def safe_component_limit(df: pd.DataFrame, requested: int) -> int:
     - For distance-based methods: n_samples - 1
     
     Args:
-        df: Input data as pandas DataFrame with samples as rows and features as columns
-        requested: Originally requested number of components
+        df :        
+            Input data as pandas DataFrame with samples as rows and features 
+            as columns.
+        requested : 
+            Originally requested number of components.
         
     Returns:
         Safe number of components to compute (min(requested, max_possible))
@@ -99,10 +112,14 @@ def create_result_dataframe(
     dimensionality reduction results.
     
     Args:
-        data: Embedding array of shape (n_samples, n_components)
-        index: Sample identifiers for DataFrame index
-        prefix: Component name prefix (e.g., 'PC', 'UMAP')
-        n_components: Number of components in the result
+        data : 
+            Embedding array of shape (n_samples, n_components)
+        index : 
+            Sample identifiers for DataFrame index
+        prefix : 
+            Component name prefix (e.g., 'PC', 'UMAP')
+        n_components : 
+            Number of components in the result
         
     Returns:
         DataFrame with named components (prefix + number) and sample index
@@ -121,7 +138,8 @@ def handle_duplicate_ids(ids: list) -> list:
         Input: ['A', 'B', 'A'] → Output: ['A_1', 'B', 'A_2']
     
     Args:
-        ids: List of original sample identifiers
+        ids : 
+            List of original sample identifiers
         
     Returns:
         List of unique identifiers with duplicates disambiguated
@@ -134,15 +152,20 @@ def handle_duplicate_ids(ids: list) -> list:
         new_ids.append(f"{sample_id}_{count}" if count > 1 else sample_id)
     return new_ids
 
-def calculate_correlation_loadings(original_data: pd.DataFrame, embeddings: pd.DataFrame) -> pd.DataFrame:
+def calculate_correlation_loadings(
+    original_data: pd.DataFrame, 
+    embeddings: pd.DataFrame
+) -> pd.DataFrame:
     """Calculate correlation loadings between original features and embedding dimensions.
     
     Computes Pearson correlations between standardized original features and
     embedding coordinates to interpret feature contributions to each dimension.
     
     Args:
-        original_data: Original feature data (samples × features)
-        embeddings: Embedding coordinates (samples × components)
+        original_data : 
+            Original feature data (samples × features)
+        embeddings : 
+            Embedding coordinates (samples × components)
         
     Returns:
         DataFrame with correlation loadings (features × components)
@@ -180,7 +203,8 @@ def table_to_dataframe(table: Union[Dict, Table, pd.DataFrame]) -> pd.DataFrame:
     - Existing pandas DataFrame (returned as-is)
     
     Args:
-        table: Input data in supported format
+        table : 
+            Input data in supported format
         
     Returns:
         DataFrame with samples as rows and features as columns
@@ -201,13 +225,14 @@ def validate_distance_matrix(dm: DistanceMatrix):
     """Perform comprehensive validation of distance matrix.
     
     Validates and cleans distance matrices by:
-    1. Handling NaN values through symmetric imputation
-    2. Ensuring matrix symmetry
-    3. Checking for degeneracy (all identical values)
-    4. Ensuring diagonal is exactly zero
+        1. Handling NaN values through symmetric imputation
+        2. Ensuring matrix symmetry
+        3. Checking for degeneracy (all identical values)
+        4. Ensuring diagonal is exactly zero
     
     Args:
-        dm: Input DistanceMatrix object
+        dm : 
+            Input DistanceMatrix object
         
     Returns:
         Validated and cleaned DistanceMatrix
@@ -273,8 +298,10 @@ def distance_matrix(
     input validation and support for both sklearn and scikit-bio metrics.
     
     Args:
-        table: Input data in supported format
-        metric: Distance metric to use (default: constants.DEFAULT_METRIC)
+        table : 
+            Input data in supported format
+        metric : 
+            Distance metric to use (default: constants.DEFAULT_METRIC)
         
     Returns:
         DistanceMatrix object containing pairwise distances between samples
@@ -321,9 +348,12 @@ def pcoa(
     for improved interpretability.
     
     Args:
-        table: Input data in supported format
-        metric: Distance metric to use (default: constants.DEFAULT_METRIC)
-        n_dimensions: Number of dimensions to compute (default: constants.DEFAULT_N_PCOA)
+        table : 
+            Input data in supported format
+        metric : 
+            Distance metric to use (default: constants.DEFAULT_METRIC)
+        n_dimensions : 
+            Number of dimensions to compute (default: constants.DEFAULT_N_PCOA)
         
     Returns:
         OrdinationResults object containing:
@@ -370,13 +400,15 @@ def pca(
     """Perform Principal Component Analysis (PCA) on feature data.
     
     This method:
-    1. Standardizes features (mean=0, variance=1)
-    2. Computes principal components via SVD
-    3. Returns component scores and loadings
+        1. Standardizes features (mean=0, variance=1)
+        2. Computes principal components via SVD
+        3. Returns component scores and loadings
     
     Args:
-        table: Input data in supported format
-        n_components: Number of principal components to compute (default: constants.DEFAULT_N_PCA)
+        table : 
+            Input data in supported format
+        n_components : 
+            Number of principal components to compute (default: constants.DEFAULT_N_PCA)
         
     Returns:
         Dictionary with:
@@ -417,14 +449,18 @@ def tsne(
     """Compute t-Distributed Stochastic Neighbor Embedding (t-SNE).
     
     Suitable for high-dimensional data visualization. This method:
-    1. Models pairwise similarities in high-dimensional space
-    2. Optimizes low-dimensional embedding to preserve local structures
+        1. Models pairwise similarities in high-dimensional space
+        2. Optimizes low-dimensional embedding to preserve local structures
     
     Args:
-        table: Input data in supported format
-        n_components: Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_TSNE)
-        random_state: Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
-        n_jobs: CPU cores to use (-1 for all available, default: constants.DEFAULT_CPU_LIMIT)
+        table : 
+            Input data in supported format
+        n_components : 
+            Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_TSNE)
+        random_state : 
+            Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
+        n_jobs : 
+            CPU cores to use (-1 for all available, default: constants.DEFAULT_CPU_LIMIT)
         
     Returns:
         Dictionary with:
@@ -473,14 +509,18 @@ def umap(
     """Compute Uniform Manifold Approximation and Projection (UMAP).
     
     Preserves both local and global data structures. This method:
-    1. Constructs topological representation of data
-    2. Optimizes low-dimensional embedding
+        1. Constructs topological representation of data
+        2. Optimizes low-dimensional embedding
     
     Args:
-        table: Input data in supported format
-        n_components: Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_UMAP)
-        random_state: Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
-        n_jobs: CPU cores to use (default: constants.DEFAULT_CPU_LIMIT)
+        table : 
+            Input data in supported format
+        n_components : 
+            Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_UMAP)
+        random_state : 
+            Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
+        n_jobs : 
+            CPU cores to use (default: constants.DEFAULT_CPU_LIMIT)
         
     Returns:
         Dictionary with:
@@ -542,11 +582,16 @@ def mds(
     pairwise distances as much as possible.
     
     Args:
-        table: Input data in supported format
-        metric: Distance metric to use (default: constants.DEFAULT_METRIC)
-        n_components: Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_MDS)
-        random_state: Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
-        n_jobs: CPU cores to use (default: constants.DEFAULT_CPU_LIMIT)
+        table : 
+            Input data in supported format
+        metric : 
+            Distance metric to use (default: constants.DEFAULT_METRIC)
+        n_components : 
+            Dimension of embedding space (typically 2-3, default: constants.DEFAULT_N_MDS)
+        random_state : 
+            Seed for reproducible results (default: constants.DEFAULT_RANDOM_STATE)
+        n_jobs : 
+            CPU cores to use (default: constants.DEFAULT_CPU_LIMIT)
         
     Returns:
         Dictionary with:
