@@ -667,14 +667,10 @@ class DownstreamResultsAnalyzer:
         """
         Initialize analyzer with downstream pipeline results
         
-        Parameters:
-        -----------
-        downstream_results : Downstream object
-            Results from the downstream pipeline
-        config : Dict
-            Configuration dictionary
-        verbose : bool
-            Whether to print progress messages
+        Args:
+            downstream_results : Results from the downstream pipeline
+            config : Configuration dictionary
+            verbose : Verbosity flag
         """
         self.results = downstream_results
         self.config = config
@@ -701,15 +697,15 @@ class DownstreamResultsAnalyzer:
     # ========================== 1. CROSS-MODULE INTEGRATION ========================== #
     
     def synthesize_feature_importance(self, top_n: int = 50) -> pd.DataFrame:
-        """
-        Combine feature importance from statistical tests, ML models, and abundance patterns
-        """
+        """Combine feature importance from statistical tests, ML models, and abundance patterns."""
         if self.verbose:
             print("Synthesizing feature importance across modules...")
         
         importance_scores = {}
         
         # Extract statistical significance scores
+        if self.top_features and 'stats' in self.top_features:
+            
         if self.stats and 'top_features' in self.stats:
             stat_features = self._extract_statistical_importance()
             for feature, score in stat_features.items():
@@ -1485,14 +1481,17 @@ class DownstreamResultsAnalyzer:
         """Extract feature importance scores from statistical tests"""
         importance_dict = {}
         
-        if 'top_features' in self.stats:
-            for feature_info in self.stats['top_features']:
-                if isinstance(feature_info, dict) and 'feature' in feature_info:
-                    feature = feature_info['feature']
-                    # Use negative log p-value as importance score
-                    p_value = feature_info.get('p_value', 1.0)
-                    importance_dict[feature] = -np.log10(max(p_value, 1e-10))
-        
+        if 'stats' in self.top_features:
+            for group_col, group_col_dict in self.top_features['stats'].items():
+                if isinstance(group_col_dict, dict):
+                    for key, val in group_col_dict.items():
+                        feature_info = group_col_dict[key]
+                        if isinstance(feature_info, dict) and 'feature' in feature_info:
+                            feature = feature_info['feature']
+                            # Use negative log p-value as importance score
+                            p_value = feature_info.get('p_value', 1.0)
+                            importance_dict[feature] = -np.log10(max(p_value, 1e-10))
+        logger.info(importance_dict)
         return importance_dict
     
     def _extract_ml_importance(self) -> Dict[str, float]:
