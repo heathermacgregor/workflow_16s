@@ -108,58 +108,54 @@ def _generate_plotly_selector_html(
     selector_options = create_selector_options(figures_dict)
     
     # Generate the HTML with integrated styling
-    html_template = (
-        f"""
-        <div id='{container_id}' class='plotly-selector-container'>
-            <div class='selector-controls'>
-                <label for='{container_id}-selector' class='selector-label'>Select {section_title}:</label>
-                <select id='{container_id}-selector' class='figure-dropdown'> 
-                    {selector_options}
-                </select>
-            </div>
-            <div id='{container_id}-plot' class="plotly-selector-plot"></div>
+    html_template = f"""
+    <div id='{container_id}' class='plotly-selector-container'>
+        <div class='selector-controls'>
+            <label for='{container_id}-selector' class='selector-label'>Select {section_title}:</label>
+            <select id='{container_id}-selector' class='figure-dropdown'>{selector_options}</select>
         </div>
+        <div id='{container_id}-plot' class="plotly-selector-plot"></div>
+    </div>
         
-        <script>
-        (function() {{
-            // Store figures data for {container_id}
-            const figuresData_{container_id.replace('-', '_')} = {json.dumps(figures_json)};
+    <script>
+    (function() {{
+        // Store figures data for {container_id}
+        const figuresData_{container_id.replace('-', '_')} = {json.dumps(figures_json)};
             
-            // Get DOM elements
-            const selector = document.getElementById('{container_id}-selector');
-            const plotDiv = document.getElementById('{container_id}-plot');
+        // Get DOM elements
+        const selector = document.getElementById('{container_id}-selector');
+        const plotDiv = document.getElementById('{container_id}-plot');
             
-            // Function to display a plot
-            function displayPlot_{container_id.replace('-', '_')}(figureKey) {{
-                if (figuresData_{container_id.replace('-', '_')}[figureKey]) {{
-                    const figureData = JSON.parse(figuresData_{container_id.replace('-', '_')}[figureKey]);
+        // Function to display a plot
+        function displayPlot_{container_id.replace('-', '_')}(figureKey) {{
+            if (figuresData_{container_id.replace('-', '_')}[figureKey]) {{
+                const figureData = JSON.parse(figuresData_{container_id.replace('-', '_')}[figureKey]);
                     
-                    if (figureData.type === 'plotly') {{
-                        // Handle Plotly figures
-                        Plotly.newPlot(plotDiv, figureData.data, figureData.layout, {{responsive: true}});
-                    }} else if (figureData.type === 'image') {{
-                        // Handle matplotlib/image figures
-                        plotDiv.innerHTML = `<img src="data:image/png;base64,${{figureData.data}}" style="max-width: 100%; height: auto;" alt="Plot">`;
-                    }} else if (figureData.type === 'error') {{
-                        // Handle errors
-                        plotDiv.innerHTML = `<div class="error-message">Error loading figure: ${{figureData.error}}</div>`;
-                    }}
+                if (figureData.type === 'plotly') {{
+                    // Handle Plotly figures
+                    Plotly.newPlot(plotDiv, figureData.data, figureData.layout, {{responsive: true}});
+                }} else if (figureData.type === 'image') {{
+                    // Handle matplotlib/image figures
+                    plotDiv.innerHTML = `<img src="data:image/png;base64,${{figureData.data}}" style="max-width: 100%; height: auto;" alt="Plot">`;
+                }} else if (figureData.type === 'error') {{
+                    // Handle errors
+                    plotDiv.innerHTML = `<div class="error-message">Error loading figure: ${{figureData.error}}</div>`;
                 }}
             }}
+        }}
             
-            // Event listener for selector change
-            selector.addEventListener('change', function() {{
-                displayPlot_{container_id.replace('-', '_')}(this.value);
-            }});
+        // Event listener for selector change
+        selector.addEventListener('change', function() {{
+            displayPlot_{container_id.replace('-', '_')}(this.value);
+        }});
             
-            // Display initial plot
-            if (selector.value) {{
-                displayPlot_{container_id.replace('-', '_')}(selector.value);
-            }}
-        }})();
-        </script>
-        """
-    )
+        // Display initial plot
+        if (selector.value) {{
+            displayPlot_{container_id.replace('-', '_')}(selector.value);
+        }}
+    }})();
+    </script>
+    """
     return html_template
 
 # ================================== CORE HELPERS =================================== #
@@ -199,12 +195,10 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     # SHAP figures
     shap_figures = {}
     for table_type, levels in amplicon_data.models.items():
-        # Ensure levels is a dictionary
-        if not isinstance(levels, dict):
+        if not isinstance(levels, dict): # Ensure levels is a dictionary
             continue
         for level, methods in levels.items():
-            # Ensure methods is a dictionary
-            if not isinstance(methods, dict):
+            if not isinstance(methods, dict): # Ensure methods is a dictionary
                 continue
             for method, result in methods.items():
                 if result and 'figures' in result:
@@ -239,7 +233,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
 
 def _convert_figure_to_serializable(fig):
-    """Convert figure object to serializable dict"""
+    """Convert figure object to serializable dict."""
     try:
         if fig is None:
             return {"type": "error", "error": "Figure object is None"}
@@ -271,8 +265,12 @@ def _convert_figure_to_serializable(fig):
         return {"type": "error", "error": str(exc)}
 
 
-def _flatten_figures_tree(tree, prefix: str = "", delimiter: str = " - "):
-    """Flatten a nested figures tree into a list of (path, figure) tuples"""
+def _flatten_figures_tree(
+    tree: Dict, 
+    prefix: str = "", 
+    delimiter: str = " - "
+) -> List:
+    """Flatten a nested figures tree into a list of (path, figure) tuples."""
     flat = []
     if not isinstance(tree, dict):
         return [("", tree)]
@@ -292,46 +290,42 @@ def _prepare_sections(
 ) -> List[Dict]:
     sections = []
 
-    for sec in include_sections:
-        if sec not in figures or not figures[sec]:
+    for section in include_sections:
+        if section not in figures or not figures[sec]:
             continue
 
         # Use the new Plotly selector for this section
-        container_id = f"plotly-selector-{sec}"
+        container_id = f"plotly-selector-{section}"
         section_html = _generate_plotly_selector_html(
-            figures[sec], 
+            figures[section], 
             container_id, 
-            sec.title()
+            section.title()
         )
 
-        sec_data = {
+        section_data = {
             "id": f"sec-{uuid.uuid4().hex}", 
-            "title": sec.title(), 
+            "title": section.title(), 
             "html_content": section_html  # Store the complete HTML
         }
 
-        sections.append(sec_data)
+        sections.append(section_data)
 
     return sections
 
 
 def _section_html(section: Dict) -> str:
     """Generate section HTML using the integrated Plotly selector"""
-    html = (
-        f'''
-        <div class="section" id="{section["id"]}">
-            <div class="section-header" onclick="toggleSection(event)">
-                <h2>{section["title"]}</h2>
-                <span class="toggle-icon">▼</span>
-            </div>
-            <div class="section-content" id="{section["id"]}-content">
-                <div class="subsection">
-                    {section["html_content"]}
-                </div>
-            </div>
+    id = section["id"]
+    title = section["title"]
+    content = section["html_content"]
+    html = f'''
+    <div class="section" id="{id}">
+        <div class="section-header" onclick="toggleSection(event)"><h2>{title}</h2><span class="toggle-icon">▼</span></div>
+        <div class="section-content" id="{id}-content">
+            <div class="subsection">{content}</div>
         </div>
-        '''
-    )
+    </div>
+    '''
     return html
     
 
@@ -340,17 +334,16 @@ def _prepare_features_table(
     max_features: int,
     category: str
 ) -> pd.DataFrame:
-    # Handle empty features first
-    if not features:
-        return pd.DataFrame({"Message": [f"No significant {category} features found"]})
+    if not features: # Handle empty features 
+        return pd.DataFrame({"Feature": [f"No significant {category} features found"]})
     
-    # Validate max_features type
-    if not isinstance(max_features, int):
+    if not isinstance(max_features, int): # Validate max_features type
         raise TypeError("max_features must be an integer")
-    
-    # Create DataFrame and handle column renaming
+
+    # Create DataFrame and limit to max_features
     df = pd.DataFrame(features[:max_features])
     
+    # Column renaming mapping
     rename_map = {
         "feature": "Feature",
         "level": "Taxonomic Level",
@@ -360,24 +353,29 @@ def _prepare_features_table(
         "effect_dir": "Direction"
     }
     
-    # Only rename existing columns
-    existing_columns = [col for col in rename_map.keys() if col in df.columns]
-    df = df.rename(columns={col: rename_map[col] for col in existing_columns})
+    # Rename existing columns only
+    existing_renames = {k: v for k, v in rename_map.items() if k in df.columns}
+    df = df.rename(columns=existing_renames)
     
-    # Handle faprotax_functions safely
+    # Process faprotax_functions if present
     if "faprotax_functions" in df.columns:
         df["Functions"] = df["faprotax_functions"].apply(
             lambda x: ", ".join(x) if isinstance(x, list) else x
         )
+        df = df.drop(columns=["faprotax_functions"])
     
-    # Format numeric columns safely using pd.to_numeric
-    if "Effect Size" in df.columns:
-        df["Effect Size"] = pd.to_numeric(df["Effect Size"], errors='coerce').fillna(0).apply(lambda x: f"{x:.4f}")
+    # Format numeric columns safely
+    numeric_columns = ["Effect Size", "P-value"]
+    for col in numeric_columns:
+        if col in df.columns:
+            # Convert to numeric, coercing errors to NaN
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            if col == "Effect Size":
+                df[col] = df[col].fillna(0).apply(lambda x: f"{x:.4f}")
+            elif col == "P-value":
+                df[col] = df[col].fillna(1).apply(lambda x: f"{x:.2e}")
     
-    if "P-value" in df.columns:
-        df["P-value"] = pd.to_numeric(df["P-value"], errors='coerce').fillna(1).apply(lambda x: f"{x:.2e}")
-    
-    # Select final output columns
+    # Define and select output columns
     output_columns = ["Feature", "Taxonomic Level", "Test", "Effect Size", 
                       "P-value", "Direction", "Functions"]
     available_columns = [col for col in output_columns if col in df.columns]
@@ -541,28 +539,26 @@ def _format_ml_section(
         }
         ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
         
-        enhanced_metrics = (
-            f"""
-            <div class="table-container" id="container-ml-metrics-table">
-                {ml_metrics_html}
-                <div class="table-controls">
-                    <div class="pagination-controls">
-                        <span>Rows per page:</span>
-                        <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
-                            <option value="5">5</option>
-                            <option value="10" selected>10</option>
-                            <option value="20">20</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                            <option value="-1">All</option>
-                        </select>
-                        <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
-                        <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
-                    </div>
+        enhanced_metrics = f"""
+        <div class="table-container" id="container-ml-metrics-table">
+            {ml_metrics_html}
+            <div class="table-controls">
+                <div class="pagination-controls">
+                    <span>Rows per page:</span>
+                    <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="-1">All</option>
+                    </select>
+                    <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
+                    <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
                 </div>
             </div>
-            """
-        )
+        </div>
+        """
         
         features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None and not ml_features.empty else "<p>No feature importance data available</p>"
         
@@ -576,20 +572,18 @@ def _format_ml_section(
                 <p>Comprehensive SHAP analysis for top features across all models:</p>
                 """ + _add_table_functionality(shap_df, 'shap-table')
 
-        ml_section_html = (
-            f"""
-            <div class="ml-section">
-                <h3>Model Performance</h3>
-                {enhanced_metrics}
+        ml_section_html = f"""
+        <div class="ml-section">
+            <h3>Model Performance</h3>
+            {enhanced_metrics}
                 
-                <h3>Top Features by Importance</h3>
-                {features_html}
+            <h3>Top Features by Importance</h3>
+            {features_html}
                 
-                {shap_html}
-            </div>
-            """
-        )
-        return 
+            {shap_html}
+        </div>
+        """
+        return ml_section_html
         
     except Exception as e:
         logger.exception("Error formatting ML section")
@@ -606,10 +600,7 @@ def _add_header_tooltips(
             f'<span class="tooltiptext">{tooltip_text}</span>'
             f'</span>'
         )
-        table_html = table_html.replace(
-            f'<th>{header}</th>', 
-            f'<th>{tooltip_html}</th>'
-        )
+        table_html = table_html.replace(f'<th>{header}</th>', f'<th>{tooltip_html}</th>')
     return table_html
 
 
@@ -650,7 +641,6 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
         </div>
     </div>
     """
-    
     return table
 
 
@@ -971,73 +961,73 @@ def create_standalone_plotly_selector(
         plotly_ver = "3.0.1"
     
     complete_html = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
-    <script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>
-    <style>
-        body {{
-            margin: 20px;
-            background-color: #ffffff;
-            font-family: Arial, sans-serif;
-        }}
-        
-        .plotly-selector-container {{
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }}
-        
-        .selector-controls {{
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        
-        .selector-label {{
-            font-weight: bold;
-            margin: 0;
-        }}
-        
-        .figure-dropdown {{
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background-color: white;
-            min-width: 250px;
-            font-size: 14px;
-        }}
-        
-        .plotly-selector-plot {{
-            width: 100%;
-            min-height: 600px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }}
-        
-        .error-message {{
-            padding: 20px;
-            color: #721c24;
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            border-radius: 4px;
-            margin: 10px 0;
-        }}
-    </style>
-</head>
-<body>
-    <h1 style="text-align: center; color: #333;">{title}</h1>
-    {selector_html}
-</body>
-</html>
-"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{title}</title>
+        <script src="https://cdn.plot.ly/plotly-{plotly_ver}.min.js"></script>
+        <style>
+            body {{
+                margin: 20px;
+                background-color: #ffffff;
+                font-family: Arial, sans-serif;
+            }}
+            
+            .plotly-selector-container {{
+                width: 100%;
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            
+            .selector-controls {{
+                margin-bottom: 15px;
+                padding: 10px;
+                background-color: #f8f9fa;
+                border-radius: 5px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }}
+            
+            .selector-label {{
+                font-weight: bold;
+                margin: 0;
+            }}
+            
+            .figure-dropdown {{
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+                min-width: 250px;
+                font-size: 14px;
+            }}
+            
+            .plotly-selector-plot {{
+                width: 100%;
+                min-height: 600px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }}
+            
+            .error-message {{
+                padding: 20px;
+                color: #721c24;
+                background-color: #f8d7da;
+                border: 1px solid #f5c6cb;
+                border-radius: 4px;
+                margin: 10px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1 style="text-align: center; color: #333;">{title}</h1>
+        {selector_html}
+    </body>
+    </html>
+    """
     
     if output_path:
         Path(output_path).write_text(complete_html, encoding="utf-8")
