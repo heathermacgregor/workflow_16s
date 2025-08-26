@@ -262,7 +262,7 @@ feature_maps:
   n: 30
   
 ml: # Machine learning
-  enabled: False
+  enabled: True
   load_existing: False
   n_threads: 32
   num_features: 500
