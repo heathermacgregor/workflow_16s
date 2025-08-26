@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
+from skbio.stats.ordination import OrdinationResults
 from statsmodels.stats.multitest import multipletests
 from biom.table import Table
 
@@ -902,7 +903,7 @@ class DownstreamResultsAnalyzer:
         
         if self.models:
             # Extract ML feature importance
-            ml_features = self._extract_ml_importance()
+            ml_features = self.()
             
             # Cross-validation performance
             cv_results = self._cross_validate_models()
@@ -1487,29 +1488,32 @@ class DownstreamResultsAnalyzer:
                         if isinstance(feature_info, dict) and 'feature' in feature_info:
                             feature = feature_info['feature']
                             # Use negative log p-value as importance score
-                            p_value = feature_info.get('p_value', 1.0)
+                            p_value = feature_info.get('p_value', 1.0) 
                             importance_dict[feature] = -np.log10(max(p_value, 1e-10))
         return importance_dict
     
     def _extract_ml_importance(self) -> Dict[str, float]:
         """Extract feature importance from ML models"""
         importance_dict = {}
-        for model_name, model_info in self.models.items():
-            for group_col_key, group_col_val in model_info.items():
-                for table_type_key, table_type_val in group_col_val.items():
-                    for level_key, level_val in table_type_val.items():
-                        for method_key, method_val in level_val.items():
-                            
-                            if isinstance(method_val, dict) and 'feature_importances' in method_val:
-                                for feature, importance in model_info['feature_importances'].items():
-                                    if feature not in importance_dict:
-                                        importance_dict[feature] = 0
-                                    importance_dict[feature] += importance
-        
+        if 'models' in self.top_features:
+            for group_col, df in self.top_features['models'].items():
+                if isinstance(df, pd.DataFrame):
+                    for row in df.itertuples(index=False):
+                        feature, importance = row.Feature, row.Importance
+                        if feature not in importance_dict:
+                            importance_dict[feature] = 0
+                        importance_dict[feature] += importance
+        # Get number of models
+        n = 0
+        for group_col, group_col_dict in self.models.items():
+            for table_type, table_type_dict in group_col_dict:
+                for level, level_dict in table_type_dict:
+                    for method, method_dict in level_dict:
+                        n += 1
         # Normalize by number of models
-        if len(self.models) > 0:
+        if n > 0:
             for feature in importance_dict:
-                importance_dict[feature] /= len(self.models)
+                importance_dict[feature] /= n
         
         return importance_dict
     
@@ -1532,14 +1536,26 @@ class DownstreamResultsAnalyzer:
         loadings = {}
         
         if self.ordination and isinstance(self.ordination, dict):
-            for method, results in self.ordination.items():
-                if isinstance(results, dict) and 'feature_loadings' in results:
+            for group_col, group_col_dict in self.ordination.items():
+                for level, level_dict in group_col_dict:
+                    for method, results in level_dict:
+                        if method in ['pca', 'umap', 'tsne']:
+                            if 'loadings' in results:
+                                loadings = results['loadings']
+                                logger.info(loadings)
+                        elif method in ['pcoa']:
+                            if isinstance(results, OrdinationResults):
+                                loadings = results.feature_loadings
+                                logger.info(loadings)
+                    """
                     for feature, loading_values in results['feature_loadings'].items():
                         if isinstance(loading_values, (list, np.ndarray)):
                             # Use L2 norm of loadings across axes
                             loadings[feature] = np.linalg.norm(loading_values)
                         elif isinstance(loading_values, (int, float)):
                             loadings[feature] = abs(loading_values)
+                    """
+
         
         return loadings
     
