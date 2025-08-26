@@ -845,6 +845,8 @@ def generate_html_report(
     
     # Loop through top_features for group-specific features
     for source, source_dict in amplicon_data.top_features.items():
+        logger.info(source)
+        logger.info(source_dict)
         for col, val_dict in source_dict:
             logger.info(col)
             logger.info(val_dict)
