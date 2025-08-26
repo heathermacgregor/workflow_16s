@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from pprint import pformat
 from plotly.offline import get_plotlyjs_version
 import plotly.io as pio
 
@@ -43,7 +44,7 @@ class NumpySafeJSONEncoder(json.JSONEncoder):
         if isinstance(obj, np.bool_):
             return bool(obj)
         return super().default(obj)
-
+        
 # ========================== PLOTLY SELECTOR INTEGRATION ========================== #
 
 def _generate_plotly_selector_html(
@@ -107,56 +108,58 @@ def _generate_plotly_selector_html(
     selector_options = create_selector_options(figures_dict)
     
     # Generate the HTML with integrated styling
-    html_template = f"""
-<div id='{container_id}' class='plotly-selector-container'>
-    <div class='selector-controls'>
-        <label for='{container_id}-selector' class='selector-label'>Select {section_title}:</label>
-        <select id='{container_id}-selector' class='figure-dropdown'>
-{selector_options}        </select>
-    </div>
-    <div id='{container_id}-plot' class="plotly-selector-plot"></div>
-</div>
-
-<script>
-(function() {{
-    // Store figures data for {container_id}
-    const figuresData_{container_id.replace('-', '_')} = {json.dumps(figures_json)};
-    
-    // Get DOM elements
-    const selector = document.getElementById('{container_id}-selector');
-    const plotDiv = document.getElementById('{container_id}-plot');
-    
-    // Function to display a plot
-    function displayPlot_{container_id.replace('-', '_')}(figureKey) {{
-        if (figuresData_{container_id.replace('-', '_')}[figureKey]) {{
-            const figureData = JSON.parse(figuresData_{container_id.replace('-', '_')}[figureKey]);
+    html_template = (
+        f"""
+        <div id='{container_id}' class='plotly-selector-container'>
+            <div class='selector-controls'>
+                <label for='{container_id}-selector' class='selector-label'>Select {section_title}:</label>
+                <select id='{container_id}-selector' class='figure-dropdown'> 
+                    {selector_options}
+                </select>
+            </div>
+            <div id='{container_id}-plot' class="plotly-selector-plot"></div>
+        </div>
+        
+        <script>
+        (function() {{
+            // Store figures data for {container_id}
+            const figuresData_{container_id.replace('-', '_')} = {json.dumps(figures_json)};
             
-            if (figureData.type === 'plotly') {{
-                // Handle Plotly figures
-                Plotly.newPlot(plotDiv, figureData.data, figureData.layout, {{responsive: true}});
-            }} else if (figureData.type === 'image') {{
-                // Handle matplotlib/image figures
-                plotDiv.innerHTML = `<img src="data:image/png;base64,${{figureData.data}}" style="max-width: 100%; height: auto;" alt="Plot">`;
-            }} else if (figureData.type === 'error') {{
-                // Handle errors
-                plotDiv.innerHTML = `<div class="error-message">Error loading figure: ${{figureData.error}}</div>`;
+            // Get DOM elements
+            const selector = document.getElementById('{container_id}-selector');
+            const plotDiv = document.getElementById('{container_id}-plot');
+            
+            // Function to display a plot
+            function displayPlot_{container_id.replace('-', '_')}(figureKey) {{
+                if (figuresData_{container_id.replace('-', '_')}[figureKey]) {{
+                    const figureData = JSON.parse(figuresData_{container_id.replace('-', '_')}[figureKey]);
+                    
+                    if (figureData.type === 'plotly') {{
+                        // Handle Plotly figures
+                        Plotly.newPlot(plotDiv, figureData.data, figureData.layout, {{responsive: true}});
+                    }} else if (figureData.type === 'image') {{
+                        // Handle matplotlib/image figures
+                        plotDiv.innerHTML = `<img src="data:image/png;base64,${{figureData.data}}" style="max-width: 100%; height: auto;" alt="Plot">`;
+                    }} else if (figureData.type === 'error') {{
+                        // Handle errors
+                        plotDiv.innerHTML = `<div class="error-message">Error loading figure: ${{figureData.error}}</div>`;
+                    }}
+                }}
             }}
-        }}
-    }}
-    
-    // Event listener for selector change
-    selector.addEventListener('change', function() {{
-        displayPlot_{container_id.replace('-', '_')}(this.value);
-    }});
-    
-    // Display initial plot
-    if (selector.value) {{
-        displayPlot_{container_id.replace('-', '_')}(selector.value);
-    }}
-}})();
-</script>
-"""
-    
+            
+            // Event listener for selector change
+            selector.addEventListener('change', function() {{
+                displayPlot_{container_id.replace('-', '_')}(this.value);
+            }});
+            
+            // Display initial plot
+            if (selector.value) {{
+                displayPlot_{container_id.replace('-', '_')}(selector.value);
+            }}
+        }})();
+        </script>
+        """
+    )
     return html_template
 
 # ================================== CORE HELPERS =================================== #
@@ -380,6 +383,7 @@ def _prepare_features_table(
     
     return df[available_columns]
 
+
 def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     summary = []
     for column, tables in stats.items():
@@ -401,28 +405,13 @@ def _prepare_stats_summary(stats: Dict) -> pd.DataFrame:
     
     return pd.DataFrame(summary)
 
+
 def _validate_models_structure(models: dict):
     """Log structure of models dictionary for debugging"""
-    from pprint import pformat
-    logger.debug("Models structure:\n" + pformat({
-        k1: {
-            k2: list(v2.keys()) 
-            for k2, v2 in v1.items()
-        } 
-        for k1, v1 in models.items()
-    }, depth=3))
+    logger.debug("Models structure:\n" + pformat(
+        {k1: {k2: list(v2.keys()) for k2, v2 in v1.items()} 
+         for k1, v1 in models.items()}, depth=3))
 
-class NumpySafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj) -> Any:  
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        return super().default(obj)
 
 def _prepare_ml_summary(
     models: Dict, 
@@ -432,20 +421,15 @@ def _prepare_ml_summary(
     if not models:
         return pd.DataFrame(), pd.DataFrame(), {}
 
-    metrics_summary = []
-    features_summary = []
-    shap_insights = {}
+    metrics_summary, features_summary, shap_summary = [], [], {}
     for group_column, table_types in models.items():
-        # Ensure table_types is a dictionary
-        if not isinstance(table_types, dict):
+        if not isinstance(table_types, dict): # Check that table_types is a dict
             continue
         for table_type, levels in table_types.items():
-            # Ensure levels is a dictionary
-            if not isinstance(levels, dict):
+            if not isinstance(levels, dict): # Check that levels is a dict
                 continue
             for level, methods in levels.items():
-                # Ensure methods is a dictionary
-                if not isinstance(methods, dict):
+                if not isinstance(methods, dict): # Check that methods is a dict
                     continue
                 for method, result in methods.items():
                     logger.info(f"Reading {group_column}/{table_type}/{level}/{method} results")
@@ -491,21 +475,21 @@ def _prepare_ml_summary(
                     
                     if "shap_report" in result:
                         key = (table_type, level, method)
-                        shap_insights[key] = result["shap_report"]
+                        shap_summary[key] = result["shap_report"]
     
     metrics_df = pd.DataFrame(metrics_summary) if metrics_summary else pd.DataFrame()
     features_df = pd.DataFrame(features_summary) if features_summary else pd.DataFrame()
-    return metrics_df, features_df, shap_insights
+    return metrics_df, features_df, shap_summary
 
 
-def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
-    """Prepare comprehensive SHAP data table for ML section using DataFrame"""
+def _prepare_shap_table(shap_summary: Dict) -> pd.DataFrame:
+    """Prepare comprehensive SHAP data table for ML section using DataFrame."""
     rows = []
-    for (table_type, level, method), df in shap_insights.items():
+    for (table_type, level, method), df in shap_summary.items():
         # Check if df is a DataFrame and has data
-        if isinstance(df, pd.DataFrame) and not df.empty:
-            # Add model identifier columns to the DataFrame
+        if isinstance(df, pd.DataFrame) and not df.empty: 
             df_copy = df.copy()
+            # Add model identifier columns
             df_copy["Table Type"] = table_type
             df_copy["Level"] = level
             df_copy["Method"] = method
@@ -534,19 +518,18 @@ def _prepare_shap_table(shap_insights: Dict) -> pd.DataFrame:
         "interaction_strength": "Interaction Strength",
         "relationship_type": "Relationship"
     }
-    
-    return combined_df.rename(columns=column_mapping)
+    combined_df = combined_df.rename(columns=column_mapping)
+    return combined_df
     
 
 def _format_ml_section(
     ml_metrics: pd.DataFrame, 
     ml_features: pd.DataFrame,
-    shap_insights: Dict  # Changed from shap_reports to shap_insights
+    shap_reports: Dict  
 ) -> str:
+    if ml_metrics is None or ml_metrics.empty:
+        return "<p>No ML results available</p>"
     try:
-        if ml_metrics is None or ml_metrics.empty:
-            return "<p>No ML results available</p>"
-        
         ml_metrics_html = ml_metrics.to_html(index=False, classes='dynamic-table', table_id='ml-metrics-table')
         
         tooltip_map = {
@@ -557,50 +540,56 @@ def _format_ml_section(
         }
         ml_metrics_html = _add_header_tooltips(ml_metrics_html, tooltip_map)
         
-        enhanced_metrics = f"""
-        <div class="table-container" id="container-ml-metrics-table">
-            {ml_metrics_html}
-            <div class="table-controls">
-                <div class="pagination-controls">
-                    <span>Rows per page:</span>
-                    <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
-                        <option value="5">5</option>
-                        <option value="10" selected>10</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="-1">All</option>
-                    </select>
-                    <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
-                    <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
+        enhanced_metrics = (
+            f"""
+            <div class="table-container" id="container-ml-metrics-table">
+                {ml_metrics_html}
+                <div class="table-controls">
+                    <div class="pagination-controls">
+                        <span>Rows per page:</span>
+                        <select class="rows-per-page" onchange="changePageSize('ml-metrics-table', this.value)">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="-1">All</option>
+                        </select>
+                        <div class="pagination-buttons" id="pagination-ml-metrics-table"></div>
+                        <span class="pagination-indicator" id="indicator-ml-metrics-table"></span>
+                    </div>
                 </div>
             </div>
-        </div>
-        """
+            """
+        )
         
         features_html = _add_table_functionality(ml_features, 'ml-features-table') if ml_features is not None and not ml_features.empty else "<p>No feature importance data available</p>"
         
         # SHAP Analysis table
         shap_html = ""
-        if shap_insights:
-            shap_df = _prepare_shap_table(shap_insights)
+        if shap_reports:
+            shap_df = _prepare_shap_table(shap_reports)
             if not shap_df.empty:
                 shap_html = """
                 <h3>SHAP Analysis</h3>
                 <p>Comprehensive SHAP analysis for top features across all models:</p>
                 """ + _add_table_functionality(shap_df, 'shap-table')
+
+        ml_section_html = (
+            f"""
+            <div class="ml-section">
+                <h3>Model Performance</h3>
+                {enhanced_metrics}
+                
+                <h3>Top Features by Importance</h3>
+                {features_html}
+                
+                {shap_html}
+            </div>
+            """
+        )
+        return 
         
-        return f"""
-        <div class="ml-section">
-            <h3>Model Performance</h3>
-            {enhanced_metrics}
-            
-            <h3>Top Features by Importance</h3>
-            {features_html}
-            
-            {shap_html}
-        </div>
-        """
     except Exception as e:
         logger.exception("Error formatting ML section")
         return f"<div class='error'>Error in ML section: {str(e)}</div>"
@@ -621,10 +610,12 @@ def _add_header_tooltips(
             f'<th>{tooltip_html}</th>'
         )
     return table_html
-    
+
+
 def _sanitize_table_id(table_id: str) -> str:
-    """Replace problematic characters in table IDs for CSS compatibility"""
+    """Replace problematic characters in table IDs for CSS compatibility."""
     return table_id.replace('=', '_eq_').replace(' ', '_')
+
 
 def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     if df is None or df.empty:
@@ -637,30 +628,34 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     indicator_id = f"indicator-{sanitized_id}"
     
     table_html = df.to_html(index=False, classes='dynamic-table', table_id=sanitized_id)
-    
-    return f"""
-    <div class='table-container' id='{container_id}'>
-        {table_html}
-        <div class='table-controls'>
-            <div class='pagination-controls'>
-                <span>Rows per page:</span>
-                <select class='rows-per-page' onchange="changePageSize('{sanitized_id}', this.value)">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="-1">All</option>
-                </select>
-                <div class='pagination-buttons' id='{pagination_id}'></div>
-                <span class='pagination-indicator' id='{indicator_id}'></span>
+
+    table = (
+        f"""
+        <div class='table-container' id='{container_id}'>
+            {table_html}
+            <div class='table-controls'>
+                <div class='pagination-controls'>
+                    <span>Rows per page:</span>
+                    <select class='rows-per-page' onchange="changePageSize('{sanitized_id}', this.value)">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="-1">All</option>
+                    </select>
+                    <div class='pagination-buttons' id='{pagination_id}'></div>
+                    <span class='pagination-indicator' id='{indicator_id}'></span>
+                </div>
             </div>
         </div>
-    </div>
-    """
+        """
+    )
+    return table
+
 
 def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
-    """Prepare HTML section for advanced statistical analysis results"""
+    """Prepare HTML section for advanced statistical analysis results."""
     if not advanced_results:
         return "<p>No advanced statistical analysis results available.</p>"
     
@@ -744,16 +739,17 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
     html_content += "</div>"
     return html_content
 
+
 def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
     include_sections: Optional[List[str]] = None,
     max_features: int = 20,
-    cfg: Optional[Dict] = None
+    config: Optional[Dict] = None
 ) -> None:
-    if cfg:
-        group_col = cfg.get("group_column", "nuclear_contamination_status")
-        group_col_values = cfg.get("group_column_values", [True, False])
+    if config:
+        group_col = config.get("group_column", "nuclear_contamination_status")
+        group_col_values = config.get("group_column_values", [True, False])
     else:
         group_col = "nuclear_contamination_status"
         group_col_values = [True, False]
@@ -776,7 +772,7 @@ def generate_html_report(
     # Add overall statistical summary section
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'summary' in amplicon_data.stats:
         summary = amplicon_data.stats['summary']
-        logger.info("Got stats summary")
+        
         # Create overall stats table
         overall_data = [
             {"Metric": "Total tests run", "Value": summary['total_tests_run']},
@@ -784,7 +780,7 @@ def generate_html_report(
         ]
         df_overall = pd.DataFrame(overall_data)
         overall_table1_html = _add_table_functionality(df_overall, 'overall-stats-table1')
-        logger.info("Got overall-stats-table1")
+        
         # Create test-specific stats table
         test_data = []
         for test, count in summary['significant_features_by_test'].items():
@@ -799,20 +795,17 @@ def generate_html_report(
             })
         df_by_test = pd.DataFrame(test_data)
         overall_table2_html = _add_table_functionality(df_by_test, 'overall-stats-table2')
-        logger.info("Got overall-stats-table2")
+        
         # Top features across tests
         if 'top_features' in amplicon_data.stats and not amplicon_data.stats['top_features'].empty:
             top_features_df = amplicon_data.stats['top_features']
-            logger.info("Got top_features_df")
             overall_top_features_html = _add_table_functionality(top_features_df, 'overall-top-features-table')
-            logger.info("Got overall-top-features-table")
         else:
             overall_top_features_html = "<p>No overall top features data</p>"
         
         # Recommendations
         if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
             recs = amplicon_data.stats['recommendations']
-            logger.info("Got recommendations")
             rec_html = "<ul>"
             for rec in recs:
                 rec_html += f"<li>{rec}</li>"
@@ -823,7 +816,6 @@ def generate_html_report(
         # Add advanced statistical analysis section if available
         if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
             advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['advanced'])
-            logger.info("Got advanced stats")
             tables_html += """
             <div class="subsection">
                 <h3>Advanced Statistical Analyses</h3>
@@ -973,13 +965,12 @@ def generate_html_report(
 
 # ========================== ADDITIONAL UTILITY FUNCTIONS ========================== #
 
-def create_standalone_plotly_selector(figures_dict: Dict[str, Any], 
-                                    title: str = "Interactive Plotly Dashboard",
-                                    output_path: Optional[Union[str, Path]] = None) -> str:
-    """
-    Create a standalone HTML page with just the Plotly selector.
-    Useful for testing or creating focused figure viewers.
-    """
+def create_standalone_plotly_selector(
+    figures_dict: Dict[str, Any], 
+    title: str = "Interactive Plotly Dashboard",
+    output_path: Optional[Union[str, Path]] = None
+) -> str:
+    """Create a standalone HTML page with just the Plotly selector."""
     
     selector_html = _generate_plotly_selector_html(figures_dict, "main-dashboard", title)
     
