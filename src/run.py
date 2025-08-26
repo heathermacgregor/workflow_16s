@@ -308,7 +308,6 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
         amplicon_data = Downstream(
             config=config,
             project_dir=project_dir,
-            mode=mode,
             existing_subsets=existing_subsets,
             verbose=verbose    
         )
