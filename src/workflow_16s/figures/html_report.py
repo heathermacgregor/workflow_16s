@@ -630,28 +630,27 @@ def _add_table_functionality(df: pd.DataFrame, table_id: str) -> str:
     
     table_html = df.to_html(index=False, classes='dynamic-table', table_id=sanitized_id)
 
-    table = (
-        f"""
-        <div class='table-container' id='{container_id}'>
-            {table_html}
-            <div class='table-controls'>
-                <div class='pagination-controls'>
-                    <span>Rows per page:</span>
-                    <select class='rows-per-page' onchange="changePageSize('{sanitized_id}', this.value)">
-                        <option value="5">5</option>
-                        <option value="10" selected>10</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="-1">All</option>
-                    </select>
-                    <div class='pagination-buttons' id='{pagination_id}'></div>
-                    <span class='pagination-indicator' id='{indicator_id}'></span>
-                </div>
+    table = f"""
+    <div class='table-container' id='{container_id}'>
+        {table_html}
+        <div class='table-controls'>
+            <div class='pagination-controls'>
+                <span>Rows per page:</span>
+                <select class='rows-per-page' onchange="changePageSize('{sanitized_id}', this.value)">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="-1">All</option>
+                </select>
+                <div class='pagination-buttons' id='{pagination_id}'></div>
+                <span class='pagination-indicator' id='{indicator_id}'></span>
             </div>
         </div>
-        """
-    )
+    </div>
+    """
+    
     return table
 
 
@@ -698,7 +697,7 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
                             "Variable": var,
                             "Table Type": table_type,
                             "Level": level,
-                            "Features Tested": len(df),
+                            " Tested": len(df),
                             "Significant (p<0.05)": num_sig
                         })
         if corr_data:
@@ -745,7 +744,7 @@ def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
     include_sections: Optional[List[str]] = None,
-    max_features: int = 20,
+    max_: int = 20,
     config: Optional[Dict] = None
 ) -> None:
     if config:
@@ -784,11 +783,11 @@ def generate_html_report(
         
         # Create test-specific stats table
         test_data = []
-        for test, count in summary['significant_features_by_test'].items():
+        for test, count in summary['significant__by_test'].items():
             effect_stats = summary['effect_sizes_summary'].get(test, {})
             test_data.append({
                 "Test": test,
-                "Significant Features": count,
+                "Significant ": count,
                 "Effect Size Mean": effect_stats.get('mean', 'N/A'),
                 "Effect Size Std": effect_stats.get('std', 'N/A'),
                 "Effect Size Min": effect_stats.get('min', 'N/A'),
@@ -851,6 +850,8 @@ def generate_html_report(
                 group_key = f"{col}={val}"
                 try:
                     df = _prepare_features_table(features, max_features, group_key)
+                    logger.info(type(df))
+                    logger.info(df)
                     tables_html += f"""
                     <h4>Features associated with {group_key}</h4>
                     {_add_table_functionality(df, f'{group_key}-table')}
