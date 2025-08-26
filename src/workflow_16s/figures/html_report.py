@@ -734,7 +734,7 @@ def generate_html_report(
     amplicon_data: "AmpliconData",
     output_path: Union[str, Path],
     include_sections: Optional[List[str]] = None,
-    max_: int = 20,
+    max_features: int = 20,
     config: Optional[Dict] = None
 ) -> None:
     if config:
