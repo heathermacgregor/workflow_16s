@@ -845,23 +845,11 @@ def generate_html_report(
     
     # Loop through top_features for group-specific features
     for source, source_dict in amplicon_data.top_features.items():
-        logger.info(source)
-        logger.info(source_dict)
         for col, val_dict in source_dict.items():
-            logger.info(col)
-            logger.info(val_dict)
             for val, features in val_dict.items():
                 group_key = f"{col}={val}"
-                logger.info(val)
-                logger.info(type(features))
-                logger.info(features)
-                logger.info(type(max_features))
-                logger.info(max_features)
-                logger.info(type(group_key))
-                logger.info(group_key)
                 try:
                     df = _prepare_features_table(features, max_features, group_key)
-                    logger.info("Got features table")
                     tables_html += f"""
                     <h4>Features associated with {group_key}</h4>
                     {_add_table_functionality(df, f'{group_key}-table')}
@@ -873,7 +861,6 @@ def generate_html_report(
     if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'test_results' in amplicon_data.stats:
         try:
             stats_df = _prepare_stats_summary(amplicon_data.stats['test_results'])
-            logger.info("Got stats summary")
         except Exception as e:
             logger.error(f"Failed to get stats summary: {e}")
     else:
