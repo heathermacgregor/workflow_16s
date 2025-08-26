@@ -847,7 +847,7 @@ def generate_html_report(
     for source, source_dict in amplicon_data.top_features.items():
         logger.info(source)
         logger.info(source_dict)
-        for col, val_dict in source_dict:
+        for col, val_dict in source_dict.items():
             logger.info(col)
             logger.info(val_dict)
             for val, features in val_dict.items():
