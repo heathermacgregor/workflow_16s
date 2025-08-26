@@ -491,7 +491,7 @@ class Ordination:
                 "proportion_explained": result.proportion_explained,
             })
         else:  # t-SNE/UMAP
-            base_params["df"] = result
+            base_params["df"] = result['components']
 
         # Generate figures for each valid color column
         for color_col in valid_color_cols:
