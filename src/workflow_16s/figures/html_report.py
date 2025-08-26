@@ -337,21 +337,20 @@ def _section_html(section: Dict) -> str:
 
 def _prepare_features_table(
     features: List[Dict], 
-    max_features: int,  # Ensure this is an integer
+    max_features: int,
     category: str
 ) -> pd.DataFrame:
+    # Handle empty features first
     if not features:
         return pd.DataFrame({"Message": [f"No significant {category} features found"]})
     
-    # Validate max_features is an integer
+    # Validate max_features type
     if not isinstance(max_features, int):
         raise TypeError("max_features must be an integer")
     
-    # Slice the list of features safely
+    # Create DataFrame and handle column renaming
     df = pd.DataFrame(features[:max_features])
-    logger.info(type(df))
-    logger.info(df)
-    # Rename columns if they exist
+    
     rename_map = {
         "feature": "Feature",
         "level": "Taxonomic Level",
@@ -360,23 +359,25 @@ def _prepare_features_table(
         "p_value": "P-value",
         "effect_dir": "Direction"
     }
-    # Only rename columns that actually exist in the DataFrame
+    
+    # Only rename existing columns
     existing_columns = [col for col in rename_map.keys() if col in df.columns]
     df = df.rename(columns={col: rename_map[col] for col in existing_columns})
     
-    # Handle faprotax_functions if present
+    # Handle faprotax_functions safely
     if "faprotax_functions" in df.columns:
         df["Functions"] = df["faprotax_functions"].apply(
-            lambda x: ", ".join(x) if isinstance(x, list) else ""
+            lambda x: ", ".join(x) if isinstance(x, list) else x
         )
     
-    # Format numeric columns if they exist
+    # Format numeric columns safely using pd.to_numeric
     if "Effect Size" in df.columns:
-        df["Effect Size"] = df["Effect Size"].apply(lambda x: f"{x:.4f}")
-    if "P-value" in df.columns:
-        df["P-value"] = df["P-value"].apply(lambda x: f"{x:.2e}")
+        df["Effect Size"] = pd.to_numeric(df["Effect Size"], errors='coerce').fillna(0).apply(lambda x: f"{x:.4f}")
     
-    # Select final columns, excluding any that might be missing
+    if "P-value" in df.columns:
+        df["P-value"] = pd.to_numeric(df["P-value"], errors='coerce').fillna(1).apply(lambda x: f"{x:.2e}")
+    
+    # Select final output columns
     output_columns = ["Feature", "Taxonomic Level", "Test", "Effect Size", 
                       "P-value", "Direction", "Functions"]
     available_columns = [col for col in output_columns if col in df.columns]
