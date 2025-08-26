@@ -705,8 +705,6 @@ class DownstreamResultsAnalyzer:
         
         # Extract statistical significance scores
         if self.top_features and 'stats' in self.top_features:
-            
-        if self.stats and 'top_features' in self.stats:
             stat_features = self._extract_statistical_importance()
             for feature, score in stat_features.items():
                 importance_scores.setdefault(feature, {})['statistical'] = score
