@@ -1489,19 +1489,22 @@ class DownstreamResultsAnalyzer:
                             # Use negative log p-value as importance score
                             p_value = feature_info.get('p_value', 1.0)
                             importance_dict[feature] = -np.log10(max(p_value, 1e-10))
-        logger.info(importance_dict)
         return importance_dict
     
     def _extract_ml_importance(self) -> Dict[str, float]:
         """Extract feature importance from ML models"""
         importance_dict = {}
-        
         for model_name, model_info in self.models.items():
-            if isinstance(model_info, dict) and 'feature_importance' in model_info:
-                for feature, importance in model_info['feature_importance'].items():
-                    if feature not in importance_dict:
-                        importance_dict[feature] = 0
-                    importance_dict[feature] += importance
+            for group_col_key, group_col_val in model_info.items():
+                for table_type_key, table_type_val in group_col_val.items():
+                    for level_key, level_val in table_type_val.items():
+                        for method_key, method_val in level_val.items():
+                            
+                            if isinstance(method_val, dict) and 'feature_importances' in method_val:
+                                for feature, importance in model_info['feature_importances'].items():
+                                    if feature not in importance_dict:
+                                        importance_dict[feature] = 0
+                                    importance_dict[feature] += importance
         
         # Normalize by number of models
         if len(self.models) > 0:
