@@ -802,12 +802,13 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
         return "<p>No advanced statistical analysis results available.</p>"
     
     html_content = "<div class='advanced-stats-section'>"
-    html_content += "<h3>Advanced Statistical Analyses</h3>"
+    #html_content += "<h3>Advanced Statistical Analyses</h3>"
     
     # Core Microbiome Results
     if 'core_microbiome' in advanced_results:
         html_content += "<h4>Core Microbiome Analysis</h4>"
         core_data = []
+        core_dfs = []
         for group_col, table_types in advanced_results['core_microbiome'].items():
             for table_type, levels in table_types.items():
                 for level, groups in levels.items():
@@ -820,9 +821,16 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
                                 "Group Value": group_value,
                                 "Core Features": len(df)
                             })
+                            df['group_column'] = group_col
+                            df['table_type'] = table_type
+                            df['level'] = level
+                            core_dfs.append(df)
         if core_data:
             core_df = pd.DataFrame(core_data)
             html_content += _add_table_functionality(core_df, 'core-microbiome-table')
+        if core_dfs:
+            core_df2 = pd.concat(core_dfs, axis=0)
+            html_content += _add_table_functionality(core_df2, 'core-microbiome2-table')
         else:
             html_content += "<p>No core microbiome results</p>"
     
@@ -830,21 +838,32 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
     if 'correlations' in advanced_results:
         html_content += "<h4>Correlation Analysis</h4>"
         corr_data = []
+        sig_data = []
         for var, table_types in advanced_results['correlations'].items():
             for table_type, levels in table_types.items():
                 for level, df in levels.items():
                     if isinstance(df, pd.DataFrame):
                         num_sig = (df['p_value'] < 0.05).sum() if 'p_value' in df.columns else 0
                         corr_data.append({
-                            "Variable": var,
+                            "Column": var,
                             "Table Type": table_type,
                             "Level": level,
-                            " Tested": len(df),
+                            "Tested": len(df),
                             "Significant (p<0.05)": num_sig
                         })
+                        sig_df = df[df['p_value'] < 0.05][['feature', 'rho', 'p_value', 'n_samples']]
+                        sig_df['group_column'] = var
+                        sig_df['table_type'] = table_type
+                        sig_df['level'] = level
+                        sig_data.append(sig_df)
         if corr_data:
             corr_df = pd.DataFrame(corr_data)
             html_content += _add_table_functionality(corr_df, 'correlation-table')
+        if sig_data:
+            sig_df_final = pd.concat(sig_data, axis=0)
+            # Manipulate the df so we are getting significant features across tests
+            sig_df_feature_counts = sig_df_final.value_counts("feature", ascending=False)
+            html_content += _add_table_functionality(sig_df_feature_counts.to_frame(), 'correlation-features-table')
         else:
             html_content += "<p>No correlation results</p>"
     
