@@ -1,4 +1,4 @@
-# ===================================== IMPORTS ====================================== #
+s# ===================================== IMPORTS ====================================== #
 
 import base64
 import itertools
@@ -165,18 +165,22 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     
     # Ordination figures
     ordination_figures = {}
-    logger.info('a')
-    for table_type, levels in amplicon_data.ordination.items():
-        logger.info('b')
-        for level, level_data in levels.items():
-            if 'figures' in level_data and level_data['figures']:
-                if table_type not in ordination_figures:
-                    ordination_figures[table_type] = {}
-                if level not in ordination_figures[table_type]:
-                    ordination_figures[table_type][level] = {}
-                
-                for method, method_figures in level_data['figures'].items():
-                    ordination_figures[table_type][level][method] = method_figures
+    for group_column, table_types in amplicon_data.ordination.items():
+        for table_type, levels in table_types.items():
+            for level, level_data in levels.items():
+                if 'figures' in level_data and level_data['figures']:                    
+                    for method, figures in level_data['figures'].items():
+                        for color_col, fig in figures:
+                            if group_column not in ordination_figures:
+                                ordination_figures.set_default(group_column, {})
+                            if table_type not in ordination_figures[group_column]:
+                                ordination_figures[group_column][table_type] = {}
+                            if level not in ordination_figures[group_column][table_type]:
+                                ordination_figures[group_column][table_type][level] = {}
+                            if method not in ordination_figures[group_column][table_type][level]:
+                                ordination_figures[group_column][table_type][level][method] = {}
+                            ordination_figures[group_column][table_type][level][method][color_col] = fig
+                            logger.info(f"Ordination figure for {group_column}/{table_type}/{level}/{method}/{color_col}")
     figures['ordination'] = ordination_figures
 
     # Alpha diversity figures
@@ -188,6 +192,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
             for level, data in levels.items():
                 if 'figures' in data and data['figures']:
                     alpha_figures[group_column][table_type][level] = data['figures']
+                    logger.info(f"Alpha diversity figure for {group_column}{table_type}/{level}")
     figures['alpha_diversity'] = alpha_figures
     
     # Sample maps
@@ -196,28 +201,32 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
 
     # SHAP figures
     shap_figures = {}
-    for table_type, levels in amplicon_data.models.items():
-        if not isinstance(levels, dict): # Ensure levels is a dictionary
-            continue
-        for level, methods in levels.items():
-            if not isinstance(methods, dict): # Ensure methods is a dictionary
+    for group_column, table_types in amplicon_data.models.items():
+        for table_type, levels in table_types.items():
+            if not isinstance(levels, dict): # Ensure levels is a dictionary
                 continue
-            for method, result in methods.items():
-                if result and 'figures' in result:
-                    if table_type not in shap_figures:
-                        shap_figures[table_type] = {}
-                    if level not in shap_figures[table_type]:
-                        shap_figures[table_type][level] = {}
-                    
-                    transformed_figures = {}
-                    for fig_key, fig_value in result['figures'].items():
-                        if fig_key == 'shap_dependency' and isinstance(fig_value, list):
-                            for i, dep_fig in enumerate(fig_value):
-                                transformed_figures[f'shap_dependency_{i}'] = dep_fig
-                        else:
-                            transformed_figures[fig_key] = fig_value
-                            
-                    shap_figures[table_type][level][method] = transformed_figures
+            for level, methods in levels.items():
+                if not isinstance(methods, dict): # Ensure methods is a dictionary
+                    continue
+                for method, result in methods.items():
+                    if result and 'figures' in result:
+                        if group_column not in shap_figures:
+                            shap_figures[group_column] = {}
+                        if table_type not in shap_figures[group_column]:
+                            shap_figures[group_column][table_type] = {}
+                        if level not in shap_figures[group_column][table_type]:
+                            shap_figures[group_column][table_type][level] = {}
+                        
+                        transformed_figures = {}
+                        for fig_key, fig_value in result['figures'].items():
+                            if fig_key == 'shap_dependency' and isinstance(fig_value, list):
+                                for i, dep_fig in enumerate(fig_value):
+                                    transformed_figures[f'shap_dependency_{i}'] = dep_fig
+                            else:
+                                transformed_figures[fig_key] = fig_value
+                                
+                        shap_figures[group_column][table_type][level][method] = transformed_figures
+                        logger.info(f"SHAP figures for {group_column}/{table_type}/{level}/{method}")
     figures['shap'] = shap_figures
 
     # Violin plots
