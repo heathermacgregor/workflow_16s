@@ -958,7 +958,7 @@ class StatisticalAnalysis:
             for table_type in self.tables:
                 for level in self.tables[table_type]:
                     _init_nested_dict(network_results, [table_type, level, method])
-                    if method == 'sparcc' and table_type == "clr_transformed_presence_absence":
+                    if table_type == "clr_transformed_presence_absence":
                         network_results[table_type][level][method] = {}
                         logger.debug(
                             f"Skipping network analysis for table type '{table_type}' with '{method}'. "
