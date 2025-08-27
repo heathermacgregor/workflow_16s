@@ -130,6 +130,14 @@ stats:
   enabled: True
   comprehensive_analysis:
     enabled: True
+    core_microbiome_analysis:
+      enabled: True
+      prevalence_threshold: 0.8
+      abundance_threshold: 0.01
+    batch_correlation:
+      enabled: True
+    network_analysis:
+      enabled: True
   tables:
     raw:
       enabled: True
