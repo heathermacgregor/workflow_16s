@@ -25,10 +25,9 @@ from matplotlib.colors import LogNorm
 from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import linkage, leaves_list
 
-# ================================== LOCAL IMPORTS =================================== #
-
+# Local Imports
 from workflow_16s.figures.figures import (
-    attach_legend_to_figure, largecolorset, plot_legend, plotly_show_and_save,
+    attach_legend_to_figure, largecolorset, plot_legend, plotly_show_and_save, save_plotly_html
 )
 from workflow_16s.figures.merged import _apply_common_layout
 
@@ -1259,7 +1258,7 @@ def plot_shap(
         ['png', 'html'], verbose
     )
     # Create dependency plots for top features
-    dependency_figs = []
+    dependency_figs = {}
     if n_features > 0:
         for feature in top_full_features[:n_features]:
             try:
@@ -1271,11 +1270,13 @@ def plot_shap(
                     10000, 
                     interaction_feature='auto'
                 )
-                plotly_show_and_save(
-                    dep_fig, show, output_dir / f"shap.dependency.{feature}", 
-                    ['png', 'html'], verbose
+                #plotly_show_and_save(dep_fig, show, output_dir / f"shap.dependency.{feature}", ['png', 'html'], verbose)
+                save_plotly_html(
+                    fig=dep_fig, 
+                    filepath=output_dir / f"shap.dependency.{feature}",
+                    verbose=verbose
                 )
-                dependency_figs.append(dep_fig)
+                dependency_figs[feature] = dep_fig
             except Exception as e:
                 logger.error(f"Error creating dependency plot for {feature}: {str(e)}")
     return {
