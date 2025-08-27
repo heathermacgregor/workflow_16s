@@ -226,7 +226,7 @@ def _extract_ordination_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]
                     continue
                 for method, method_figures in figures.items():
                     if isinstance(method_figures, dict):
-                        ordination_figures[group_column][table_type][level][method].update(method_figures)
+                        ordination_figures[table_type][level][method].update(method_figures)
                         color_cols = list(method_figures.keys())
                         logger.info(f"Ordination figures extracted: {group_column}/{table_type}/{level}/{method} "
                                   f"({len(color_cols)} color columns)")
