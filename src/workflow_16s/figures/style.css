@@ -534,6 +534,7 @@ th {
 
 .plotly-selector-plot {
     width: 100%;
+    min-height: 1000px;
     background: white;
     position: relative;
     padding: 20px;
