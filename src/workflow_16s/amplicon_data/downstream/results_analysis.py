@@ -152,17 +152,14 @@ class DownstreamResultsAnalyzer:
         if not self.top_features or 'stats' not in self.top_features:
             return importance_dict
             
-        for group_col, group_data in self.top_features['stats'].items():
+        for group_col, df in self.top_features['stats'].items():
             if not isinstance(group_data, dict):
                 continue
-                
-            for condition, features in group_data.items():
-                for feature_info in features:
-                    if isinstance(feature_info, dict) and 'feature' in feature_info:
-                        feature = feature_info['feature']
-                        p_value = feature_info.get('p_value', 1.0)
+            for condition, df in group_data.items():
+                if isinstance(df, pd.DataFrame) and 'Feature' in df.columns and 'P-value' in df.columns:
+                    for _, row in df.iterrows():
                         # Use negative log p-value as importance score
-                        importance_dict[feature] = -np.log10(max(p_value, 1e-10))
+                        importance_dict[row['Feature']] = -np.log10(max(row['P-value'], 1e-10)))
         
         return importance_dict
     
@@ -176,16 +173,14 @@ class DownstreamResultsAnalyzer:
         for group_col, df in self.top_features['models'].items():
             if isinstance(df, pd.DataFrame) and 'Feature' in df.columns and 'Importance' in df.columns:
                 for _, row in df.iterrows():
-                    feature = row['Feature']
                     importance_str = row['Importance']
-                    
-                    # Convert importance to float
                     try:
+                        # Convert importance to float
                         importance = float(importance_str) if importance_str != "N/A" else 0
-                        if feature in importance_dict:
-                            importance_dict[feature] += importance
+                        if row['Feature'] in importance_dict:
+                            importance_dict[row['Feature']] += importance
                         else:
-                            importance_dict[feature] = importance
+                            importance_dict[row['Feature']] = importance
                     except (ValueError, TypeError):
                         continue
         
