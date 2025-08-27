@@ -293,7 +293,7 @@ def _prepare_sections(
     sections = []
 
     for section in include_sections:
-        if section not in figures or not figures[sec]:
+        if section not in figures or not figures[section]:
             continue
 
         # Use the new Plotly selector for this section
