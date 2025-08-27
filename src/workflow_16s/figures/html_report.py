@@ -938,8 +938,8 @@ def generate_html_report(
         
         # Recommendations
         #if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
-        if amplicon_data.stats_recommendations:
-            recs = amplicon_data.stats_recommendations
+        if amplicon_data.stats['recommendations']:
+            recs = amplicon_data.stats['recommendations']
             rec_html = "<ul>"
             for rec in recs:
                 rec_html += f"<li>{rec}</li>"
@@ -949,8 +949,8 @@ def generate_html_report(
 
         # Add advanced statistical analysis section if available
         #if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
-        if amplicon_data.stats and amplicon_data.stats_comprehensive_analysis:
-            advanced_html = _prepare_advanced_stats_section(amplicon_data.stats_comprehensive_analysis)
+        if amplicon_data.stats and amplicon_data.stats['comprehensive_analysis']:
+            advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['comprehensive_analysis'])
             tables_html += """
             <div class="subsection">
                 <h3>Advanced Statistical Analyses</h3>
