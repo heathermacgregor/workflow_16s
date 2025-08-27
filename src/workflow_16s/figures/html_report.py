@@ -160,93 +160,217 @@ def _generate_plotly_selector_html(
 
 # ================================== CORE HELPERS =================================== #
 
-def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
-    figures = {}
-    
-    # Ordination figures
-    ordination_figures = {}
-    for group_column, table_types in amplicon_data.ordination.items():
-        logger.info(group_column)
-        for table_type, levels in table_types.items():
-            logger.info(table_type)
-            for level, level_data in levels.items():
-                logger.info(level)
-                if 'figures' in level_data and level_data['figures']:                    
-                    for method, figures in level_data['figures'].items():
-                        logger.info(method)
-                        logger.info(type(figures))
-                        for color_col, fig in figures.items():
-                            logger.info(color_col)
-                            if group_column not in ordination_figures:
-                                ordination_figures.set_default(group_column, {})
-                            if table_type not in ordination_figures[group_column]:
-                                ordination_figures[group_column][table_type] = {}
-                            if level not in ordination_figures[group_column][table_type]:
-                                ordination_figures[group_column][table_type][level] = {}
-                            if method not in ordination_figures[group_column][table_type][level]:
-                                ordination_figures[group_column][table_type][level][method] = {}
-                            ordination_figures[group_column][table_type][level][method][color_col] = fig
-                            logger.info(f"Ordination figure for {group_column}/{table_type}/{level}/{method}/{color_col}")
-    figures['ordination'] = ordination_figures
+shap_fig_titles = {
+        "roc": "ROC",
+        "prc": "PRC",
+        "confusion_matrix": "Confusion Matrix",
+        "shap_summary_bar": "SHAP Summary (Bar)",
+        "shap_summary_beeswarm": "SHAP Summary (Beeswarm)",
+        "shap_summary_heatmap": "SHAP Summary (Heatmap)",
+        "shap_summary_force": "SHAP Summary (Force)"
+    }
 
-    # Alpha diversity figures
-    alpha_figures = {}
-    for group_column, table_types in amplicon_data.alpha_diversity.items():
-        alpha_figures.setdefault(group_column, {})
-        for table_type, levels in table_types.items():
-            alpha_figures[group_column].setdefault(table_type, {})
-            for level, data in levels.items():
-                if 'figures' in data and data['figures']:
-                    alpha_figures[group_column][table_type][level] = data['figures']
-                    logger.info(f"Alpha diversity figure for {group_column}{table_type}/{level}")
-    figures['alpha_diversity'] = alpha_figures
+from collections import defaultdict
+from typing import Dict, Any, List, Union
+
+
+def _extract_figures(amplicon_data: Any) -> Dict[str, Any]:
+    """Extract figures from amplicon data across different analysis types.
     
-    # Sample maps
-    if amplicon_data.maps:
+    Args:
+        amplicon_data: AmpliconData object containing analysis results
+        
+    Returns:
+        Dictionary containing organized figures by analysis type
+    """
+    figures = {
+        'ordination': _extract_ordination_figures(amplicon_data),
+        'alpha_diversity': _extract_alpha_diversity_figures(amplicon_data),
+        'shap': _extract_shap_figures(amplicon_data),
+        'violin': _extract_violin_figures(amplicon_data)
+    }
+    
+    # Extract sample maps (simple case)
+    if getattr(amplicon_data, 'maps', None):
         figures['map'] = amplicon_data.maps
+        logger.info(f"Sample maps extracted: {len(amplicon_data.maps)} maps")
+    
+    return figures
 
-    # SHAP figures
-    shap_figures = {}
-    for group_column, table_types in amplicon_data.models.items():
+
+def _create_nested_defaultdict(depth: int):
+    """Create nested defaultdict of specified depth."""
+    if depth == 1:
+        return defaultdict(dict)
+    return defaultdict(lambda: _create_nested_defaultdict(depth - 1))
+
+
+def _extract_ordination_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
+    """Extract ordination figures from amplicon data using defaultdict for efficiency."""
+    ordination_data = getattr(amplicon_data, 'ordination', None)
+    if not ordination_data:
+        return {}
+    
+    # 5-level nested structure: group_column -> table_type -> level -> method -> color_col
+    ordination_figures = _create_nested_defaultdict(4)
+    
+    for group_column, table_types in ordination_data.items():
+        if not isinstance(table_types, dict):
+            continue
         for table_type, levels in table_types.items():
-            if not isinstance(levels, dict): # Ensure levels is a dictionary
+            if not isinstance(levels, dict):
+                continue
+            for level, level_data in levels.items():
+                figures = _get_nested_value(level_data, ['figures'])
+                if not figures:
+                    continue
+                for method, method_figures in figures.items():
+                    if isinstance(method_figures, dict):
+                        ordination_figures[group_column][table_type][level][method].update(method_figures)
+                        color_cols = list(method_figures.keys())
+                        logger.info(f"Ordination figures extracted: {group_column}/{table_type}/{level}/{method} "
+                                  f"({len(color_cols)} color columns)")
+    
+    return _defaultdict_to_dict(ordination_figures)
+
+
+def _extract_alpha_diversity_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
+    """Extract alpha diversity figures using defaultdict for efficiency."""
+    alpha_data = getattr(amplicon_data, 'alpha_diversity', None)
+    if not alpha_data:
+        return {}
+    
+    # group_column -> table_type -> level
+    alpha_figures = _create_nested_defaultdict(2)
+    
+    for group_column, table_types in alpha_data.items():
+        if not isinstance(table_types, dict):
+            continue
+        for table_type, levels in table_types.items():
+            if not isinstance(levels, dict):
+                continue
+            for level, data in levels.items():
+                figures = _get_nested_value(data, ['figures'])
+                if figures:
+                    alpha_figures[group_column][table_type][level] = figures
+                    logger.info(f"Alpha diversity figures extracted: {group_column}/{table_type}/{level}")
+    
+    return _defaultdict_to_dict(alpha_figures)
+
+
+def _extract_shap_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
+    """Extract SHAP figures using defaultdict for efficiency."""
+    models_data = getattr(amplicon_data, 'models', None)
+    if not models_data:
+        return {}
+    
+    # group_column -> table_type -> level -> method
+    shap_figures = _create_nested_defaultdict(3)
+    
+    for group_column, table_types in models_data.items():
+        if not isinstance(table_types, dict):
+            continue
+        for table_type, levels in table_types.items():
+            if not isinstance(levels, dict):
                 continue
             for level, methods in levels.items():
-                if not isinstance(methods, dict): # Ensure methods is a dictionary
+                if not isinstance(methods, dict):
                     continue
                 for method, result in methods.items():
-                    if result and 'figures' in result:
-                        if group_column not in shap_figures:
-                            shap_figures[group_column] = {}
-                        if table_type not in shap_figures[group_column]:
-                            shap_figures[group_column][table_type] = {}
-                        if level not in shap_figures[group_column][table_type]:
-                            shap_figures[group_column][table_type][level] = {}
-                        
-                        transformed_figures = {}
-                        for fig_key, fig_value in result['figures'].items():
-                            if fig_key == 'shap_dependency' and isinstance(fig_value, list):
-                                for i, dep_fig in enumerate(fig_value):
-                                    transformed_figures[f'shap_dependency_{i}'] = dep_fig
-                            else:
-                                transformed_figures[fig_key] = fig_value
-                                
+                    figures = _get_nested_value(result, ['figures'])
+                    if figures:
+                        transformed_figures = _transform_shap_figures_efficient(figures)
                         shap_figures[group_column][table_type][level][method] = transformed_figures
-                        logger.info(f"SHAP figures for {group_column}/{table_type}/{level}/{method}")
-    figures['shap'] = shap_figures
+                        logger.info(f"SHAP figures extracted: {group_column}/{table_type}/{level}/{method}")
+    
+    return _defaultdict_to_dict(shap_figures)
 
-    # Violin plots
-    violin_figures = {}
-    for col, vals in amplicon_data.top_features.items():
+
+def _transform_shap_figures_efficient(figures: Dict[str, Any]) -> Dict[str, Any]:
+    """Efficiently transform SHAP figures using dictionary comprehensions."""
+    transformed = {}
+    for key, val in figures.items():
+        if key == 'shap_dependency':
+            if isinstance(val, list):
+                transformed.update({f'shap_dependency_{i}': fig for i, fig in enumerate(val)})
+            elif isinstance(val, dict):
+                transformed.update({f'shap_dependency_{feature}': fig for feature, fig in val.items()})
+            else:
+                transformed[key] = val
+        else:
+            transformed[key] = val
+    return transformed
+
+
+def _extract_violin_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
+    """Extract violin figures using defaultdict for efficiency."""
+    top_features = getattr(amplicon_data, 'top_features', None)
+    if not top_features:
+        return {}
+    violin_figures = defaultdict(dict)
+    for col, vals in top_features.items():
+        if not isinstance(vals, dict):
+            continue
+        feature_count = 0
         for val, features in vals.items():
-            group_key = f"{col}={val}"
-            violin_figures.setdefault(col, {})
+            if not isinstance(features, (list, tuple)):
+                continue
             for feature in features:
-                if isinstance(feature, dict) and feature.get('violin_figure'):
+                if (isinstance(feature, dict) and 
+                    'violin_figure' in feature and 
+                    'feature' in feature):
+                    
                     violin_figures[col][feature['feature']] = feature['violin_figure']
-    figures['violin'] = violin_figures
+                    feature_count += 1
+        
+        if feature_count > 0:
+            logger.info(f"Violin figures extracted: {col} ({feature_count} features)")
+    
+    return dict(violin_figures)
 
-    return figures
+
+def _get_nested_value(data: Any, keys: List[str], default=None) -> Any:
+    """Efficiently get nested value from dictionary-like object.
+    
+    Args:
+        data: Dictionary or object to search
+        keys: List of keys to traverse
+        default: Default value if not found
+        
+    Returns:
+        Nested value or default
+    """
+    if not isinstance(data, dict):
+        return default
+    
+    current = data
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    
+    return current if current else default
+
+
+def _defaultdict_to_dict(dd: Union[defaultdict, dict]) -> dict:
+    """Recursively convert defaultdict to regular dict for JSON serialization.
+    
+    Args:
+        dd: defaultdict or dict to convert
+        
+    Returns:
+        Regular dictionary
+    """
+    if isinstance(dd, defaultdict):
+        dd = dict(dd)
+    
+    for key, value in dd.items():
+        if isinstance(value, defaultdict):
+            dd[key] = _defaultdict_to_dict(value)
+        elif isinstance(value, dict):
+            dd[key] = _defaultdict_to_dict(value)
+    
+    return dd
 
 
 def _convert_figure_to_serializable(fig):
