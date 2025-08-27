@@ -174,6 +174,7 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
                 if 'figures' in level_data and level_data['figures']:                    
                     for method, figures in level_data['figures'].items():
                         logger.info(method)
+                        logger.info(figures)
                         for color_col, fig in figures:
                             logger.info(color_col)
                             if group_column not in ordination_figures:
