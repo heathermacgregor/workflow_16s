@@ -422,6 +422,16 @@ class Downstream:
             for group_column in self.group_columns:
                 self._process_ml_top_features(group_column)
 
+        self.results.top_features = top_features_plots(
+            output_dir=self.output_dir,
+            config=self.config,
+            top_features=self.results.top_features,
+            tables=self.results.tables,
+            meta=self.results.metadata,
+            nfc_facilities=self.results.nfc_facilities,
+            verbose=self.verbose
+        )
+
     def _process_statistical_top_features(self, group_column: Dict) -> None:
         """Process top features from statistical analysis."""
         n_features = self.config.get_parameter('top_features', 'n', DEFAULT_TOP_N_FEATURES)
