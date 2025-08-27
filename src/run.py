@@ -326,11 +326,12 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
         logger.error(f"Failed processing amplicon data: {str(e)}")
     finally:
         print_data_dicts(amplicon_data)
+        print_data_dicts(amplicon_data.results)
         
     output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
     try:
         generate_html_report(
-            amplicon_data=amplicon_data,
+            amplicon_data=amplicon_data.results,
             output_path=output_path,
             max_features=20,
             config=config
