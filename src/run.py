@@ -36,7 +36,9 @@ from workflow_16s import ena
 from workflow_16s.config import get_config
 from workflow_16s.logger import setup_logging 
 
-from workflow_16s.amplicon_data.analysis import AmpliconData
+#from workflow_16s.amplicon_data.analysis import AmpliconData
+from workflow_16s.amplicon_data.downstream.downstream import Downstream
+from workflow_16s.amplicon_data.downstream.results_analysis import DownstreamResultsAnalyzer
 from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.metadata.per_dataset import SubsetDataset
 from workflow_16s.qiime.workflows.execute_workflow import (
@@ -50,7 +52,7 @@ from workflow_16s.utils.io import (
     dataset_first_match, import_metadata_tsv, import_table_biom, load_datasets_info, 
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
-from workflow_16s.amplicon_data.downstream.downstream import Downstream, DownstreamResultsAnalyzer
+
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
 import workflow_16s.custom_tmp_config
@@ -68,18 +70,24 @@ def get_existing_subsets(config, logger) -> Dict[str, Dict[str, Path]]:
     required QIIME outputs.
     
     Args:
-        config: Configuration dictionary.
-        logger: Logger instance.
+        config : 
+            Configuration dictionary.
+        logger : 
+            Logger instance.
         
     Returns:
         Dictionary mapping subset IDs to dictionaries of file paths.
     """
+    # Get project directory structure
     project_dir = SubDirs(config["project_dir"])
-    classifier = config["qiime2"]["per_dataset"]["taxonomy"].get(
-        "classifier", constants.DEFAULT_CLASSIFIER
-    )
+    # Get taxonomy classifier
+    taxonomy_config = config["qiime2"]["per_dataset"]["taxonomy"]
+    classifier = taxonomy_config.get("classifier", constants.DEFAULT_CLASSIFIER)
+    # Get datasets
     datasets = load_datasets_list(config["dataset_list"])
     datasets_info = load_datasets_info(config["dataset_info"])
+    
+    # Initialize storage for existing subsets
     existing_subsets = {}
 
     # Define required files and their keys
@@ -136,7 +144,7 @@ def get_existing_subsets(config, logger) -> Dict[str, Dict[str, Path]]:
                     logger.debug(f"Found existing outputs for subset: {subset_id}")
         
         except Exception as e:
-            logger.error(f"❌ Error processing dataset {dataset} for existing subsets: {str(e)}")
+            logger.error(f"Error processing dataset {dataset} for existing subsets: {str(e)}")
     
     logger.info(f"Found {len(existing_subsets)} completed subsets")
     return existing_subsets
@@ -146,8 +154,10 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
     """Run the "upstream" part of the workflow (raw data to feature tables).
     
     Args:
-        config: Configuration dictionary.
-        logger: Logger instance.
+        config : 
+            Configuration dictionary.
+        logger : 
+            Logger instance.
     """
     qiime_config = config.get("qiime2", {})
     qiime_per_dataset_config = qiime_config.get("per_dataset", {})
@@ -174,8 +184,8 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
                     try:
                         sanitize = lambda s: re.sub(r"[^a-zA-Z0-9-]", "_", s)
                         
-                        # Subset identifier: dataset, instrument_platform, library_layout,
-                        # target_subfragment, FWD_SEQ_REV_SEQ
+                        # Subset identifier: 
+                        # dataset -> instrument_platform -> library_layout -> target_subfragment -> FWD_SEQ_REV_SEQ
                         subset_id = (
                             subset["dataset"] + '.' 
                             + subset["instrument_platform"].lower() + '.' 
@@ -248,21 +258,21 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
                             )
 
                     except Exception as subset_error:
-                        logger.error(f"❌ Failed processing subset {subset['dataset']}: {str(subset_error)}")
+                        logger.error(f"Failed processing subset {subset['dataset']}: {str(subset_error)}")
                         fail_subsets.append((subset["dataset"], str(subset_error)))
 
             except Exception as dataset_error:
-                logger.error(f"❌ Failed processing dataset {dataset}: {str(dataset_error)}")
+                logger.error(f"Failed processing dataset {dataset}: {str(dataset_error)}")
                 fail_subsets.append((dataset, str(dataset_error)))
 
         n_success_subsets = len(success_subsets)
         n_total_subsets = len(success_subsets) + len(fail_subsets)
         logger.info(
-            f"📢 Processing complete! Succeeded for {n_success_subsets} of {n_total_subsets} subsets"
+            f"Processing complete! Succeeded for {n_success_subsets} of {n_total_subsets} subsets"
         )
         if fail_subsets:
             fail_subsets_report = '\n'.join(
-                ["ℹ️ Failure details:"] + [f"    • {dataset}: {error}" for dataset, error in fail_subsets]
+                ["Failure details:"] + [f"    • {dataset}: {error}" for dataset, error in fail_subsets]
             )
             logger.info(fail_subsets_report)
 
@@ -281,20 +291,21 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
         return success_subsets
         
     except Exception as global_error:
-        logger.critical(
-            f"❌ Fatal pipeline error: {str(global_error)}", 
-            exc_info=True
-        )
+        logger.critical(f"Fatal pipeline error: {str(global_error)}", exc_info=True)
         raise
+
 
 def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     """Run the "downstream" part of the workflow (feature table analysis).
 
     Args:
-        config:           Configuration dictionary.
-        logger:           Logger instance.
-        existing_subsets: Successful subsets from "upstream" processing,
-        if it was performed, otherwise None.
+        config :           
+            Configuration dictionary.
+        logger :           
+            Logger instance.
+        existing_subsets : 
+            Successful subsets from "upstream" processing, if it was performed, 
+            otherwise None.
     """
     # Get existing subsets
     if existing_subsets == None:
@@ -302,32 +313,30 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
             existing_subsets = get_existing_subsets(config, logger)
             logger.info(f"Found {len(existing_subsets)} completed subsets")
             
-    mode = 'genus' if config["target_subfragment_mode"] == 'any' else 'asv'    
-    verbose = False
+    # Run downstream analysis    
     try:
         amplicon_data = Downstream(
             config=config,
             project_dir=project_dir,
             existing_subsets=existing_subsets,
-            verbose=verbose    
+            verbose=False    
         )
-        """
-        amplicon_data = AmpliconData(
-            config=config,
-            project_dir=project_dir,
-            mode=mode,
-            existing_subsets=existing_subsets,
-            verbose=verbose        
+        analyzer = DownstreamResultsAnalyzer(
+            downstream_results=amplicon_data, 
+            config=config, 
+            verbose=True
         )
-        """
-        analyzer = DownstreamResultsAnalyzer(downstream_results=amplicon_data, config=config, verbose=True)
-        results = analyzer.run_comprehensive_analysis(output_dir=str(project_dir.final / 'comprehensive_analysis'))
+        results = analyzer.run_comprehensive_analysis(
+            output_dir=str(project_dir.final / 'comprehensive_analysis')
+        )
+        
     except Exception as e:
         logger.error(f"Failed processing amplicon data: {str(e)}")
-    finally:
-        print_data_dicts(amplicon_data)
-        print_data_dicts(amplicon_data.results)
         
+    finally:
+        print_data_dicts(amplicon_data.results)
+
+    # Generate a comprehensive HTML report
     output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
     try:
         generate_html_report(
@@ -337,6 +346,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
             config=config
         )
         logger.info(f"HTML report generated at: {output_path}")
+        
     except Exception as e:
         logger.error(f"Failed generating HTML report: {str(e)}")
     
@@ -353,6 +363,7 @@ class Workflow16S:
         try:
             self._execute_upstream()
             self._execute_downstream()
+            
         except Exception as e:
             self.logger.error(f"Workflow execution failed: {e}")
             raise WorkflowError("Workflow aborted due to errors") from e
@@ -381,6 +392,7 @@ class Workflow16S:
                 self._success_subsets
             )
             self.logger.info("Downstream processing completed")
+
 
 class WorkflowError(Exception):
     """Custom exception for workflow-related errors."""
