@@ -90,7 +90,9 @@ group_columns:
     values:
       - True
       - False
-      
+
+
+# NFC Facilities
 nfc_facilities:
   enabled: True
   use_local: True
@@ -101,14 +103,33 @@ nfc_facilities:
   maps:
     enabled: True
 
-features: # Processing steps to perform on the merged feature table prior to analysis
+
+# Sample Maps
+maps:
+  enabled: False
+  color_columns:
+    - "dataset_name"
+    - "nuclear_contamination_status"
+    - "env_feature"
+    - "env_material"
+    - "country"
+    - "facility_match"
+
+
+# Feature Table Preprocessing
+# Toggle which processing steps will be performed on the merged feature table prior to analysis.
+features: 
   filter: True
   normalize: True
   clr_transform: True
   presence_absence: True
 
-stats: # Statistical analyses
+
+# Statistical Analyses
+stats: 
   enabled: True
+  comprehensive_analysis:
+    enabled: True
   tables:
     raw:
       enabled: True
@@ -137,7 +158,9 @@ stats: # Statistical analyses
         - "mwu_bonferroni"        
         - "kruskal_bonferroni"
 
-alpha_diversity: # Alpha diversity
+
+# Alpha Diversity
+alpha_diversity: 
   enabled: True
   plots: 
     enabled: True
@@ -146,7 +169,7 @@ alpha_diversity: # Alpha diversity
     effect_size_threshold: 0.5
   parametric: False  # Statistical test type
   correlation_analysis: 
-    enabled: True
+    enabled: False
     max_categories: 20       # Max unique values for categorical variables
     min_group_size: 5        # Min samples per group for valid comparison
     top_n_correlations: 20   # Number of top associations to show
@@ -173,8 +196,10 @@ alpha_diversity: # Alpha diversity
     #- "goods_coverage"
     - "heip_evenness" 
     #- "dominance"
-  
-ordination: # Beta diversity + ordination
+
+
+# Beta Diversity (Ordination)
+ordination: 
   enabled: True
   load_existing: False # BROKEN
   max_workers: 2       # Max concurrent ordination tasks
@@ -237,31 +262,9 @@ ordination: # Beta diversity + ordination
         - "genus"
         - "phylum"
 
-faprotax: # Functional prediction
-  enabled: True
 
-maps:
-  enabled: False
-  color_columns:
-    - "dataset_name"
-    - "nuclear_contamination_status"
-    - "env_feature"
-    - "env_material"
-    - "country"
-    - "facility_match"
-
-top_features:
-  enabled: True
-  n: 30
-  violin_plots: # Violin plots of top important features
-    enabled: True
-    n: 30  # Number of features to plot per category
-  
-feature_maps:
-  enabled: True
-  n: 30
-  
-ml: # Machine learning
+# Machine Learning Feature Selection with CatBoost
+ml: 
   enabled: True
   load_existing: False
   n_threads: 32
@@ -331,3 +334,27 @@ ml: # Machine learning
         #- "lasso"
         #- "shap"
   
+
+# Functional Prediction
+faprotax: 
+  enabled: True
+
+
+# Top Features
+top_features:
+  enabled: True
+  n: 30                 # Number of top features
+  stats:
+    enabled: True
+  models:
+    enabled: True
+  violin_plots:         # Violin plots of top important features
+    enabled: True
+    n: 30               # Number of features to plot per category
+  feature_maps:         # Feature maps of top important features
+    enabled: True
+    n: 30 
+    
+feature_maps:
+  enabled: True
+  n: 30
