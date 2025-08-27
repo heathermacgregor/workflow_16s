@@ -959,12 +959,12 @@ class StatisticalAnalysis:
             
             for table_type in self.tables:
                 if method == 'sparcc' and table_type == "clr_transformed_presence_absence":
-                        core_results[table_type][level][method] = {}
-                        logger.debug(
-                            f"Skipping network analysis for table type '{table_type}' with '{method}'. "
-                            f"Will error due to `abs_correlation`."
-                        )
-                        continue
+                    network_results[table_type][level][method] = {}
+                    logger.debug(
+                        f"Skipping network analysis for table type '{table_type}' with '{method}'. "
+                        f"Will error due to `abs_correlation`."
+                    )
+                    continue
                 for level in self.tables[table_type]:
                     # Use cached data
                     table_aligned, _ = self._get_cached_data(table_type, level)
