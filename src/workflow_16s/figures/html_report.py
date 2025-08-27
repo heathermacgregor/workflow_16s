@@ -165,7 +165,9 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     
     # Ordination figures
     ordination_figures = {}
+    logger.info('a')
     for table_type, levels in amplicon_data.ordination.items():
+        logger.info('b')
         for level, level_data in levels.items():
             if 'figures' in level_data and level_data['figures']:
                 if table_type not in ordination_figures:
