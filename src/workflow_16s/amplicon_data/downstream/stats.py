@@ -834,7 +834,15 @@ class StatisticalAnalysis:
                 main_task = progress.add_task(_format_task_desc(main_desc), 
                                             total=len(self.tables) * len(self.tables['raw']))
                 
-                for table_type in self.tables:
+                for table_type in self.tables: 
+                    if table_type == "clr_transformed":
+                        core_results[col][table_type][level] = {}
+                        logger.debug(
+                            f"Skipping core microbiome analysis for table type '{table_type}'. "
+                            f"Will error due to float division by zero."
+                        )
+                        continue
+                        
                     for level in self.tables[table_type]:
                         level_desc = f"{table_type.replace('_', ' ').title()} ({level.title()})"
                         progress.update(main_task, description=_format_task_desc(level_desc))
@@ -864,6 +872,7 @@ class StatisticalAnalysis:
                                 
                         except Exception as e:
                             logger.error(f"Core microbiome analysis failed for {col}/{table_type}/{level}: {e}")
+                            
                         finally:
                             progress.update(main_task, advance=1)
                     
@@ -879,7 +888,7 @@ class StatisticalAnalysis:
         for var in continuous_variables:
             correlation_results[var] = {}
             
-            for table_type in self.tables:
+            for table_type in self.tables:                        
                 for level in self.tables[table_type]:
                     # Check if variable exists in metadata
                     metadata = self.metadata[table_type][level]
@@ -929,6 +938,13 @@ class StatisticalAnalysis:
             network_results[method] = {}
             
             for table_type in self.tables:
+                if method == 'sparcc' and table_type == "clr_transformed_presence_absence":
+                        core_results[table_type][level][method] = {}
+                        logger.debug(
+                            f"Skipping network analysis for table type '{table_type}' with '{method}'. "
+                            f"Will error due to `abs_correlation`."
+                        )
+                        continue
                 for level in self.tables[table_type]:
                     # Use cached data
                     table_aligned, _ = self._get_cached_data(table_type, level)
@@ -940,14 +956,14 @@ class StatisticalAnalysis:
                             threshold=threshold
                         )
                         
-                        _init_nested_dict(network_results, [method, table_type, level])
-                        network_results[method][table_type][level] = {
+                        _init_nested_dict(network_results, [table_type, level, method])
+                        network_results[table_type][level][method] = {
                             'correlation_matrix': corr_matrix,
                             'edges': edges_df
                         }
                         
                         # Save results
-                        output_dir = self.project_dir / 'networks' / method / table_type / level
+                        output_dir = self.project_dir / 'networks' / table_type / level / method 
                         output_dir.mkdir(parents=True, exist_ok=True)
                         
                         corr_path = output_dir / 'correlation_matrix.tsv'
@@ -1016,7 +1032,7 @@ class StatisticalAnalysis:
         
         # 2. Correlation analysis
         continuous_vars = kwargs.get('continuous_variables', 
-                                   self.config.get('stats', {}).get('continuous_variables', []))
+                                   self.config.get('stats', {}).get('continuous_variables', ['ph', 'distance_from_facility_km']))
         if continuous_vars:
             logger.info("Running correlation analysis...")
             try:
