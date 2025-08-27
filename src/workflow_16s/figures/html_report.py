@@ -376,19 +376,26 @@ def _defaultdict_to_dict(dd: Union[defaultdict, dict]) -> dict:
     return dd
 
 
-def _convert_figure_to_serializable(fig):
-    """Convert figure object to serializable dict."""
+def _convert_figure_to_serializable(fig, min_height=1000):
+    """Convert figure object to serializable dict with minimum height enforcement."""
     try:
         if fig is None:
             return {"type": "error", "error": "Figure object is None"}
             
         if hasattr(fig, "to_plotly_json"):
             pj = fig.to_plotly_json()
-            pj.setdefault("layout", {})["showlegend"] = False
+            layout = pj.setdefault("layout", {})
+            layout["showlegend"] = False
+            
+            # Enforce minimum height
+            current_height = layout.get("height")
+            if current_height is None or current_height < min_height:
+                layout["height"] = min_height
+            
             return {
                 "type": "plotly",
                 "data": pj["data"],
-                "layout": pj["layout"],
+                "layout": layout,
                 "square": False
             }
         elif isinstance(fig, Figure):
@@ -1152,7 +1159,7 @@ def create_standalone_plotly_selector(
             
             .plotly-selector-plot {{
                 width: 100%;
-                min-height: 600px;
+                min-height: 1000px;
                 border: 1px solid #ddd;
                 border-radius: 5px;
             }}
