@@ -161,14 +161,14 @@ def _generate_plotly_selector_html(
 # ================================== CORE HELPERS =================================== #
 
 shap_fig_titles = {
-        "roc": "ROC",
-        "prc": "PRC",
-        "confusion_matrix": "Confusion Matrix",
-        "shap_summary_bar": "SHAP Summary (Bar)",
-        "shap_summary_beeswarm": "SHAP Summary (Beeswarm)",
-        "shap_summary_heatmap": "SHAP Summary (Heatmap)",
-        "shap_summary_force": "SHAP Summary (Force)"
-    }
+    "roc": "ROC",
+    "prc": "PRC",
+    "confusion_matrix": "Confusion Matrix",
+    "shap_summary_bar": "SHAP Summary (Bar)",
+    "shap_summary_beeswarm": "SHAP Summary (Beeswarm)",
+    "shap_summary_heatmap": "SHAP Summary (Heatmap)",
+    "shap_summary_force": "SHAP Summary (Force)"
+}
 
 from collections import defaultdict
 from typing import Dict, Any, List, Union
@@ -292,11 +292,14 @@ def _transform_shap_figures_efficient(figures: Dict[str, Any]) -> Dict[str, Any]
     for key, val in figures.items():
         if key == 'shap_dependency':
             if isinstance(val, list):
-                transformed.update({f'shap_dependency_{i}': fig for i, fig in enumerate(val)})
+                transformed.update({f'SHAP (Dependency - {i})': fig for i, fig in enumerate(val)})
             elif isinstance(val, dict):
-                transformed.update({f'shap_dependency_{feature}': fig for feature, fig in val.items()})
+                transformed.update({f'SHAP (Dependency - {feature})': fig for feature, fig in val.items()})
             else:
                 transformed[key] = val
+        elif key in shap_fig_titles.keys():
+            new_key = shap_fig_titles[key]
+            transformed[new_key] = val
         else:
             transformed[key] = val
     return transformed
