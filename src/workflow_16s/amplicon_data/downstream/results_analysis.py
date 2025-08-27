@@ -159,7 +159,7 @@ class DownstreamResultsAnalyzer:
                 if isinstance(df, pd.DataFrame) and 'Feature' in df.columns and 'P-value' in df.columns:
                     for _, row in df.iterrows():
                         # Use negative log p-value as importance score
-                        importance_dict[row['Feature']] = -np.log10(max(row['P-value'], 1e-10)))
+                        importance_dict[row['Feature']] = -np.log10(max(row['P-value'], 1e-10))
         
         return importance_dict
     
