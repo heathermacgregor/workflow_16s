@@ -35,7 +35,7 @@ from workflow_16s.utils.data import (
 from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
-# ========================== OPTIMIZATION UTILITIES ========================== #
+# ============================== OPTIMIZATION UTILITIES ============================== #
 
 class TaskResult(NamedTuple):
     """Structured result for parallel tasks."""
@@ -47,6 +47,7 @@ class TaskResult(NamedTuple):
     error: Optional[str]
     loaded_from_file: bool = False
     processing_time: float = 0.0
+    
 
 class DataCache:
     """Lightweight caching for preprocessed data with memory optimization."""
@@ -100,7 +101,7 @@ class DataCache:
         self._access_order.clear()
         self._memory_usage = 0
 
-# ========================== RESULT LOADING UTILITIES ========================== #
+# ============================= RESULT LOADING UTILITIES ============================= #
 
 class ResultLoader:
     """Handles loading and validation of existing results with enhanced caching."""
@@ -160,6 +161,7 @@ class ResultLoader:
             else:
                 logger.warning(f"Unsupported file format: {result_path}")
                 return None
+                
             # Basic validation
             if result.empty:
                 logger.warning(f"Empty result file: {result_path}")
@@ -169,6 +171,7 @@ class ResultLoader:
             # Cache the result
             self._load_cache[cache_key] = result
             return result
+            
         except Exception as e:
             logger.warning(f"Failed to load result from {result_path}: {e}")
             return None
@@ -184,11 +187,14 @@ class ResultLoader:
                 df[col] = df[col].astype(np.uint8)
         
         for col in df.select_dtypes(include=['float64']).columns:
-            if col not in ['p_value', 'q_value']:  # Preserve precision for p-values
+            # Preserve precision for p-values
+            if col not in ['p_value', 'q_value']:  
                 df[col] = pd.to_numeric(df[col], downcast='float')
-        
-        for col in df.select_dtypes(include=['object']).columns: # Convert object columns to category 
-            if len(df[col].unique()) / len(df[col]) < 0.5:  # Cardinality threshold
+
+        # Convert object columns to category 
+        for col in df.select_dtypes(include=['object']).columns: 
+            # Cardinality threshold
+            if len(df[col].unique()) / len(df[col]) < 0.5:  
                 df[col] = df[col].astype('category')
         
         return df
@@ -231,7 +237,7 @@ class ResultLoader:
         self._load_cache.clear()
         self._metadata_cache.clear()
 
-# ========================== CONFIGURATION ========================== #
+# ================================== CONFIGURATION =================================== #
 
 logger = logging.getLogger("workflow_16s")
 
@@ -301,7 +307,7 @@ DEFAULT_TESTS = {
     "presence_absence": ["fisher"]
 }
 
-# ========================== FUNCTIONS ========================== #
+# ==================================== FUNCTIONS ===================================== #
 
 def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
     """Initialize nested dictionary levels efficiently."""
@@ -309,6 +315,7 @@ def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
     for key in keys[:-1]:
         current = current.setdefault(key, {})
     current.setdefault(keys[-1], {})
+
 
 def get_enabled_tasks(
     config: Dict, 
@@ -348,6 +355,7 @@ def get_enabled_tasks(
     
     return tasks
 
+
 def get_group_column_values(group_column: Dict, metadata: pd.DataFrame) -> List[Any]:
     """Optimized group column value extraction."""
     if 'values' in group_column and group_column['values']:
@@ -362,6 +370,7 @@ def get_group_column_values(group_column: Dict, metadata: pd.DataFrame) -> List[
         return metadata[col_name].drop_duplicates().tolist()
     
     return []
+
 
 def run_single_statistical_test(
     task_data: Tuple[str, str, str, Table, pd.DataFrame, str, List[Any], Path]
@@ -435,6 +444,7 @@ def run_single_statistical_test(
         processing_time = time.time() - start_time
         return TaskResult(task_id, table_type, level, test, None, error_msg, False, processing_time)
 
+
 def _calculate_config_hash(config: Dict, group_column: str, table_type: str, level: str, test: str) -> str:
     """Calculate a hash for configuration to validate result compatibility."""
     config_data = {
@@ -448,6 +458,8 @@ def _calculate_config_hash(config: Dict, group_column: str, table_type: str, lev
     
     config_str = json.dumps(config_data, sort_keys=True, default=str)
     return hashlib.md5(config_str.encode()).hexdigest()
+
+# ===================================== CLASSES ====================================== #
 
 class StatisticalAnalysis:
     """Highly optimized Statistical Analysis class with result loading."""
@@ -778,11 +790,13 @@ class StatisticalAnalysis:
         
         if total > 0:
             load_percentage = (loaded / total) * 100
-            logger.info(f"Analysis Statistics:")
-            logger.info(f"  Total tasks: {total}")
-            logger.info(f"  Loaded from files: {loaded} ({load_percentage:.1f}%)")
-            logger.info(f"  Calculated fresh: {calculated} ({100-load_percentage:.1f}%)")
-            logger.info(f"  Total analysis time: {stats.get('analysis_time_seconds', 0):.2f} seconds")
+            logger.info(
+                f"Analysis Statistics:\n"
+                f"  Total tasks: {total}\n"
+                f"  Loaded from files: {loaded} ({load_percentage:.1f}%)\n"
+                f"  Calculated fresh: {calculated} ({100-load_percentage:.1f}%)\n"
+                f"  Total analysis time: {stats.get('analysis_time_seconds', 0):.2f} seconds"
+            )
             
             # Log timing statistics for calculated tasks
             if stats['task_times']:
@@ -790,14 +804,18 @@ class StatisticalAnalysis:
                 max_time = max(stats['task_times'].values())
                 min_time = min(stats['task_times'].values())
                 
-                logger.info(f"  Task timing (calculated tasks):")
-                logger.info(f"    Average: {avg_time:.2f}s, Min: {min_time:.2f}s, Max: {max_time:.2f}s")
+                logger.info(
+                    f"  Task timing (calculated tasks):\n"
+                    f"    Average: {avg_time:.2f}s, Min: {min_time:.2f}s, Max: {max_time:.2f}s"
+                )
             
             if loaded > 0:
                 # Rough estimate of time saved (using average time for loaded tasks)
                 avg_task_time = (sum(stats['task_times'].values()) / len(stats['task_times'])) if stats['task_times'] else 10
                 estimated_time_saved = loaded * avg_task_time
-                logger.info(f"  Estimated time saved: ~{estimated_time_saved:.0f} seconds")
+                logger.info(
+                    f"  Estimated time saved: ~{estimated_time_saved:.0f} seconds"
+                )
     
     def get_effect_size(self, test_name: str, row: pd.Series) -> Optional[float]:
         """Optimized effect size extraction."""
@@ -831,8 +849,9 @@ class StatisticalAnalysis:
             
             with get_progress_bar() as progress:
                 main_desc = f"Running core microbiome analysis for '{col}'"
-                main_task = progress.add_task(_format_task_desc(main_desc), 
-                                            total=len(self.tables) * len(self.tables['raw']))
+                main_desc_fmt = _format_task_desc(main_desc)
+                main_n = len(self.tables) * len(self.tables['raw'])
+                main_task = progress.add_task(main_desc_fmt, total=main_n)
                 
                 for table_type in self.tables: 
                     if table_type == "clr_transformed":
@@ -845,7 +864,8 @@ class StatisticalAnalysis:
                         
                     for level in self.tables[table_type]:
                         level_desc = f"{table_type.replace('_', ' ').title()} ({level.title()})"
-                        progress.update(main_task, description=_format_task_desc(level_desc))
+                        level_desc_fmt = _format_task_desc(level_desc)
+                        progress.update(main_task, description=level_desc_fmt)
                         
                         # Use cached data
                         table_aligned, metadata_aligned = self._get_cached_data(table_type, level)
@@ -892,17 +912,17 @@ class StatisticalAnalysis:
                 for level in self.tables[table_type]:
                     # Check if variable exists in metadata
                     metadata = self.metadata[table_type][level]
+                    table = self.tables[table_type][level]
                     if var not in metadata.columns:
                         continue
-                    
+
                     # Filter out samples with missing values
                     metadata = metadata.dropna(subset=[var])
                     if len(metadata) < 5:  # Require min samples
                         logger.warning(f"Skipping {var}/{table_type}/{level}: only {len(metadata)} valid samples")
                         continue
-                    
-                    # Use cached data
-                    table_aligned, metadata_aligned = self._get_cached_data(table_type, level)
+                        
+                    table_aligned, metadata_aligned = update_table_and_metadata(table, metadata)
                     
                     try:
                         result = spearman_correlation(
