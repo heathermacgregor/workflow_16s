@@ -332,7 +332,7 @@ class Downstream:
         """Log statistical analysis information."""
         recommendations = stats.get_analysis_recommendations()
         logger.info(recommendations)
-        self.stats_recommendations = recommendations
+        self.results.stats['recommendations'] = recommendations
         
         summary = stats.get_summary_statistics()
         logger.info(f"Statistical Analysis Summary:")
@@ -347,7 +347,7 @@ class Downstream:
         run_comp_anal = self.config.config['stats']['comprehensive_analysis'].get('enabled', True)
         if run_comp_anal:
             comprehensive_analysis = stats.run_comprehensive_analysis()
-            self.stats_comprehensive_analysis = comprehensive_analysis
+            self.results.stats['comprehensive_analysis'] = comprehensive_analysis
 
     def _log_loading_performance(self, load_stats: Dict) -> None:
         """Log result loading performance statistics."""
