@@ -889,7 +889,6 @@ def generate_html_report(
         group_col_values = [True, False]
         
     figures_dict = _extract_figures(amplicon_data)
-    logger.info("Extracted figures")
     include_sections = include_sections or [
         k for k, v in figures_dict.items() if v
     ]
@@ -923,9 +922,9 @@ def generate_html_report(
                 "Test": test,
                 "Significant ": count,
                 "Effect Size Mean": effect_stats.get('mean', 'N/A'),
-                "Effect Size Std": effect_stats.get('std', 'N/A'),
-                "Effect Size Min": effect_stats.get('min', 'N/A'),
-                "Effect Size Max": effect_stats.get('max', 'N/A')
+                "Effect Size Std.": effect_stats.get('std', 'N/A'),
+                "Effect Size Min.": effect_stats.get('min', 'N/A'),
+                "Effect Size Max.": effect_stats.get('max', 'N/A')
             })
         df_by_test = pd.DataFrame(test_data)
         overall_table2_html = _add_table_functionality(df_by_test, 'overall-stats-table2')
@@ -938,8 +937,9 @@ def generate_html_report(
             overall_top_features_html = "<p>No overall top features data</p>"
         
         # Recommendations
-        if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
-            recs = amplicon_data.stats['recommendations']
+        #if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
+        if amplicon_data.stats_recommendations:
+            recs = amplicon_data.stats_recommendations
             rec_html = "<ul>"
             for rec in recs:
                 rec_html += f"<li>{rec}</li>"
@@ -948,8 +948,9 @@ def generate_html_report(
             rec_html = "<p>No recommendations</p>"
 
         # Add advanced statistical analysis section if available
-        if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
-            advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['advanced'])
+        #if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
+        if amplicon_data.stats and amplicon_data.stats_comprehensive_analysis:
+            advanced_html = _prepare_advanced_stats_section(amplicon_data.stats_comprehensive_analysis)
             tables_html += """
             <div class="subsection">
                 <h3>Advanced Statistical Analyses</h3>
