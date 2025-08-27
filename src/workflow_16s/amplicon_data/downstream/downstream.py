@@ -423,8 +423,9 @@ class Downstream:
         if self.config.is_enabled('ml') and self.results.models:
             for group_column in self.group_columns:
                 self._process_ml_top_features(group_column)
-
-        self.results.top_features = top_features_plots(
+                
+        logger.info("Plotting plots for top features")
+        top_features_with_plots = top_features_plots(
             output_dir=self.output_dir,
             config=self.config,
             top_features=self.results.top_features,
@@ -433,6 +434,7 @@ class Downstream:
             nfc_facilities=self.results.nfc_facilities,
             verbose=self.verbose
         )
+        self.results.top_features = top_features_with_plots
 
     def _process_statistical_top_features(self, group_column: Dict) -> None:
         """Process top features from statistical analysis."""
@@ -458,14 +460,20 @@ class Downstream:
         
         positive_features.sort(key=lambda d: (-d["effect"], d["p_value"]))
         negative_features.sort(key=lambda d: (d["effect"], d["p_value"]))
+
+        positive_features_n = positive_features[:n_features]
+        negative_features_n = negative_features[:n_features]
+
+        positive_features_df = pd.DataFrame(positive_features_n) if positive_features_n else pd.DataFrame()
+        negative_features_df = pd.DataFrame(negative_features_n) if negative_features_n else pd.DataFrame()
         
         # Store results
         values = group_column.get('values', [True, False])
-        self.results.top_features["stats"][group_column['name']][values[0]] = positive_features[:n_features]
-        self.results.top_features["stats"][group_column['name']][values[1]] = negative_features[:n_features]
+        self.results.top_features["stats"][group_column['name']][values[0]] = positive_features_df
+        self.results.top_features["stats"][group_column['name']][values[1]] = negative_features_df
         
         logger.info(f"Top features for {group_column['name']}: "
-                   f"{values[0]} ({len(positive_features)}), {values[1]} ({len(negative_features)})")
+                    f"{values[0]} ({len(positive_features)}), {values[1]} ({len(negative_features)})")
 
     def _validate_group_column_for_top_features(self, group_column: Dict) -> bool:
         """Validate group column for top features analysis."""
@@ -485,6 +493,15 @@ class Downstream:
     def _extract_statistical_features(self, group_column: Dict) -> List[Dict]:
         """Extract significant features from statistical tests."""
         all_features = []
+
+        effect_direction_terminology_config = {
+            "verbose": {"pos": "positive", "neg": "negative"},
+            "symbols": {"pos": "+", "neg": "-"},
+            "arrows": {"pos": "🢁", "neg": "🢃"}
+        }
+        effect_direction_selector = "verbose"
+        pos = effect_direction_terminology_config[effect_direction_selector]["pos"]
+        neg = effect_direction_terminology_config[effect_direction_selector]["neg"]
         
         with self.stats_obj as stats:
             test_results = self.results.stats['test_results'][group_column['name']]
@@ -506,18 +523,19 @@ class Downstream:
                         )
                         sig_df = sig_df.dropna(subset=["effect"])
 
+                        
                         # Add features to list
                         for _, row in sig_df.iterrows():
                             all_features.append({
-                                "feature": row["feature"],
-                                "column": group_column['name'],
-                                "table_type": table_type,
-                                "level": level,
-                                "method": "statistical_test",
-                                "test": test_name,
-                                "effect": row["effect"],
-                                "p_value": row["p_value"],
-                                "effect_dir": "positive" if row["effect"] > 0 else "negative",
+                                "Feature": row["feature"],
+                                "Column": group_column['name'],
+                                "Table Type": table_type,
+                                "Level": level,
+                                "Method Type": "statistical_test",
+                                "Method": test_name,
+                                "Effect Size": row["effect"],
+                                "P-value": row["p_value"],
+                                "Effect Direction": pos if row["effect"] > 0 else neg,
                             })
         
         return all_features
@@ -546,12 +564,13 @@ class Downstream:
                     for i, feat in enumerate(top_features[:n_features], 1):
                         importance = feat_imp.get(feat, 0)
                         features_summary.append({
+                            "Feature": feat,
                             "Column": group_column['name'],
                             "Table Type": table_type,
                             "Level": level,
+                            "Method Type": "feature_selection",
                             "Method": method,
                             "Rank": i,
-                            "Feature": feat,
                             "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
                         })
         
