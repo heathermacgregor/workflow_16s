@@ -616,7 +616,7 @@ def _prepare_ml_summary(
                         importance = feat_imp.get(feat, 0)
                         features_summary.append({
                             "Feature": feat,
-                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
+                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A",
                             "Column": group_column,
                             "Table Type": table_type,
                             "Level": level,
