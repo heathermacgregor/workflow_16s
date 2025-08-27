@@ -955,17 +955,16 @@ class StatisticalAnalysis:
         network_results = {}
         
         for method in methods:
-            network_results[method] = {}
-            
             for table_type in self.tables:
-                if method == 'sparcc' and table_type == "clr_transformed_presence_absence":
-                    network_results[table_type][level][method] = {}
-                    logger.debug(
-                        f"Skipping network analysis for table type '{table_type}' with '{method}'. "
-                        f"Will error due to `abs_correlation`."
-                    )
-                    continue
                 for level in self.tables[table_type]:
+                    _init_nested_dict(network_results, [table_type, level, method])
+                    if method == 'sparcc' and table_type == "clr_transformed_presence_absence":
+                        network_results[table_type][level][method] = {}
+                        logger.debug(
+                            f"Skipping network analysis for table type '{table_type}' with '{method}'. "
+                            f"Will error due to `abs_correlation`."
+                        )
+                        continue
                     # Use cached data
                     table_aligned, _ = self._get_cached_data(table_type, level)
                     
@@ -976,7 +975,6 @@ class StatisticalAnalysis:
                             threshold=threshold
                         )
                         
-                        _init_nested_dict(network_results, [table_type, level, method])
                         network_results[table_type][level][method] = {
                             'correlation_matrix': corr_matrix,
                             'edges': edges_df
