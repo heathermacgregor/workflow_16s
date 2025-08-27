@@ -601,7 +601,7 @@ def _prepare_ml_summary(
                         "Table Type": table_type,
                         "Level": level,
                         "Method": method,
-                        "Top Features": len(result.get("top_features", [])),
+                        "Top Features (N)": len(result.get("top_features", [])),
                         "Accuracy": f"{test_scores.get('accuracy', 'N/A')}",
                         "F1 Score": f"{test_scores.get('f1', 'N/A')}",
                         "MCC": f"{test_scores.get('mcc', 'N/A')}",
@@ -611,16 +611,17 @@ def _prepare_ml_summary(
                     metrics_summary.append(metrics)
                     
                     feat_imp = result.get("feature_importances", {})
-                    top_features = result.get("top_features", [])[:10]
+                    top_features = result.get("top_features", [])[:20]
                     for i, feat in enumerate(top_features, 1):
                         importance = feat_imp.get(feat, 0)
                         features_summary.append({
+                            "Feature": feat,
+                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
+                            "Column": group_column,
                             "Table Type": table_type,
                             "Level": level,
                             "Method": method,
-                            "Rank": i,
-                            "Feature": feat,
-                            "Importance": f"{importance:.4f}" if isinstance(importance, (int, float)) else "N/A"
+                            "Rank": i                            
                         })
                     
                     if "shap_report" in result:
@@ -944,8 +945,7 @@ def generate_html_report(
             overall_top_features_html = "<p>No overall top features data</p>"
         
         # Recommendations
-        #if 'recommendations' in amplicon_data.stats and amplicon_data.stats['recommendations']:
-        if amplicon_data.stats['recommendations']:
+        if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'recommendations' in amplicon_data.stats:
             recs = amplicon_data.stats['recommendations']
             rec_html = "<ul>"
             for rec in recs:
@@ -955,8 +955,7 @@ def generate_html_report(
             rec_html = "<p>No recommendations</p>"
 
         # Add advanced statistical analysis section if available
-        #if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'advanced' in amplicon_data.stats:
-        if amplicon_data.stats and amplicon_data.stats['comprehensive_analysis']:
+        if amplicon_data.stats and isinstance(amplicon_data.stats, dict) and 'comprehensive_analysis' in amplicon_data.stats:
             advanced_html = _prepare_advanced_stats_section(amplicon_data.stats['comprehensive_analysis'])
             tables_html += """
             <div class="subsection">
@@ -967,12 +966,16 @@ def generate_html_report(
             
         tables_html += f"""
         <h3>Overall Analysis Summary</h3>
+        
         <h4>Summary Statistics</h4>
         {overall_table1_html}
+        
         <h4>Test-Specific Summary</h4>
         {overall_table2_html}
+        
         <h4>Top Features Across All Tests</h4>
         {overall_top_features_html}
+        
         <h4>Analysis Recommendations</h4>
         {rec_html}
         """
@@ -1018,11 +1021,7 @@ def generate_html_report(
     # ML summary
     if amplicon_data.models:
         _validate_models_structure(amplicon_data.models)
-        ml_metrics, ml_features, shap_reports = _prepare_ml_summary(
-            amplicon_data.models,
-            [],   # Not used
-            []    # Not used
-        )
+        ml_metrics, ml_features, shap_reports = _prepare_ml_summary(amplicon_data.models, [], [])
         logger.info("Got ML data")
     else:
         ml_metrics, ml_features, shap_reports = pd.DataFrame(), pd.DataFrame(), {}
