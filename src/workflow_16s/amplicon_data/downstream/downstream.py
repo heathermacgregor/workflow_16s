@@ -346,7 +346,7 @@ class Downstream:
 
         run_comp_anal = self.config.config['stats']['comprehensive_analysis'].get('enabled', True)
         if run_comp_anal:
-            comprehensive_analysis = run_comprehensive_analysis()
+            comprehensive_analysis = stats.run_comprehensive_analysis()
             self.stats_comprehensive_analysis = comprehensive_analysis
 
     def _log_loading_performance(self, load_stats: Dict) -> None:
