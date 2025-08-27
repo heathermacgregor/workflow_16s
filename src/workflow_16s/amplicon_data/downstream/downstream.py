@@ -329,11 +329,7 @@ class Downstream:
                 logger.warning(f"  - {warning}")
 
     def _log_statistical_analysis_info(self, stats) -> None:
-        """Log statistical analysis information."""
-        recommendations = stats.get_analysis_recommendations()
-        logger.info(recommendations)
-        self.results.stats['recommendations'] = recommendations
-        
+        """Log statistical analysis information."""        
         summary = stats.get_summary_statistics()
         logger.info(f"Statistical Analysis Summary:")
         logger.info(f"  - Total tests run: {summary['total_tests_run']}")
@@ -343,11 +339,6 @@ class Downstream:
         load_stats = summary.get('performance_metrics', {}).get('load_statistics', {})
         if load_stats:
             self._log_loading_performance(load_stats)
-
-        run_comp_anal = self.config.config['stats']['comprehensive_analysis'].get('enabled', True)
-        if run_comp_anal:
-            comprehensive_analysis = stats.run_comprehensive_analysis()
-            self.results.stats['comprehensive_analysis'] = comprehensive_analysis
 
     def _log_loading_performance(self, load_stats: Dict) -> None:
         """Log result loading performance statistics."""
@@ -362,13 +353,22 @@ class Downstream:
 
     def _compile_statistical_results(self, stats) -> Dict[str, Any]:
         """Compile statistical analysis results."""
-        top_features = stats.get_top_features_across_tests()
         summary = stats.get_summary_statistics()
+        
+        top_features = stats.get_top_features_across_tests()
+        
+        recommendations = stats.get_analysis_recommendations()
+
+        run_comp_anal = self.config.config['stats']['comprehensive_analysis'].get('enabled', True)
+        if run_comp_anal:
+            comprehensive_analysis = stats.run_comprehensive_analysis()
         
         results = {
             'test_results': stats.results,
             'top_features': top_features,
             'summary': summary,
+            'recommendations': recommendations,
+            'comprehensive_analysis': comprehensive_analysis,
             'load_statistics': stats.get_load_report()
         }
         return results
