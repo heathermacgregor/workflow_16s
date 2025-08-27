@@ -775,7 +775,7 @@ def generate_html_report(
         
         # Create test-specific stats table
         test_data = []
-        for test, count in summary['significant__by_test'].items():
+        for test, count in summary['significant_features_by_test'].items():
             effect_stats = summary['effect_sizes_summary'].get(test, {})
             test_data.append({
                 "Test": test,
