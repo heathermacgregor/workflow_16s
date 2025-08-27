@@ -166,11 +166,16 @@ def _extract_figures(amplicon_data: "AmpliconData") -> Dict[str, Any]:
     # Ordination figures
     ordination_figures = {}
     for group_column, table_types in amplicon_data.ordination.items():
+        logger.info(group_column)
         for table_type, levels in table_types.items():
+            logger.info(table_type)
             for level, level_data in levels.items():
+                logger.info(level)
                 if 'figures' in level_data and level_data['figures']:                    
                     for method, figures in level_data['figures'].items():
+                        logger.info(method)
                         for color_col, fig in figures:
+                            logger.info(color_col)
                             if group_column not in ordination_figures:
                                 ordination_figures.set_default(group_column, {})
                             if table_type not in ordination_figures[group_column]:
