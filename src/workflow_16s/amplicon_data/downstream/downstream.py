@@ -89,12 +89,12 @@ class ResultsContainer:
     def __init__(self):
         self.metadata: Dict[str, Any] = {}
         self.tables: Dict[str, Any] = {}
-        self.maps: Optional[Dict[str, Any]] = {}
-        self.stats: Optional[Dict[str, Any]] = {}
-        self.alpha_diversity: Optional[Dict[str, Any]] = {}
-        self.ordination: Optional[Dict[str, Any]] = {}
-        self.top_features: Optional[Dict[str, Any]] = {}
-        self.models: Optional[Dict[str, Any]] = {}
+        self.maps: Dict[str, Any] = {}
+        self.stats: Dict[str, Any] = {}
+        self.alpha_diversity: Dict[str, Any] = {}
+        self.ordination: Dict[str, Any] = {}
+        self.top_features: Dict[str, Any] = {}
+        self.models: Dict[str, Any] = {}
         self.analysis_statistics: Dict[str, Any] = {}
 
 # ================================= FUNCTIONAL ANNOTATION ========================== #
