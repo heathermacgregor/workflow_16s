@@ -435,7 +435,8 @@ class Downstream:
                 nfc_facilities=self.results.nfc_facilities,
                 verbose=self.verbose
             )
-            self.results.top_features = top_features_with_plots
+            logger.info(top_features_with_plots)
+            #self.results.top_features = top_features_with_plots
             
         # Process top features from ML feature selection
         if self.config.is_enabled('ml') and self.results.models:
@@ -452,7 +453,8 @@ class Downstream:
                 nfc_facilities=self.results.nfc_facilities,
                 verbose=self.verbose
             )
-            self.results.top_features = top_features_with_plots
+            logger.info(top_features_with_plots)
+            #self.results.top_features = top_features_with_plots
 
     def _process_statistical_top_features(self, group_column: Dict) -> None:
         """Process top features from statistical analysis."""
