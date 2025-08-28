@@ -32,7 +32,7 @@ class Maps:
         self.meta = meta
         self.output_dir = output_dir
       
-        self.maps_config = self.config['maps']
+        self.maps_config = self.config.get('maps', {})
         self.color_columns = self.maps_config.get(
             'color_columns',
             [
@@ -69,10 +69,27 @@ class Maps:
         if has_valid_facility_data:
             color_columns.append('facility_match')
         meta = self.meta
-        valid_columns = [col for col in color_columns if col in meta]
+        valid_columns = [col for col in color_columns if col in meta.columns]
         missing = set(self.color_columns) - set(valid_columns)
         if missing and self.verbose:
             logger.warning(f"Missing columns in metadata: {', '.join(missing)}")
+
+        # Validate required geographic columns for mapping
+        required_geo_cols = [constants.DEFAULT_LATITUDE_COL, constants.DEFAULT_LONGITUDE_COL]
+        missing_geo_cols = [col for col in required_geo_cols if col not in meta.columns]
+        if missing_geo_cols:
+            if self.verbose:
+                logger.warning(
+                    f"Missing required geographic columns for mapping: {', '.join(missing_geo_cols)}. "
+                    f"Sample maps will not be generated."
+                )
+            return {}
+        
+        # Check if we have any valid columns to plot
+        if not valid_columns:
+            if self.verbose:
+                logger.warning("No valid color columns found in metadata. Sample maps will not be generated.")
+            return {}
 
         meta = meta.set_index('#sampleid')
       
