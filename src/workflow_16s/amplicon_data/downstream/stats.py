@@ -855,7 +855,7 @@ class StatisticalAnalysis:
                 
                 for table_type in self.tables: 
                     if table_type == "clr_transformed":
-                        core_results[col][table_type][level] = {}
+                        core_results[col][table_type] = {}
                         logger.debug(
                             f"Skipping core microbiome analysis for table type '{table_type}'. "
                             f"Will error due to float division by zero."
