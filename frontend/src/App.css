@@ -1,0 +1,50 @@
+/* src/App.css */
+.App {
+  text-align: left;
+}
+
+/* Reset and base styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Global utility classes */
+.plotly-container {
+  width: 100%;
+  min-height: 400px;
+}
+
+.plot-loading,
+.plot-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  color: #6c757d;
+}
+
+.plot-error {
+  color: #dc3545;
+}
+
+.section-loading,
+.section-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  color: #6c757d;
+}
+
+.section-error {
+  color: #dc3545;
+}
