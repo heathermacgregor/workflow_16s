@@ -152,7 +152,7 @@ class DownstreamResultsAnalyzer:
         if not self.top_features or 'stats' not in self.top_features:
             return importance_dict
             
-        for group_col, df in self.top_features['stats'].items():
+        for group_data, df in self.top_features['stats'].items():
             if not isinstance(group_data, dict):
                 continue
             for condition, df in group_data.items():
