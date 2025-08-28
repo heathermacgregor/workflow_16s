@@ -133,7 +133,7 @@ class ResultLoader:
                         saved_hash = f.read().strip()
                     if saved_hash != config_hash:
                         return False  # Configuration has changed
-                except:
+                except Exception as e:
                     pass
         
         return True
