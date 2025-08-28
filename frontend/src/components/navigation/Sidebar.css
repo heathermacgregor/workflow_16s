@@ -1,0 +1,89 @@
+/* src/components/navigation/Sidebar.css */
+.sidebar {
+  width: 300px;
+  background-color: #ffffff;
+  border-right: 1px solid #dee2e6;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: 1rem 0;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 1rem;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #343a40;
+}
+
+.section-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.section-list li {
+  margin-bottom: 0.5rem;
+}
+
+.section-button {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border: none;
+  background-color: transparent;
+  color: #495057;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.section-button:hover:not(:disabled) {
+  background-color: #e9ecef;
+}
+
+.section-button:disabled {
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+.section-list li.active .section-button {
+  background-color: #007bff;
+  color: white;
+}
+
+.no-data {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.sidebar-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.expand-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.expand-button,
+.collapse-button {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #dee2e6;
+  background-color: #f8f9fa;
+  color: #495057;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.expand-button:hover,
+.collapse-button:hover {
+  background-color: #e9ecef;
+}
