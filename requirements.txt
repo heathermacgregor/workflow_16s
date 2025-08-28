@@ -1,0 +1,47 @@
+# Python dependencies for workflow_16s
+# Generated from conda environment specification
+# For full conda environment setup, use: conda env create -f workflow_16s.yml
+
+# Core Python packages (conda-installable)
+numpy>=2.2.0
+pandas>=2.2.0
+scipy>=1.15.0
+matplotlib>=3.10.0
+seaborn>=0.13.0
+scikit-learn>=1.6.0
+statsmodels>=0.14.0
+
+# Bioinformatics packages
+biopython>=1.85
+biom-format>=2.1.16
+scikit-bio>=0.6.3
+
+# Machine learning and analysis
+catboost>=1.2.8
+numba>=0.61.0
+shap>=0.48.0
+umap-learn>=0.5.7
+
+# Visualization and reporting
+plotly>=6.1.0
+jupyter>=1.0.0
+jupyterlab>=4.4.0
+
+# Geospatial analysis
+geopy>=2.4.0
+
+# Data processing utilities
+openpyxl>=3.1.0
+pyyaml>=6.0.0
+tqdm>=4.67.0
+psutil>=7.0.0
+
+# Pip-only dependencies
+choreographer==1.0.9
+kaleido==1.0.0
+logistro==1.1.0
+orjson==3.10.18
+simplejson==3.20.1
+
+# Development and testing
+pytest>=8.3.0
