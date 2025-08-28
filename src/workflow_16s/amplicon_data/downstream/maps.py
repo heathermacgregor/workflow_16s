@@ -67,8 +67,7 @@ class Maps:
         if nfc_facility_data is not None:
             color_columns.append('facility_match')
 
-        # Use one metadata file (raw/genus)
-        metadata = self.metadata["raw"]["genus"]
+        metadata = self.metadata
         # Get valid color columns
         valid_columns = [col for col in color_columns if col in metadata.columns]
         missing = set(color_columns) - set(valid_columns)
