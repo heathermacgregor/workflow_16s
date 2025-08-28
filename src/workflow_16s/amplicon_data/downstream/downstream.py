@@ -424,23 +424,35 @@ class Downstream:
         if self.config.is_enabled('stats') and self.results.stats:
             for group_column in self.group_columns:
                 self._process_statistical_top_features(group_column)
-        
+
+            logger.info("Plotting plots for top features")
+            top_features_with_plots = top_features_plots(
+                output_dir=self.output_dir,
+                config=self.config,
+                top_features=self.results.top_features.stats,
+                tables=self.results.tables,
+                meta=self.results.metadata,
+                nfc_facilities=self.results.nfc_facilities,
+                verbose=self.verbose
+            )
+            self.results.top_features = top_features_with_plots
+            
         # Process top features from ML feature selection
         if self.config.is_enabled('ml') and self.results.models:
             for group_column in self.group_columns:
                 self._process_ml_top_features(group_column)
                 
-        logger.info("Plotting plots for top features")
-        top_features_with_plots = top_features_plots(
-            output_dir=self.output_dir,
-            config=self.config,
-            top_features=self.results.top_features,
-            tables=self.results.tables,
-            meta=self.results.metadata,
-            nfc_facilities=self.results.nfc_facilities,
-            verbose=self.verbose
-        )
-        self.results.top_features = top_features_with_plots
+            logger.info("Plotting plots for top features")
+            top_features_with_plots = top_features_plots(
+                output_dir=self.output_dir,
+                config=self.config,
+                top_features=self.results.top_features.models,
+                tables=self.results.tables,
+                meta=self.results.metadata,
+                nfc_facilities=self.results.nfc_facilities,
+                verbose=self.verbose
+            )
+            self.results.top_features = top_features_with_plots
 
     def _process_statistical_top_features(self, group_column: Dict) -> None:
         """Process top features from statistical analysis."""
