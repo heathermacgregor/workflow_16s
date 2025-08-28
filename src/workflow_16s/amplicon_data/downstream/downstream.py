@@ -277,7 +277,7 @@ class Downstream:
         """Generate sample maps if enabled."""
         maps = Maps(
             self.config.config, 
-            self.results.metadata, 
+            self.results.metadata["raw"]["genus"], 
             Path(self.output_dir) / 'sample_maps', 
             self.verbose
         )
