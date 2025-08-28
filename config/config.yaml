@@ -1,0 +1,368 @@
+##########################################################################################################################################
+# CONFIG FILE
+# Example #1: Nuclear contamination
+##########################################################################################################################################
+
+# HARDWARE
+cpu:
+  limit: 32  # Global CPU limit for all operations
+
+# PATHS
+dataset_list: "./datasets.txt" # List of datasets
+dataset_info: "./datasets.tsv" # Dataset metadata
+manual_metadata_dir: "../../../manual_metadata" # Dataset sample metadata (manually collected)
+project_dir: "../../test" # Output directory
+
+# CREDENTIALS
+ena_email: "macgregor@berkeley.edu" # ENA API
+
+# Toggle what parts to run
+upstream: 
+  enabled: False
+downstream: 
+  enabled: True
+  find_subsets: False
+
+##########################################################################################################################################
+# UPSTREAM
+##########################################################################################################################################
+
+pcr_primers_mode: "manual" # PCR primers are manually provided ("manual") or predicted based on sequence alignment ("auto")
+target_subfragment_mode: "any" # Specify a target 16S rRNA subfragment or "any"
+blast_db_dir: "./blast/silva_16s/SILVA_16S_db" # Path to the directory containing your BLAST DB
+
+fastqc:
+  enabled: False
+
+seqkit:
+  enabled: False
+
+validate_16s: # Validate sequences based on sequence alignment
+  enabled: False
+  n_runs: 10
+  run_targets:
+    - "16S"
+    - "unknown"
+
+cutadapt: # Trim sequences with CutAdapt before importing to QIIME
+  enabled: False
+  start_trim: 0
+  end_trim: 0
+  start_q_cutoff: 30
+  end_q_cutoff: 15
+  min_seq_length: 150
+  n_cores: 16
+
+qiime2: # QIIME 
+  per_dataset:
+    script_path: "../src/workflow_16s/qiime/workflows/per_dataset_run.py"
+    hard_rerun: False
+    trim:
+      enabled: True # Set to "False" if cutadapt > enabled is "True"
+    denoise:
+      chimera_method: "consensus"
+      denoise_algorithm: "DADA2"
+    taxonomy:
+      classifier_dir: "./classifier/silva-138-99-515-806"
+      classifier: "silva-138-99-515-806"
+      classify_method: "sklearn"
+    filter:
+      retain_threshold: 80
+    
+clean_fastqc: 
+  enabled: True
+
+##########################################################################################################################################
+# DOWNSTREAM
+##########################################################################################################################################
+
+group_column: "nuclear_contamination_status" # The metadata column that defines categorical groups of samples
+group_column_type: "bool"
+group_column_values: 
+  - True
+  - False 
+
+metadata_id_column: "#sampleid"
+dataset_column: "dataset_name"
+group_columns:
+  - name: "nuclear_contamination_status"
+    type: "bool"
+    values:
+      - True
+      - False
+
+
+# NFC Facilities
+nfc_facilities:
+  enabled: True
+  use_local: True
+  databases:
+    - name: "GEM"
+    - name: "NFCIS"
+  max_distance_km: 50
+  maps:
+    enabled: True
+
+
+# Sample Maps
+maps:
+  enabled: True
+  color_columns:
+    - "dataset_name"
+    - "nuclear_contamination_status"
+    - "env_feature"
+    - "env_material"
+    - "country"
+    - "facility_match"
+
+
+# Feature Table Preprocessing
+# Toggle which processing steps will be performed on the merged feature table prior to analysis.
+features: 
+  filter: True
+  normalize: True
+  clr_transform: True
+  presence_absence: True
+
+
+# Statistical Analyses
+stats: 
+  enabled: True
+  comprehensive_analysis:
+    enabled: True
+    core_microbiome_analysis:
+      enabled: True
+      prevalence_threshold: 0.8
+      abundance_threshold: 0.01
+    batch_correlation:
+      enabled: True
+    network_analysis:
+      enabled: True
+  tables:
+    raw:
+      enabled: True
+      tests:
+        - "mwu_bonferroni"       
+        - "kruskal_bonferroni"
+    presence_absence:
+      enabled: True
+      tests:
+        - "fisher"                
+    filtered:
+      enabled: True
+      tests:
+        - "mwu_bonferroni"
+        - "kruskal_bonferroni"
+    normalized:
+      enabled: True
+      tests:
+        - "ttest"                 
+        - "mwu_bonferroni"       
+        - "kruskal_bonferroni"
+    clr_transformed:
+      enabled: True
+      tests:
+        - "ttest"                 
+        - "mwu_bonferroni"        
+        - "kruskal_bonferroni"
+
+
+# Alpha Diversity
+alpha_diversity: 
+  enabled: True
+  plots: 
+    enabled: True
+    add_points: True
+    add_stat_annot: True
+    effect_size_threshold: 0.5
+  parametric: False  # Statistical test type
+  correlation_analysis: 
+    enabled: False
+    max_categories: 20       # Max unique values for categorical variables
+    min_group_size: 5        # Min samples per group for valid comparison
+    top_n_correlations: 20   # Number of top associations to show
+  tables: 
+    raw:  
+      enabled: True
+      levels:  
+        - "genus"
+        #- "family"
+        #- "class"
+    normalized:
+      enabled: False #True
+      levels: 
+        - "genus"
+        - "family"
+  metrics:  
+    - "shannon"
+    - "observed_features"
+    - "simpson"
+    - "pielou_evenness"
+    #- "chao1"
+    #- "ace"
+    #- "gini_index"
+    #- "goods_coverage"
+    - "heip_evenness" 
+    #- "dominance"
+
+
+# Beta Diversity (Ordination)
+ordination: 
+  enabled: True
+  load_existing: False # BROKEN
+  max_workers: 2       # Max concurrent ordination tasks
+  cpu_limit: 16        # CPU cores per ordination method
+  tables:
+    raw:
+      enabled: False #True
+      pcoa_metric: "braycurtis"
+      methods:
+        #- "pca"
+        - "pcoa"
+        #- "tsne"
+        #- "umap"
+      levels:
+        - "genus"
+        #- "family"
+        #- "class"
+    filtered:
+      enabled: False #True
+      pcoa_metric: "braycurtis"
+      methods:
+        #- "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - "genus"
+        - "phylum"
+    normalized:
+      enabled: True
+      pcoa_metric: "braycurtis"
+      methods:
+        - "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        #- "genus"
+        - "phylum"
+    clr_transformed:
+      enabled: False #True
+      pcoa_metric: "euclidean"
+      methods:
+        - "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - "genus"
+        - "phylum"
+    presence_absence:
+      enabled: False #True
+      pcoa_metric: "jaccard"
+      methods:
+        #- "pca"
+        - "pcoa"
+        - "tsne"
+        - "umap"
+      levels:
+        - "genus"
+        - "phylum"
+
+
+# Machine Learning Feature Selection with CatBoost
+ml: 
+  enabled: True
+  load_existing: False
+  n_threads: 32
+  num_features: 500
+  step_size: 100
+  permutation_importance: 
+    enabled: True
+  plots:
+    enabled: True
+  tables:
+    raw:
+      enabled: False
+      levels:
+        - "genus"
+      methods:
+        - "rfe"
+        #- "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
+    filtered:
+      enabled: False
+      levels:
+        - "genus"
+      methods:
+        - "rfe"
+        - "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
+    normalized:
+      enabled: False
+      levels:
+        - "genus"
+      methods:
+        - "rfe"
+        - "select_k_best"
+        - "chi_squared"
+        - "lasso"
+        - "shap"
+    clr_transformed:
+      enabled: True
+      levels:
+        #- "genus"
+        - "family"
+        #- "order"
+        #- "class"
+        #- "phylum"
+      methods:
+        - "rfe"
+        #- "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
+    presence_absence:
+      enabled: True
+      levels:
+        #- "genus"
+        - "family"
+        #- "order"
+        #- "class"
+        #- "phylum"
+      methods:
+        - "rfe"
+        #- "select_k_best"
+        #- "chi_squared"
+        #- "lasso"
+        #- "shap"
+  
+
+# Functional Prediction
+faprotax: 
+  enabled: True
+
+
+# Top Features
+top_features:
+  enabled: True
+  n: 30                 # Number of top features
+  stats:
+    enabled: True
+  models:
+    enabled: True
+  violin_plots:         # Violin plots of top important features
+    enabled: True
+    n: 30               # Number of features to plot per category
+  feature_maps:         # Feature maps of top important features
+    enabled: True
+    n: 30 
+    
+feature_maps:
+  enabled: True
+  n: 30
