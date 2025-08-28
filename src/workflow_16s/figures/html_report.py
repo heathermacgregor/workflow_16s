@@ -862,8 +862,9 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
         if sig_data:
             sig_df_final = pd.concat(sig_data, axis=0)
             # Manipulate the df so we are getting significant features across tests
-            sig_df_feature_counts = sig_df_final.value_counts("feature", ascending=False)
-            html_content += _add_table_functionality(sig_df_feature_counts.to_frame(), 'correlation-features-table')
+            sig_df_feature_counts = sig_df_final.value_counts("feature", ascending=False).to_frame()
+            sig_df_feature_counts["feature"] = sig_df_feature_counts.index
+            html_content += _add_table_functionality(sig_df_feature_counts, 'correlation-features-table')
         else:
             html_content += "<p>No correlation results</p>"
     
@@ -871,6 +872,7 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
     if 'networks' in advanced_results:
         html_content += "<h4>Microbial Network Analysis</h4>"
         network_data = []
+        network_dfs = []
         for method, table_types in advanced_results['networks'].items():
             for table_type, levels in table_types.items():
                 for level, data in levels.items():
@@ -884,9 +886,18 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
                             "Positive Edges": (edges['correlation'] > 0).sum(),
                             "Negative Edges": (edges['correlation'] < 0).sum()
                         })
+                        edges["Method"] = method
+                        edges["Table Type"] = table_type
+                        edges["Level"] = level
+                        network_dfs.append(edges)
+                        
         if network_data:
             network_df = pd.DataFrame(network_data)
             html_content += _add_table_functionality(network_df, 'network-table')
+        if network_dfs:
+            network_df = pd.concat(network_dfs, axis=0)
+            network_df = network_df[network_df['abs_correlation'] > 0.8].sort_values(by=['abs_correlation', 'edge_type'])
+            html_content += _add_table_functionality(network_df, 'network-table2')
         else:
             html_content += "<p>No network analysis results</p>"
     
