@@ -13,7 +13,7 @@ import sys
 # Add the src directory to Python path to import workflow_16s modules
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from .data_processor import ReportDataProcessor
+from api.data_processor import ReportDataProcessor
 
 # ===================================== MODELS ====================================== #
 

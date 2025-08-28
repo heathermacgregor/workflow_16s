@@ -1,0 +1,25 @@
+# Modern report system gitignore additions
+
+# API cache and logs
+api/__pycache__/
+api/*.log
+
+# React build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Generated API data
+api_data/
+*.json
+
+# Development server logs
+*.log
+uvicorn.log
+
+# Temporary files
+/tmp/
+.DS_Store

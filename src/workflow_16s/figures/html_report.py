@@ -917,7 +917,8 @@ def generate_html_report(
     output_path: Union[str, Path],
     include_sections: Optional[List[str]] = None,
     max_features: int = 20,
-    config: Optional[Dict] = None
+    config: Optional[Dict] = None,
+    enable_modern_features: bool = False  # New parameter for modern features
 ) -> None:
     if config:
         group_col = config.get("group_column", "nuclear_contamination_status")
@@ -1124,6 +1125,24 @@ def generate_html_report(
     )
         
     output_path.write_text(html, encoding="utf-8")
+    
+    # Generate modern features if enabled
+    if enable_modern_features:
+        try:
+            from workflow_16s.html_report.modern_report import generate_modern_html_report
+            # Generate API data alongside the legacy HTML
+            generate_modern_html_report(
+                amplicon_data=amplicon_data,
+                output_path=output_path,
+                include_sections=include_sections,
+                max_features=max_features,
+                config=config,
+                mode="api"  # Only generate API data, not duplicate HTML
+            )
+            logger.info("Modern report features generated successfully")
+        except Exception as e:
+            logger.warning(f"Could not generate modern features: {e}")
+            logger.warning("Continuing with legacy HTML report only")
 
 # ========================== ADDITIONAL UTILITY FUNCTIONS ========================== #
 
