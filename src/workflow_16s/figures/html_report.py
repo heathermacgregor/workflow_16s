@@ -873,9 +873,9 @@ def _prepare_advanced_stats_section(advanced_results: Dict) -> str:
         html_content += "<h4>Microbial Network Analysis</h4>"
         network_data = []
         network_dfs = []
-        for method, table_types in advanced_results['networks'].items():
-            for table_type, levels in table_types.items():
-                for level, data in levels.items():
+        for table_type, levels in advanced_results['networks'].items():
+            for level, methods in levels.items():
+                for method, data in methods.items():
                     if 'edges' in data and isinstance(data['edges'], pd.DataFrame):
                         edges = data['edges']
                         network_data.append({
