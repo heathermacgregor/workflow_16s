@@ -119,7 +119,7 @@ class DownstreamResultsAnalyzer:
         if not importance_scores:
             logger.warning("No feature importance scores found")
             return pd.DataFrame()
-        
+        logger.info(importance_scores)
         # Create consensus DataFrame
         consensus_df = pd.DataFrame.from_dict(importance_scores, orient='index').fillna(0)
         
