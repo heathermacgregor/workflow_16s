@@ -89,14 +89,14 @@ class DownstreamResultsAnalyzer:
         self.functional_analysis: Dict[str, Any] = {}
         
         if self.verbose:
-            print("DownstreamResultsAnalyzer initialized successfully")
+            logger.info("DownstreamResultsAnalyzer initialized successfully")
 
     # ========================== FEATURE IMPORTANCE SYNTHESIS ======================== #
     
     def synthesize_feature_importance(self, top_n: int = 50) -> pd.DataFrame:
         """Combine feature importance from multiple analysis approaches."""
         if self.verbose:
-            print("Synthesizing feature importance across modules...")
+            logger.info("Synthesizing feature importance across modules...")
         
         importance_scores = {}
         
@@ -141,7 +141,7 @@ class DownstreamResultsAnalyzer:
         self.consensus_features = consensus_df.head(top_n)
         
         if self.verbose:
-            print(f"Generated consensus ranking for {len(consensus_df)} features")
+            logger.info(f"Generated consensus ranking for {len(consensus_df)} features")
         
         return self.consensus_features
     
@@ -160,7 +160,7 @@ class DownstreamResultsAnalyzer:
                     for _, row in df.iterrows():
                         # Use negative log p-value as importance score
                         importance_dict[row['Feature']] = -np.log10(max(row['P-value'], 1e-10))
-        
+        logger.info("Extracted feature importance scores from statistical tests.")
         return importance_dict
     
     def _extract_ml_importance(self) -> Dict[str, float]:
@@ -189,7 +189,7 @@ class DownstreamResultsAnalyzer:
             max_importance = max(importance_dict.values())
             if max_importance > 0:
                 importance_dict = {k: v/max_importance for k, v in importance_dict.items()}
-        
+        logger.info("Extracted feature importance from ML models.")
         return importance_dict
     
     def _extract_alpha_associations(self) -> Dict[str, float]:
@@ -240,7 +240,7 @@ class DownstreamResultsAnalyzer:
                                 # Use L2 norm across first two axes
                                 loading_norm = np.linalg.norm(feature_loadings.iloc[i, :2])
                                 loadings[feature] = loading_norm
-        
+        logger.info("Extracted feature loadings from ordination analysis.")
         return loadings
 
     # ========================== NETWORK ANALYSIS ========================== #
@@ -249,7 +249,7 @@ class DownstreamResultsAnalyzer:
                                  threshold: float = DEFAULT_NETWORK_CORRELATION_THRESHOLD) -> Dict[str, Any]:
         """Create networks connecting statistically significant features."""
         if self.verbose:
-            print(f"Building integrated networks using {method}...")
+            logger.info(f"Building integrated networks using {method}...")
         
         network_results = {}
         
@@ -289,7 +289,7 @@ class DownstreamResultsAnalyzer:
             }
             
             if self.verbose:
-                print(f"Network created: {network_properties.get('n_nodes', 0)} nodes, "
+                logger.info(f"Network created: {network_properties.get('n_nodes', 0)} nodes, "
                      f"{network_properties.get('n_edges', 0)} edges")
                      
         except Exception as e:
@@ -395,7 +395,7 @@ class DownstreamResultsAnalyzer:
     def analyze_environmental_gradients(self, continuous_vars: List[str] = None) -> Dict[str, Any]:
         """Analyze environmental gradients using canonical correspondence analysis."""
         if self.verbose:
-            print("Analyzing environmental gradients...")
+            logger.info("Analyzing environmental gradients...")
         
         if continuous_vars is None:
             continuous_vars = ['ph', 'facility_distance_km']
@@ -456,7 +456,7 @@ class DownstreamResultsAnalyzer:
             gradient_results['feature_loadings'] = feature_loadings
             
             if self.verbose:
-                print(f"CCA analysis completed with {n_components} components")
+                logger.info(f"CCA analysis completed with {n_components} components")
                 
         except Exception as e:
             logger.error(f"Error in CCA analysis: {e}")
@@ -516,9 +516,9 @@ class DownstreamResultsAnalyzer:
     def run_comprehensive_analysis(self, output_dir: str = 'integrated_analysis_output') -> Dict[str, Any]:
         """Run comprehensive integrated analysis pipeline."""
         if self.verbose:
-            print("=" * 60)
-            print("RUNNING COMPREHENSIVE DOWNSTREAM ANALYSIS")
-            print("=" * 60)
+            logger.info("=" * 60)
+            logger.info("RUNNING COMPREHENSIVE DOWNSTREAM ANALYSIS")
+            logger.info("=" * 60)
         
         results = {}
         
@@ -544,7 +544,7 @@ class DownstreamResultsAnalyzer:
             if consensus_features is not None and not consensus_features.empty:
                 consensus_features.to_csv(f"{output_dir}/consensus_features.csv")
                 if self.verbose:
-                    print(f"Saved consensus features to {output_dir}/consensus_features.csv")
+                    logger.info(f"Saved consensus features to {output_dir}/consensus_features.csv")
             
             # Generate summary report
             summary_report = self._generate_analysis_summary(results)
@@ -552,8 +552,8 @@ class DownstreamResultsAnalyzer:
                 f.write(summary_report)
             
             if self.verbose:
-                print(f"Analysis completed! Results saved to: {output_dir}")
-                print("=" * 60)
+                logger.info(f"Analysis completed! Results saved to: {output_dir}")
+                logger.info("=" * 60)
             
             return results
             
