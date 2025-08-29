@@ -183,6 +183,12 @@ class NFCFacilitiesHandler:
         return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
 
 
+# API
+def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame):
+    handler = NFCFacilitiesHandler(config=config)
+    nfc_facilities, updated_metadata = handler.run(metadata=metadata)
+    return nfc_facilities, updated_metadata
+    
 # TODO: Additions from https://github.com/heathermacgregor/workflow_16s/blob/main/src/workflow_16s/utils/nfc_facilities.py
 '''
 def analyze_contamination_correlation(
