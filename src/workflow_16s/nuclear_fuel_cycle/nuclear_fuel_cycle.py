@@ -1,0 +1,251 @@
+import pandas as pd
+import requests
+from typing import Dict
+
+from workflow_16s.constants import DEFAULT_USER_AGENT, REFERENCES_DIR
+from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases 
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+
+_session = requests.Session() # Create a single requests session for reuse
+
+@lru_cache(maxsize=None)
+def _geocode_query(query: str, user_agent: str = DEFAULT_USER_AGENT) -> (float, float):
+    """Get coordinates from Nominatim API with caching."""
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {'q': query, 'format': 'json', 'limit': 1}
+    headers = {'User-Agent': user_agent}
+    try:
+        response = _session.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data:
+            return float(data[0]['lat']), float(data[0]['lon'])
+    except Exception as e:
+        logger.error(f"Geocoding failed for '{query}': {e}")
+    return None, None
+
+
+def sph2cart(latitudes, longitudes, R=6371):
+    """Convert spherical lat/lon to Cartesian coordinates."""
+    φ = np.radians(latitudes.astype(float))
+    λ = np.radians(longitudes.astype(float))
+    x = R * np.cos(φ) * np.cos(λ)
+    y = R * np.cos(φ) * np.sin(λ)
+    z = R * np.sin(φ)
+    return np.column_stack((x, y, z))
+
+
+class NFCFacilitiesHandler:
+    def __init__(self, config: Dict, user_agent: str = DEFAULT_USER_AGENT):
+        self.config = config
+        enabled = self.config.get("nfc_facilities", {}).get("enabled", False)
+        if not enabled:
+            return
+        
+        self.databases = self.config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
+        self.database_names = [db['name'] for db in self.databases]
+
+        self.max_distance_km = self.config.get("nfc_facilities", {}).get("max_distance_km", 50)
+
+        self.user_agent = user_agent
+
+    def run(self, metadata: pd.DataFrame):
+        df = self._get_data()
+        df = self._geocode(df)
+        match_df = self._match_facilities_with_samples()
+      
+    def _get_data(self):
+        database_dfs = []
+        if "GEM" in self.database_names or "NFCIS" in self.database_names:
+            database_dfs.append(other_databases.load_nfc_facilities(config=self.config))
+        if "MinDat" in self.database_names:
+            database_dfs.append(mindat.world_uranium_mines())
+        if "Wikipedia" in self.database_names:
+            database_dfs.append(wikipedia.world_nfc_facilities())
+        df = pd.concat(database_dfs, axis=0)
+        return df
+
+    def _geocode(self, df: pd.DataFrame):
+        # Prepare geocoding
+        df['__query__'] = df['facility'].fillna('') + ', ' + df['country'].fillna('')
+        unique_queries = df['__query__'].unique()
+    
+        # Geocode unique queries with progress
+        coords = {}
+        with get_progress_bar() as progress:
+            task_desc = "Geocoding unique locations"
+            task_desc_fmt = _format_task_desc(task_desc)
+            task = progress.add_task(task_desc_fmt, total=len(unique_queries))
+            for q in unique_queries:
+                coords[q] = _geocode_query(q, self.user_agent)
+                time.sleep(1) 
+                progress.update(task, advance=1)
+    
+        # Map coords back to DataFrame
+        df['latitude_deg']  = df['__query__'].map(lambda q: coords[q][0])
+        df['longitude_deg'] = df['__query__'].map(lambda q: coords[q][1])
+        df.drop(columns='__query__', inplace=True)
+    
+        return df
+
+    def _match_facilities_with_samples(
+        self,
+        facilities_df: pd.DataFrame,
+        samples_df: pd.DataFrame,        
+        output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
+    ) -> pd.DataFrame:
+        
+        # Pass full metadata to ensure coordinate columns are available
+        matched_df = self._match_facilities_to_locations(facilities_df, samples_df)
+        
+        # Define required metadata columns to keep
+        required_sample_cols = [
+            'nuclear_contamination_status', 
+            'dataset_name', 
+            'country', 
+            'latitude_deg', 
+            'longitude_deg'
+        ]
+        
+        # Get new facility columns (including renamed coordinates)
+        new_cols = [col for col in matched_df.columns if col not in samples_df.columns]
+        
+        # Combine required metadata and new facility columns
+        result_cols = [col for col in required_sample_cols if col in matched_df] + new_cols
+        
+        # Log warning if any required columns are missing
+        missing_cols = set(required_sample_cols) - set(result_cols)
+        if missing_cols:
+            logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
+        # Save full matched results
+        if output_dir:
+            matched_df[result_cols].to_csv(
+                Path(output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",
+                sep='\t', index=False
+            )
+        return matched_df
+
+    def _match_facilities_with_locations(
+        facilities_df: pd.DataFrame,
+        samples_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Match locations to nearby facilities within a specified distance threshold.
+        Handles missing coordinates by preserving original rows."""
+        # Copy samples to preserve order and index
+        samples_df = samples_df.reset_index(drop=True).copy()
+    
+        # Identify valid coordinates
+        valid_mask = samples_df[['latitude_deg', 'longitude_deg']].notnull().all(axis=1)
+        valid_samples = samples_df[valid_mask]
+        invalid_samples = samples_df[~valid_mask]
+    
+        # If no valid samples, return all unmatched
+        if valid_samples.empty:
+            matches = pd.DataFrame([
+                {
+                    **{col: np.nan for col in facilities_df.columns}, 
+                    'facility_distance_km': np.nan, 
+                    'facility_match': False
+                }
+                for _ in range(len(samples_df))
+            ])
+            # Rename facility coordinate columns before returning
+            matches = matches.rename(columns={
+                'latitude_deg': 'facility_latitude_deg',
+                'longitude_deg': 'facility_longitude_deg'
+            })
+            return pd.concat([samples, matches], axis=1)
+    
+        # Prepare facility KD-tree
+        valid_fac = facilities_df.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
+        fac_xyz = sph2cart(valid_fac['latitude_deg'], valid_fac['longitude_deg'])
+        tree = cKDTree(fac_xyz)
+    
+        # Build sample coordinates
+        samp_xyz = sph2cart(valid_samples['latitude_deg'], valid_samples['longitude_deg'])
+        dists, idxs = tree.query(samp_xyz, distance_upper_bound=self.max_distance_km)
+    
+        # Build result records
+        records = []
+        # First handle valid_samples
+        for dist, idx in zip(dists, idxs):
+            if np.isfinite(dist):
+                rec = valid_fac.iloc[idx].to_dict()
+                rec.update({'facility_distance_km': dist, 'facility_match': True})
+            else:
+                rec = {col: np.nan for col in facilities_df.columns}
+                rec.update({'facility_distance_km': np.nan, 'facility_match': False})
+            records.append(rec)
+    
+        # Then handle invalid_samples: no match
+        for _ in range(len(invalid_samples)):
+            rec = {col: np.nan for col in facilities_df.columns}
+            rec.update({'facility_distance_km': np.nan, 'facility_match': False})
+            records.append(rec)
+    
+        # Combine matches in original order
+        matches_df = pd.DataFrame(records)
+        
+        # Rename facility coordinate columns to avoid conflicts
+        matches_df = matches_df.rename(columns={
+            'latitude_deg': 'facility_latitude_deg',
+            'longitude_deg': 'facility_longitude_deg',
+            'country': 'facility_country'
+        })
+        
+        return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
+
+
+# TODO: Additions from https://github.com/heathermacgregor/workflow_16s/blob/main/src/workflow_16s/utils/nfc_facilities.py
+'''
+def analyze_contamination_correlation(
+    df: pd.DataFrame,
+    threshold: float = 0.5
+) -> dict:
+    """
+    Analyzes correlation between facility proximity and contamination status.
+    """
+    required = ['facility_match', 'nuclear_contamination_status']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+    analysis_df = df.set_index('#sampleid')[required].dropna().copy()
+    # Contamination boolean
+    if pd.api.types.is_numeric_dtype(analysis_df['nuclear_contamination_status']):
+        analysis_df['contaminated'] = analysis_df['nuclear_contamination_status'] > threshold
+    else:
+        analysis_df['contaminated'] = (
+            analysis_df['nuclear_contamination_status'].str.lower()
+            .isin(['contaminated','positive','high','yes','true'])
+        )
+
+    facility_nearby = analysis_df['facility_match'].astype(bool)
+    is_contaminated = analysis_df['contaminated']
+
+    tn, fp, fn, tp = confusion_matrix(is_contaminated, facility_nearby, labels=[False, True]).ravel()
+
+    total = len(analysis_df)
+    summary = {
+        'total_locations': total,
+        'contamination_rate': is_contaminated.mean(),
+        'facility_presence_rate': facility_nearby.mean(),
+        'true_positive_rate': tp / (tp + fn) if tp+fn>0 else 0,
+        'false_positive_rate': fp / (fp + tn) if fp+tn>0 else 0,
+        'precision': tp / (tp + fp) if tp+fp>0 else 0,
+        'relative_risk': (tp/(tp+fp)) / (fn/(fn+tn)) if fn+tn>0 else float('nan')
+    }
+
+    return {
+        'summary_metrics': summary,
+        'confusion_matrix': {'true_positive': tp, 'false_positive': fp, 'true_negative': tn, 'false_negative': fn},
+        'contingency_table': pd.crosstab(
+            facility_nearby, is_contaminated,
+            rownames=['Facility Nearby'], colnames=['Contaminated'], margins=True
+        ).to_dict(),
+        'classification_report': classification_report(
+            is_contaminated, facility_nearby,
+            target_names=['Not Contaminated','Contaminated'], output_dict=True
+        )
+    }
+'''
