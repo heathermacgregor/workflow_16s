@@ -3,6 +3,8 @@
 # Example #1: Nuclear contamination
 ##########################################################################################################################################
 
+verbose: True
+
 # HARDWARE
 cpu:
   limit: 32  # Global CPU limit for all operations
