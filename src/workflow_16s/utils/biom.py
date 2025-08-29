@@ -1,24 +1,21 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Library Imports
-import glob
 import logging
-import os
-import re
+from functools import reduce
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Union
 
 # Third-Party Imports
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from Bio import SeqIO
 from biom import load_table
 from biom.table import Table
 
 # Local Imports
 from workflow_16s import constants
+from workflow_16s.constants import TAXONOMIC_LEVELS_MAPPING, PREVALENCE_THRESHOLD, GROUP_THRESHOLD
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -26,17 +23,79 @@ logger = logging.getLogger('workflow_16s')
 
 # ==================================== FUNCTIONS ===================================== #
 
+def import_biom(biom_path: Union[str, Path]) -> Table:
+    """Load a BIOM table from file.
+    
+    Args:
+        biom_path : 
+            Path to .biom file.
+    
+    Returns:
+        BIOM Table object or pandas DataFrame.
+    
+    Raises:
+        ValueError: For invalid 'as_type' values.
+    """
+    try:
+        with h5py.File(biom_path) as f:
+            return Table.from_hdf5(f)
+    except:
+        return load_table(biom_path)
+
+
+def import_merged_biom_table(biom_paths: List[Union[str, Path]]) -> Table:
+    """Merge multiple BIOM tables into a single unified table.
+    
+    Args:
+        biom_paths : 
+            List of paths to .biom files.
+    
+    Returns:
+        Merged BIOM Table or DataFrame.
+    
+    Raises:
+        ValueError : 
+            If no valid tables are loaded.
+    """
+    tables: List[Table] = []
+    with get_progress_bar() as progress:
+        task_desc = "Loading feature tables"
+        task_desc_fmt = _format_task_desc(task_desc)
+        task = progress.add_task(task_desc_fmt, total=len(biom_paths))
+        for path in biom_paths:
+            try:
+                tables.append(import_biom(path, 'table'))
+            except Exception as e:
+                logger.error(f"BIOM load failed for {path}: {e}")
+            finally:
+                progress.update(task, advance=1)
+
+    if not tables:
+        raise ValueError("No valid BIOM tables loaded")
+
+    # Merge the tables using reduce
+    return reduce(lambda t1, t2: t1.merge(t2), tables)
+        
+
 def export_h5py(
-    table: Table,
+    table: Union[pd.DataFrame, Table],
     output_path: Union[str, Path]
-):
-    """"""
+) -> None:
+    """
+
+    Args:
+        table :
+        output_path:
+    """
+    table = table.copy()
+    table = df_to_biom(table)
+    
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_path, 'w') as f:
         table.to_hdf5(f, generated_by=f"Table")
         
 
-def convert_to_biom(
+def df_to_biom(
     table: Union[pd.DataFrame, Table]
 ) -> Table:
     """Convert pandas DataFrame to BIOM Table.
@@ -49,30 +108,28 @@ def convert_to_biom(
     """
     if isinstance(table, Table):
         return table
-    
-    observation_ids = table.index.astype(str).tolist()
-    sample_ids = table.columns.astype(str).tolist()
-    data = table.values
-    
+        
     return Table(
-        data=data,
-        observation_ids=observation_ids,
-        sample_ids=sample_ids,
+        data=table.values,
+        observation_ids=table.index.astype(str).tolist(),
+        sample_ids=table.columns.astype(str).tolist(),
         type="OTU table"
     )
   
 
 def collapse_taxa(
     table: Union[pd.DataFrame, Table], 
-    target_level: str, 
-    verbose: bool = True
+    target_level: str,
+    levels: Dict = TAXONOMIC_LEVELS_MAPPING
 ) -> Table:
     """Collapse feature table to specified taxonomic level.
     
     Args:
-        table:        Input BIOM Table or DataFrame.
-        target_level: Taxonomic level to collapse to (phylum/class/order/family).
-        output_dir:   Directory to save collapsed table.
+        table :        
+            Input BIOM Table or DataFrame.
+        target_level : 
+            Taxonomic level to collapse to (phylum/class/order/family).
+        levels :
     
     Returns:
         Collapsed BIOM Table.
@@ -81,33 +138,30 @@ def collapse_taxa(
         ValueError: For invalid target_level.
     """
     table = table.copy()
-    table = convert_to_biom(table)
+    table = df_to_biom(table)
         
-    if target_level not in constants.levels:
+    if target_level not in levels:
         raise ValueError(
             f"Invalid `target_level`: {target_level}. "
-            f"Expected one of {list(constants.levels.keys())}")
+            f"Expected one of {list(levels.keys())}"
+        )
 
-    level_idx = constants.levels[target_level]
+    i = levels[target_level]
 
     # Create taxonomy mapping
     id_map = {}
     for taxon in table.ids(axis='observation').astype(str):
         parts = taxon.split(';')
-        truncated = ';'.join(
-            parts[:level_idx + 1]
-        ) if len(parts) >= level_idx + 1 else 'Unclassified'
+        truncated = ';'.join(parts[:i + 1]) if len(parts) >= i + 1 else 'Unclassified'
         id_map[taxon] = truncated
 
     # Collapse table
-    collapsed_table = table.collapse(
+    return table.collapse(
         lambda id, _: id_map.get(id, 'Unclassified'),
         norm=False,
         axis='observation',
         include_collapsed_metadata=False
     ).remove_empty()
-    
-    return collapsed_table
   
 
 def presence_absence(
@@ -125,7 +179,7 @@ def presence_absence(
         Presence/absence BIOM Table filtered by abundance.
     """
     table = table.copy()
-    table = convert_to_biom(table)
+    table = df_to_biom(table)
     
     # Filter by abundance
     feature_sums = np.array(table.sum(axis='observation')).flatten()
@@ -136,65 +190,88 @@ def presence_absence(
     
     # Convert to presence/absence
     pa_table = table.pa(inplace=False)
-    pa_table_filtered = pa_table.filter(keep_ids, axis='observation')
-    pa_df_filtered = pa_table_filtered.to_dataframe(dense=True)
-
-    # Save output
-    pa_table = Table(
-        pa_df_filtered.values,
-        pa_df_filtered.index,
-        pa_df_filtered.columns,
+    pa_table_fltr = pa_table.filter(keep_ids, axis='observation')
+    pa_df_fltr = pa_table_fltr.to_dataframe(dense=True)
+    
+    return Table(
+        data=pa_df_fltr.values,
+        observation_ids=pa_df_fltr.index.tolist(),
+        sample_ids=pa_df_fltr.columns.tolist(),
         table_id='Presence Absence BIOM Table'
     )
-    
-    return pa_table
 
 
 def filter_presence_absence(
     table: Table, 
     metadata: pd.DataFrame, 
-    col: str = 'nuclear_contamination_status', 
-    prevalence_threshold: float = 0.05, 
-    group_threshold: float = 0.05
+    group_column: str = DEFAULT_GROUP_COL, 
+    prevalence_threshold: float = PREVALENCE_THRESHOLD, 
+    group_threshold: float = GROUP_THRESHOLD
 ) -> Table:
     """Filter presence/absence table based on prevalence and group differences.
     
     Args:
-        table:                Input BIOM Table.
-        metadata:             Sample metadata DataFrame.
-        col:                  Metadata column to group by.
-        prevalence_threshold: Minimum prevalence across all samples.
-        group_threshold:      Minimum prevalence difference between groups.
+        table :                
+            Input BIOM Table.
+        metadata :             
+            Sample metadata DataFrame.
+        col :                  
+            Metadata column to group by.
+        prevalence_threshold : 
+            Minimum prevalence across all samples.
+        group_threshold :      
+            Minimum prevalence difference between groups.
     
     Returns:
         Filtered BIOM Table
     """
     df = table.to_dataframe(dense=True).T
     metadata = metadata.set_index("run_accession.1")
-    df_with_meta = df.join(metadata[[col]], how='inner')
+    df_with_meta = df.join(metadata[[group_column]], how='inner')
 
     # Apply prevalence filter
     if prevalence_threshold:
-        species_data = df_with_meta.drop(columns=[col])
+        species_data = df_with_meta.drop(columns=[group_column])
         prev = species_data.mean(axis=0)
         filtered_species = prev[prev >= prevalence_threshold].index
         df_with_meta = df_with_meta[filtered_species.union(pd.Index([col]))]
 
     # Apply group filter
     if group_threshold:
-        groups = df_with_meta.groupby(col)
+        #group_column_type = df_with_meta[group_column].dtype
+        groups = df_with_meta.groupby(group_column)
         if True not in groups.groups or False not in groups.groups:
-            raise ValueError(f"Metadata column '{col}' must have True/False groups")
+            error_msg = f"Metadata column '{group_column}' must have True/False groups"
+            raise ValueError(error_msg)
         sum_per_group = groups.sum(numeric_only=True)
         n_samples = groups.size()
         percentages = sum_per_group.div(n_samples, axis=0)
         mask = (percentages.loc[True] >= group_threshold) & (percentages.loc[False] >= group_threshold)
         selected_species = mask[mask].index
-        df_with_meta = df_with_meta[selected_species.union(pd.Index([col]))]
+        df_with_meta = df_with_meta[selected_species.union(pd.Index([group_column]))]
 
     return Table(
-        df_with_meta.drop(columns=[col]).values.T,
-        df_with_meta.columns.tolist(),
-        df_with_meta.index.tolist(),
+        data=df_with_meta.drop(columns=[group_column]).values.T,
+        observation_ids=df_with_meta.columns.tolist(),
+        sample_ids=df_with_meta.index.tolist(),
         table_id='Filtered Presence/Absence Table'
     )
+
+
+def sample_id_map(table: Table) -> Dict[str, str]:
+    """Create lowercase to original-case ID mapping for BIOM table samples."""
+    # Handle empty table
+    if table.is_empty():
+        return {}
+    
+    mapping: Dict[str, str] = {}
+    for orig_id in table.ids(axis='sample'):
+        lower_id = orig_id.lower()
+        if lower_id in mapping:
+            raise ValueError(
+                f"Duplicate lowercase sample ID: '{lower_id}' "
+                f"(from '{orig_id}' and '{mapping[lower_id]}')"
+            )
+        mapping[lower_id] = orig_id
+    return mapping
+    
