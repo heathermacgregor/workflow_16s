@@ -1,44 +1,26 @@
-import pandas as pd
+# Standard Imports
 import requests
-from typing import Dict
+from typing import Dict, Optional, Union
 
+# Third Party Imports
+import pandas as pd
+from scipy.spatial import cKDTree
+
+# Local Imports
 from workflow_16s.constants import DEFAULT_USER_AGENT, REFERENCES_DIR
-from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases 
+from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases, utils 
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
-
-_session = requests.Session() # Create a single requests session for reuse
-
-@lru_cache(maxsize=None)
-def _geocode_query(query: str, user_agent: str = DEFAULT_USER_AGENT) -> (float, float):
-    """Get coordinates from Nominatim API with caching."""
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {'q': query, 'format': 'json', 'limit': 1}
-    headers = {'User-Agent': user_agent}
-    try:
-        response = _session.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if data:
-            return float(data[0]['lat']), float(data[0]['lon'])
-    except Exception as e:
-        logger.error(f"Geocoding failed for '{query}': {e}")
-    return None, None
-
-
-def sph2cart(latitudes, longitudes, R=6371):
-    """Convert spherical lat/lon to Cartesian coordinates."""
-    φ = np.radians(latitudes.astype(float))
-    λ = np.radians(longitudes.astype(float))
-    x = R * np.cos(φ) * np.cos(λ)
-    y = R * np.cos(φ) * np.sin(λ)
-    z = R * np.sin(φ)
-    return np.column_stack((x, y, z))
 
 
 class NFCFacilitiesHandler:
-    def __init__(self, config: Dict, user_agent: str = DEFAULT_USER_AGENT):
+    def __init__(
+        self, 
+        config: Dict,        
+        output_dir: Optional[Union[str, Path]] = REFERENCES_DIR, 
+        user_agent: str = DEFAULT_USER_AGENT
+    ):
         self.config = config
-        enabled = self.config.get("nfc_facilities", {}).get("enabled", False)
+        enabled = self.config.get("nfc_facilities", {}).get("enabled", True) # TODO: Switch to False
         if not enabled:
             return
         
@@ -47,13 +29,20 @@ class NFCFacilitiesHandler:
 
         self.max_distance_km = self.config.get("nfc_facilities", {}).get("max_distance_km", 50)
 
+        self.output_dir = output_dir
         self.user_agent = user_agent
 
     def run(self, metadata: pd.DataFrame):
+        df = self._get_geocoded_data()
+        updated_metadata = self._match_facilities_with_samples(facilities_df=df, samples_df=metadata)
+        return df, updated_metadata
+
+    def _get_geocoded_data(self):
         df = self._get_data()
         df = self._geocode(df)
-        match_df = self._match_facilities_with_samples()
-      
+        self.nfc_facilities = df
+        return df
+        
     def _get_data(self):
         database_dfs = []
         if "GEM" in self.database_names or "NFCIS" in self.database_names:
@@ -62,8 +51,8 @@ class NFCFacilitiesHandler:
             database_dfs.append(mindat.world_uranium_mines())
         if "Wikipedia" in self.database_names:
             database_dfs.append(wikipedia.world_nfc_facilities())
-        df = pd.concat(database_dfs, axis=0)
-        return df
+        facilities_df = pd.concat(database_dfs, axis=0)
+        return facilities_df
 
     def _geocode(self, df: pd.DataFrame):
         # Prepare geocoding
@@ -77,7 +66,7 @@ class NFCFacilitiesHandler:
             task_desc_fmt = _format_task_desc(task_desc)
             task = progress.add_task(task_desc_fmt, total=len(unique_queries))
             for q in unique_queries:
-                coords[q] = _geocode_query(q, self.user_agent)
+                coords[q] = utils._geocode_query(q, self.user_agent)
                 time.sleep(1) 
                 progress.update(task, advance=1)
     
@@ -85,14 +74,12 @@ class NFCFacilitiesHandler:
         df['latitude_deg']  = df['__query__'].map(lambda q: coords[q][0])
         df['longitude_deg'] = df['__query__'].map(lambda q: coords[q][1])
         df.drop(columns='__query__', inplace=True)
-    
         return df
 
     def _match_facilities_with_samples(
         self,
         facilities_df: pd.DataFrame,
-        samples_df: pd.DataFrame,        
-        output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
+        samples_df: pd.DataFrame
     ) -> pd.DataFrame:
         
         # Pass full metadata to ensure coordinate columns are available
@@ -118,7 +105,7 @@ class NFCFacilitiesHandler:
         if missing_cols:
             logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
         # Save full matched results
-        if output_dir:
+        if self.output_dir:
             matched_df[result_cols].to_csv(
                 Path(output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",
                 sep='\t', index=False
@@ -158,11 +145,11 @@ class NFCFacilitiesHandler:
     
         # Prepare facility KD-tree
         valid_fac = facilities_df.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
-        fac_xyz = sph2cart(valid_fac['latitude_deg'], valid_fac['longitude_deg'])
+        fac_xyz = utils.sph2cart(valid_fac['latitude_deg'], valid_fac['longitude_deg'])
         tree = cKDTree(fac_xyz)
     
         # Build sample coordinates
-        samp_xyz = sph2cart(valid_samples['latitude_deg'], valid_samples['longitude_deg'])
+        samp_xyz = utils.sph2cart(valid_samples['latitude_deg'], valid_samples['longitude_deg'])
         dists, idxs = tree.query(samp_xyz, distance_upper_bound=self.max_distance_km)
     
         # Build result records
