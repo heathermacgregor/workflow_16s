@@ -86,6 +86,8 @@ class MinDatAPI:
         results = lr.get_dict()
         if 'results' in results and results['results']:
             df = pd.DataFrame(results['results'])
+            df['facility'] = [i.split(',')[0] for i in df['txt']]
+            df['data_source'] = "MinDat"
             return df, gpd_from_df(df)
         else:
             return pd.DataFrame(), gpd.GeoDataFrame()
