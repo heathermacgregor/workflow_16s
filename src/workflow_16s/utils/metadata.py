@@ -306,4 +306,13 @@ class MetadataCleaner:
             # Update the DataFrame
             self.df.at[idx, 'latitude_deg'] = new_lat
             self.df.at[idx, 'longitude_deg'] = new_lon
-          
+
+
+# API
+def clean_metadata(metadata: pd.DataFrame):
+    cleaner = MetadataCleaner(
+        config=self.config, 
+        metadata=metadata
+    )
+    cleaner.run_all()
+    return cleaner.df
