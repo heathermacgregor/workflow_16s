@@ -1,7 +1,32 @@
 import os
 import re
 from pathlib import Path
-
+MODE = 'genus'
+DEFAULT_GROUP_COLUMN: str = "nuclear_contamination_status"
+GROUP_COLUMNS = [
+    {
+        'name': "nuclear_contamination_status",
+        'type': "bool",
+        'values': [True, False]
+    },
+]
+SAMPLE_ID_COLUMN = '#sampleid'
+PREVALENCE_THRESHOLD: float = 0.05
+GROUP_THRESHOLD: float = 0.05
+TAXONOMIC_LEVELS_MAPPING = {
+    'phylum': 2, 
+    'class': 3, 
+    'order': 4, 
+    'family': 5, 
+    'genus': 6
+}
+TAXONOMIC_LEVELS = {
+    'phylum': 2, 
+    'class': 3, 
+    'order': 4, 
+    'family': 5, 
+    'genus': 6
+}
 # ==================================================================================== #
 # PROGRESS BAR
 # ==================================================================================== #
