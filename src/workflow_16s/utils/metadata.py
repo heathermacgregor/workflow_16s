@@ -60,6 +60,27 @@ def import_metadata_tsv(
     return df
 
 
+def get_group_column_values(
+    group_column: Union[str, Dict], 
+    metadata: pd.DataFrame
+) -> List[Any]:
+    """Optimized group column value extraction."""
+    if isinstance(group_column, dict):
+        if 'values' in group_column and group_column['values']:
+            return group_column['values']
+        
+        if 'type' in group_column and group_column['type'] == 'bool':
+            return [True, False]
+        
+        if 'name' in group_column and group_column['name'] in metadata.columns:
+            return metadata[group_column['name']].drop_duplicates().tolist()
+    elif isinstance(group_column, str):
+        if group_column in metadata.columns:
+            return metadata[group_column].drop_duplicates().tolist()
+    else:
+        return []
+
+
 def import_merged_metadata_tsv(
     tsv_paths: List[Union[str, Path]],
     columns_to_rename: Optional[List[Tuple[str, str]]] = None
