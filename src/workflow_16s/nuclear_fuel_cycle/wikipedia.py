@@ -2,17 +2,19 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from pathlib import Path
+from typing import Union
+from workflow_16s.constants import REFERENCES_DIR 
 
 
-class ScrapeWikipedia:
-    def __init__(self):
+class WikipediaScraper:
+    def __init__(self, output_dir: Union[str, Path] = REFERENCES_DIR):
+        self.output_dir = output_dir
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
-        self.nps = self._nuclear_power_stations()
-        self.um = self._uranium_mines()
-        self.data = self._compile_and_sort()
+        self.data = pd.DataFrame()
       
     def _get_soup(self, url):
         response = self.session.get(url)
@@ -85,8 +87,17 @@ class ScrapeWikipedia:
         return dfs
 
     def _compile_and_sort(self):
-        return pd.concat([pd.concat(self.nps), pd.concat(self.um)]).sort_values(by='facility_name')
+        nps = self._nuclear_power_stations()
+        um = self._uranium_mines()
+        datasets = [nps, um]
+        df = pd.concat([pd.concat(x) for x in datasets])
+        df = df.sort_values(by='facility_name')
+        df.to_csv(self.output_dir / "nfc_facility_data_wikipedia.tsv", sep="\t", index=False)
+        self.data = df
+        return df
 
-# Usage
-scraper = ScrapeWikipedia()
-print(scraper.data)
+
+# API
+def world_nfc_facilities():
+    scraper = WikipediaScraper()
+    return scraper._compile_all_and_sort()
