@@ -9,7 +9,7 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN
-from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import NFCFacilitiesHandler
+from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
 from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sample_id_map
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.metadata import MetadataCleaner, import_merged_metadata_tsv
@@ -181,10 +181,11 @@ class DownstreamDataLoader:
         return tsv_paths
 
     # SPECIAL CASE: LOAD NFC FACILITIES DATA
-    def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        handler = NFCFacilitiesHandler(config=self.config)
-        nfc_facilities, updated_metadata = handler.run(metadata=metadata)
-        return nfc_facilities, updated_metadata
+    def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        return update_nfc_facilities_data(
+            config=self.config,
+            metadata=metadata
+        )
 
     def _log_results(self, level, table, metadata) -> None:
         table_size = "Empty" if table.is_empty() else f"{table.shape[0]} features × {table.shape[1]} samples"
