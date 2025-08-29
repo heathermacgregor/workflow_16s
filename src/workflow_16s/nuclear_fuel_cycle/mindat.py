@@ -123,10 +123,10 @@ class MinDatAPI:
         
         if dfs:
             df = pd.concat(dfs, axis=0)
-            df.to_csv(self.output_dir / "world_mines.tsv", sep="\t", index=False)
+            df.to_csv(self.output_dir / "mindat_world_mines.tsv", sep="\t", index=False)
             gdf = gpd_from_df(df)
             if not gdf.empty:
-                if self.plot_package == 'apl':
+                if self.plot_package == 'mpl':
                     self._mpl_plot_uranium_mines_locality('world', gdf)
             return df, gdf
         else:
@@ -135,5 +135,5 @@ class MinDatAPI:
 
 
 # API
-def world_uranium_mines():
+def mindat_world_uranium_mines():
     return MinDatAPI()._get_uranium_mines_world()
