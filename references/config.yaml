@@ -132,6 +132,7 @@ features:
 # Statistical Analyses
 stats: 
   enabled: True
+  load_existing: True
   comprehensive_analysis:
     enabled: True
     core_microbiome_analysis:
