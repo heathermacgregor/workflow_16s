@@ -135,5 +135,6 @@ class MinDatAPI:
 
 
 # API
-def mindat_world_uranium_mines():
-    return MinDatAPI()._get_uranium_mines_world()
+def world_uranium_mines():
+    mindat_api = MinDatAPI()
+    return mindat_api._get_uranium_mines_world()
