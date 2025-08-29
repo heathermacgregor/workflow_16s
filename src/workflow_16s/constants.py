@@ -37,6 +37,7 @@ DEFAULT_MODE = 'genus'
 DEFAULT_FEATURE_TYPE = 'ASV'
 
 DEFAULT_EMAIL = "macgregor@berkeley.edu"
+MINDAT_API_KEY = "ee6cec6c0c15e4e2960871477dbfb072"
 
 # ==================================================================================== #
 # ENA
