@@ -193,4 +193,14 @@ class DownstreamDataLoader:
         feature_type = "genera" if level == "genus" else "ASVs"
         logger.info(f"{'Loaded metadata:':<30}{metadata_size}")
         logger.info(f"{'Loaded features:':<30}{table_size} {feature_type}")
-      
+
+
+# API
+def load_data(config: Dict, project_dir: SubDirs, existing_subsets: Any = None):
+    loader = DownstreamDataLoader(
+        config=config,
+        project_dir=project_dir,
+        existing_subsets=existing_subsets
+    )
+    loader.run()
+    return loader
