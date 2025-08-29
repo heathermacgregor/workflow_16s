@@ -31,6 +31,7 @@ DEFAULT_TIME_REMAINING_STYLE: str = "thistle1"
 # SETTINGS
 # ==================================================================================== #
 # Go up two levels 
+REFERENCES_DIR = Path(__file__).resolve().parents[2] / "references"
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "references" / "config.yaml"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG
 DEFAULT_MODE = 'genus'
