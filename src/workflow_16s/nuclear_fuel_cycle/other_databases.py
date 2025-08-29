@@ -66,6 +66,7 @@ class NFCFacilityDB:
             df = df[list(column_names.values())]
             df = df.rename(columns={v: k for k, v in column_names.items()})
             df = df[list(column_names.keys())]
+            df['data_source'] = database
             dfs.append(df)
           
         if dfs:
