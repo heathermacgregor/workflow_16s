@@ -12,7 +12,7 @@ from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN
 from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
 from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sample_id_map
 from workflow_16s.utils.dir_utils import SubDirs
-from workflow_16s.utils.metadata import MetadataCleaner, import_merged_metadata_tsv
+from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
 
 
 def align_table_and_metadata(
@@ -92,7 +92,7 @@ class DownstreamDataLoader:
         level, subdir, _ = self.ModeConfig[mode]
         table = self._load_biom_table(level, subdir)
         metadata = self._load_metadata(level, subdir)
-        metadata = self._clean_metadata(metadata)
+        metadata = clean_metadata(metadata)
       
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
@@ -110,7 +110,6 @@ class DownstreamDataLoader:
             logger.warning(f"Alignment resulted in empty table for level '{level}'")
         return table, metadata
         
-    # BIOM FEATURE TABLE    
     def _load_biom_table(self, level, subdir) -> Table:
         table_paths = self._get_table_paths(level, subdir)  
         if not table_paths:
@@ -128,19 +127,10 @@ class DownstreamDataLoader:
         
         return metadata
 
-    def _clean_metadata(self, metadata: pd.DataFrame):
-        cleaner = MetadataCleaner(
-            config=self.config, 
-            metadata=metadata
-        )
-        cleaner.run_all()
-        return cleaner.df
-
     def _get_table_paths(self, level: str, subdir: str) -> List[Path]:
         # If there are existing subsets of datasets from upstream processing loaded
         if self.existing_subsets is not None:
             table_paths = [paths[dir] for subset_id, paths in self.existing_subsets.items()]
-            
         # If there are NOT existing subsets, search in the directory files matching a pattern
         else:
             if self.config["target_subfragment_mode"] == 'any':
