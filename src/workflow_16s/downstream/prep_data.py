@@ -192,8 +192,8 @@ class DownstreamDataPrepper:
                     finally:
                         progress.update(task_id, advance=1)
                       
+# ==================================================================================== #
 
-# API
 def prep_data(config: Dict, metadata: Dict, tables: Dict, project_dir: SubDirs):
     prepper = DownstreamDataPrepper(
         config=config,
