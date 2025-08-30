@@ -1,3 +1,5 @@
+# ===================================== IMPORTS ====================================== #
+
 # Standard Imports
 import re
 from pathlib import Path
@@ -9,6 +11,7 @@ import pandas as pd
 # Local Imports
 from workflow_16s.constants import SAMPLE_ID_COLUMN, GROUP_COLUMNS
 
+# ==================================================================================== #
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
@@ -59,6 +62,7 @@ def import_metadata_tsv(
 
     return df
 
+# ==================================================================================== #
 
 def get_group_column_values(
     group_column: Union[str, Dict], 
@@ -116,6 +120,7 @@ def import_merged_metadata_tsv(
 
     return pd.concat(dfs, ignore_index=True)
 
+# ==================================================================================== #
 
 class MetadataCleaner:
     # Precompile regex patterns for efficiency
@@ -328,8 +333,8 @@ class MetadataCleaner:
             self.df.at[idx, 'latitude_deg'] = new_lat
             self.df.at[idx, 'longitude_deg'] = new_lon
 
+# ==================================================================================== #
 
-# API
 def clean_metadata(metadata: pd.DataFrame):
     cleaner = MetadataCleaner(
         config=self.config, 
