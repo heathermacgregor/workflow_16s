@@ -1,3 +1,5 @@
+# ==================================================================================== #
+
 # Standard Library Imports
 import hashlib
 import json
@@ -33,7 +35,7 @@ from workflow_16s.utils.data import (
 from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
-
+# ==================================================================================== #
 
 # Pre-compiled test configuration for faster access
 TestConfig = {
@@ -101,6 +103,7 @@ TestDefaults = {
     "presence_absence": ["fisher"]
 }
 
+# ==================================================================================== #
 
 def run_single_statistical_test(
     task_data: Tuple[str, str, str, Table, pd.DataFrame, str, List[Any], Path]
@@ -228,6 +231,7 @@ def calculate_config_hash(config: Dict, group_column: str, table_type: str, leve
     config_str = json.dumps(config_data, sort_keys=True, default=str)
     return hashlib.md5(config_str.encode()).hexdigest()
   
+# ==================================================================================== #
 
 class TaskResult(NamedTuple):
     """Structured result for parallel tasks."""
@@ -293,6 +297,7 @@ class DataCache:
         self._access_order.clear()
         self._memory_usage = 0
 
+# ==================================================================================== #
 
 class LocalResultLoader:
     """Handles loading and validation of existing results with enhanced caching."""
