@@ -134,7 +134,7 @@ stats:
   enabled: True
   load_existing: True
   max_workers: 8
-  comprehensive_analysis:
+  advanced_analysis:
     enabled: True
     core_microbiome_analysis:
       enabled: True
