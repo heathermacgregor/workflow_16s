@@ -1,3 +1,5 @@
+# ===================================== IMPORTS ====================================== #
+
 # Standard Imports
 import glob
 import logging
@@ -14,6 +16,7 @@ from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sampl
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
 
+# ==================================================================================== #
 
 def align_table_and_metadata(
     table: Table,
@@ -52,6 +55,7 @@ def align_table_and_metadata(
     filtered_table = table.filter(original_ids, axis='sample', inplace=False)
     return filtered_table, filtered_metadata
   
+# ==================================================================================== #
 
 class DownstreamDataLoader:
     ModeConfig = {
@@ -182,8 +186,8 @@ class DownstreamDataLoader:
         logger.info(f"{'Loaded metadata:':<30}{metadata_size}")
         logger.info(f"{'Loaded features:':<30}{table_size} {feature_type}")
 
+# ==================================================================================== #
 
-# API
 def load_data(config: Dict, project_dir: SubDirs, existing_subsets: Any = None):
     loader = DownstreamDataLoader(
         config=config,
