@@ -68,7 +68,7 @@ class DownstreamDataLoader:
         self.target_subfragment_mode = self.config.get("target_subfragment_mode", MODE)
         self.metadata_id_column = self.config.get("metadata_id_column", SAMPLE_ID_COLUMN)
       
-        self.verbose = self.config("verbose", False)
+        self.verbose = self.config.get("verbose", False)
       
         self.project_dir = project_dir
         self.existing_subsets = existing_subsets
@@ -77,10 +77,8 @@ class DownstreamDataLoader:
         # Initialize storage for feature tables and metadata
         self.tables: Dict = {'raw': {}}
         self.metadata: Dict = {'raw': {}}
-      
-        self.table_paths = None
-
         self.nfc_facilities = None
+        self.table_paths = None
 
     def run(self):
         # Load the ASV feature table if the target subfragment is specified (so, not 'any')
