@@ -1,3 +1,5 @@
+# ===================================== IMPORTS ====================================== #
+
 # Standard Library Imports
 import logging
 from pathlib import Path
@@ -13,6 +15,7 @@ from workflow_16s.downstream.load_data import load_data
 from workflow_16s.downstream.prep_data import prep_data
 from workflow_16s.downstream.stats_analysis import run_statistical_analysis
 
+# ==================================================================================== #
 
 # TODO: Refactor these modules
 from workflow_16s.amplicon_data.downstream.alpha import AlphaDiversity
@@ -76,6 +79,7 @@ def run_feature_selection(
             results[name] = fs.models
     return results
     
+# ==================================================================================== #
 
 class Config:
     """Configuration container for downstream analysis parameters."""
@@ -104,7 +108,8 @@ class Results:
         self.models: Dict[str, Any] = {}
         self.analysis_statistics: Dict[str, Any] = {}
       
-    
+# ==================================================================================== #
+
 class DownstreamAnalyzer:
     """Main class for orchestrating 16S amplicon data analysis pipeline."""
     ModeConfig = {
@@ -303,8 +308,8 @@ class DownstreamAnalyzer:
             logger.info(f"  - Loaded from cache: {summary_info.get('loaded_from_files', 'N/A')}")
             logger.info(f"  - Calculated fresh: {summary_info.get('calculated_fresh', 'N/A')}")
 
+# ==================================================================================== #
 
-# API
 def run_downstream(
     config: Dict, 
     project_dir: Any, 
