@@ -14,6 +14,7 @@ from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN
 from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
 from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sample_id_map
 from workflow_16s.utils.dir_utils import SubDirs
+#from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
 
 # ==================================================================================== #
