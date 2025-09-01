@@ -87,7 +87,8 @@ class DownstreamDataLoader:
 
     def run(self):
         # Load the ASV feature table if the target subfragment is specified (so, not 'any')
-        self._load_table_and_metadata('asv') if not self.target_subfragment_mode == 'any' else pass
+        if not self.target_subfragment_mode == 'any':
+            self._load_table_and_metadata('asv')  
         # Load the taxonomically-assigned feature table at the genus level     
         self._load_table_and_metadata('genus')
       
