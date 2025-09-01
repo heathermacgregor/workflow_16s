@@ -35,6 +35,8 @@ from workflow_16s.diversity import beta_diversity
 from workflow_16s.figures.beta_diversity import beta_diversity_plot
 from workflow_16s.downstream.load_data import align_table_and_metadata
 from workflow_16s.utils.dataframe import table_to_df
+from workflow_16s.utils.dir_utils import SubDirs
+from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 
@@ -101,7 +103,7 @@ class Ordination:
     def __init__(
         self, 
         config: Dict, 
-        project_dir: ProjectDir,
+        project_dir: Union[ProjectDir, SubDirs],
         metadata: pd.DataFrame,
         tables: Dict[str, Dict[str, Table]],
         group_column: str = constants.DEFAULT_GROUP_COLUMN,
@@ -394,7 +396,7 @@ class Ordination:
 
 def run_beta_diversity(
     config: Dict, 
-    project_dir: ProjectDir,
+    project_dir: Union[ProjectDir, SubDirs],
     metadata: pd.DataFrame,
     tables: Dict[str, Dict[str, Table]],
     group_columns: List[str]
