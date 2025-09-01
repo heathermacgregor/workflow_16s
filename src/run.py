@@ -37,7 +37,7 @@ from workflow_16s.config import get_config
 from workflow_16s.logger import setup_logging 
 
 #from workflow_16s.amplicon_data.analysis import AmpliconData
-from workflow_16s.amplicon_data.downstream.downstream import Downstream
+#from workflow_16s.amplicon_data.downstream.analysis import Downstream
 from workflow_16s.amplicon_data.downstream.results_analysis import DownstreamResultsAnalyzer
 from workflow_16s.figures.html_report import generate_html_report
 from workflow_16s.metadata.per_dataset import SubsetDataset
@@ -53,7 +53,7 @@ from workflow_16s.utils.io import (
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
 
-from workflow_16s.downstream.downstream import DownstreamAnalyzer
+from workflow_16s.amplicon_data.downstream.analysis import Downstream
 from workflow_16s.utils.dir import ProjectDir, create_project_dirs
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
