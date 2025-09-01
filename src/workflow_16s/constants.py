@@ -1,18 +1,27 @@
 import os
 import re
 from pathlib import Path
+from typing import Dict, List
+
+# ==================================================================================== #
+
 MODE = 'genus'
-DEFAULT_GROUP_COLUMN: str = "nuclear_contamination_status"
-GROUP_COLUMNS = [
+FEATURE_TYPE = 'ASV'
+
+SAMPLE_ID_COLUMN = '#sampleid'
+GROUP_COLUMN: str = "nuclear_contamination_status"
+GROUP_COLUMNS: List[Dict] = [
     {
         'name': "nuclear_contamination_status",
         'type': "bool",
         'values': [True, False]
     },
 ]
-SAMPLE_ID_COLUMN = '#sampleid'
-PREVALENCE_THRESHOLD: float = 0.05
+
 GROUP_THRESHOLD: float = 0.05
+PREVALENCE_THRESHOLD: float = 0.05
+
+TAXONOMIC_LEVELS = {'phylum': 2, 'class': 3, 'order': 4, 'family': 5, 'genus': 6}
 TAXONOMIC_LEVELS_MAPPING = {
     'phylum': 2, 
     'class': 3, 
@@ -20,13 +29,34 @@ TAXONOMIC_LEVELS_MAPPING = {
     'family': 5, 
     'genus': 6
 }
-TAXONOMIC_LEVELS = {
-    'phylum': 2, 
-    'class': 3, 
-    'order': 4, 
-    'family': 5, 
-    'genus': 6
+
+# ==================================================================================== #
+# PROGRESS BAR
+# ==================================================================================== #
+# See supported colors at: https://www.w3schools.com/colors/colors_x11.asp
+PROGRESS_BAR_SETTINGS: Dict = {
+    'text_width': 65,
+    'description_color': 'white',
+    'bar_width': 40,
+    'bar_column_complete_color': 'honeydew2',
+    'finished_color': 'dark_cyan',
+    'percentage_color': 'honeydew2',
+    'm_of_n_complete_color': 'honeydew2',
+    'time_elapsed_color': 'light_sky_blue1',
+    'time_remaining_color': 'thistle1'
 }
+
+REFERENCES_DIR = Path(__file__).resolve().parents[2] / "references"
+CONFIG_PATH = REFERENCES_DIR / "config.yaml"
+
+
+ENA_EMAIL = "macgregor@berkeley.edu"
+ENA_PATTERN = re.compile(r"^PRJ[EDN][A-Z]\d{4,}$", re.IGNORECASE)
+
+MINDAT_API_KEY = "ee6cec6c0c15e4e2960871477dbfb072"
+
+
+DEFAULT_GROUP_COLUMN: str = "nuclear_contamination_status"
 # ==================================================================================== #
 # PROGRESS BAR
 # ==================================================================================== #
