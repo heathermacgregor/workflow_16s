@@ -386,11 +386,11 @@ class Workflow16S:
             return
           
         self.logger.info("Starting downstream processing")
+        existing_subsets = self._get_existing_subsets()
         results = run_downstreams(
             self.config, 
-            #self.logger, 
             self.project_dir, 
-            self._get_existing_subsets()
+            existing_subsets
         )
         self.logger.info("Downstream processing completed")
       
