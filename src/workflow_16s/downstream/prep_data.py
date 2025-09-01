@@ -37,7 +37,7 @@ class DownstreamDataPrepper:
         tables: Dict,
         project_dir: SubDirs
     ) -> None:
-        self.config config 
+        self.config = config 
         self.mode = self.config.get("target_subfragment_mode", MODE)
         self.verbose = self.config("verbose", False)
       
