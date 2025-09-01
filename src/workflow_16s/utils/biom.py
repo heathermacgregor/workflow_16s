@@ -27,14 +27,10 @@ def import_biom(biom_path: Union[str, Path]) -> Table:
     """Load a BIOM table from file.
     
     Args:
-        biom_path : 
-            Path to .biom file.
+        biom_path (Union[str, Path]): Path to .biom file.
     
     Returns:
         BIOM Table object or pandas DataFrame.
-    
-    Raises:
-        ValueError: For invalid 'as_type' values.
     """
     try:
         with h5py.File(biom_path) as f:
