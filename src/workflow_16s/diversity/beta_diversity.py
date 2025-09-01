@@ -177,7 +177,7 @@ def pca(
     }
     if not df.shape[0] == components.shape[0]:
         raise
-    if not df.shape[1] == loadings.shape[0]
+    if not df.shape[1] == loadings.shape[0]:
         raise
     return result
 
