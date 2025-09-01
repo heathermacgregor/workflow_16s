@@ -1,6 +1,6 @@
 import numpy as np
 import requests
-
+from functools import lru_cache
 from workflow_16s.constants import DEFAULT_USER_AGENT
 
 _session = requests.Session() # Create a single requests session for reuse
