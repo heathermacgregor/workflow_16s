@@ -349,10 +349,10 @@ class Workflow16S:
             project_name=project_config.get("name", "project_01"), 
             base_path=project_config.get("dir_path", "../../project_01")
         )
-        self.logger = setup_logging(self.project_dir.get_dir('logs'))
+        self.logger = setup_logging(self.project_dir.get_dir('logs').dir_path)
       
-        self.project_dir_dep = SubDirs(self.config["project_dir"])
-        self.logger_dep = setup_logging(self.project_dir_dep.logs)
+        #self.project_dir_dep = SubDirs(self.config["project_dir"])
+        #self.logger_dep = setup_logging(self.project_dir_dep.logs)
       
         self._success_subsets: Optional[List[str]] = None
 
