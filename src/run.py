@@ -84,6 +84,7 @@ def get_existing_subsets(config, logger) -> Dict[str, Dict[str, Path]]:
     Returns:
         Dictionary mapping subset IDs to dictionaries of file paths.
     """
+    print(type(logger))
     # Get project directory structure
     project_dir = SubDirs(config["project_dir"])
     # Get taxonomy classifier
