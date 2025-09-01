@@ -417,6 +417,7 @@ class WorkflowError(Exception):
 def main(config_path: Path = constants.DEFAULT_CONFIG) -> None:
     """Run the entire workflow."""    
     workflow = Workflow16S(config_path)
+    workflow.run()
 
 if __name__ == "__main__":
     # Get custom config.yaml file from system arguments
