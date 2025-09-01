@@ -53,7 +53,7 @@ from workflow_16s.utils.io import (
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
 
-from workflow_16s.amplicon_data.downstream.analysis import Downstream
+from workflow_16s.downstream.analysis import Downstream
 from workflow_16s.utils.dir import ProjectDir, create_project_dirs
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
