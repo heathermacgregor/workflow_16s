@@ -374,7 +374,7 @@ class Workflow16S:
         # Get existing subsets
         if self._success_subsets == None and downstream_config.get("find_subsets", False):
             existing_subsets = get_existing_subsets(self.config, self.logger)
-            logger.info(f"Found {len(existing_subsets)} completed subsets")
+            self.logger.info(f"Found {len(existing_subsets)} completed subsets")
             return existing_subsets
         else:
             return self._success_subsets
