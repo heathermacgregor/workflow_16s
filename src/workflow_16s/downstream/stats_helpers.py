@@ -105,134 +105,6 @@ TestDefaults = {
 
 # ==================================================================================== #
 
-def run_single_statistical_test(
-    task_data: Tuple[str, str, str, Table, pd.DataFrame, str, List[Any], Path]
-) -> Any: #TaskResult:
-    """Optimized single test execution for parallel processing."""
-    table_type, level, test, table, metadata, name, values, output_dir = task_data
-    task_id = f"{table_type}_{level}_{test}"
-    start_time = time.time()
-    
-    try:
-        # Prepare data once
-        table, metadata = align_table_and_metadata(table, metadata)
-        test_func = TestConfig[test]["func"]
-        # Handle different function signatures efficiently
-        if test in {'enhanced_stats', 'differential_abundance'}:
-            result = test_func(
-                table=table,
-                metadata=metadata,
-                group_column=name
-            )
-        elif test == 'network_analysis':
-            corr_matrix, edges_df = test_func(table=table)
-            # Save correlation matrix
-            corr_path = output_dir / f'{test}_correlation_matrix.tsv'
-            corr_matrix.to_csv(corr_path, sep='\t')
-            result = edges_df
-        elif test == 'spearman_correlation':
-            # Skip if column not found
-            if name not in metadata.columns:
-                return TaskResult(task_id, table_type, level, test, None, "Column not found", False, 0)
-            result = test_func(
-                table=table,
-                metadata=metadata,
-                continuous_column=name
-            )
-        else:
-            # Check if test requires group values
-            if TestConfig[test].get("requires_group_values", True):
-                result = test_func(
-                    table=table,
-                    metadata=metadata,
-                    group_column=name,
-                    group_column_values=values
-                )
-            else:
-                result = test_func(
-                    table=table,
-                    metadata=metadata,
-                    group_column=name
-                )
-        
-        # Save results
-        if isinstance(result, pd.DataFrame) and not result.empty:
-            output_path = output_dir / f'{test}.tsv'
-            result.to_csv(output_path, sep='\t', index=True)
-            # Save configuration hash to validate future loads
-            config_hash_path = output_dir / ".config_hash"
-            if not config_hash_path.exists():
-                # Create a simple hash of test configuration
-                config_str = f"{test}_{table_type}_{level}"
-                config_hash = hashlib.md5(config_str.encode()).hexdigest()
-                with open(config_hash_path, 'w') as f:
-                    f.write(config_hash)
-        
-        processing_time = time.time() - start_time
-        return TaskResult(task_id, table_type, level, test, result, None, False, processing_time)
-        
-    except Exception as e:
-        error_msg = f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
-        logger.error(error_msg)
-        processing_time = time.time() - start_time
-        return TaskResult(task_id, table_type, level, test, None, error_msg, False, processing_time)
-
-
-def get_enabled_tasks(
-    config: Dict, 
-    tables: Dict[str, Dict[str, Table]]
-) -> List[Tuple[str, str, str]]:
-    """Task enumeration with early filtering."""
-    stats_config = config.get('stats', {})
-    table_config = stats_config.get('tables', {})
-    
-    tasks = []
-    known_tests = set(TestConfig.keys())
-    
-    # Pre-filter enabled table types
-    enabled_table_types = [
-        table_type for table_type, type_config in table_config.items()
-        if type_config.get('enabled', False) and table_type in tables
-    ]
-    
-    for table_type in enabled_table_types:
-        type_config = table_config[table_type]
-        available_levels = set(tables[table_type].keys())
-        
-        # Filter levels
-        configured_levels = set(type_config.get('levels', available_levels))
-        enabled_levels = available_levels & configured_levels
-        
-        # Filter tests
-        configured_tests = set(type_config.get('tests', TestDefaults.get(table_type, [])))
-        enabled_tests = configured_tests & known_tests
-        
-        # Generate tasks 
-        tasks.extend([
-            (table_type, level, test)
-            for level in enabled_levels
-            for test in enabled_tests
-        ])
-    
-    return tasks
-
-
-def calculate_config_hash(config: Dict, group_column: str, table_type: str, level: str, test: str) -> str:
-    """Calculate a hash for configuration to validate result compatibility."""
-    config_data = {
-        'group_column': group_column,
-        'table_type': table_type,
-        'level': level,
-        'test': test,
-        'test_config': TEST_CONFIG.get(test, {}),
-        'stats_config': config.get('stats', {})
-    }
-    
-    config_str = json.dumps(config_data, sort_keys=True, default=str)
-    return hashlib.md5(config_str.encode()).hexdigest()
-  
-# ==================================================================================== #
-
 class TaskResult(NamedTuple):
     """Structured result for parallel tasks."""
     task_id: str
@@ -433,3 +305,133 @@ class LocalResultLoader:
         self._load_cache.clear()
         self._metadata_cache.clear()
       
+
+# ==================================================================================== #
+
+def run_single_statistical_test(
+    task_data: Tuple[str, str, str, Table, pd.DataFrame, str, List[Any], Path]
+) -> TaskResult:
+    """Optimized single test execution for parallel processing."""
+    table_type, level, test, table, metadata, name, values, output_dir = task_data
+    task_id = f"{table_type}_{level}_{test}"
+    start_time = time.time()
+    
+    try:
+        # Prepare data once
+        table, metadata = align_table_and_metadata(table, metadata)
+        test_func = TestConfig[test]["func"]
+        # Handle different function signatures efficiently
+        if test in {'enhanced_stats', 'differential_abundance'}:
+            result = test_func(
+                table=table,
+                metadata=metadata,
+                group_column=name
+            )
+        elif test == 'network_analysis':
+            corr_matrix, edges_df = test_func(table=table)
+            # Save correlation matrix
+            corr_path = output_dir / f'{test}_correlation_matrix.tsv'
+            corr_matrix.to_csv(corr_path, sep='\t')
+            result = edges_df
+        elif test == 'spearman_correlation':
+            # Skip if column not found
+            if name not in metadata.columns:
+                return TaskResult(task_id, table_type, level, test, None, "Column not found", False, 0)
+            result = test_func(
+                table=table,
+                metadata=metadata,
+                continuous_column=name
+            )
+        else:
+            # Check if test requires group values
+            if TestConfig[test].get("requires_group_values", True):
+                result = test_func(
+                    table=table,
+                    metadata=metadata,
+                    group_column=name,
+                    group_column_values=values
+                )
+            else:
+                result = test_func(
+                    table=table,
+                    metadata=metadata,
+                    group_column=name
+                )
+        
+        # Save results
+        if isinstance(result, pd.DataFrame) and not result.empty:
+            output_path = output_dir / f'{test}.tsv'
+            result.to_csv(output_path, sep='\t', index=True)
+            # Save configuration hash to validate future loads
+            config_hash_path = output_dir / ".config_hash"
+            if not config_hash_path.exists():
+                # Create a simple hash of test configuration
+                config_str = f"{test}_{table_type}_{level}"
+                config_hash = hashlib.md5(config_str.encode()).hexdigest()
+                with open(config_hash_path, 'w') as f:
+                    f.write(config_hash)
+        
+        processing_time = time.time() - start_time
+        return TaskResult(task_id, table_type, level, test, result, None, False, processing_time)
+        
+    except Exception as e:
+        error_msg = f"Test '{test}' failed for {table_type}/{level}: {str(e)}"
+        logger.error(error_msg)
+        processing_time = time.time() - start_time
+        return TaskResult(task_id, table_type, level, test, None, error_msg, False, processing_time)
+
+
+def get_enabled_tasks(
+    config: Dict, 
+    tables: Dict[str, Dict[str, Table]]
+) -> List[Tuple[str, str, str]]:
+    """Task enumeration with early filtering."""
+    stats_config = config.get('stats', {})
+    table_config = stats_config.get('tables', {})
+    
+    tasks = []
+    known_tests = set(TestConfig.keys())
+    
+    # Pre-filter enabled table types
+    enabled_table_types = [
+        table_type for table_type, type_config in table_config.items()
+        if type_config.get('enabled', False) and table_type in tables
+    ]
+    
+    for table_type in enabled_table_types:
+        type_config = table_config[table_type]
+        available_levels = set(tables[table_type].keys())
+        
+        # Filter levels
+        configured_levels = set(type_config.get('levels', available_levels))
+        enabled_levels = available_levels & configured_levels
+        
+        # Filter tests
+        configured_tests = set(type_config.get('tests', TestDefaults.get(table_type, [])))
+        enabled_tests = configured_tests & known_tests
+        
+        # Generate tasks 
+        tasks.extend([
+            (table_type, level, test)
+            for level in enabled_levels
+            for test in enabled_tests
+        ])
+    
+    return tasks
+
+
+def calculate_config_hash(config: Dict, group_column: str, table_type: str, level: str, test: str) -> str:
+    """Calculate a hash for configuration to validate result compatibility."""
+    config_data = {
+        'group_column': group_column,
+        'table_type': table_type,
+        'level': level,
+        'test': test,
+        'test_config': TEST_CONFIG.get(test, {}),
+        'stats_config': config.get('stats', {})
+    }
+    
+    config_str = json.dumps(config_data, sort_keys=True, default=str)
+    return hashlib.md5(config_str.encode()).hexdigest()
+  
+
