@@ -15,7 +15,10 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s import constants
-from workflow_16s.constants import TAXONOMIC_LEVELS_MAPPING, PREVALENCE_THRESHOLD, GROUP_THRESHOLD, DEFAULT_GROUP_COLUMN as DEFAULT_GROUP_COL
+from workflow_16s.constants import (
+    DEFAULT_GROUP_COLUMN, GROUP_THRESHOLD, PREVALENCE_THRESHOLD, 
+    TAXONOMIC_LEVELS_MAPPING
+)
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
@@ -27,7 +30,7 @@ def import_biom(biom_path: Union[str, Path]) -> Table:
     """Load a BIOM table from file.
     
     Args:
-        biom_path (Union[str, Path]): Path to .biom file.
+        biom_path: Path to .biom file.
     
     Returns:
         BIOM Table object or pandas DataFrame.
@@ -43,21 +46,20 @@ def import_merged_biom_table(biom_paths: List[Union[str, Path]]) -> Table:
     """Merge multiple BIOM tables into a single unified table.
     
     Args:
-        biom_paths : 
-            List of paths to .biom files.
+        biom_paths: List of paths to .biom files.
     
     Returns:
         Merged BIOM Table or DataFrame.
     
     Raises:
-        ValueError : 
-            If no valid tables are loaded.
+        ValueError: If no valid tables are loaded.
     """
     tables: List[Table] = []
     with get_progress_bar() as progress:
-        task_desc = "Loading feature tables"
-        task_desc_fmt = _format_task_desc(task_desc)
-        task = progress.add_task(task_desc_fmt, total=len(biom_paths))
+        task = progress.add_task(
+            _format_task_desc("Loading feature tables"), 
+            total=len(biom_paths)
+        )
         for path in biom_paths:
             try:
                 tables.append(import_biom(path, 'table'))
@@ -77,11 +79,11 @@ def export_h5py(
     table: Union[pd.DataFrame, Table],
     output_path: Union[str, Path]
 ) -> None:
-    """
+    """Export BIOM Table with h5py.
 
     Args:
-        table :
-        output_path:
+        table:       BIOM Table.
+        output_path: File path to save output.
     """
     table = table.copy()
     table = df_to_biom(table)
@@ -91,9 +93,7 @@ def export_h5py(
         table.to_hdf5(f, generated_by=f"Table")
         
 
-def df_to_biom(
-    table: Union[pd.DataFrame, Table]
-) -> Table:
+def df_to_biom(table: Union[pd.DataFrame, Table]) -> Table:
     """Convert pandas DataFrame to BIOM Table.
     
     Args:
@@ -121,11 +121,9 @@ def collapse_taxa(
     """Collapse feature table to specified taxonomic level.
     
     Args:
-        table :        
-            Input BIOM Table or DataFrame.
-        target_level : 
-            Taxonomic level to collapse to (phylum/class/order/family).
-        levels :
+        table:        Input BIOM Table or DataFrame.
+        target_level: Taxonomic level to collapse to (phylum/class/order/family).
+        levels:       Taxonomic levels mapping dictionary.
     
     Returns:
         Collapsed BIOM Table.
@@ -168,7 +166,7 @@ def presence_absence(
     
     Args:
         table:        Input BIOM Table or DataFrame.
-        target_level: Taxonomic level for output naming.
+        target_level: Taxonomic level.
         output_dir:   Directory to save output.
     
     Returns:
@@ -200,26 +198,21 @@ def presence_absence(
 def filter_presence_absence(
     table: Table, 
     metadata: pd.DataFrame, 
-    group_column: str = DEFAULT_GROUP_COL, 
+    group_column: str = DEFAULT_GROUP_COLUMN, 
     prevalence_threshold: float = PREVALENCE_THRESHOLD, 
     group_threshold: float = GROUP_THRESHOLD
 ) -> Table:
     """Filter presence/absence table based on prevalence and group differences.
     
     Args:
-        table :                
-            Input BIOM Table.
-        metadata :             
-            Sample metadata DataFrame.
-        col :                  
-            Metadata column to group by.
-        prevalence_threshold : 
-            Minimum prevalence across all samples.
-        group_threshold :      
-            Minimum prevalence difference between groups.
+        table:                Input BIOM Table.
+        metadata:             Sample metadata DataFrame.
+        col:                  Metadata column to group by.
+        prevalence_threshold: Minimum prevalence across all samples.
+        group_threshold:      Minimum prevalence difference between groups.
     
     Returns:
-        Filtered BIOM Table
+        Filtered BIOM Table.
     """
     df = table.to_dataframe(dense=True).T
     metadata = metadata.set_index("run_accession.1")
@@ -256,18 +249,15 @@ def filter_presence_absence(
 
 def sample_id_map(table: Table) -> Dict[str, str]:
     """Create lowercase to original-case ID mapping for BIOM table samples."""
-    # Handle empty table
-    if table.is_empty():
+    if table.is_empty(): # Handle empty table
         return {}
     
     mapping: Dict[str, str] = {}
     for orig_id in table.ids(axis='sample'):
         lower_id = orig_id.lower()
         if lower_id in mapping:
-            raise ValueError(
-                f"Duplicate lowercase sample ID: '{lower_id}' "
-                f"(from '{orig_id}' and '{mapping[lower_id]}')"
-            )
+            raise ValueError(f"Duplicate lowercase sample ID: '{lower_id}' "
+                             f"(from '{orig_id}' and '{mapping[lower_id]}')")
         mapping[lower_id] = orig_id
     return mapping
     
