@@ -369,14 +369,17 @@ class Workflow16S:
             self.logger.error(f"Failed downstream processing: {e}")            
 
     def _get_existing_subsets(self):
-        downstream_config = self.config.get("downstream", {})
+        find_subsets = self.config.get("downstream", {}).get("find_subsets", False)
         # Get existing subsets
-        self.logger.info(self.config.get("downstream", {}))
-        if self._success_subsets == None and not downstream_config.get("find_subsets", False):
-            self.logger.info("Searching for existing completed subsets")
-            existing_subsets = get_existing_subsets(self.config, self.logger)
-            self.logger.info(f"Found {len(existing_subsets)} completed subsets")
-            return existing_subsets
+        self.logger.info(find_subsets)
+        if self._success_subsets == None:
+            if find_subsets:
+                self.logger.info("Searching for existing completed subsets")
+                existing_subsets = get_existing_subsets(self.config, self.logger)
+                self.logger.info(f"Found {len(existing_subsets)} completed subsets")
+                return existing_subsets
+            else:
+                return None
         else:
             return self._success_subsets
 
