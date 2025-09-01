@@ -32,6 +32,7 @@ from workflow_16s.figures.merged import (
 )
 from workflow_16s.constants import GROUP_COLUMNS, MODE
 from workflow_16s.diversity import beta_diversity 
+from workflow_16s.figures.beta_diversity import beta_diversity_plot
 from workflow_16s.downstream.load_data import align_table_and_metadata
 from workflow_16s.utils.dataframe import table_to_df
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
@@ -59,7 +60,6 @@ class OrdinationConfig:
     """Configuration for ordination methods."""
     key: str
     func: Callable
-    plot_func: Callable
     name: str
     plot_kwargs: Dict = None
     
@@ -92,12 +92,12 @@ class Ordination:
     
     # Use dataclass for better structure
     TestConfig = {
-        "pca": OrdinationConfig("pca", beta_diversity.pca, plot_pca, "PCA"),
-        "pcoa": OrdinationConfig("pcoa", beta_diversity.pcoa, plot_pcoa, "PCoA"),
-        "tsne": OrdinationConfig("tsne", beta_diversity.tsne, plot_mds, "t‑SNE", {"mode": "TSNE"}),
-        "umap": OrdinationConfig("umap", beta_diversity.umap, plot_mds, "UMAP", {"mode": "UMAP"}),
+        "pca": OrdinationConfig("pca", beta_diversity.pca, "PCA"),
+        "pcoa": OrdinationConfig("pcoa", beta_diversity.pcoa, "PCoA"),
+        "tsne": OrdinationConfig("tsne", beta_diversity.tsne, "t‑SNE", {"mode": "TSNE"}),
+        "umap": OrdinationConfig("umap", beta_diversity.umap, "UMAP", {"mode": "UMAP"}),
     }
-
+Ordination(config=config, project_dir=project_dir, metadata=metadata, tables=tables, group_column=group_column).run()
     def __init__(
         self, 
         config: Dict, 
@@ -205,28 +205,10 @@ class Ordination:
         return True
 
     def _load_existing_figures(self, task: OrdinationTask, output_dir: Path) -> Dict[str, Any]:
-        """Load existing figures from HTML files."""
-        raise 
-        '''
-        self.log_ok(f"Loading existing figures for {task}")
-        figures = {}
-        metadata = self.metadata[task.table_type][task.level]
-        valid_color_columns = [col for col in self.color_columns if col in metadata.columns]
-        
-        for color_col in valid_color_columns:
-            fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / fname
-            self.log(f"Attempting to load: {file_path}")
-            try:
-                fig = load_plotly_html(file_path)
-                figures[color_col] = fig
-            except Exception as e:
-                logger.warning(f"Failed to load existing figure {file_path}: {e}")
-                import traceback
-                logger.debug(f"Traceback: {traceback.format_exc()}")
-                
-        return figures
-        '''
+        print("Not supported")
+
+    def _skip_and_load_existing(self, task: OrdinationTask, task_output_dir: Path):
+        print("Not supported")
 
     def _calculate_optimal_workers(self) -> int:
         """Calculate optimal number of worker threads.
@@ -241,7 +223,7 @@ class Ordination:
             return
             
         with get_progress_bar() as progress:
-            desc = "Running beta diversity"
+            desc = "Running beta diversity module"
             task_id = progress.add_task(_format_task_desc(desc), total=len(self.tasks))
             
             max_workers = self._calculate_optimal_workers()
@@ -249,9 +231,9 @@ class Ordination:
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks at once 
-                future_to_task = {
-                    executor.submit(self._run_single_ordination, task, self.output_dir, progress): task for task in self.tasks
-                }
+                future_to_task = {executor.submit(self._run_single_ordination, 
+                                                  task, self.output_dir, 
+                                                  progress): task for task in self.tasks}
     
                 # Process completed futures with timeout
                 errors = []
@@ -264,10 +246,8 @@ class Ordination:
                                 self._store_result(*result)
                         except Exception as e:
                             errors.append(e)
-                            self.log(
-                                f"Ordination failed for {task}: {str(e)}; "
-                                f"Traceback: {traceback.format_exc()}"
-                            )
+                            self.log(f"Ordination failed for {task}: {str(e)}; "
+                                     f"Traceback: {traceback.format_exc()}")
                         finally:
                             progress.update(task, advance=1)
                 except TimeoutError:
@@ -284,23 +264,7 @@ class Ordination:
         self.results[task.table_type][task.level][task.method] = result
         self.results[task.table_type][task.level]['figures'][task.method] = figures
 
-    def _skip_and_load_existing(self, task: OrdinationTask, task_output_dir: Path):
-        # Try to load figures if possible
-        '''
-        figures = self._load_existing_figures(task, task_output_dir)
-        if figures:
-            self.log(f"Returning loaded figures for {task}")
-            return task.table_type, task.level, task.method, None, figures
-        
-        # Store file paths instead of loading figures
-        figure_paths = self._store_figure_paths(task, task_output_dir)
-        if figure_paths:
-            self.log(f"Returning figure paths for {task}")
-            return task.table_type, task.level, task.method, None, figure_paths
-            
-        self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
-        '''
-        return None, None, None, None, None
+    
         
     def _run_single_ordination(self, task: OrdinationTask, progress: Any) -> Optional[Tuple]:
         """Run a single ordination task with optimized error handling."""
@@ -316,6 +280,7 @@ class Ordination:
         method_task = progress.add_task(_format_task_desc(method_desc), total=1)
         
         try:
+            '''
             # Check if we should skip and load existing figures
             if self._should_skip_existing(task, output_dir):
                 result_tuple = self._skip_and_load_existing(task, task_output_dir)
@@ -326,15 +291,17 @@ class Ordination:
                     return result_tuple
                 # If we have figure paths but couldn't load them, continue to calculation
                 self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
-            result, figures = self._run_test(task=task, output_dir=task_output_dir)
-            return task.table_type, task.level, task.method, result, figures
+            '''
+            result, figures = self._run_test(task, output_dir)
         except Exception as e:
             logger.error(f"Ordination {task} failed: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
-            return None
+            result, figures = None, None
         finally:
             progress.update(method_task, completed=1, visible=False)
-
+        
+        return task.table_type, task.level, task.method, result, figures
+            
     def _get_method_params(self, task: OrdinationTask) -> Dict:
         """Get method-specific parameters efficiently."""
         params = {}
@@ -351,9 +318,9 @@ class Ordination:
         table, metadata = align_table_and_meta(table, metadata)
         result = self._calculate(task, method_config, table)
         if not result:
-            return task, None, None
-        figures = self._plot(task, method_config, table, metadata, output_dir)
-        return task, result, figures
+            return None, None
+        figures = self._plot(result, task, method_config, metadata, output_dir)
+        return result, figures
       
     def _calculate(self, task: OrdinationTask, method_config: OrdinationConfig, table: Table):
         method_params = self._get_method_params(task)
@@ -371,9 +338,17 @@ class Ordination:
             return None
         return result
 
-    def _plot(self, task: OrdinationTask, method_config: OrdinationConfig, table: Table, task: OrdinationTask, metadata: pd.DataFrame, output_dir: Union[str, Path]):
+    def _plot(
+        self, 
+        result: Any, 
+        task: OrdinationTask, 
+        method_config: OrdinationConfig, 
+        metadata: pd.DataFrame, 
+        output_dir: Union[str, Path]
+    ):
         """Generate figures."""
         figures = {}
+        
         valid_color_cols = [col for col in self.color_columns if col in metadata.columns]
         if not valid_color_cols:
             logger.warning(f"No valid color columns found for {task}")
@@ -382,10 +357,11 @@ class Ordination:
         # Base plot parameters
         base_params = {
             "metadata": metadata,
+            "ordination_type": method_config.name,
             "symbol_col": self.symbol_col,
+            "dimensions": (1, 2),
             "transformation": task.table_type,
-            "output_dir": output_dir,
-            **self.MethodConfig.plot_kwargs
+            "output_dir": output_dir
         }
         
         # Method-specific parameters
@@ -407,11 +383,33 @@ class Ordination:
             try:
                 self.log(f"Generating figure for {task} with color column: {color_col}")
                 plot_params = {**base_params, "color_col": color_col}
-                fig, _ = method_config.plot_func(**plot_params)
-                if fig:
-                    figures[color_col] = fig
+                fig = beta_diversity_plot(plot_params)
+                figures[color_col] = fig
             except Exception as e:
                 logger.warning(f"Failed to generate figure for {task} with color {color_col}: {e}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
                 continue
         return figures
+
+
+def run_beta_diversity(
+    config: Dict, 
+    project_dir: ProjectDir,
+    metadata: pd.DataFrame,
+    tables: Dict[str, Dict[str, Table]],
+    group_columns: List[str]
+):
+    results = {}
+    for group_column in group_columns:
+        beta = Ordination(
+            config=config, 
+            project_dir=project_dir, 
+            metadata=metadata, 
+            tables=tables, 
+            group_column=group_column['name']
+        )
+        beta.run()
+        results[group_column['name']] = beta.results
+    return results
+    
+        
