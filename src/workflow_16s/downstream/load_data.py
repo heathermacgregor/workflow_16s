@@ -3,7 +3,7 @@
 # Standard Imports
 import glob
 import logging
-from typing import Tuple
+from typing import Dict, Tuple
 
 # Third Party Imports
 import pandas as pd
