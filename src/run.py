@@ -364,12 +364,12 @@ class Workflow16S:
         self.logger.info("Starting downstream processing")
         existing_subsets = self._get_existing_subsets()
         try:
-            analyzer = run_downstream(config, project_dir, existing_subsets)
+            analyzer = run_downstream(self.config, self.project_dir, existing_subsets)
             results = analyzer.results
             print_data_dicts(results)
             
         except Exception as e:
-            logger.error(f"Failed downstream processing: {e}")
+            self.logger.error(f"Failed downstream processing: {e}")
 
         if results:
             self.logger.info("Downstream processing completed")
