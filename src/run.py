@@ -341,9 +341,7 @@ class Workflow16S:
             self.project_dir_dep
         )
         self.logger.info("Upstream processing completed")
-
-    
-          
+        
     def _execute_downstream(self) -> None:
         """Run downstream processing if enabled in config."""
         if not is_enabled(self.config.get("downstream", {})):
@@ -355,7 +353,7 @@ class Workflow16S:
             analyzer = run_downstream(self.config, self.project_dir, existing_subsets)
             results = analyzer.results
             print_data_dicts(results)
-            self.logger.info("Downstream processing completed")\
+            self.logger.info("Downstream processing completed")
 
             # Generate a comprehensive HTML report
             output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
@@ -372,6 +370,8 @@ class Workflow16S:
     def _get_existing_subsets(self):
         downstream_config = self.config.get("downstream", {})
         # Get existing subsets
+        self.logger.info(self._success_subsets)
+        self.logger.info(downstream_config = self.config.get("downstream", {}))
         if self._success_subsets == None and downstream_config.get("find_subsets", False):
             self.logger.info("Searching for existing completed subsets")
             existing_subsets = get_existing_subsets(self.config, self.logger)
