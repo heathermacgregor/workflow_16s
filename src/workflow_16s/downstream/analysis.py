@@ -14,12 +14,12 @@ from workflow_16s.constants import MODE, GROUP_COLUMNS
 from workflow_16s.downstream.load_data import load_data
 from workflow_16s.downstream.prep_data import prep_data
 from workflow_16s.downstream.stats_analysis import run_statistical_analysis
+from workflow_16s.downstream.beta_diversity import run_beta_diversity
 
 # ==================================================================================== #
 
 # TODO: Refactor these modules
 from workflow_16s.amplicon_data.downstream.alpha import AlphaDiversity
-from workflow_16s.amplicon_data.downstream.beta import Ordination
 from workflow_16s.amplicon_data.downstream.feature_selection import FeatureSelection
 from workflow_16s.amplicon_data.downstream.maps import Maps
 
@@ -47,21 +47,6 @@ def run_alpha_diversity_analysis(
     alpha = AlphaDiversity(config, metadata, tables)
     alpha.run(output_dir=output_dir)
     return alpha.results
-
-
-def run_beta_diversity_analysis(
-    config: Dict,
-    metadata: Dict,
-    tables: Dict,
-    output_dir: Union[str, Path],
-    group_columns: List
-):
-    results = {}
-    for group_column in group_columns:
-        beta = Ordination(config, metadata, tables, group_column['name'])
-        beta.run(output_dir=output_dir)
-        results[group_column['name']] = beta.results
-    return results
 
 
 def run_feature_selection(
@@ -234,7 +219,7 @@ class DownstreamAnalyzer:
 
     def _run_beta_diversity(self) -> None:
         """Run Beta Diversity (Ordination) Analysis."""
-        self.results.ordination = run_beta_diversity_analysis(
+        self.results.ordination = run_beta_diversity(
             config=self.config.config, metadata=self.results.metadata,
             tables=self.results.tables, output_dir=self.output_dir,
             group_columns=self.group_columns
