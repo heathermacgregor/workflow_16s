@@ -303,19 +303,6 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
 
 
 
-def create_report(results, output_path):    
-    try:
-        generate_html_report(
-            amplicon_data=amplicon_data.results,
-            output_path=output_path,
-            max_features=20,
-            config=config
-        )
-        logger.info(f"HTML report generated at: {output_path}")
-        
-    except Exception as e:
-        logger.error(f"Failed generating HTML report: {str(e)}")
-    
 
 class Workflow16S:
     def __init__(self, config_path: Path = constants.DEFAULT_CONFIG) -> None:
@@ -371,7 +358,12 @@ class Workflow16S:
 
             # Generate a comprehensive HTML report
             output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
-            create_report(results, output_path)
+            generate_html_report(
+                amplicon_data=results,
+                output_path=output_path,
+                max_features=20,
+                config=self.config
+            )
             
         except Exception as e:
             self.logger.error(f"Failed downstream processing: {e}")            
