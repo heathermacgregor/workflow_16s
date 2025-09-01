@@ -15,7 +15,7 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s import constants
-from workflow_16s.constants import TAXONOMIC_LEVELS_MAPPING, PREVALENCE_THRESHOLD, GROUP_THRESHOLD, DEFAULT_GROUP_COL
+from workflow_16s.constants import TAXONOMIC_LEVELS_MAPPING, PREVALENCE_THRESHOLD, GROUP_THRESHOLD, DEFAULT_GROUP_COLUMN as DEFAULT_GROUP_COL
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
