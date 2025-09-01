@@ -110,7 +110,7 @@ class DownstreamAnalyzer:
     ):
         # Initialize core attributes
         self.config = Config(config)
-        self.verbose = self.config.get("verbose", False)
+        self.verbose = self.config.config.get("verbose", False)
         self.project_dir = project_dir
         self.output_dir = self.project_dir.final
         self.existing_subsets = existing_subsets
