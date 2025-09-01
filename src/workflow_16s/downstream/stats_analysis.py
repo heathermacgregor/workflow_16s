@@ -36,7 +36,7 @@ from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.constants import GROUP_COLUMNS, MODE
 from workflow_16s.downstream.load_data import align_table_and_metadata
-from workflow_16s.downstream.stats_helpers import DataCache, LocalResultsLoader, TestConfig, calculate_config_hash, get_enabled_tasks, run_single_statistical_test
+from workflow_16s.downstream.stats_helpers import DataCache, LocalResultLoader, TestConfig, calculate_config_hash, get_enabled_tasks, run_single_statistical_test
 from workflow_16s.utils.metadata import get_group_column_values
 from workflow_16s.stats.test import microbial_network_analysis
 
