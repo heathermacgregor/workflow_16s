@@ -16,6 +16,10 @@ from workflow_16s.downstream.prep_data import prep_data
 from workflow_16s.downstream.stats_analysis import run_statistical_analysis
 from workflow_16s.downstream.beta_diversity import run_beta_diversity
 
+# ========================== INITIALIZATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger('workflow_16s')
+
 # ==================================================================================== #
 
 # TODO: Refactor these modules
