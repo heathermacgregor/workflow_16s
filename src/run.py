@@ -331,8 +331,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     finally:
         print_data_dicts(amplicon_data.results)
 
-def create_report(results, output_path)
-    
+def create_report(results, output_path):    
     try:
         generate_html_report(
             amplicon_data=amplicon_data.results,
