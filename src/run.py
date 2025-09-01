@@ -360,7 +360,7 @@ class Workflow16S:
       
         self._success_subsets: Optional[List[str]] = None
 
-    def run(self) -> None:d
+    def run(self) -> None:
         """Execute the workflow based on configuration settings."""
         try:
             self._execute_upstream()
