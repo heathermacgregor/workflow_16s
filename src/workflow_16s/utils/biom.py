@@ -4,7 +4,7 @@
 import logging
 from functools import reduce
 from pathlib import Path
-from typing import List, Union
+from typing import Dict, List, Union
 
 # Third-Party Imports
 import h5py
