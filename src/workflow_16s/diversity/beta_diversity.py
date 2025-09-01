@@ -23,7 +23,9 @@ from umap import UMAP
 # Local Imports
 from workflow_16s import constants
 from workflow_16s.utils.dataframe import table_to_df
-from workflow_16s.diversity.beta_diversity.helpers import create_result_df, validate_table_df, validate_distance_matrix
+from workflow_16s.diversity.helpers import (
+    create_result_df, validate_distance_matrix, validate_table_df
+)
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
