@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 # Local Imports
-from workflow_16s.constants import SAMPLE_ID_COLUMN, GROUP_COLUMNS
+from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN
 
 # ==================================================================================== #
 
@@ -21,11 +21,9 @@ def import_metadata_tsv(
     """Load and standardize a sample metadata TSV file.
     
     Args:
-        tsv_path :       
-            Path to metadata TSV file.
-        group_columns :
-        columns_to_rename : 
-            List of (old_name, new_name) tuples for column renaming.
+        tsv_path:          Path to metadata TSV file.
+        group_columns:     [Placeholder]
+        columns_to_rename: List of (old_name, new_name) tuples for column renaming.
     
     Returns:
         Standardized metadata DataFrame.
@@ -43,11 +41,20 @@ def import_metadata_tsv(
     # Normalize column names to lowercase
     df.columns = df.columns.str.lower()
 
-    sample_id_col = next((col for col in ['run_accession', '#sampleid', 'sample-id'] if col in df.columns), None)
-    df['SAMPLE ID'] = (df[sample_id_col] if sample_id_col else [f"{tsv_path.parents[5].name}_x{i}" for i in range(1, len(df)+1)])
+    sample_id_col = next((col 
+                          for col in ['run_accession', '#sampleid', 'sample-id'] 
+                          if col in df.columns), None)
+    df['SAMPLE ID'] = (df[sample_id_col] 
+                       if sample_id_col 
+                       else [f"{tsv_path.parents[5].name}_x{i}" 
+                             for i in range(1, len(df)+1)])
 
-    dataset_id_col = next((col for col in ['project_accession', 'dataset_id', 'dataset_name'] if col in df.columns), None)
-    df['DATASET ID'] = (df[dataset_id_col] if dataset_id_col else tsv_path.parents[5].name)
+    dataset_id_col = next((col 
+                           for col in ['project_accession', 'dataset_id', 'dataset_name'] 
+                           if col in df.columns), None)
+    df['DATASET ID'] = (df[dataset_id_col] 
+                        if dataset_id_col 
+                        else tsv_path.parents[5].name)
   
     for col in group_columns:
         name = col.get('name')
@@ -64,11 +71,17 @@ def import_metadata_tsv(
 
 # ==================================================================================== #
 
-def get_group_column_values(
-    group_column: Union[str, Dict], 
-    metadata: pd.DataFrame
-) -> List[Any]:
-    """Optimized group column value extraction."""
+def get_group_column_values(group_column: Union[str, Dict], 
+                            metadata: pd.DataFrame) -> List[Any]:
+    """Extract values from group column.
+    
+    Args:
+        group_column: [Placeholder]
+        metadata:     [Placeholder]
+        
+    Returns:
+        List [Placeholder]
+    """
     if isinstance(group_column, dict):
         if 'values' in group_column and group_column['values']:
             return group_column['values']
@@ -92,10 +105,8 @@ def import_merged_metadata_tsv(
     """Merge multiple metadata files into a single DataFrame.
     
     Args:
-        tsv_paths :      
-            List of paths to metadata TSV files.
-        columns_to_rename : 
-            List of (old_name, new_name) tuples for column renaming.
+        tsv_paths:         List of paths to metadata TSV files.
+        columns_to_rename: List of (old_name, new_name) tuples for column renaming.
     
     Returns:
         Concatenated metadata DataFrame.
@@ -123,6 +134,7 @@ def import_merged_metadata_tsv(
 # ==================================================================================== #
 
 class MetadataCleaner:
+    """[Placeholder]"""
     # Precompile regex patterns for efficiency
     NUM_PATTERN = re.compile(r'[-+]?\d*\.\d+|[-+]?\d+')
     LETTER_PATTERN = re.compile(r'[NnSsEeWw]')
@@ -130,8 +142,8 @@ class MetadataCleaner:
     # Define potential source columns
     lat_sources = ['lat', 'lat_study', 'latitude_deg_ena', 'latitude_deg.1']
     lon_sources = ['lon', 'lon_study', 'longitude_deg.1']
-    pair_sources = ['lat_lon', 'location', 'location_ena', 'location_start', 'location_end', 
-                    'location_start_study', 'location_end_study']
+    pair_sources = ['lat_lon', 'location', 'location_ena', 'location_start', 
+                    'location_end', 'location_start_study', 'location_end_study']
     def __init__(self, config: Dict, metadata: pd.DataFrame):
         self.df = metadata
         # Handle empty metadata
@@ -141,6 +153,7 @@ class MetadataCleaner:
         self.sample_id_column = self.config.get("metadata_id_column", SAMPLE_ID_COLUMN)
 
     def run_all(self):  
+        """[Placeholder]"""
         self._clean_columns()
         self._clean_sample_ids()
         self._collapse_suffix_columns(suffix='_ena')
@@ -148,7 +161,7 @@ class MetadataCleaner:
         self._fill_missing_coordinates()
 
     def _clean_columns(self) -> None:
-        # Remove duplicate columns
+        """Remove duplicate columns."""
         if self.df.columns.duplicated().any():
             duplicated_columns = self.df.columns[self.df.columns.duplicated()].tolist()
             logger.debug(
@@ -168,7 +181,6 @@ class MetadataCleaner:
         self.df = self.df.drop_duplicates(subset=[col])
 
     def _collapse_suffix_columns(self, suffix: str = '_ena'):
-        # Create a copy of the DataFrame to avoid modifying the original
         df = self.df.copy()
         # Identify all columns ending with the suffix
         columns = [col for col in df.columns if col.endswith(suffix)]
@@ -224,12 +236,10 @@ class MetadataCleaner:
         """Extract latitude and longitude from a string using precompiled regex patterns.
         
         Args:
-            s (str) : 
-                Input string containing coordinate information
+            s: Input string containing coordinate information.
             
         Returns:
-            tuple : 
-                (latitude, longitude) as floats, or (None, None) if extraction fails
+            (latitude, longitude) as floats, or (None, None) if extraction fails.
         """
         if not isinstance(s, str):
             return None, None
@@ -336,6 +346,7 @@ class MetadataCleaner:
 # ==================================================================================== #
 
 def clean_metadata(metadata: pd.DataFrame):
+    """[Placeholder]"""
     cleaner = MetadataCleaner(
         config=self.config, 
         metadata=metadata
