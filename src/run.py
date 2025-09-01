@@ -301,31 +301,7 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
         raise
 
 
-def run_downstreams(config, logger, project_dir, existing_subsets) -> None:
-    """Run the "downstream" part of the workflow (feature table analysis).
 
-    Args:
-        config :           
-            Configuration dictionary.
-        logger :           
-            Logger instance.
-        existing_subsets : 
-            Successful subsets from "upstream" processing, if it was performed, 
-            otherwise None.
-    """            
-    # Run downstream analysis    
-    try:
-        analyzer = run_downstream(config, project_dir, existing_subsets)
-        results = analyzer.results
-        #results = analyzer.run_comprehensive_analysis(
-        #    output_dir=str(project_dir.final / 'comprehensive_analysis')
-        #)
-        
-    except Exception as e:
-        logger.error(f"Failed downstream processing: {e}")
-        
-    finally:
-        print_data_dicts(results)
 
 def create_report(results, output_path):    
     try:
@@ -387,16 +363,19 @@ class Workflow16S:
           
         self.logger.info("Starting downstream processing")
         existing_subsets = self._get_existing_subsets()
-        results = run_downstreams(
-            self.config, 
-            self.project_dir, 
-            existing_subsets
-        )
-        self.logger.info("Downstream processing completed")
-      
-        # Generate a comprehensive HTML report
-        output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
-        create_report(results, output_path)
+        try:
+            analyzer = run_downstream(config, project_dir, existing_subsets)
+            results = analyzer.results
+            print_data_dicts(results)
+            
+        except Exception as e:
+            logger.error(f"Failed downstream processing: {e}")
+
+        if results:
+            self.logger.info("Downstream processing completed")
+            # Generate a comprehensive HTML report
+            output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
+            create_report(results, output_path)
 
     def _get_existing_subsets(self):
         downstream_config = self.config.get("downstream", {})
