@@ -210,7 +210,7 @@ class DownstreamAnalyzer:
             use_process_pool=True
         ).results
     
-     def _run_alpha_diversity(self) -> None:
+    def _run_alpha_diversity(self) -> None:
         """Run Alpha Diversity Analysis."""
         self.results.alpha_diversity = run_alpha_diversity_analysis(
             config=self.config.config, metadata=self.results.metadata, 
