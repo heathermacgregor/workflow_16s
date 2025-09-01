@@ -107,7 +107,7 @@ TestDefaults = {
 
 def run_single_statistical_test(
     task_data: Tuple[str, str, str, Table, pd.DataFrame, str, List[Any], Path]
-) -> TaskResult:
+) -> Any: #TaskResult:
     """Optimized single test execution for parallel processing."""
     table_type, level, test, table, metadata, name, values, output_dir = task_data
     task_id = f"{table_type}_{level}_{test}"
