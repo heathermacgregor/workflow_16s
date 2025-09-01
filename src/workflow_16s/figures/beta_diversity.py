@@ -78,6 +78,6 @@ def beta_diversity_plot(
     obj.create_fig(x_col, y_col, x_title, y_title, hover_data=['sample_id', color_col, symbol_col])
     if output_dir:
         type = ordination_type.lower()
-        file_stem = output_dir /  / f"{ordination_type.lower()}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"  
+        file_stem = output_dir / type / f"{type}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"  
         obj.save(f"{file_stem}.json")
     return obj.fig
