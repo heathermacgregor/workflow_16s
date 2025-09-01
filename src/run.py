@@ -53,7 +53,7 @@ from workflow_16s.utils.io import (
     load_datasets_list, safe_delete, write_manifest_tsv, write_metadata_tsv
 )
 
-from workflow_16s.downstream.analysis import Downstream
+from workflow_16s.downstream.analysis import run_downstream
 from workflow_16s.utils.dir import ProjectDir, create_project_dirs
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -301,7 +301,7 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
         raise
 
 
-def run_downstream(config, logger, project_dir, existing_subsets) -> None:
+def run_downstreams(config, logger, project_dir, existing_subsets) -> None:
     """Run the "downstream" part of the workflow (feature table analysis).
 
     Args:
@@ -315,12 +315,8 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
     """            
     # Run downstream analysis    
     try:
-        analyzer = DownstreamAnalyzer(
-            config=config,
-            project_dir=project_dir,
-            existing_subsets=existing_subsets
-        )
-        results = analyzer.run()
+        analyzer = run_downstream(config, project_dir, existing_subsets)
+        results = analyzer.results
         #results = analyzer.run_comprehensive_analysis(
         #    output_dir=str(project_dir.final / 'comprehensive_analysis')
         #)
@@ -329,7 +325,7 @@ def run_downstream(config, logger, project_dir, existing_subsets) -> None:
         logger.error(f"Failed downstream processing: {e}")
         
     finally:
-        print_data_dicts(amplicon_data.results)
+        print_data_dicts(results)
 
 def create_report(results, output_path):    
     try:
@@ -390,9 +386,9 @@ class Workflow16S:
             return
           
         self.logger.info("Starting downstream processing")
-        results = run_downstream(
+        results = run_downstreams(
             self.config, 
-            self.logger, 
+            #self.logger, 
             self.project_dir, 
             self._get_existing_subsets()
         )
