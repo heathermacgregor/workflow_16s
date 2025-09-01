@@ -97,7 +97,7 @@ class Ordination:
         "tsne": OrdinationConfig("tsne", beta_diversity.tsne, "t‑SNE", {"mode": "TSNE"}),
         "umap": OrdinationConfig("umap", beta_diversity.umap, "UMAP", {"mode": "UMAP"}),
     }
-Ordination(config=config, project_dir=project_dir, metadata=metadata, tables=tables, group_column=group_column).run()
+    
     def __init__(
         self, 
         config: Dict, 
