@@ -373,6 +373,7 @@ class Workflow16S:
         downstream_config = self.config.get("downstream", {})
         # Get existing subsets
         if self._success_subsets == None and downstream_config.get("find_subsets", False):
+            self.logger.info("Searching for existing completed subsets")
             existing_subsets = get_existing_subsets(self.config, self.logger)
             self.logger.info(f"Found {len(existing_subsets)} completed subsets")
             return existing_subsets
