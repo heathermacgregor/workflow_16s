@@ -367,15 +367,14 @@ class Workflow16S:
             analyzer = run_downstream(self.config, self.project_dir, existing_subsets)
             results = analyzer.results
             print_data_dicts(results)
-            
-        except Exception as e:
-            self.logger.error(f"Failed downstream processing: {e}")
+            self.logger.info("Downstream processing completed")\
 
-        if results:
-            self.logger.info("Downstream processing completed")
             # Generate a comprehensive HTML report
             output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
             create_report(results, output_path)
+            
+        except Exception as e:
+            self.logger.error(f"Failed downstream processing: {e}")            
 
     def _get_existing_subsets(self):
         downstream_config = self.config.get("downstream", {})
