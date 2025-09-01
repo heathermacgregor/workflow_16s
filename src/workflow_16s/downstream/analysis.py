@@ -116,14 +116,14 @@ class DownstreamAnalyzer:
         self.existing_subsets = existing_subsets
 
         # Result loading configuration
-        self.load_existing_results = self.config.get("load_existing_results", True)
-        self.max_result_age_hours = self.config.get("max_result_age_hours", None)
-        self.force_recalculate_stats = self.config.get("force_recalculate_stats", None) or []
-        self.invalidate_results_patterns = self.config.get("invalidate_results_patterns", None) or []
+        self.load_existing_results = self.config.config.get("load_existing_results", True)
+        self.max_result_age_hours = self.config.config.get("max_result_age_hours", None)
+        self.force_recalculate_stats = self.config.config.get("force_recalculate_stats", None) or []
+        self.invalidate_results_patterns = self.config.config.get("invalidate_results_patterns", None) or []
 
         # Initialize analysis settings
         self._setup_mode()
-        self.group_columns = config.get("group_columns", GROUP_COLUMNS)
+        self.group_columns = self.config.config.get("group_columns", GROUP_COLUMNS)
         
         # Initialize result containers
         self.results = Results()
@@ -169,7 +169,7 @@ class DownstreamAnalyzer:
     def _prep_data(self) -> None:
         logger.info("Prepping data...")
         data = prep_data(
-            config=self.config, metadata=self.results.metadata, tables=self.results.tables,
+            config=self.config.config, metadata=self.results.metadata, tables=self.results.tables,
             project_dir=self.project_dir
         )
         self.results.metadata = data.metadata
@@ -184,7 +184,7 @@ class DownstreamAnalyzer:
         ]
         
         for module_name, module_func in analysis_modules:
-            if self.config.is_enabled(module_name):
+            if self.config.config.is_enabled(module_name):
                 logger.info(f"Running {module_name} analysis...")
                 try:
                     module_func()
