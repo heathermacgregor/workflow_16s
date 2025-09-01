@@ -62,8 +62,8 @@ def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
 class TaskProcessor:
     def __init__(
         self, 
-        project_dir: StatisticalAnalysis.project_dir,
-        _data_cache: StatisticalAnalysis._data_cache,
+        project_dir: Any, #StatisticalAnalysis.project_dir,
+        _data_cache: Any, #StatisticalAnalysis._data_cache,
         use_process_pool: Any,
         max_workers: Any,
         name: str, 
