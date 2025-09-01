@@ -313,6 +313,7 @@ class Workflow16S:
             project_name=project_config.get("name", "project_01"), 
             base_path=project_config.get("dir_path", "../../project_01")
         )
+        print(self.project_dir.get_dir('logs').dir_path)
         self.logger = setup_logging(self.project_dir.get_dir('logs').dir_path)
       
         #self.project_dir_dep = SubDirs(self.config["project_dir"])
@@ -370,8 +371,7 @@ class Workflow16S:
     def _get_existing_subsets(self):
         downstream_config = self.config.get("downstream", {})
         # Get existing subsets
-        self.logger.info(self._success_subsets)
-        self.logger.info(downstream_config = self.config.get("downstream", {}))
+        self.logger.info(self.config.get("downstream", {}))
         if self._success_subsets == None and downstream_config.get("find_subsets", False):
             self.logger.info("Searching for existing completed subsets")
             existing_subsets = get_existing_subsets(self.config, self.logger)
