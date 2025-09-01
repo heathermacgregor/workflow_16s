@@ -63,7 +63,7 @@ class DownstreamDataPrepper:
         # Save tables
         self._save_tables()
         
-     def _fetch_data(table_type: str, level: str) -> Tuple:
+    def _fetch_data(table_type: str, level: str) -> Tuple:
         metadata = self.metadata.get(table_type, {}).get(level)
         table = self.tables.get(table_type, {}).get(level)
         if table is None or metadata is None:
