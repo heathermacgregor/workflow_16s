@@ -123,7 +123,7 @@ class DownstreamDataLoader:
         return import_merged_biom_table(biom_paths=table_paths)
 
     def _load_metadata(self, level, table_dir) -> pd.DataFrame:
-        metadata_paths = self._find_metadata_paths(level, subdir)
+        metadata_paths = self._get_metadata_paths(level, subdir)
         if not metadata_paths:
             raise FileNotFoundError("No metadata TSV filepaths found")
         metadata = import_merged_metadata_tsv(
