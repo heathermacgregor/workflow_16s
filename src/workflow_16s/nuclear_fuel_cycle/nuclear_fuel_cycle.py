@@ -1,3 +1,5 @@
+# ===================================== IMPORTS ====================================== #
+
 # Standard Imports
 import requests
 import time
@@ -12,36 +14,60 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 # Local Imports
-from workflow_16s.constants import DEFAULT_USER_AGENT, REFERENCES_DIR
+from workflow_16s.constants import DEFAULT_USER_AGENT, MINDAT_API_KEY, REFERENCES_DIR
 from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases, utils 
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
-# Set up logger
+# ==================================================================================== #
+
 logger = logging.getLogger("workflow_16s")
+
+# ==================================================================================== #
 
 class NFCFacilitiesHandler:
     def __init__(
         self, 
         config: Dict,        
         output_dir: Optional[Union[str, Path]] = REFERENCES_DIR, 
+        mindat_api_key: str = MINDAT_API_KEY,
         user_agent: str = DEFAULT_USER_AGENT
     ):
         self.config = config
         enabled = self.config.get("nfc_facilities", {}).get("enabled", True) # TODO: Switch to False
         if not enabled:
             return
+
+        self.verbose = self.config.get("verbose", False)
         
         self.databases = self.config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
         self.database_names = [db['name'] for db in self.databases]
 
         self.max_distance_km = self.config.get("nfc_facilities", {}).get("max_distance_km", 50)
 
-        self.output_dir = output_dir
-        self.user_agent = user_agent
+        self.use_local = self.config.get("nfc_facilities", {}).get('use_local', False)
 
+        self.output_dir = Path(output_dir) / "nfc_facilities"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.facilities_output_path = Path(self.output_dir) / 'facilities.csv'
+        self.matches_output_path = Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv"
+
+        self.mindat_api_key = mindat_api_key
+        self.user_agent = user_agent
+        
+    def log(self, msg):
+        return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
+        
     def run(self, metadata: pd.DataFrame):
-        df = self._get_geocoded_data()
-        updated_metadata = self._match_facilities_with_samples(facilities_df=df, samples_df=metadata)
+        if self.use_local and self.facilities_output_path.exists():
+            df = pd.read_csv(self.facilities_output_path)
+        else:
+            df = self._get_geocoded_data()
+            
+        if self.use_local and self.matches_output_path.exists():   
+            updated_metadata = pd.read_csv(self.matches_output_path, sep='\t')
+        else:
+            updated_metadata = self._match_facilities_with_samples(facilities_df=df, samples_df=metadata)
+    
         return df, updated_metadata
 
     def _get_geocoded_data(self):
@@ -55,7 +81,7 @@ class NFCFacilitiesHandler:
         if "GEM" in self.database_names or "NFCIS" in self.database_names:
             database_dfs.append(other_databases.load_nfc_facilities(config=self.config))
         if "MinDat" in self.database_names:
-            database_dfs.append(mindat.world_uranium_mines())
+            database_dfs.append(mindat.world_uranium_mines(self.mindat_api_key, self.output_dir))
         if "Wikipedia" in self.database_names:
             database_dfs.append(wikipedia.world_nfc_facilities())
         facilities_df = pd.concat(database_dfs, axis=0)
@@ -69,9 +95,10 @@ class NFCFacilitiesHandler:
         # Geocode unique queries with progress
         coords = {}
         with get_progress_bar() as progress:
-            task_desc = "Geocoding unique locations"
-            task_desc_fmt = _format_task_desc(task_desc)
-            task = progress.add_task(task_desc_fmt, total=len(unique_queries))
+            task = progress.add_task( 
+                _format_task_desc("Geocoding unique locations"), 
+                total=len(unique_queries)
+            )
             for q in unique_queries:
                 coords[q] = utils._geocode_query(q, self.user_agent)
                 time.sleep(1) 
@@ -112,11 +139,9 @@ class NFCFacilitiesHandler:
             logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
         
         # Save full matched results
-        if self.output_dir:
-            matched_df[result_cols].to_csv(
-                Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",
-                sep='\t', index=False
-            )
+        if self.matches_output_path:
+            #matched_df[result_cols]
+            matched_df.to_csv(self.matches_output_path, sep='\t', index=False)
         return matched_df
 
     def _match_facilities_with_locations(
@@ -198,8 +223,8 @@ class NFCFacilitiesHandler:
         
         return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)
 
+# ==================================================================================== #
 
-# API
 def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame):
     handler = NFCFacilitiesHandler(config=config)
     nfc_facilities, updated_metadata = handler.run(metadata=metadata)
