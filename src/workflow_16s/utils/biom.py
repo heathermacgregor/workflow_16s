@@ -63,7 +63,7 @@ def import_merged_biom_table(biom_paths: List[Union[str, Path]]) -> Table:
         )
         for path in biom_paths:
             try:
-                tables.append(import_biom(path, 'table'))
+                tables.append(import_biom(path))
             except Exception as e:
                 logger.error(f"BIOM load failed for {path}: {e}")
             finally:
