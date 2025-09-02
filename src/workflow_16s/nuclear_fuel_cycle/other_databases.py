@@ -105,7 +105,7 @@ class NFCFacilityDB:
             dfs.append(df)
           
         if dfs:
-            self.result = pd.concat(dfs, ignore_index=True).dropna(subset=['latitude_deg', 'longitude_deg'])
+            self.result = pd.concat(dfs, ignore_index=True)#.dropna(subset=['latitude_deg', 'longitude_deg'])
             if self.output_dir:
                 tsv_path = Path(self.output_dir) / f"nfc_facilities{'_'.join(self.databases)}.tsv"
                 self.result.to_csv(tsv_path, sep='\t', index=True)
