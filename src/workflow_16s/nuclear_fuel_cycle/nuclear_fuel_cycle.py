@@ -1,12 +1,15 @@
 # Standard Imports
 import requests
+import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Union
 
 # Third Party Imports
 import pandas as pd
+import numpy as np
 from scipy.spatial import cKDTree
+from sklearn.metrics import confusion_matrix, classification_report
 
 # Local Imports
 from workflow_16s.constants import DEFAULT_USER_AGENT, REFERENCES_DIR
