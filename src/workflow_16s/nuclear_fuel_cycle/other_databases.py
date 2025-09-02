@@ -22,7 +22,7 @@ class NFCFacilityDB:
     ):
         self.databases = databases
         self.output_dir = output_dir
-        self.result = result
+        self.result = None
 
     def _process_dbs(self):
         dfs = []
