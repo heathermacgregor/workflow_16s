@@ -105,7 +105,7 @@ class WikipediaScraper:
                         country = location.split(',')[-1].strip()
 
                 row_data = {
-                    'facility_name': mine_name,
+                    'facility': mine_name,
                     'facility_location': location,
                     'country': country,
                     'data_source': f"Table {i+1} - {url}",
