@@ -134,7 +134,7 @@ def load_nfc_facilities(
     valid_dbs = []
     for database in db_names:
         if database in list(DBConfig.keys()):
-            db = self.DBConfig[database]
+            db = DBConfig[database]
             valid_dbs.append(db['name'])
         else:
             continue
