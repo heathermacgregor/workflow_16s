@@ -3,6 +3,7 @@
 # Standard Imports
 import glob
 import logging
+import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -119,7 +120,11 @@ class DownstreamDataLoader:
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
             logger.info("Finding NFC facilities...")
-            self.nfc_facilities, metadata = self._load_nfc_facilities(metadata)
+            try:
+                self.nfc_facilities, metadata = self._load_nfc_facilities(metadata)
+            except Exception as e:
+                logger.error(f"Failed finding NFC facilities: {e}\n"
+                             f"Traceback: {traceback.format_exc()}")
           
         table, metadata = self._filter_and_align(table, metadata, level)
         self._log_results(table, metadata, level)
