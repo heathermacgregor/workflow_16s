@@ -58,6 +58,24 @@ def align_table_and_metadata(
 # ==================================================================================== #
 
 class DownstreamDataLoader:
+    """Loads and aligns BIOM feature tables and metadata for downstream analysis.
+    
+    Handles loading of both ASV and genus-level feature tables along with corresponding
+    metadata files. Supports filtering based on nuclear fuel cycle facilities and
+    alignment of samples between tables and metadata.
+
+    Attributes:
+        config:                  Configuration dictionary containing processing parameters.
+        target_subfragment_mode: Processing mode for subfragments ('asv', 'genus', or 'any').
+        metadata_id_column:      Column name in metadata containing sample IDs.
+        verbose:                 Boolean indicating whether to output verbose logging messages.
+        project_dir:             Project directory object containing path definitions.
+        existing_subsets:        Pre-existing data subsets from upstream processing.
+        tables:                  Dictionary storing loaded feature tables.
+        metadata:                Dictionary storing loaded metadata.
+        nfc_facilities:          DataFrame containing nuclear fuel cycle facility data if enabled.
+        table_paths:             List of paths to found BIOM table files.
+    """
     ModeConfig = {
         "asv": ("asv", "table", "asv"), 
         "genus": ("genus", "table_6", "l6")
@@ -84,6 +102,7 @@ class DownstreamDataLoader:
         self.table_paths = None
 
     def run(self):
+        """Executes the data loading process."""
         # Load the ASV feature table if the target subfragment is specified (so, not 'any')
         if not self.target_subfragment_mode == 'any':
             self._load_table_and_metadata('asv')  
@@ -91,6 +110,7 @@ class DownstreamDataLoader:
         self._load_table_and_metadata('genus')
       
     def _load_table_and_metadata(self, mode: str = 'genus') -> None:
+        """Loads feature table and metadata for a specific processing mode."""
         level, subdir, _ = self.ModeConfig[mode]
         table = self._load_biom_table(level, subdir)
         metadata = self._load_metadata(level, subdir)
@@ -100,11 +120,12 @@ class DownstreamDataLoader:
         if self.config.get("nfc_facilities", {}).get("enabled", False):
             self.nfc_facilities, metadata = self._load_nfc_facilities(metadata)
           
-        table, metadata = self._filter_and_align(table, metadata)
-        self._log_results(level, table, metadata)
+        table, metadata = self._filter_and_align(table, metadata, level)
+        self._log_results(table, metadata, level)
         self.tables['raw'][level], self.metadata['raw'][level] = table, metadata
 
-    def _filter_and_align(self, table, metadata) -> Tuple:
+    def _filter_and_align(self, table, metadata, level) -> Tuple[Table, pd.DataFrame]:
+        """Filters and aligns feature table with metadata using sample IDs."""
         table, metadata = align_table_and_metadata(
             table, metadata, self.metadata_id_column
         )
@@ -113,12 +134,14 @@ class DownstreamDataLoader:
         return table, metadata
         
     def _load_biom_table(self, level, subdir) -> Table:
+        """Loads and merges BIOM tables from found file paths."""
         table_paths = self._get_table_paths(level, subdir)  
         if not table_paths:
             raise FileNotFoundError("No BIOM table filepaths found")
         return import_merged_biom_table(biom_paths=table_paths)
 
     def _load_metadata(self, level, subdir) -> pd.DataFrame:
+        """Loads and merges metadata from TSV files."""
         metadata_paths = self._get_metadata_paths(level, subdir)
         if not metadata_paths:
             raise FileNotFoundError("No metadata TSV filepaths found")
@@ -132,6 +155,7 @@ class DownstreamDataLoader:
         return clean_metadata(metadata)
 
     def _get_table_paths(self, level: str, subdir: str) -> List[Path]:
+        """Discovers BIOM table file paths based on processing mode."""
         # If there are existing subsets of datasets from upstream processing loaded
         if self.existing_subsets is not None:
             table_paths = [paths[dir] for subset_id, paths in self.existing_subsets.items()]
@@ -155,6 +179,7 @@ class DownstreamDataLoader:
         return table_paths 
 
     def _get_metadata_paths(self, level, subdir) -> List[Path]:
+        """Discovers metadata file paths corresponding to found BIOM tables."""
         tsv_paths: List[Path] = []
         # If there are existing subsets of datasets from upstream processing loaded
         if self.existing_subsets is not None:
@@ -176,9 +201,11 @@ class DownstreamDataLoader:
 
     # SPECIAL CASE: LOAD NFC FACILITIES DATA
     def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Loads and processes nuclear fuel cycle facilities data."""
         return update_nfc_facilities_data(config=self.config, metadata=metadata)
 
-    def _log_results(self, level, table, metadata) -> None:
+    def _log_results(self, table, metadata, level) -> None:
+        """Logs summary statistics for loaded data."""
         table_size = "Empty" if table.is_empty() else f"{table.shape[0]} features × {table.shape[1]} samples"
         metadata_size = "Empty" if metadata.empty else f"{metadata.shape[0]} samples × {metadata.shape[1]} cols"
         feature_type = "genera" if level == "genus" else "ASVs"
@@ -188,6 +215,16 @@ class DownstreamDataLoader:
 # ==================================================================================== #
 
 def load_data(config: Dict, project_dir: Any, existing_subsets: Any = None):
+    """Convenience function to initialize and run the data loader.
+    
+    Args:
+        config:           Configuration dictionary for data loading parameters.
+        project_dir:      Project directory object containing path definitions.
+        existing_subsets: Pre-existing data subsets from upstream processing.
+        
+    Returns:
+        Initialized and executed DownstreamDataLoader instance.
+    """
     loader = DownstreamDataLoader(
         config=config,
         project_dir=project_dir,
