@@ -30,7 +30,7 @@ class NFCFacilityDB:
         dfs = []
         for database in self.databases:
             if database in list(self.DBConfig.keys()):
-                file_path, skip_rows, skip_first_col, column_names = self.DBConfig[database]
+                skip_rows, skip_first_col, column_names, file_path = self.DBConfig[database]
             else:
                 raise ValueError(f"Unknown database: {database}")
 
