@@ -85,7 +85,7 @@ class DownstreamDataPrepper:
             raise ValueError(
                 f"Missing table or metadata for level '{level}' and table type '{table_type}'"
             )
-        return metadata, table
+        return table, metadata
        
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         """Collapse taxonomy tables from base level to all taxonomic levels."""
