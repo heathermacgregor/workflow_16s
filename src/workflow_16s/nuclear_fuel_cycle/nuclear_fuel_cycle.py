@@ -118,6 +118,8 @@ class NFCFacilitiesHandler:
             database_dfs.append(mindat.world_uranium_mines(self.mindat_api_key, self.output_dir))
         if "Wikipedia" in self.database_names:
             database_dfs.append(wikipedia.world_nfc_facilities(output_dir=self.output_dir))
+        logger.info(database_dfs)
+        database_dfs = [item for sublist in database_dfs for item in sublist]
         facilities_df = pd.concat(database_dfs, axis=0)
         return facilities_df
 
