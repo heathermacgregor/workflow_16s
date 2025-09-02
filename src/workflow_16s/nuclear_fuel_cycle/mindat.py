@@ -94,13 +94,15 @@ class MinDatAPI:
         output_dir:   Directory for output files.
         plot_package: Visualization package to use ('mpl' for matplotlib).
         localities:   List of available localities.
+        verbose:      Verbosity flag.
     """
     MPLWorldURL = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
     def __init__(
-      self, 
-      api_key: str, 
-      output_dir: Union[str, Path] = REFERENCES_DIR,
-      plot_package: str = 'mpl'
+        self, 
+        api_key: str, 
+        output_dir: Union[str, Path] = REFERENCES_DIR,
+        plot_package: str = 'mpl',
+        verbose: bool = False
     ):
         """Initialize Mindat API client.
         
@@ -112,6 +114,7 @@ class MinDatAPI:
         os.environ["MINDAT_API_KEY"] = api_key
         self.output_dir = output_dir
         self.plot_package = plot_package
+        self.verbose = verbose
       
         try:
             self.localities = self._get_mindat_localities()
