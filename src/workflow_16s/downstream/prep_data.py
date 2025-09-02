@@ -75,6 +75,7 @@ class DownstreamDataPrepper:
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         # Get base level from mode config (e.g. "asv" or "genus")
         base_level = self.ModeConfig[self.mode][0]
+        logger.info(base_level)
         base_table, base_metadata = self._fetch_data(table_type, base_level)
 
         with get_progress_bar() as progress:
