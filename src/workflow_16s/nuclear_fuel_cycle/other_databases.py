@@ -50,21 +50,13 @@ class NFCFacilityDB:
         self.result = None
 
     def _process_dbs(self):
-        """Process configured databases and combine results.
-        
-        Returns:
-            Combined DataFrame containing facilities from all processed databases
-            
-        Raises:
-            Logs errors for unknown databases but continues processing others
-        """
+        """Process configured databases and combine results."""
         logger.info(self.DBConfig.keys())
         dfs = []
         for database in self.database_names:
             if database in list(self.DBConfig.keys()):
                 db = self.DBConfig[database]
             else:
-                logger.error(f"Unknown database: {database}")
                 continue
             skip_rows, skip_first_col, column_names, file_path = db
             # Detect and load file (only needed columns)
