@@ -347,10 +347,10 @@ class MetadataCleaner:
 
 # ==================================================================================== #
 
-def clean_metadata(metadata: pd.DataFrame):
+def clean_metadata(config: Dict, metadata: pd.DataFrame):
     """[Placeholder]"""
     cleaner = MetadataCleaner(
-        config=self.config, 
+        config=config, 
         metadata=metadata
     )
     cleaner.run_all()
