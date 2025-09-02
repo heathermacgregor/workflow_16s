@@ -462,7 +462,7 @@ def create_project_dirs(project_name: str, base_path: Union[str, Path] = ".",
     Returns:
         ProjectDir instance for the project
     """
-    project_path = Path(base_path) / project_name
+    project_path = Path(base_path) #/ project_name
     return ProjectDir(project_path, config=custom_config)
 
 '''
