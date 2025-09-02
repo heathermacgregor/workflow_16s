@@ -45,6 +45,7 @@ class NFCFacilityDB:
             output_dir: Output directory for processed results. Defaults to REFERENCES_DIR.
         """
         self.databases = databases
+        self.database_names = [db['name'] for db in self.databases]
         self.output_dir = output_dir
         self.result = None
 
@@ -59,7 +60,6 @@ class NFCFacilityDB:
         """
         logger.info(self.DBConfig.keys())
         dfs = []
-        self.database_names = [db['name'] for db in self.databases]
         for database in self.database_names:
             if database in list(self.DBConfig.keys()):
                 db = self.DBConfig[database]
