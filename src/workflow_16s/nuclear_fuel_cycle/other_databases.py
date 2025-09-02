@@ -25,6 +25,7 @@ class NFCFacilityDB:
         self.result = None
 
     def _process_dbs(self):
+        logger.info(self.DBConfig.keys())
         dfs = []
         for database in self.databases:
             if database in list(self.DBConfig.keys()):
