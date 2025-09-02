@@ -37,6 +37,8 @@ from workflow_16s.stats.beta_diversity import (
 )
 from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+from workflow_16s.diversity.beta_diversity import pca, pcoa, tsne, umap
+from workflow_16s.figures.beta_diversity import beta_diversity_plot
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -93,10 +95,10 @@ class Ordination:
     
     # Use dataclass for better structure
     TEST_CONFIG = {
-        "pca": OrdinationConfig("pca", calculate_pca, plot_pca, "PCA"),
-        "pcoa": OrdinationConfig("pcoa", calculate_pcoa, plot_pcoa, "PCoA"),
-        "tsne": OrdinationConfig("tsne", calculate_tsne, plot_mds, "t‑SNE", {"mode": "TSNE"}),
-        "umap": OrdinationConfig("umap", calculate_umap, plot_mds, "UMAP", {"mode": "UMAP"}),
+        "pca": OrdinationConfig("pca", pca, beta_diversity_plot, "PCA"),
+        "pcoa": OrdinationConfig("pcoa", pcoa, beta_diversity_plot, "PCoA"),
+        "tsne": OrdinationConfig("tsne", tsne, beta_diversity_plot, "t‑SNE", {"mode": "TSNE"}),
+        "umap": OrdinationConfig("umap", umap, beta_diversity_plot, "UMAP", {"mode": "UMAP"}),
     }
 
     def __init__(
@@ -398,9 +400,8 @@ class Ordination:
             self.log_ok(f"Completed task {task}")
             return task.table_type, task.level, task.method, result, figures
         except Exception as e:
-            logger.error(f"Ordination {task} failed: {e}")
-            import traceback
-            logger.debug(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Ordination {task} failed: {e}\n"
+                         f"Traceback: {traceback.format_exc()}")
             return None
         finally:
             progress.update(method_task, completed=1, visible=False)
@@ -438,9 +439,8 @@ class Ordination:
                 self.log_ok(f"Running {task.method}")
                 result = method_config.func(table=table, **method_params)
         except Exception as e:
-            logger.error(f"Failed {task}: {e}")
-            import traceback
-            logger.debug(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Failed {task}: {e}\n"
+                         f"Traceback: {traceback.format_exc()}")
             return None, {}
 
         # Generate figures
@@ -451,9 +451,8 @@ class Ordination:
             )
             return result, figures
         except Exception as e:
-            logger.error(f"Plotting failed for {task}: {e}")
-            import traceback
-            logger.debug(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Plotting failed for {task}: {e}\n"
+                         f"Traceback: {traceback.format_exc()}")
             return result, {}
 
     def _generate_figures(
