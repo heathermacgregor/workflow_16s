@@ -88,7 +88,7 @@ def load_nfc_facilities(
     databases = config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
     if output_dir:
-        tsv_path = Path(self.output_dir) / f"nfc_facilities{'_'.join(databases)}.tsv"
+        tsv_path = Path(output_dir) / f"nfc_facilities{'_'.join(databases)}.tsv"
     if use_local and tsv_path.exists():
         df = pd.read_csv(tsv_path, sep='\t')
     else:
