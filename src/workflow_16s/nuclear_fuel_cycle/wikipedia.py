@@ -1,6 +1,7 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Imports
+import logging
 import requests
 from datetime import datetime
 from pathlib import Path
