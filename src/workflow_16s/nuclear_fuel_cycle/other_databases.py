@@ -22,6 +22,13 @@ logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
 class NFCFacilityDB:
+    """A class that handles loading and processing of NFC facility databases.
+    
+    Attributes:
+        databases:  List of database names to process.
+        output_dir: Directory where processed results will be saved.
+        result:     Combined DataFrame containing processed database information.
+    """
     DBConfig = {
         "GEM": (0, False, DEFAULT_GEM_COLUMNS, DEFAULT_GEM_PATH),
         "NFCIS": (8, True, DEFAULT_NFCIS_COLUMNS, DEFAULT_NFCIS_PATH)
@@ -31,11 +38,25 @@ class NFCFacilityDB:
         databases: List[str] = ["GEM", "NFCIS"], 
         output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
     ):
+        """Initialize NFC facility database processor.
+        
+        Args:
+            databases:  List of database names to process. Defaults to ["GEM", "NFCIS"].
+            output_dir: Output directory for processed results. Defaults to REFERENCES_DIR.
+        """
         self.databases = databases
         self.output_dir = output_dir
         self.result = None
 
     def _process_dbs(self):
+        """Process configured databases and combine results.
+        
+        Returns:
+            Combined DataFrame containing facilities from all processed databases
+            
+        Raises:
+            Logs errors for unknown databases but continues processing others
+        """
         logger.info(self.DBConfig.keys())
         dfs = []
         for database in self.databases:
@@ -98,6 +119,18 @@ def load_nfc_facilities(
     config: Dict, 
     output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
 ) -> pd.DataFrame:
+    """Load NFC facilities from configured databases.
+    
+    Args:
+        config:     Configuration dictionary containing database settings.
+        output_dir: Directory where processed results will be saved. Defaults to REFERENCES_DIR.
+        
+    Returns:
+        DataFrame containing combined facilities from all configured databases.
+        
+    Note:
+        Can use locally cached version if configured and available.
+    """
     databases = config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
     db_names = '_'.join(db['name'] for db in databases)
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
