@@ -6,7 +6,7 @@ import requests
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 # Third Party Imports
 import pandas as pd
