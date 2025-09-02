@@ -120,11 +120,11 @@ class MinDatAPI:
         try:
             self.localities = self._get_mindat_localities()
         except Exception as e:
-            log(f"Error getting Mindat localities: {e}")
+            self.log(f"Error getting Mindat localities: {e}")
         
         # Ensure we have localities
         if not self.localities:
-            log("No localities found. Using pycountry fallback.")
+            self.log("No localities found. Using pycountry fallback.")
             self.localities = self._get_pycountry_countries()
             
     def log(self, msg):
@@ -170,7 +170,7 @@ class MinDatAPI:
             gdf: GeoDataFrame containing mine coordinates.
         """
         if gdf.empty:
-            log(f"No data to plot for {locality}")
+            self.log(f"No data to plot for {locality}")
             return
             
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -195,16 +195,16 @@ class MinDatAPI:
         """
         dfs = []
         for locality in self.localities: 
-            log(f"Processing {locality}")
+            self.log(f"Processing {locality}")
             try:
                 df, gdf = self._get_uranium_mines_locality(locality)
                 if not df.empty:
                     dfs.append(df)
                     self._mpl_plot_uranium_mines_locality(locality, gdf)
                 else:
-                    log(f"No uranium mines found in {locality}")
+                    self.log(f"No uranium mines found in {locality}")
             except Exception as e:
-                log(f"Error with {locality}: {e}")
+                self.log(f"Error with {locality}: {e}")
         
         if dfs:
             df = pd.concat(dfs, axis=0)
@@ -215,7 +215,7 @@ class MinDatAPI:
                     self._mpl_plot_uranium_mines_locality('world', gdf)
             return df, gdf
         else:
-            log("No data found for any locality")
+            self.log("No data found for any locality")
             return pd.DataFrame(), gpd.GeoDataFrame()
 
 # ==================================================================================== #
