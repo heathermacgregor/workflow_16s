@@ -89,7 +89,6 @@ class NFCFacilitiesHandler:
         samples_df: pd.DataFrame
     ) -> pd.DataFrame:
         
-        # Fixed: Call the correct method name
         matched_df = self._match_facilities_with_locations(facilities_df, samples_df)
         
         # Define required metadata columns to keep
@@ -115,12 +114,12 @@ class NFCFacilitiesHandler:
         # Save full matched results
         if self.output_dir:
             matched_df[result_cols].to_csv(
-                Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",  # Fixed: use self.output_dir
+                Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",
                 sep='\t', index=False
             )
         return matched_df
 
-    def _match_facilities_with_locations(  # Fixed: Added self parameter
+    def _match_facilities_with_locations(
         self,
         facilities_df: pd.DataFrame,
         samples_df: pd.DataFrame
@@ -148,9 +147,10 @@ class NFCFacilitiesHandler:
             # Rename facility coordinate columns before returning
             matches = matches.rename(columns={
                 'latitude_deg': 'facility_latitude_deg',
-                'longitude_deg': 'facility_longitude_deg'
+                'longitude_deg': 'facility_longitude_deg',
+                'country': 'facility_country'
             })
-            return pd.concat([samples_df, matches], axis=1)  # Fixed: samples_df instead of samples
+            return pd.concat([samples_df, matches], axis=1)
     
         # Prepare facility KD-tree
         valid_fac = facilities_df.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
@@ -159,7 +159,12 @@ class NFCFacilitiesHandler:
     
         # Build sample coordinates
         samp_xyz = utils.sph2cart(valid_samples['latitude_deg'], valid_samples['longitude_deg'])
-        dists, idxs = tree.query(samp_xyz, distance_upper_bound=self.max_distance_km)
+        
+        # Convert max distance from km to the coordinate system units
+        # Assuming Earth radius of 6371 km and unit sphere coordinates
+        max_distance_units = self.max_distance_km / 6371.0
+        
+        dists, idxs = tree.query(samp_xyz, distance_upper_bound=max_distance_units)
     
         # Build result records
         records = []
@@ -167,7 +172,9 @@ class NFCFacilitiesHandler:
         for dist, idx in zip(dists, idxs):
             if np.isfinite(dist):
                 rec = valid_fac.iloc[idx].to_dict()
-                rec.update({'facility_distance_km': dist, 'facility_match': True})
+                # Convert distance back to kilometers
+                distance_km = dist * 6371.0
+                rec.update({'facility_distance_km': distance_km, 'facility_match': True})
             else:
                 rec = {col: np.nan for col in facilities_df.columns}
                 rec.update({'facility_distance_km': np.nan, 'facility_match': False})
@@ -189,7 +196,7 @@ class NFCFacilitiesHandler:
             'country': 'facility_country'
         })
         
-        return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)  # Fixed: samples_df instead of samples
+        return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)
 
 
 # API
