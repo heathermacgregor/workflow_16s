@@ -25,6 +25,24 @@ logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
 class NFCFacilitiesHandler:
+    """Handler for managing Nuclear Fuel Cycle (NFC) facilities data.
+    
+    This class handles the retrieval, geocoding, and matching of NFC facilities
+    with sample metadata based on geographical coordinates.
+    
+    Attributes:
+        config:                 Configuration dictionary containing settings.
+        output_dir:             Directory path for output files.
+        mindat_api_key:         API key for MinDat API access.
+        user_agent:             User agent string for web requests.
+        verbose:                Flag for verbose logging.
+        databases:              List of database configurations.
+        database_names:         Names of enabled databases.
+        max_distance_km:        Maximum distance in km for facility matching.
+        use_local:              Flag to use locally cached data.
+        facilities_output_path: Path to facilities output CSV.
+        matches_output_path:    Path to facility matches output TSV.
+    """
     def __init__(
         self, 
         config: Dict,        
@@ -32,6 +50,14 @@ class NFCFacilitiesHandler:
         mindat_api_key: str = MINDAT_API_KEY,
         user_agent: str = DEFAULT_USER_AGENT
     ):
+        """Initialize NFC facilities handler.
+        
+        Args:
+            config: Configuration dictionary containing NFC facilities settings.
+            output_dir: Output directory path. Defaults to REFERENCES_DIR.
+            mindat_api_key: Mindat API key. Defaults to MINDAT_API_KEY.
+            user_agent: User agent string for web requests. Defaults to DEFAULT_USER_AGENT.
+        """
         self.config = config
         enabled = self.config.get("nfc_facilities", {}).get("enabled", True) # TODO: Switch to False
         if not enabled:
@@ -55,9 +81,11 @@ class NFCFacilitiesHandler:
         self.user_agent = user_agent
         
     def log(self, msg):
+        """Log message with debug level if verbose mode is enabled."""
         return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
         
     def run(self, metadata: pd.DataFrame):
+        """Execute the complete NFC facilities processing pipeline."""
         if self.use_local and self.facilities_output_path.exists():
             df = pd.read_csv(self.facilities_output_path)
         else:
@@ -71,12 +99,14 @@ class NFCFacilitiesHandler:
         return df, updated_metadata
 
     def _get_geocoded_data(self):
+        """Retrieve and geocode facilities data from configured databases."""
         df = self._get_data()
         df = self._geocode(df)
         self.nfc_facilities = df
         return df
         
     def _get_data(self):
+        """Aggregate facilities data from all enabled databases."""
         database_dfs = []
         if "GEM" in self.database_names or "NFCIS" in self.database_names:
             databases = []
@@ -92,6 +122,14 @@ class NFCFacilitiesHandler:
         return facilities_df
 
     def _geocode(self, df: pd.DataFrame):
+        """Geocode facility locations using nominatim OpenStreetMap.
+        
+        Args:
+            df: Input DataFrame with facility and country information.
+            
+        Returns:
+            pd.DataFrame: DataFrame with added latitude and longitude columns.
+        """
         # Prepare geocoding
         df['__query__'] = df['facility'].fillna('') + ', ' + df['country'].fillna('')
         unique_queries = df['__query__'].unique()
@@ -119,7 +157,15 @@ class NFCFacilitiesHandler:
         facilities_df: pd.DataFrame,
         samples_df: pd.DataFrame
     ) -> pd.DataFrame:
+        """Match samples with nearby facilities within the specified distance.
         
+        Args:
+            facilities_df: DataFrame containing geocoded facilities.
+            samples_df: DataFrame containing sample metadata with coordinates.
+            
+        Returns:
+            pd.DataFrame: Updated metadata with facility match information.
+        """
         matched_df = self._match_facilities_with_locations(facilities_df, samples_df)
         
         # Define required metadata columns to keep
@@ -153,8 +199,15 @@ class NFCFacilitiesHandler:
         facilities_df: pd.DataFrame,
         samples_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """Match locations to nearby facilities within a specified distance threshold.
-        Handles missing coordinates by preserving original rows."""
+        """Match sample locations to nearby facilities using KD-tree spatial indexing.
+        
+        Args:
+            facilities_df: Geocoded facilities DataFrame.
+            samples_df: Sample metadata DataFrame with coordinates.
+            
+        Returns:
+            pd.DataFrame: Combined DataFrame with facility match results.
+        """
         # Copy samples to preserve order and index
         samples_df = samples_df.reset_index(drop=True).copy()
     
@@ -229,7 +282,18 @@ class NFCFacilitiesHandler:
 
 # ==================================================================================== #
 
-def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame):
+def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Convenience function to update NFC facilities data and match with samples.
+    
+    Args:
+        config:   Configuration dictionary.
+        metadata: Sample metadata DataFrame with coordinates.
+        
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]:
+            - NFC facilities DataFrame
+            - Updated metadata with facility matches
+    """
     handler = NFCFacilitiesHandler(config=config)
     nfc_facilities, updated_metadata = handler.run(metadata=metadata)
     return nfc_facilities, updated_metadata
