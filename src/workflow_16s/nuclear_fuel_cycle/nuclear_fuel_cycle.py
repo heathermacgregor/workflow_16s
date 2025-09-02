@@ -41,7 +41,7 @@ class NFCFacilitiesHandler:
         
         self.databases = self.config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
         self.database_names = [db['name'] for db in self.databases]
-
+        logger.info(self.database_names)
         self.max_distance_km = self.config.get("nfc_facilities", {}).get("max_distance_km", 50)
 
         self.use_local = self.config.get("nfc_facilities", {}).get('use_local', False)
@@ -79,7 +79,11 @@ class NFCFacilitiesHandler:
     def _get_data(self):
         database_dfs = []
         if "GEM" in self.database_names or "NFCIS" in self.database_names:
-            database_dfs.append(other_databases.load_nfc_facilities(config=self.config))
+            databases = []
+            for db in ["GEM", "NFCIS"]:
+                if db in self.database_names:
+                    databases.append(db)
+            database_dfs.append(other_databases.load_nfc_facilities(config=self.config, databases=databases))
         if "MinDat" in self.database_names:
             database_dfs.append(mindat.world_uranium_mines(self.mindat_api_key, self.output_dir))
         if "Wikipedia" in self.database_names:
