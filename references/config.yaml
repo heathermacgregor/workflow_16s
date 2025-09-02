@@ -114,7 +114,7 @@ nfc_facilities:
 
 # Sample Maps
 maps:
-  enabled: True
+  enabled: False
   color_columns:
     - "dataset_name"
     - "nuclear_contamination_status"
