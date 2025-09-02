@@ -11,6 +11,7 @@ import pandas as pd
 
 # Local Imports
 from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
