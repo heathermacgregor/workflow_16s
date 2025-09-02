@@ -117,7 +117,11 @@ class DownstreamDataPrepper:
                 self.metadata.setdefault(table_type, {})[level] = metadata
                 progress.update(task_id, advance=1)
             progress.update(task_id, description=task_desc_fmt)
-   
+            
+    def _transform_enabled(self, config_key: str):
+        # Explicitly convert config value to boolean
+        return bool(features_config.get(config_key, True))
+        
     def _apply_transformations(self, level: str) -> None:      
         """Apply transformations (filtering, normalization, CLR) to specified taxonomic level."""
         table, metadata = self._fetch_data("raw", level)
@@ -129,10 +133,6 @@ class DownstreamDataPrepper:
         ]
 
         features_config = self.config.get("features", {})
-        def _transform_enabled(self, config_key: str):
-            # Explicitly convert config value to boolean
-            return bool(features_config.get(config_key, True))
-
         n_steps = sum([self._transform_enabled(config_key) for key, _, _ in steps])
         with get_progress_bar() as progress:
             task_desc = "Transforming_features"
