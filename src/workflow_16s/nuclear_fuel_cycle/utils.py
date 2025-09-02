@@ -1,9 +1,20 @@
-import numpy as np
+# ==================================================================================== #
+
+# Standard Imports
 import requests
 from functools import lru_cache
+
+# Third Party Imports
+import numpy as np
+
+# Local Imports
 from workflow_16s.constants import DEFAULT_USER_AGENT
 
+# ==================================================================================== #
+
 _session = requests.Session() # Create a single requests session for reuse
+
+# ==================================================================================== #
 
 @lru_cache(maxsize=None)
 def _geocode_query(query: str, user_agent: str = DEFAULT_USER_AGENT) -> (float, float):
