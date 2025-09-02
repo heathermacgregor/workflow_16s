@@ -14,6 +14,7 @@ import itertools
 import logging
 import os
 import re
+import traceback
 import shutil
 import subprocess
 import sys
@@ -328,7 +329,8 @@ class Workflow16S:
             self._execute_downstream()
             
         except Exception as e:
-            self.logger.error(f"Workflow execution failed: {e}")
+            self.logger.error(f"Workflow execution failed: {e}\n"
+                              f"Traceback: {traceback.format_exc()}"))
             raise WorkflowError("Workflow aborted due to errors") from e
 
     def _execute_upstream(self) -> None:
@@ -366,7 +368,8 @@ class Workflow16S:
             )
             
         except Exception as e:
-            self.logger.error(f"Failed downstream processing: {e}")            
+            self.logger.error(f"Failed downstream processing: {e}\n"
+                              f"Traceback: {traceback.format_exc()}"))            
 
     def _get_existing_subsets(self):
         find_subsets = self.config.get("downstream", {}).get("find_subsets", False)
