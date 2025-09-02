@@ -19,6 +19,7 @@ from workflow_16s.constants import (
     DEFAULT_GROUP_COLUMN, GROUP_THRESHOLD, PREVALENCE_THRESHOLD, 
     TAXONOMIC_LEVELS_MAPPING
 )
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
