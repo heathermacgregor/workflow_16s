@@ -264,7 +264,7 @@ class DownstreamAnalyzer:
             ('faprotax', 'Functional Annotation')
         ]
         
-        enabled = [name for key, name in modules if self.config.(key)]
+        enabled = [name for key, name in modules if self.config.is_enabled(key)]
         disabled = [name for key, name in modules if not self.config.is_enabled(key)]
         
         logger.info(f"Enabled modules: {', '.join(enabled)}")
