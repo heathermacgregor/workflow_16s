@@ -1,15 +1,25 @@
+# ==================================================================================== #
+
+# Standard Imports
 import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+# Third Party Imports
 import pandas as pd
 
+# Local Imports
 from workflow_16s.constants import (
     DEFAULT_GEM_PATH, DEFAULT_GEM_COLUMNS, DEFAULT_NFCIS_PATH, DEFAULT_NFCIS_COLUMNS,
     REFERENCES_DIR
 )
+
+# ==================================================================================== #
+
 logger = logging.getLogger("workflow_16s")
+
+# ==================================================================================== #
 
 class NFCFacilityDB:
     DBConfig = {
@@ -82,8 +92,8 @@ class NFCFacilityDB:
           
         return self.result
 
+# ==================================================================================== #
 
-# API
 def load_nfc_facilities(
     config: Dict, 
     output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
