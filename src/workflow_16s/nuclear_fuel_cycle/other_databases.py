@@ -52,9 +52,11 @@ class NFCFacilityDB:
     def _process_dbs(self):
         """Process configured databases and combine results."""
         dfs = []
+        valid_dbs = []
         for database in self.database_names:
             if database in list(self.DBConfig.keys()):
                 db = self.DBConfig[database]
+                valid_dbs.append(db['name'])
             else:
                 continue
             skip_rows, skip_first_col, column_names, file_path = db
@@ -96,9 +98,9 @@ class NFCFacilityDB:
             dfs.append(df)
           
         if dfs:
-            self.result = pd.concat(dfs, ignore_index=True)#.dropna(subset=['latitude_deg', 'longitude_deg'])
+            self.result = pd.concat(dfs, ignore_index=True)
             if self.output_dir:
-                tsv_path = Path(self.output_dir) / f"nfc_facilities{'_'.join(self.database_names)}.tsv"
+                tsv_path = Path(self.output_dir) / f"nfc_facilities{'_'.join(valid_dbs)}.tsv"
                 self.result.to_csv(tsv_path, sep='\t', index=True)
         else:
             self.result = pd.DataFrame()
@@ -123,17 +125,28 @@ def load_nfc_facilities(
     Note:
         Can use locally cached version if configured and available.
     """
+    DBConfig = {
+        "GEM": (0, False, DEFAULT_GEM_COLUMNS, DEFAULT_GEM_PATH),
+        "NFCIS": (8, True, DEFAULT_NFCIS_COLUMNS, DEFAULT_NFCIS_PATH)
+    }
     databases = config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
-    db_names = '_'.join(db['name'] for db in databases)
+    db_names = [db['name'] for db in databases]
+    valid_dbs = []
+    for database in db_names:
+        if database in list(DBConfig.keys()):
+            db = self.DBConfig[database]
+            valid_dbs.append(db['name'])
+        else:
+            continue
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
     if output_dir:
-        tsv_path = Path(output_dir) / f"nfc_facilities{db_names}.tsv"
+        tsv_path = Path(output_dir) / f"nfc_facilities{'_'.join(valid_dbs)}.tsv"
     if use_local and tsv_path.exists():
         df = pd.read_csv(tsv_path, sep='\t')
     else:
         db_loader = NFCFacilityDB(databases=databases, output_dir=output_dir)
         df = db_loader._process_dbs()
     
-    logger.info(f"NFC facilities from databases ({', '.join(db['name'] for db in databases)}): {df.shape}")
+    logger.info(f"NFC facilities from databases ({', '.join(valid_dbs)}): {df.shape}")
     return df
   
