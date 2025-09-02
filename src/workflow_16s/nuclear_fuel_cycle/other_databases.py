@@ -135,7 +135,7 @@ def load_nfc_facilities(
     for database in db_names:
         if database in list(DBConfig.keys()):
             db = DBConfig[database]
-            valid_dbs.append(db['name'])
+            valid_dbs.append(database)
         else:
             continue
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
