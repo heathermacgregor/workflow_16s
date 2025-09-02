@@ -114,7 +114,7 @@ class DownstreamDataLoader:
         level, subdir, _ = self.ModeConfig[mode]
         table = self._load_biom_table(level, subdir)
         metadata = self._load_metadata(level, subdir)
-        metadata = clean_metadata(metadata)
+        metadata = clean_metadata(self.config, metadata)
       
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
