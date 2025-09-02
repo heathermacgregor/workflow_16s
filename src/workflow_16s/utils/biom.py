@@ -103,6 +103,7 @@ def df_to_biom(table: Union[pd.DataFrame, Table]) -> Table:
     Returns:
         BIOM Table representation of the DataFrame.
     """
+    print(type(table))
     if isinstance(table, Table):
         return table
         
