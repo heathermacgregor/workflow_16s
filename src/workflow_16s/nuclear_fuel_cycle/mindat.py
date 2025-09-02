@@ -137,6 +137,9 @@ class MinDatAPI:
 
 
 # API
-def world_uranium_mines():
-    mindat_api = MinDatAPI()
+def world_uranium_mines(
+    api_key: str = MINDAT_API_KEY, 
+    output_dir: Union[str, Path] = REFERENCES_DIR
+):
+    mindat_api = MinDatAPI(api_key, output_dir)
     return mindat_api._get_uranium_mines_world()
