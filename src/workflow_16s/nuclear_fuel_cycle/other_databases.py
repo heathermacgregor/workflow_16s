@@ -89,15 +89,16 @@ def load_nfc_facilities(
     output_dir: Optional[Union[str, Path]] = REFERENCES_DIR
 ) -> pd.DataFrame:
     databases = config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
+    db_names = '_'.join(db['name'] for db in databases)
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
     if output_dir:
-        tsv_path = Path(output_dir) / f"nfc_facilities{'_'.join(db['name'] for db in databases)}.tsv"
+        tsv_path = Path(output_dir) / f"nfc_facilities{db_names}.tsv"
     if use_local and tsv_path.exists():
         df = pd.read_csv(tsv_path, sep='\t')
     else:
         db_loader = NFCFacilityDB(databases=databases, output_dir=output_dir)
         df = db_loader._process_dbs()
     
-    logger.info(f"NFC facilities from databases ({', '.join(databases)}): {df.shape}")
+    logger.info(f"NFC facilities from databases ({', '.join(db['name'] for db in databases)}): {df.shape}")
     return df
   
