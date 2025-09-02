@@ -67,7 +67,7 @@ class NFCFacilitiesHandler:
         
         self.databases = self.config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
         self.database_names = [db['name'] for db in self.databases]
-        logger.info(self.database_names)
+        
         self.max_distance_km = self.config.get("nfc_facilities", {}).get("max_distance_km", 50)
 
         self.use_local = self.config.get("nfc_facilities", {}).get('use_local', False)
@@ -282,12 +282,13 @@ class NFCFacilitiesHandler:
 
 # ==================================================================================== #
 
-def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame, verbose: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Convenience function to update NFC facilities data and match with samples.
     
     Args:
         config:   Configuration dictionary.
         metadata: Sample metadata DataFrame with coordinates.
+        verbose:  Verbosity flag.
         
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]:
@@ -296,5 +297,8 @@ def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame) -> Tuple[pd
     """
     handler = NFCFacilitiesHandler(config=config)
     nfc_facilities, updated_metadata = handler.run(metadata=metadata)
+    if verbose:
+        logger.info(nfc_facilities)
+        logger.info(updated_metadata)
     return nfc_facilities, updated_metadata
     
