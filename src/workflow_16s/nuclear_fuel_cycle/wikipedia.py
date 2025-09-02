@@ -131,7 +131,7 @@ class WikipediaScraper:
 
 # ======================================= API ======================================== #
 
-def world_nfc_facilities(output_dir: Union[str, Path] = REFERENCES_DIR)):
+def world_nfc_facilities(output_dir: Union[str, Path] = REFERENCES_DIR):
     """Public API function to retrieve worldwide nuclear facility data from Wikipedia.
     
     Returns:
