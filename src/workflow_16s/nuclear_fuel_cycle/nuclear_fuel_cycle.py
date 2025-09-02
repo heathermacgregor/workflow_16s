@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
 
 # Third Party Imports
+import geopandas as gpd
 import pandas as pd
 import numpy as np
 from scipy.spatial import cKDTree
@@ -119,11 +120,17 @@ class NFCFacilitiesHandler:
         if "Wikipedia" in self.database_names:
             database_dfs.append(wikipedia.world_nfc_facilities(output_dir=self.output_dir))
         
-        database_dfs = [item for sublist in database_dfs for item in sublist]
+        #database_dfs = [item for sublist in database_dfs for item in sublist]
+        dfs = []
         for df in database_dfs:
             logger.info(df)
             logger.info(type(df))
-        facilities_df = pd.concat(database_dfs, axis=0)
+            if isinstance(df, gpd.GeoDataFrame):
+                dfs.append(pd.DataFrame(df))  # Convert and append
+            elif isinstance(df, pd.DataFrame):
+                dfs.append(df)  # Directly append
+            
+        facilities_df = pd.concat(dfs, axis=0)
         return facilities_df
 
     def _geocode(self, df: pd.DataFrame):
