@@ -51,7 +51,6 @@ class NFCFacilityDB:
 
     def _process_dbs(self):
         """Process configured databases and combine results."""
-        logger.info(self.DBConfig.keys())
         dfs = []
         for database in self.database_names:
             if database in list(self.DBConfig.keys()):
