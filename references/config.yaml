@@ -5,7 +5,7 @@
 
 project:
   name: "test"
-  dir_path: "../../../test"
+  dir_path: "../../test"
   
 verbose: True
 
