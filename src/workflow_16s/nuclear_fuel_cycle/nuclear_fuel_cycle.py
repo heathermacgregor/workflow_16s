@@ -83,11 +83,11 @@ class NFCFacilitiesHandler:
             for db in ["GEM", "NFCIS"]:
                 if db in self.database_names:
                     databases.append(db)
-            database_dfs.append(other_databases.load_nfc_facilities(config=self.config, databases=databases))
+            database_dfs.append(other_databases.load_nfc_facilities(config=self.config, output_dir=self.output_dir))
         if "MinDat" in self.database_names:
             database_dfs.append(mindat.world_uranium_mines(self.mindat_api_key, self.output_dir))
         if "Wikipedia" in self.database_names:
-            database_dfs.append(wikipedia.world_nfc_facilities())
+            database_dfs.append(wikipedia.world_nfc_facilities(output_dir=self.output_dir))
         facilities_df = pd.concat(database_dfs, axis=0)
         return facilities_df
 
