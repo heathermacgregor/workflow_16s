@@ -25,6 +25,22 @@ logger = logging.getLogger("workflow_16s")
 # ================================= DEFAULT VALUES =================================== #
 
 class DownstreamDataPrepper:
+    """A class that handles downstream data preparation.
+        • Generates feature tables collapsed at each taxonomic level
+        • Performs various transformations (filtering, normalization, CLR) 
+          to feature tables
+        • Generates presence/absence tables
+        • Exports processed BIOM tables
+
+    Attributes:
+        config:      Configuration dictionary for processing parameters.
+        metadata:    Metadata associated with the feature tables.
+        tables:      Feature tables at different processing stages.
+        project_dir: Project directory structure.
+        mode:        Processing mode ('any' or 'genus').
+        verbose:     Verbosity flag.
+        output_dir:  Output directory for processed tables.
+    """
     ModeConfig = {
         "any": ("asv", "table", "asv"), 
         "genus": ("genus", "table_6", "l6")
@@ -46,24 +62,23 @@ class DownstreamDataPrepper:
         self.metadata, self.tables = metadata, tables        
 
     def run(self):
+        """Execute the full data preparation pipeline."""
         # Collapse raw tables at all taxonomy levels
         self._collapse_taxonomy("raw")
 
         for level in self.levels:
             try:
-                # Preprocessing steps
-                self._apply_transformations(level)
+                self._apply_transformations(level) # Preprocessing 
                 for table_type in ["filtered", "normalized", "clr_transformed"]:
                     if table_type in self.tables and level in self.tables[table_type]:
-                        # Create Presence/Absence tables
                         self._create_presence_absence(table_type, level)
             except Exception as e:
                 logger.error(f"Data prep failed for {level}: {e}")
                 
-        # Save tables
         self._save_tables()
         
-    def _fetch_data(self, table_type: str, level: str) -> Tuple:
+    def _fetch_data(self, table_type: str, level: str) -> Tuple[pd.DataFrame, Table]:
+        """Retrieve table and metadata for specified processing stage and taxonomic level."""
         metadata = self.metadata.get(table_type, {}).get(level)
         table = self.tables.get(table_type, {}).get(level)
         if table is None or metadata is None:
@@ -73,6 +88,7 @@ class DownstreamDataPrepper:
         return metadata, table
        
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
+        """Collapse taxonomy tables from base level to all taxonomic levels."""
         # Get base level from mode config (e.g. "asv" or "genus")
         base_level = self.ModeConfig[self.mode][0]
         base_table, base_metadata = self._fetch_data(table_type, base_level)
@@ -102,6 +118,7 @@ class DownstreamDataPrepper:
             progress.update(task_id, description=task_desc_fmt)
    
     def _apply_transformations(self, level: str) -> None:      
+        """Apply transformations (filtering, normalization, CLR) to specified taxonomic level."""
         table, metadata = self._fetch_data("raw", level)
 
         steps = [
@@ -142,6 +159,7 @@ class DownstreamDataPrepper:
                         progress.update(task_id, advance=1)
         
     def _create_presence_absence(self, table_type: str, level: str) -> None:
+        """Create presence/absence tables from specified table type and taxonomic level."""
         if not bool(self.config.get("features", {}).get("presence_absence", False)):
             return
         try:
@@ -157,10 +175,8 @@ class DownstreamDataPrepper:
             logger.error(f"Presence/absence table failed for {level} ({table_type}): {e}")
 
     def _save_tables(self) -> None:
-        # Create directory if it doesn't exist
-        base = self.output_dir / "merged" / "table"
-        base.mkdir(parents=True, exist_ok=True)
-    
+        """Export all processed tables to BIOM format files in parallel."""
+        base = self.output_dir / "merged" / "table"    
         # Prepare export tasks
         export_tasks = []
         for table_type, levels in self.tables.items():
@@ -194,6 +210,17 @@ class DownstreamDataPrepper:
 # ==================================================================================== #
 
 def prep_data(config: Dict, metadata: Dict, tables: Dict, project_dir: Any):
+    """Prepare data for downstream analysis by applying transformations and exports.
+
+    Args:
+        config:      Configuration dictionary for processing parameters.
+        metadata:    Metadata associated with the feature tables.
+        tables:      Dictionary containing feature tables at different stages.
+        project_dir: Project directory structure object.
+
+    Returns:
+        DownstreamDataPrepper: The processed data prepper instance.
+    """
     prepper = DownstreamDataPrepper(
         config=config,
         metadata=metadata,
