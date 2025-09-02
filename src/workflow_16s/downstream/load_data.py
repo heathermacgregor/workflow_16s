@@ -29,12 +29,9 @@ def align_table_and_metadata(
     """Align BIOM table with metadata using sample IDs.
     
     Args:
-        table :         
-            BIOM feature table.
-        metadata :      
-            Sample metadata DataFrame.
-        sample_id_col : 
-            Metadata column containing sample IDs.
+        table:         BIOM feature table.
+        metadata:      Sample metadata DataFrame.
+        sample_id_col: Metadata column containing sample IDs.
     
     Returns:
         Tuple of (filtered BIOM table, filtered metadata DataFrame)
@@ -127,19 +124,11 @@ class DownstreamDataLoader:
             raise FileNotFoundError("No metadata TSV filepaths found")
         
         columns_to_rename = self.config.get("columns_to_rename", {}) or {}
-        metadatas = []
         
-        for path in metadata_paths:
-            try:
-                df = import_single_metadata_tsv(path, columns_to_rename)
-                metadatas.append(df)
-            except Exception as e:
-                logger.warning(f"Failed to load {path}: {e}")
-        
-        if not metadatas:
-            return pd.DataFrame()
-        
-        metadata = pd.concat(metadatas, ignore_index=True)
+        metadata = import_merged_metadata_tsv(
+            tsv_paths=metadata_paths, 
+            columns_to_rename=columns_to_rename  
+        )
         return clean_metadata(metadata)
 
     def _get_table_paths(self, level: str, subdir: str) -> List[Path]:
@@ -187,10 +176,7 @@ class DownstreamDataLoader:
 
     # SPECIAL CASE: LOAD NFC FACILITIES DATA
     def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        return update_nfc_facilities_data(
-            config=self.config,
-            metadata=metadata
-        )
+        return update_nfc_facilities_data(config=self.config, metadata=metadata)
 
     def _log_results(self, level, table, metadata) -> None:
         table_size = "Empty" if table.is_empty() else f"{table.shape[0]} features × {table.shape[1]} samples"
