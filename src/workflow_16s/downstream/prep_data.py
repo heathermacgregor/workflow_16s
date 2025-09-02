@@ -39,7 +39,7 @@ class DownstreamDataPrepper:
     ) -> None:
         self.config = config 
         self.mode = self.config.get("target_subfragment_mode", MODE)
-        self.verbose = self.config("verbose", False)
+        self.verbose = self.config.get("verbose", False)
       
         self.output_dir = Path(project_dir.data)
         
