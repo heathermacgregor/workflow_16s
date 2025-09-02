@@ -18,6 +18,8 @@ from workflow_16s.utils.dir_utils import SubDirs
 #from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
 
+logger = logging.getLogger("workflow_16s")
+
 # ==================================================================================== #
 
 def align_table_and_metadata(
