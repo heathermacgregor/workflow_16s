@@ -1,6 +1,7 @@
 # ==================================================================================== #
 
 # Standard Imports
+import logging
 import requests
 from functools import lru_cache
 
@@ -12,6 +13,7 @@ from workflow_16s.constants import DEFAULT_USER_AGENT
 
 # ==================================================================================== #
 
+logger = logging.getLogger("workflow_16s")
 _session = requests.Session() # Create a single requests session for reuse
 
 # ==================================================================================== #
