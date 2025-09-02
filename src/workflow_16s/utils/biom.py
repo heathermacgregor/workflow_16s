@@ -104,6 +104,8 @@ def df_to_biom(table: Union[pd.DataFrame, Table]) -> Table:
         BIOM Table representation of the DataFrame.
     """
     print(type(table))
+    print(table.index.astype(str).tolist())
+    print(table.columns.astype(str).tolist())
     if isinstance(table, Table):
         return table
         
