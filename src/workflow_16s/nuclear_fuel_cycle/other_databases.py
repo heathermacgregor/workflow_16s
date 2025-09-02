@@ -59,7 +59,8 @@ class NFCFacilityDB:
         """
         logger.info(self.DBConfig.keys())
         dfs = []
-        for database in self.databases:
+        self.database_names = [db['name'] for db in self.databases]
+        for database in self.database_names:
             if database in list(self.DBConfig.keys()):
                 db = self.DBConfig[database]
             else:
