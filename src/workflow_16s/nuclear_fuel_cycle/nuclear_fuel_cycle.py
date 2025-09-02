@@ -17,7 +17,7 @@ from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases, 
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # Set up logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("workflow_16s")
 
 class NFCFacilitiesHandler:
     def __init__(
