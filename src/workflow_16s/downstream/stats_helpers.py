@@ -34,7 +34,7 @@ from workflow_16s.utils.data import (
 )
 from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
-
+logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
 # Pre-compiled test configuration for faster access
