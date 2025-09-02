@@ -26,11 +26,11 @@ logger = logging.getLogger("workflow_16s")
 
 class DownstreamDataPrepper:
     """A class that handles downstream data preparation.
-        • Generates feature tables collapsed at each taxonomic level
-        • Performs various transformations (filtering, normalization, CLR) 
-          to feature tables
-        • Generates presence/absence tables
-        • Exports processed BIOM tables
+    
+    - Generates feature tables collapsed at each taxonomic level
+    - Performs various transformations (filtering, normalization, CLR) to feature tables
+    - Generates presence/absence tables
+    - Exports processed BIOM tables
 
     Attributes:
         config:      Configuration dictionary for processing parameters.
@@ -90,7 +90,8 @@ class DownstreamDataPrepper:
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         """Collapse taxonomy tables from base level to all taxonomic levels."""
         # Get base level from mode config (e.g. "asv" or "genus")
-        base_level = self.ModeConfig[self.mode][0]
+        #base_level = self.ModeConfig[self.mode][0]
+        base_level = "genus" if self.config.get("target_subfragment_mode", MODE) == 'any' else "asv"
         base_table, base_metadata = self._fetch_data(table_type, base_level)
 
         with get_progress_bar() as progress:
