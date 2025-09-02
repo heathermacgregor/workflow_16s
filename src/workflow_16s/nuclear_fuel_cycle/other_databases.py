@@ -30,13 +30,14 @@ class NFCFacilityDB:
         dfs = []
         for database in self.databases:
             if database in list(self.DBConfig.keys()):
-                skip_rows, skip_first_col, column_names, file_path = self.DBConfig[database]
+                db = self.DBConfig[database]
             else:
-                raise ValueError(f"Unknown database: {database}")
-
+                logger.error(f"Unknown database: {database}")
+                continue
+            skip_rows, skip_first_col, column_names, file_path = db
             # Detect and load file (only needed columns)
             ext = os.path.splitext(file_path)[1].lower()
-            use_cols = None
+            use_cols = column_names
             try:
                 if ext in ['.xlsx', '.xls']:
                     df_raw = pd.read_excel(
