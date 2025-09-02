@@ -143,7 +143,8 @@ class DownstreamDataLoader:
                 subfragment = "*"
             else:
                 subfragment = self.config["target_subfragment_mode"]
-            qiime_data_dir = Path(self.project_dir.qiime_data_per_dataset)   
+            qiime_data_dir = Path(self.project_dirr.get_dir.qiime_data_per_dataset)   
+            logger.info(qiime_data_dir)
             pattern = "/".join([
                 str(qiime_data_dir), "*", "*", "*", subfragment, 
                 "FWD_*_REV_*", subdir, "feature-table.biom"
