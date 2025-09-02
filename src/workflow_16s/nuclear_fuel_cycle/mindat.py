@@ -1,29 +1,63 @@
+# ==================================================================================== #
+
+# Standard Imports
 import os
+import requests
+from pathlib import Path
+from typing import Union
+
+# Third Party Imports
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import pandas as pd
 import pycountry
-import requests
 from bs4 import BeautifulSoup
 from openmindat import LocalitiesRetriever
-from pathlib import Path
-from typing import Union
 
-from workflow_16s.constants import MINDAT_API_KEY, REFERENCES_DIR, USER_AGENT 
+# Local Imports
+from workflow_16s.constants import REFERENCES_DIR, USER_AGENT 
+
+# ==================================================================================== #
+
+logger = logging.getLogger("workflow_16s")
+
+# ==================================================================================== #
 
 def gpd_from_df(df):
+    """Create a GeoDataFrame from a DataFrame with latitude/longitude coordinates.
+
+    Args:
+        df: Input DataFrame containing 'latitude' and 'longitude' columns.
+
+    Returns:
+        GeoDataFrame with geometry points created from coordinate columns.
+    """
     return gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df.longitude, df.latitude),
         crs="EPSG:4326"
     )
 
+# ==================================================================================== #
+
 class MinDatScraper:
+    """Scraper for retrieving locality data from Mindat website.
+    
+    Attributes:
+        MinDatLocalitiesURL: URL for Mindat's country list page.
+        session:             Persistent HTTP session.
+        localities:          List of locality names extracted from Mindat.
+    """
+    
+    MinDatLocalitiesURL = 'https://www.mindat.org/countrylist.php'
+    
     def __init__(self):
+        """Initialize scraper and fetch localities."""
         self._get_session()
         self._get_localities()
       
-    def _get_session(self):
+    def _get_session(self) -> None:
+        """Configure HTTP session with custom User-Agent."""
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': USER_AGENT})
       
@@ -33,10 +67,12 @@ class MinDatScraper:
         return BeautifulSoup(response.content, 'html.parser')
 
     def _get_mindattable(self, soup):
+        """Retrieve and parse HTML content from URL."""
         return soup.find('table', class_='mindattable')
       
-    def _get_localities(self, url: str = 'https://www.mindat.org/countrylist.php'):
-        soup = self._get_soup(url)
+    def _get_localities(self):
+        """Extract mindattable element from parsed HTML."""
+        soup = self._get_soup(self.MinDatLocalitiesURL)
         table = self._get_mindattable(soup)
         localities = []
         if table:
@@ -51,12 +87,28 @@ class MinDatScraper:
 
 
 class MinDatAPI:
+    """API client for retrieving and processing uranium mine data from Mindat.
+    
+    Attributes:
+        MPLWorldURL:  URL for Natural Earth countries dataset.
+        output_dir:   Directory for output files.
+        plot_package: Visualization package to use ('mpl' for matplotlib).
+        localities:   List of available localities.
+    """
+    MPLWorldURL = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
     def __init__(
       self, 
-      api_key: str = MINDAT_API_KEY, 
+      api_key: str, 
       output_dir: Union[str, Path] = REFERENCES_DIR,
       plot_package: str = 'mpl'
     ):
+        """Initialize Mindat API client.
+        
+        Args:
+            api_key:      Mindat API key for authentication.
+            output_dir:   Directory for storing output files. Defaults to REFERENCES_DIR.
+            plot_package: Visualization package to use. Currently supports 'mpl'.
+        """
         os.environ["MINDAT_API_KEY"] = api_key
         self.output_dir = output_dir
         self.plot_package = plot_package
@@ -64,21 +116,37 @@ class MinDatAPI:
         try:
             self.localities = self._get_mindat_localities()
         except Exception as e:
-            print(f"Error getting Mindat localities: {e}")
+            log(f"Error getting Mindat localities: {e}")
         
         # Ensure we have localities
         if not self.localities:
-            print("No localities found. Using pycountry fallback.")
+            log("No localities found. Using pycountry fallback.")
             self.localities = self._get_pycountry_countries()
-      
+            
+    def log(self, msg):
+        """Log message if verbose mode is enabled."""
+        return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
+        
     def _get_mindat_localities(self):
+        """Retrieve localities from Mindat website."""
         scraper = MinDatScraper()
         return scraper.localities
 
     def _get_pycountry_countries(self):
+        """Fallback method to get country names from pycountry."""
         return [country.name for country in pycountry.countries]
 
-    def _get_uranium_mines_locality(self, locality: str):
+    def _get_uranium_mines_locality(self, locality: str) -> tuple[pd.DataFrame, gpd.GeoDataFrame]:
+        """Retrieve uranium mines data for a specific locality.
+        
+        Args:
+            locality: Target locality name.
+            
+        Returns:
+            Tuple containing:
+                - DataFrame with mine data
+                - GeoDataFrame with geometric coordinates
+        """
         lr = LocalitiesRetriever()
         lr.country(locality).description("mine").elements_inc("U")
         results = lr.get_dict()
@@ -90,13 +158,19 @@ class MinDatAPI:
         else:
             return pd.DataFrame(), gpd.GeoDataFrame()
 
-    def _mpl_plot_uranium_mines_locality(self, locality: str, gdf: gpd.GeoDataFrame):
+    def _mpl_plot_uranium_mines_locality(self, locality: str, gdf: gpd.GeoDataFrame) -> None:
+        """Generate matplotlib visualization of uranium mines.
+        
+        Args:
+            locality: Name of locality being plotted.
+            gdf: GeoDataFrame containing mine coordinates.
+        """
         if gdf.empty:
-            print(f"No data to plot for {locality}")
+            log(f"No data to plot for {locality}")
             return
             
         fig, ax = plt.subplots(figsize=(10, 6))
-        world_url = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
+        world_url = self.MPLWorldURL
         world = gpd.read_file(world_url)
         world.plot(ax=ax, color='lightgrey', edgecolor='white')
         gdf.plot(ax=ax, color='red', markersize=5)
@@ -108,18 +182,25 @@ class MinDatAPI:
         plt.close()
 
     def _get_uranium_mines_world(self):
+        """Retrieve and process uranium mines data for all available localities.
+        
+        Returns:
+            Tuple containing:
+                - Combined DataFrame of all mine data
+                - Combined GeoDataFrame of all geometric data
+        """
         dfs = []
         for locality in self.localities: 
-            print(f"Processing {locality}")
+            log(f"Processing {locality}")
             try:
                 df, gdf = self._get_uranium_mines_locality(locality)
                 if not df.empty:
                     dfs.append(df)
                     self._mpl_plot_uranium_mines_locality(locality, gdf)
                 else:
-                    print(f"No uranium mines found in {locality}")
+                    log(f"No uranium mines found in {locality}")
             except Exception as e:
-                print(f"Error with {locality}: {e}")
+                log(f"Error with {locality}: {e}")
         
         if dfs:
             df = pd.concat(dfs, axis=0)
@@ -130,14 +211,23 @@ class MinDatAPI:
                     self._mpl_plot_uranium_mines_locality('world', gdf)
             return df, gdf
         else:
-            print("No data found for any locality")
+            log("No data found for any locality")
             return pd.DataFrame(), gpd.GeoDataFrame()
 
+# ==================================================================================== #
 
-# API
 def world_uranium_mines(
-    api_key: str = MINDAT_API_KEY, 
+    api_key: str, 
     output_dir: Union[str, Path] = REFERENCES_DIR
 ):
+    """Main function to retrieve worldwide uranium mines data.
+    
+    Args:
+        api_key:    Mindat API key.
+        output_dir: Output directory for results. Defaults to REFERENCES_DIR.
+        
+    Returns:
+        Tuple containing combined DataFrame and GeoDataFrame of uranium mines.
+    """
     mindat_api = MinDatAPI(api_key, output_dir)
     return mindat_api._get_uranium_mines_world()
