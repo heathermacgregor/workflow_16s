@@ -52,14 +52,9 @@ class NFCFacilityDB:
     def _process_dbs(self):
         """Process configured databases and combine results."""
         dfs = []
-        valid_dbs = []
-        for database in self.database_names:
-            if database in list(self.DBConfig.keys()):
-                db = self.DBConfig[database]
-                valid_dbs.append(db['name'])
-            else:
-                continue
-            skip_rows, skip_first_col, column_names, file_path = db
+        valid_dbs = [database for database in self.database_names if database in list(self.DBConfig.keys())]
+        for name in valid_dbs:
+            skip_rows, skip_first_col, column_names, file_path = self.DBConfig[name]
             # Detect and load file (only needed columns)
             ext = os.path.splitext(file_path)[1].lower()
             use_cols = column_names
