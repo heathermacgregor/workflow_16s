@@ -1,6 +1,8 @@
 # ==================================================================================== #
 
 # Standard Imports
+import contextlib
+import io
 import logging
 import os
 import requests
@@ -139,21 +141,16 @@ class MinDatAPI:
     def _get_pycountry_countries(self):
         """Fallback method to get country names from pycountry."""
         return [country.name for country in pycountry.countries]
-
+    
     def _get_uranium_mines_locality(self, locality: str) -> tuple[pd.DataFrame, gpd.GeoDataFrame]:
-        """Retrieve uranium mines data for a specific locality.
-        
-        Args:
-            locality: Target locality name.
-            
-        Returns:
-            Tuple containing:
-                - DataFrame with mine data
-                - GeoDataFrame with geometric coordinates
-        """
+        """Retrieve uranium mines data for a specific locality."""
         lr = LocalitiesRetriever()
         lr.country(locality).description("mine").elements_inc("U")
-        results = lr.get_dict()
+        
+        # Suppress stdout/stderr from openmindat
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            results = lr.get_dict()
+        
         if 'results' in results and results['results']:
             df = pd.DataFrame(results['results'])
             df['facility'] = [i.split(',')[0] for i in df['txt']]
