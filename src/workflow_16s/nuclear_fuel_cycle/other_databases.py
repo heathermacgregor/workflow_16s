@@ -131,13 +131,7 @@ def load_nfc_facilities(
     }
     databases = config.get("nfc_facilities", {}).get("databases", [{'name': "NFCIS"}, {'name': "GEM"}])
     db_names = [db['name'] for db in databases]
-    valid_dbs = []
-    for database in db_names:
-        if database in list(DBConfig.keys()):
-            db = DBConfig[database]
-            valid_dbs.append(database)
-        else:
-            continue
+    valid_dbs = [database for database in db_names if database in list(DBConfig.keys())]
     use_local = config.get("nfc_facilities", {}).get('use_local', False)
     if output_dir:
         tsv_path = Path(output_dir) / f"nfc_facilities{'_'.join(valid_dbs)}.tsv"
