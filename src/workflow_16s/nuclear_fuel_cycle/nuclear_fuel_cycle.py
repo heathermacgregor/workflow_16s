@@ -115,6 +115,7 @@ class NFCFacilitiesHandler:
         return matched_df
 
     def _match_facilities_with_locations(
+        self,
         facilities_df: pd.DataFrame,
         samples_df: pd.DataFrame
     ) -> pd.DataFrame:
@@ -182,7 +183,7 @@ class NFCFacilitiesHandler:
             'country': 'facility_country'
         })
         
-        return pd.concat([samples, matches_df.reset_index(drop=True)], axis=1)
+        return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)
 
 
 # API
