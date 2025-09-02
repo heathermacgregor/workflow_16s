@@ -14,8 +14,7 @@ from biom.table import Table
 from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN
 from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
 from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sample_id_map
-from workflow_16s.utils.dir_utils import SubDirs
-#from workflow_16s.utils.dir import Dir, ProjectDir
+from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
 
 logger = logging.getLogger("workflow_16s")
@@ -69,7 +68,7 @@ class DownstreamDataLoader:
     def __init__(
         self,
         config: Dict,
-        project_dir: Any, #SubDirs,
+        project_dir: Any, 
         existing_subsets: Any = None
     ):
         self.config = config
@@ -171,7 +170,7 @@ class DownstreamDataLoader:
                 tail = dataset_dir.parts[-6:-1]
                 metadata_dir = Path(self.project_dir.metadata_per_dataset)
                 tsv_path = metadata_dir.joinpath(*tail, "sample-metadata.tsv")
-                if metadata_path.exists():
+                if tsv_path.exists():
                     tsv_paths.append(tsv_path)
                   
         if self.verbose:
