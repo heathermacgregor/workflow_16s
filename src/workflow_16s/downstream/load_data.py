@@ -78,7 +78,6 @@ class DownstreamDataLoader:
       
         self.project_dir = project_dir
         self.existing_subsets = existing_subsets
-        self._load_nfc_facilities()
 
         # Initialize storage for feature tables and metadata
         self.tables: Dict = {'raw': {}}
