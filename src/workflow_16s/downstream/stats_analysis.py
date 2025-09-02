@@ -41,7 +41,7 @@ from workflow_16s.utils.metadata import get_group_column_values
 from workflow_16s.stats.test import microbial_network_analysis
 
 # ==================================================================================== #
-
+logger = logging.getLogger("workflow_16s")
 CORE_MICROBIOME_PREVALENCE_THRESHOLD: float = 0.8
 CORE_MICROBIOME_ABUNDANCE_THRESHOLD: float = 0.01
 NETWORK_ANALYSIS_METHODS: List[str] = ['sparcc', 'spearman']
