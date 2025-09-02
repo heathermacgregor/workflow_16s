@@ -152,7 +152,7 @@ class DownstreamDataLoader:
             tsv_paths=metadata_paths, 
             columns_to_rename=columns_to_rename  
         )
-        return clean_metadata(metadata)
+        return clean_metadata(self.config, metadata)
 
     def _get_table_paths(self, level: str, subdir: str) -> List[Path]:
         """Discovers BIOM table file paths based on processing mode."""
