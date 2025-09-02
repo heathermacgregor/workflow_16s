@@ -1,6 +1,7 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Imports
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -10,7 +11,7 @@ import pandas as pd
 
 # Local Imports
 from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN
-
+logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
 def import_metadata_tsv(
