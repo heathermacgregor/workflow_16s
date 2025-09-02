@@ -1,12 +1,12 @@
 # ===================================== IMPORTS ====================================== #
 
 # Standard Imports
+import logging
 import requests
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Union
-import logging
 
 # Third Party Imports
 import pandas as pd
