@@ -109,7 +109,7 @@ class DownstreamDataPrepper:
                     table, metadata = base_table, base_metadata
                 else:
                     # Collapse from base table to target level
-                    table = collapse_taxa(base_table, level, progress, task_id)
+                    table = collapse_taxa(base_table, level)
                     table, metadata = align_table_and_metadata(table, base_metadata)
 
                 # Store results
