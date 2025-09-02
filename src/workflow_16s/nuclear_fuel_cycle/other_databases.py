@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -8,7 +9,7 @@ from workflow_16s.constants import (
     DEFAULT_GEM_PATH, DEFAULT_GEM_COLUMNS, DEFAULT_NFCIS_PATH, DEFAULT_NFCIS_COLUMNS,
     REFERENCES_DIR
 )
-
+logger = logging.getLogger("workflow_16s")
 
 class NFCFacilityDB:
     DBConfig = {
