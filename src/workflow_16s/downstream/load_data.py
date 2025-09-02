@@ -158,7 +158,7 @@ class DownstreamDataLoader:
         """Discovers BIOM table file paths based on processing mode."""
         # If there are existing subsets of datasets from upstream processing loaded
         if self.existing_subsets is not None:
-            table_paths = [paths[dir] for subset_id, paths in self.existing_subsets.items()]
+            table_paths = [paths[subdir] for subset_id, paths in self.existing_subsets.items()]
         # If there are NOT existing subsets, search in the directory files matching a pattern
         else:
             if self.config["target_subfragment_mode"] == 'any':
