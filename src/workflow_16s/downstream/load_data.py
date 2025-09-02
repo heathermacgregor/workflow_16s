@@ -69,7 +69,7 @@ class DownstreamDataLoader:
     def __init__(
         self,
         config: Dict,
-        project_dir: SubDirs,
+        project_dir: Any, #SubDirs,
         existing_subsets: Any = None
     ):
         self.config = config
@@ -122,7 +122,7 @@ class DownstreamDataLoader:
             raise FileNotFoundError("No BIOM table filepaths found")
         return import_merged_biom_table(biom_paths=table_paths)
 
-    def _load_metadata(self, level, table_dir) -> pd.DataFrame:
+    def _load_metadata(self, level, subdir) -> pd.DataFrame:
         metadata_paths = self._get_metadata_paths(level, subdir)
         if not metadata_paths:
             raise FileNotFoundError("No metadata TSV filepaths found")
@@ -194,7 +194,7 @@ class DownstreamDataLoader:
 
 # ==================================================================================== #
 
-def load_data(config: Dict, project_dir: SubDirs, existing_subsets: Any = None):
+def load_data(config: Dict, project_dir: Any, existing_subsets: Any = None):
     loader = DownstreamDataLoader(
         config=config,
         project_dir=project_dir,
