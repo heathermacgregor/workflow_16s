@@ -125,12 +125,22 @@ class DownstreamDataLoader:
         metadata_paths = self._get_metadata_paths(level, subdir)
         if not metadata_paths:
             raise FileNotFoundError("No metadata TSV filepaths found")
-        metadata = import_merged_metadata_tsv(
-            tsv_paths=metadata_paths, 
-            columns_to_rename=self.config.get("columns_to_rename", None)
-        )
         
-        return metadata
+        columns_to_rename = self.config.get("columns_to_rename", {}) or {}
+        metadatas = []
+        
+        for path in metadata_paths:
+            try:
+                df = import_single_metadata_tsv(path, columns_to_rename)
+                metadatas.append(df)
+            except Exception as e:
+                logger.warning(f"Failed to load {path}: {e}")
+        
+        if not metadatas:
+            return pd.DataFrame()
+        
+        metadata = pd.concat(metadatas, ignore_index=True)
+        return clean_metadata(metadata)
 
     def _get_table_paths(self, level: str, subdir: str) -> List[Path]:
         # If there are existing subsets of datasets from upstream processing loaded
@@ -143,8 +153,6 @@ class DownstreamDataLoader:
             else:
                 subfragment = self.config["target_subfragment_mode"]
             qiime_data_dir = Path(self.project_dir.qiime_data_per_dataset)   
-            logger.info(self.project_dir)
-            logger.info(self.project_dir.qiime_data_per_dataset)
             pattern = "/".join([
                 str(qiime_data_dir), "*", "*", "*", subfragment, 
                 "FWD_*_REV_*", subdir, "feature-table.biom"
