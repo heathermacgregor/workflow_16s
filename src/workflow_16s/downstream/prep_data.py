@@ -54,7 +54,7 @@ class DownstreamDataPrepper:
         project_dir: Any
     ) -> None:
         self.config = config 
-        self.mode = self.config.get("target_subfragment_mode", MODE)
+        self.mode = "genus" if not self.config.get("target_subfragment_mode", MODE) == 'any' else "any"
         self.verbose = self.config.get("verbose", False)
       
         self.output_dir = Path(project_dir.data)
