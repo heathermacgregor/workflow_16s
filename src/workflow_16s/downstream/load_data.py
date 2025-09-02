@@ -118,6 +118,7 @@ class DownstreamDataLoader:
       
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
+            logger.info("Finding NFC facilities...")
             self.nfc_facilities, metadata = self._load_nfc_facilities(metadata)
           
         table, metadata = self._filter_and_align(table, metadata, level)
