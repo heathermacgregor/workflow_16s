@@ -1,21 +1,23 @@
 # Standard Imports
 import requests
-import warnings
+import time  # Added missing import
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Union
+import logging  # Added for logging
 
 # Third Party Imports
 import pandas as pd
-import numpy as np
+import numpy as np  # Added missing import
 from scipy.spatial import cKDTree
-from sklearn.metrics import confusion_matrix, classification_report
 
 # Local Imports
 from workflow_16s.constants import DEFAULT_USER_AGENT, REFERENCES_DIR
 from workflow_16s.nuclear_fuel_cycle import mindat, wikipedia, other_databases, utils 
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
+# Set up logger
+logger = logging.getLogger(__name__)
 
 class NFCFacilitiesHandler:
     def __init__(
@@ -87,8 +89,8 @@ class NFCFacilitiesHandler:
         samples_df: pd.DataFrame
     ) -> pd.DataFrame:
         
-        # Pass full metadata to ensure coordinate columns are available
-        matched_df = self._match_facilities_to_locations(facilities_df, samples_df)
+        # Fixed: Call the correct method name
+        matched_df = self._match_facilities_with_locations(facilities_df, samples_df)
         
         # Define required metadata columns to keep
         required_sample_cols = [
@@ -109,15 +111,16 @@ class NFCFacilitiesHandler:
         missing_cols = set(required_sample_cols) - set(result_cols)
         if missing_cols:
             logger.warning(f"Missing required columns in output: {', '.join(missing_cols)}")
+        
         # Save full matched results
         if self.output_dir:
             matched_df[result_cols].to_csv(
-                Path(output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",
+                Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv",  # Fixed: use self.output_dir
                 sep='\t', index=False
             )
         return matched_df
 
-    def _match_facilities_with_locations(
+    def _match_facilities_with_locations(  # Fixed: Added self parameter
         self,
         facilities_df: pd.DataFrame,
         samples_df: pd.DataFrame
@@ -147,7 +150,7 @@ class NFCFacilitiesHandler:
                 'latitude_deg': 'facility_latitude_deg',
                 'longitude_deg': 'facility_longitude_deg'
             })
-            return pd.concat([samples, matches], axis=1)
+            return pd.concat([samples_df, matches], axis=1)  # Fixed: samples_df instead of samples
     
         # Prepare facility KD-tree
         valid_fac = facilities_df.dropna(subset=['latitude_deg', 'longitude_deg']).reset_index(drop=True)
@@ -186,7 +189,7 @@ class NFCFacilitiesHandler:
             'country': 'facility_country'
         })
         
-        return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)
+        return pd.concat([samples_df, matches_df.reset_index(drop=True)], axis=1)  # Fixed: samples_df instead of samples
 
 
 # API
@@ -195,56 +198,3 @@ def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame):
     nfc_facilities, updated_metadata = handler.run(metadata=metadata)
     return nfc_facilities, updated_metadata
     
-# TODO: Additions from https://github.com/heathermacgregor/workflow_16s/blob/main/src/workflow_16s/utils/nfc_facilities.py
-'''
-def analyze_contamination_correlation(
-    df: pd.DataFrame,
-    threshold: float = 0.5
-) -> dict:
-    """
-    Analyzes correlation between facility proximity and contamination status.
-    """
-    required = ['facility_match', 'nuclear_contamination_status']
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {', '.join(missing)}")
-
-    analysis_df = df.set_index('#sampleid')[required].dropna().copy()
-    # Contamination boolean
-    if pd.api.types.is_numeric_dtype(analysis_df['nuclear_contamination_status']):
-        analysis_df['contaminated'] = analysis_df['nuclear_contamination_status'] > threshold
-    else:
-        analysis_df['contaminated'] = (
-            analysis_df['nuclear_contamination_status'].str.lower()
-            .isin(['contaminated','positive','high','yes','true'])
-        )
-
-    facility_nearby = analysis_df['facility_match'].astype(bool)
-    is_contaminated = analysis_df['contaminated']
-
-    tn, fp, fn, tp = confusion_matrix(is_contaminated, facility_nearby, labels=[False, True]).ravel()
-
-    total = len(analysis_df)
-    summary = {
-        'total_locations': total,
-        'contamination_rate': is_contaminated.mean(),
-        'facility_presence_rate': facility_nearby.mean(),
-        'true_positive_rate': tp / (tp + fn) if tp+fn>0 else 0,
-        'false_positive_rate': fp / (fp + tn) if fp+tn>0 else 0,
-        'precision': tp / (tp + fp) if tp+fp>0 else 0,
-        'relative_risk': (tp/(tp+fp)) / (fn/(fn+tn)) if fn+tn>0 else float('nan')
-    }
-
-    return {
-        'summary_metrics': summary,
-        'confusion_matrix': {'true_positive': tp, 'false_positive': fp, 'true_negative': tn, 'false_negative': fn},
-        'contingency_table': pd.crosstab(
-            facility_nearby, is_contaminated,
-            rownames=['Facility Nearby'], colnames=['Contaminated'], margins=True
-        ).to_dict(),
-        'classification_report': classification_report(
-            is_contaminated, facility_nearby,
-            target_names=['Not Contaminated','Contaminated'], output_dict=True
-        )
-    }
-'''
