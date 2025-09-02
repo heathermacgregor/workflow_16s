@@ -103,12 +103,20 @@ def df_to_biom(table: Union[pd.DataFrame, Table]) -> Table:
     Returns:
         BIOM Table representation of the DataFrame.
     """
-    print(type(table))
-    print(table.index.astype(str).tolist())
-    print(table.columns.astype(str).tolist())
     if isinstance(table, Table):
         return table
-        
+    
+    # Ensure we have a DataFrame with features as rows and samples as columns
+    if table.shape[0] < table.shape[1]:
+        # This might be transposed - transpose back
+        table = table.T
+    
+    # Convert all values to numeric, coercing errors to NaN
+    table = table.apply(pd.to_numeric, errors='coerce')
+    
+    # Fill NaN values with 0 and convert to integers
+    table = table.fillna(0).astype(int)
+    
     return Table(
         data=table.values,
         observation_ids=table.index.astype(str).tolist(),
