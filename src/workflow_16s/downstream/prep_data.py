@@ -15,7 +15,7 @@ from workflow_16s.constants import MODE, TAXONOMIC_LEVELS
 from workflow_16s.downstream.load_data import align_table_and_metadata
 from workflow_16s.utils.biom import collapse_taxa, export_h5py, presence_absence
 from workflow_16s.utils.data import clr, filter, normalize
-from workflow_16s.utils.dir_utils import SubDirs
+from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
@@ -35,7 +35,7 @@ class DownstreamDataPrepper:
         config: Dict,
         metadata: Dict,
         tables: Dict,
-        project_dir: SubDirs
+        project_dir: Any
     ) -> None:
         self.config = config 
         self.mode = self.config.get("target_subfragment_mode", MODE)
@@ -63,7 +63,7 @@ class DownstreamDataPrepper:
         # Save tables
         self._save_tables()
         
-    def _fetch_data(table_type: str, level: str) -> Tuple:
+    def _fetch_data(self, table_type: str, level: str) -> Tuple:
         metadata = self.metadata.get(table_type, {}).get(level)
         table = self.tables.get(table_type, {}).get(level)
         if table is None or metadata is None:
@@ -75,7 +75,6 @@ class DownstreamDataPrepper:
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         # Get base level from mode config (e.g. "asv" or "genus")
         base_level = self.ModeConfig[self.mode][0]
-        logger.info(base_level)
         base_table, base_metadata = self._fetch_data(table_type, base_level)
 
         with get_progress_bar() as progress:
@@ -102,7 +101,6 @@ class DownstreamDataPrepper:
                 progress.update(task_id, advance=1)
             progress.update(task_id, description=task_desc_fmt)
    
-      
     def _apply_transformations(self, level: str) -> None:      
         table, metadata = self._fetch_data("raw", level)
 
@@ -195,7 +193,7 @@ class DownstreamDataPrepper:
                       
 # ==================================================================================== #
 
-def prep_data(config: Dict, metadata: Dict, tables: Dict, project_dir: SubDirs):
+def prep_data(config: Dict, metadata: Dict, tables: Dict, project_dir: Any):
     prepper = DownstreamDataPrepper(
         config=config,
         metadata=metadata,
