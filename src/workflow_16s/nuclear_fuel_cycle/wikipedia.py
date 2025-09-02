@@ -1,30 +1,58 @@
-import pandas as pd
+# ===================================== IMPORTS ====================================== #
+
+# Standard Imports
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
-from typing import Union
-from workflow_16s.constants import REFERENCES_DIR 
+from typing import Optional, Union
 
+# Third-Party Imports
+import pandas as pd
+from bs4 import BeautifulSoup
+
+# Local Imports
+from workflow_16s.constants import REFERENCES_DIR, USER_AGENT 
+
+# ========================== INITIALISATION & CONFIGURATION ========================== #
+
+logger = logging.getLogger("workflow_16s")
+
+# ====================================== CLASSES ===================================== #
 
 class WikipediaScraper:
+    """A web scraper for extracting nuclear facility information from Wikipedia tables.
+    
+    - Scrapes nuclear power stations and uranium mines data from Wikipedia
+    - Combinines scraped data as a pandas DataFrame
+    - Saves DataFrame to a TSV file
+    
+    Attributes:
+        BaseURL:    Base URL for Wikipedia pages.
+        output_dir: Directory where output files will be saved.
+        session:    HTTP session for making requests.
+        data:       Combined dataset of scraped facilities.
+    """
+    BaseURL = "https://en.wikipedia.org/wiki/"
     def __init__(self, output_dir: Union[str, Path] = REFERENCES_DIR):
         self.output_dir = output_dir
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self.session.headers.update({'User-Agent': USER_AGENT})
         self.data = pd.DataFrame()
       
     def _get_soup(self, url):
+        """Retrieve and parse HTML content from a URL."""
         response = self.session.get(url)
         response.raise_for_status()
         return BeautifulSoup(response.content, 'html.parser')
 
     def _get_wikitables(self, soup):
+        """Extract all wikitable elements from parsed HTML."""
         return soup.find_all('table', {'class': 'wikitable'})
 
-    def _nuclear_power_stations(self, url: str = "https://en.wikipedia.org/wiki/List_of_nuclear_power_stations"):
+    def _nuclear_power_stations(self, url: str = None):
+        """Scrape nuclear power station data from Wikipedia."""
+        if url is None:
+            url = f"{self.BaseURL}List_of_nuclear_power_stations"
         soup = self._get_soup(url)
         tables = self._get_wikitables(soup)
     
@@ -48,7 +76,10 @@ class WikipediaScraper:
             dfs.append(pd.DataFrame(data))
         return dfs
 
-    def _uranium_mines(self, url: str = "https://en.wikipedia.org/wiki/List_of_uranium_mines"):
+    def _uranium_mines(self, url: str = None):
+        """Scrape uranium mine data from Wikipedia."""
+        if url is None:
+            url = f"{self.BaseURL}List_of_uranium_mines"
         soup = self._get_soup(url)
         tables = self._get_wikitables(soup)
 
@@ -87,6 +118,7 @@ class WikipediaScraper:
         return dfs
 
     def _compile_and_sort(self):
+        """Combine and sort all scraped facility data."""
         nps = self._nuclear_power_stations()
         um = self._uranium_mines()
         datasets = [nps, um]
@@ -96,8 +128,13 @@ class WikipediaScraper:
         self.data = df
         return df
 
+# ======================================= API ======================================== #
 
-# API
 def world_nfc_facilities():
+    """Public API function to retrieve worldwide nuclear facility data from Wikipedia.
+    
+    Returns:
+        DataFrame containing combined nuclear facility information from Wikipedia.
+    """
     scraper = WikipediaScraper()
-    return scraper._compile_all_and_sort()
+    return scraper._compile_and_sort()
