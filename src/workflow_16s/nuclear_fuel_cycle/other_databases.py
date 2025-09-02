@@ -83,13 +83,13 @@ class NFCFacilityDB:
             # Set header and reset
             df.columns = df.iloc[0]
             df = df.iloc[1:].reset_index(drop=True)
-            logger.info(f"Loaded '{database}' data with {df.shape[0]} NFC facilities")
+            logger.info(f"Loaded '{name}' data with {df.shape[0]} NFC facilities")
 
             # Filter and rename
             df = df[list(column_names.values())]
             df = df.rename(columns={v: k for k, v in column_names.items()})
             df = df[list(column_names.keys())]
-            df['data_source'] = database
+            df['data_source'] = name
             dfs.append(df)
           
         if dfs:
