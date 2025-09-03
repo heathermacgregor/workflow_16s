@@ -174,6 +174,6 @@ def world_nfc_facilities(config: Dict, output_dir: Union[str, Path] = REFERENCES
     output_path = Path(output_dir) / "wikipedia.tsv"
     if config.get("nfc_facilities", {}).get("use_local", False):
         if output_path.exists():
-            return pd.read_csv(output_path, sep='\t', index=False)
+            return pd.read_csv(output_path, sep='\t')
     scraper = WikipediaScraper(output_path)
     return scraper._compile_and_sort()
