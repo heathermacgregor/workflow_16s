@@ -427,7 +427,7 @@ def calculate_config_hash(config: Dict, group_column: str, table_type: str, leve
         'table_type': table_type,
         'level': level,
         'test': test,
-        'test_config': TEST_CONFIG.get(test, {}),
+        'test_config': TestConfig.get(test, {}),
         'stats_config': config.get('stats', {})
     }
     
