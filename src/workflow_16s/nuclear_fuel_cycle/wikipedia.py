@@ -5,7 +5,7 @@ import logging
 import requests
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 # Third-Party Imports
 import pandas as pd
@@ -165,7 +165,7 @@ class WikipediaScraper:
 
 # ======================================= API ======================================== #
 
-def world_nfc_facilities(output_dir: Union[str, Path] = REFERENCES_DIR):
+def world_nfc_facilities(config: Dict, output_dir: Union[str, Path] = REFERENCES_DIR):
     """Public API function to retrieve worldwide nuclear facility data from Wikipedia.
     
     Returns:
