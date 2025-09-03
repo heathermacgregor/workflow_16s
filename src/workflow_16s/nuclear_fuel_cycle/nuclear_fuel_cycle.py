@@ -75,7 +75,7 @@ class NFCFacilitiesHandler:
 
         self.output_dir = Path(output_dir) / "nfc_facilities"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.facilities_output_path = Path(self.output_dir) / 'facilities.csv'
+        self.facilities_output_path = Path(self.output_dir) / 'facilities.tsv'
         self.matches_output_path = Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv"
 
         self.mindat_api_key = mindat_api_key
@@ -88,7 +88,7 @@ class NFCFacilitiesHandler:
     def run(self, metadata: pd.DataFrame):
         """Execute the complete NFC facilities processing pipeline."""
         if self.use_local and self.facilities_output_path.exists():
-            df = pd.read_csv(self.facilities_output_path)
+            df = pd.read_csv(self.facilities_output_path, sep='\t')
         else:
             df = self._get_geocoded_data()
             
