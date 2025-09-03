@@ -34,8 +34,8 @@ class WikipediaScraper:
         data:       Combined dataset of scraped facilities.
     """
     BaseURL = "https://en.wikipedia.org/wiki/"
-    def __init__(self, output_dir: Union[str, Path] = REFERENCES_DIR):
-        self.output_dir = output_dir
+    def __init__(self, output_path: Union[str, Path] = REFERENCES_DIR):
+        self.output_path = output_path
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': USER_AGENT})
         self.data = pd.DataFrame()
@@ -158,8 +158,8 @@ class WikipediaScraper:
         um = self._uranium_mines()
         datasets = [nps, um]
         df = pd.concat(datasets)
-        df = df.sort_values(by='facility_name')
-        df.to_csv(self.output_dir / "wikipedia.tsv", sep="\t", index=False)
+        df = df.sort_values(by='facility')
+        df.to_csv(self.output_path, sep="\t", index=False)
         self.data = df
         return df
 
@@ -171,5 +171,9 @@ def world_nfc_facilities(output_dir: Union[str, Path] = REFERENCES_DIR):
     Returns:
         DataFrame containing combined nuclear facility information from Wikipedia.
     """
-    scraper = WikipediaScraper(output_dir)
+    output_path = Path(output_dir) / "wikipedia.tsv"
+    if config.get("nfc_facilities", {}).get("use_local", False):
+        if output_path.exists():
+            return pd.read_csv(output_path, sep='\t', index=False)
+    scraper = WikipediaScraper(output_path)
     return scraper._compile_and_sort()
