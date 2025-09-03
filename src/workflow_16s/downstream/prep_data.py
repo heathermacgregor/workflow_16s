@@ -166,7 +166,7 @@ class DownstreamDataPrepper:
             metadata = self.metadata[table_type][level]
             table = self.tables[table_type][level]
             
-            pa_table = presence_absence(table)
+            pa_table = presence_absence(table, level)
             pa_table, pa_metadata = align_table_and_metadata(pa_table, metadata)
             # Store results
             self.tables.setdefault(f"{table_type}_presence_absence", {})[level] = pa_table
