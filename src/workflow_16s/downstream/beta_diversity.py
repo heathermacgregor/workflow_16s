@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 from functools import lru_cache
 from collections import defaultdict
+
 # Third‑Party Imports
 import json
 import pandas as pd
@@ -24,26 +25,20 @@ import plotly.io as pio
 # Local Imports
 from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
-from workflow_16s.figures.figures import load_plotly_html
-from workflow_16s.figures.merged import (
-    pca as plot_pca,
-    pcoa as plot_pcoa,
-    mds as plot_mds
-)
 from workflow_16s.constants import GROUP_COLUMNS, MODE
 from workflow_16s.diversity import beta_diversity 
-from workflow_16s.figures.beta_diversity import beta_diversity_plot
 from workflow_16s.downstream.load_data import align_table_and_metadata
+from workflow_16s.figures.downstream.beta_diversity import beta_diversity_plot
 from workflow_16s.utils.dataframe import table_to_df
-from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.dir import Dir, ProjectDir
+from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
-umap_lock = threading.Lock() # Global lock for UMAP operations to prevent thread conflicts
+#umap_lock = threading.Lock() # Global lock for UMAP operations to prevent thread conflicts
 
 # =================================== DATA CLASSES ================================== #
 
