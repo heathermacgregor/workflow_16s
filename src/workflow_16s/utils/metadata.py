@@ -73,7 +73,7 @@ def import_metadata_tsv(
 
 
 def export_tsv(
-    metadata: pd.DataFrame
+    metadata: pd.DataFrame,
     output_path: Union[str, Path]
 ) -> None:
     """Export a sample metadata DataFrame to a TSV file."""
