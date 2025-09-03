@@ -75,7 +75,7 @@ pio.templates["heather"] = go.layout.Template(
 pio.templates.default = "heather" 
 
 
-def fig_to_json(fig, output_path):
+def fig_to_json(fig, output_path, verbose: bool = True):
     # Convenience for optional INFO logging
     log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
     output_path = Path(output_path).expanduser().resolve()
