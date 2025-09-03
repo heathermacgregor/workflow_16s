@@ -101,7 +101,7 @@ class Ordination:
         project_dir: Union[ProjectDir, SubDirs],
         metadata: pd.DataFrame,
         tables: Dict[str, Dict[str, Table]],
-        group_column: str = constants.DEFAULT_GROUP_COLUMN,
+        group_columns: Optional[List],
     ):
         self.config = config
         # Check if ordination is enabled
@@ -115,14 +115,14 @@ class Ordination:
         self.verbose = self.config("verbose", False)
         self.project_dir = project_dir
 
-        self.group_columns = self.config.get("group_columns", GROUP_COLUMNS)
+        self.group_columns = group_columns or self.config.get("group_columns", GROUP_COLUMNS)
         self.symbol_col = 'nuclear_contamination_status'
-        #self.group_column = group_column
         
         self.metadata = metadata
         self.tables = tables
         
-        self.color_columns = tuple(self.config['maps'].get("color_columns", self.DefaultColorCols))
+        self.color_columns = tuple(set(self.config['maps'].get("color_columns", self.DefaultColorCols) + self.group_columns))
+        
 
         # Initialize results dict
         self.results = defaultdict(lambda: defaultdict(lambda: {'figures': {}}))
@@ -396,17 +396,15 @@ def run_beta_diversity(
     tables: Dict[str, Dict[str, Table]],
     group_columns: List[str]
 ):
-    results = {}
-    for group_column in group_columns:
-        beta = Ordination(
-            config=config, 
-            project_dir=project_dir, 
-            metadata=metadata, 
-            tables=tables, 
-            group_column=group_column['name']
-        )
-        beta.run()
-        results[group_column['name']] = beta.results
-    return results
+    names = [group_column['name'] for group_column in group_columns]
+    beta = Ordination(
+        config=config, 
+        project_dir=project_dir, 
+        metadata=metadata, 
+        tables=tables, 
+        group_columns=names
+    )
+    beta.run()
+    return beta.results
     
         
