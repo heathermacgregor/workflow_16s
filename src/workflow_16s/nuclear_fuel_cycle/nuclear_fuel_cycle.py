@@ -171,6 +171,8 @@ class NFCFacilitiesHandler:
         df['latitude_deg']  = df['__query__'].map(lambda q: coords[q][0])
         df['longitude_deg'] = df['__query__'].map(lambda q: coords[q][1])
         df.drop(columns='__query__', inplace=True)
+        if self.facilities_output_path:
+            df.to_csv(self.facilities_output_path, sep='\t', index=False)
         return df
 
     def _match_facilities_with_samples(
