@@ -75,7 +75,22 @@ class WikipediaScraper:
                     row_data[headers[n]] = cells[n] 
                 data.append(row_data)
             dfs.append(pd.DataFrame(data))
-        return dfs
+        df = pd.concat(dfs)
+        rename = {
+            "# units[note 1]": "n_units_1",
+            "Capacity(MWe)[note 2]": "capacity_mwe",
+            "Country or territory": "country_1",
+            "Location": "lat_lon",
+            "Began operation": "facility_start_year",
+            "No. ofunits": "n_units_2",
+            "Net capacityunder construction(MW)": "capacity_mw_during_construction",
+            "Constructionstart": "facility_start_construction_year",
+            "Plannedconnection": "facility_planned_connection_year",
+            "Country": "country_2",
+            "Past capacity (MW)": "capacity_mw_past",
+        }
+        df = df.rename(columns=rename)
+        return df
 
     def _uranium_mines(self, url: str = None):
         """Scrape uranium mine data from Wikipedia."""
@@ -116,16 +131,33 @@ class WikipediaScraper:
                         row_data[headers[n]] = cells[n] 
                 data.append(row_data)
             dfs.append(pd.DataFrame(data))
-        return dfs
+        df = pd.concat(dfs)
+        rename = {
+            "Year discovered": "facility_discovered_year",	
+            "Year commenced": "facility_start_year",	
+            "Grade %U[2]": "grade_%_u",	
+            "Annual production (tOre)[3]": "annual_production_tons_ore",	
+            "Annual production (tU)[4]": "annual_production_tons_u",	
+            "Scheduled Commencement	Grade %U": "scheduled_commencement_grade_%_u",	
+            "Planned Annual production (tOre)": "planned_annual_production_tons_ore",	
+            "Planned Annual production (tU)": "planned_annual_production_tons_u",	
+            "Probable commencement": "probable_facility_start_year",	
+            "Probable annual production (tOre)": "probable_annual_production_tons_ore",	
+            "Probable annual production (tU)": "probable_annual_production_tons_u",	
+            "Total production (tU)": "total_production_tons_u",	
+            "Year closed": "facility_end_year",
+        }
+        df = df.rename(columns=rename)
+        return df
 
     def _compile_and_sort(self):
         """Combine and sort all scraped facility data."""
         nps = self._nuclear_power_stations()
         um = self._uranium_mines()
         datasets = [nps, um]
-        df = pd.concat([pd.concat(x) for x in datasets])
+        df = pd.concat(datasets)
         df = df.sort_values(by='facility_name')
-        df.to_csv(self.output_dir / "nfc_facility_data_wikipedia.tsv", sep="\t", index=False)
+        df.to_csv(self.output_dir / "wikipedia.tsv", sep="\t", index=False)
         self.data = df
         return df
 
