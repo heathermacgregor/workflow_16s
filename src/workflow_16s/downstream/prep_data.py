@@ -16,6 +16,7 @@ from workflow_16s.downstream.load_data import align_table_and_metadata
 from workflow_16s.utils.biom import collapse_taxa, export_h5py, presence_absence
 from workflow_16s.utils.data import clr, filter, normalize
 from workflow_16s.utils.dir import Dir, ProjectDir
+from workflow_16s.utils.metadata import export_tsv
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
