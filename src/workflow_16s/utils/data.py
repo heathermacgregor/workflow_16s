@@ -789,3 +789,239 @@ def filter_presence_absence(
         table_id='Filtered Presence/Absence Table'
     )
   
+###########################################################
+
+
+from typing import Optional, Tuple, Set
+
+def merge_data(
+    table: pd.DataFrame,
+    meta: pd.DataFrame,
+    group_col: str = "group",  # constants.DEFAULT_GROUP_COLUMN
+    meta_id_col: Optional[str] = "sample_id",  # constants.DEFAULT_META_ID_COLUMN
+    verbose: bool = False
+) -> pd.DataFrame:
+    """Merge feature table with metadata using intelligent ID matching.
+    
+    Automatically detects table orientation and handles common ID formatting issues
+    including case sensitivity and whitespace.
+    
+    Args:
+        table: Feature table, either (samples × features) or (features × samples)
+        meta: Metadata DataFrame with sample information
+        group_col: Name of metadata column to merge into table
+        meta_id_col: Column in metadata containing sample IDs. 
+                    If None, uses metadata index
+        verbose: Enable detailed logging
+        
+    Returns:
+        Feature table with group column added (samples × features+1)
+        
+    Raises:
+        ValueError: Invalid inputs, duplicate IDs, or no matching samples
+        KeyError: Missing required columns
+    """
+    # Input validation
+    _validate_inputs(table, meta, group_col, meta_id_col)
+    
+    # Extract and normalize metadata IDs
+    meta_ids_norm, meta_ids_orig = _extract_metadata_ids(
+        meta, meta_id_col, verbose
+    )
+    
+    # Check for duplicates in metadata
+    _check_duplicate_ids(meta_ids_norm, meta_ids_orig, meta_id_col)
+    
+    # Find correct table orientation and get normalized table IDs
+    table_oriented, table_ids_norm = _orient_table_for_matching(
+        table, meta_ids_norm, verbose
+    )
+    
+    # Create mapping and merge
+    merged_table = _merge_with_metadata(
+        table_oriented, table_ids_norm, meta, meta_ids_norm, 
+        group_col, meta_id_col, verbose
+    )
+    
+    return merged_table
+
+
+def _validate_inputs(
+    table: pd.DataFrame, 
+    meta: pd.DataFrame, 
+    group_col: str, 
+    meta_id_col: Optional[str]
+) -> None:
+    """Validate input parameters."""
+    if table.empty:
+        raise ValueError("Feature table is empty")
+    
+    if meta.empty:
+        raise ValueError("Metadata table is empty")
+    
+    if group_col not in meta.columns:
+        raise KeyError(f"Group column '{group_col}' not found in metadata")
+    
+    if meta_id_col and meta_id_col not in meta.columns:
+        raise KeyError(f"Metadata ID column '{meta_id_col}' not found")
+
+
+def _normalize_ids(ids: pd.Series) -> pd.Series:
+    """Normalize IDs by converting to string, stripping whitespace, and lowercasing."""
+    return ids.astype(str).str.strip().str.lower()
+
+
+def _extract_metadata_ids(
+    meta: pd.DataFrame, 
+    meta_id_col: Optional[str], 
+    verbose: bool
+) -> Tuple[pd.Series, pd.Series]:
+    """Extract and normalize metadata sample IDs."""
+    if meta_id_col:
+        if verbose:
+            logger.info(f"Using metadata column '{meta_id_col}' for sample IDs")
+        ids_original = meta[meta_id_col]
+    else:
+        if verbose:
+            logger.info("Using metadata index for sample IDs")
+        ids_original = meta.index.to_series()
+    
+    ids_normalized = _normalize_ids(ids_original)
+    return ids_normalized, ids_original
+
+
+def _check_duplicate_ids(
+    meta_ids_norm: pd.Series, 
+    meta_ids_orig: pd.Series, 
+    meta_id_col: Optional[str]
+) -> None:
+    """Check for and report duplicate IDs in metadata."""
+    duplicates = meta_ids_norm[meta_ids_norm.duplicated(keep=False)]
+    
+    if not duplicates.empty:
+        unique_duplicates = duplicates.unique()
+        n_duplicates = len(unique_duplicates)
+        
+        # Get original values for the duplicates
+        duplicate_mask = meta_ids_norm.isin(unique_duplicates)
+        original_duplicates = meta_ids_orig[duplicate_mask].unique()
+        
+        # Show examples (limit to 5 for readability)
+        example_norm = unique_duplicates[:5].tolist()
+        example_orig = original_duplicates[:5].tolist()
+        
+        source = f"column '{meta_id_col}'" if meta_id_col else "index"
+        
+        raise ValueError(
+            f"Found {n_duplicates} duplicate sample IDs in metadata {source}\n"
+            f"Normalized duplicates: {example_norm}\n"
+            f"Original values: {example_orig}"
+        )
+
+
+def _calculate_id_overlap(table_ids: pd.Series, meta_ids: pd.Series) -> Set[str]:
+    """Calculate overlap between table and metadata IDs."""
+    return set(table_ids) & set(meta_ids)
+
+
+def _orient_table_for_matching(
+    table: pd.DataFrame, 
+    meta_ids_norm: pd.Series, 
+    verbose: bool
+) -> Tuple[pd.DataFrame, pd.Series]:
+    """Determine correct table orientation and return oriented table with normalized IDs."""
+    # Try samples-as-rows orientation first
+    table_ids_norm = _normalize_ids(table.index.to_series())
+    shared_ids = _calculate_id_overlap(table_ids_norm, meta_ids_norm)
+    
+    if shared_ids:
+        if verbose:
+            logger.info(f"Using samples-as-rows orientation ({len(shared_ids)} matches)")
+        return table, table_ids_norm
+    
+    # Try transposed orientation (features-as-rows)
+    if verbose:
+        logger.info("No matches with samples-as-rows, trying transposed orientation")
+    
+    table_transposed = table.T
+    table_ids_norm_t = _normalize_ids(table_transposed.index.to_series())
+    shared_ids_t = _calculate_id_overlap(table_ids_norm_t, meta_ids_norm)
+    
+    if shared_ids_t:
+        if verbose:
+            logger.info(f"Using features-as-rows orientation ({len(shared_ids_t)} matches)")
+        return table_transposed, table_ids_norm_t
+    
+    # No matches found in either orientation
+    _raise_no_matches_error(table_ids_norm, table_ids_norm_t, meta_ids_norm)
+
+
+def _raise_no_matches_error(
+    table_ids_rows: pd.Series, 
+    table_ids_cols: pd.Series, 
+    meta_ids: pd.Series
+) -> None:
+    """Raise informative error when no ID matches are found."""
+    table_examples_rows = sorted(table_ids_rows.unique())[:5]
+    table_examples_cols = sorted(table_ids_cols.unique())[:5]
+    meta_examples = sorted(meta_ids.unique())[:5]
+    
+    raise ValueError(
+        "No matching sample IDs found in either table orientation\n"
+        f"Table IDs (samples-as-rows): {table_examples_rows}\n"
+        f"Table IDs (features-as-rows): {table_examples_cols}\n"
+        f"Metadata IDs: {meta_examples}\n"
+        "Check for ID format differences or ensure IDs are present in both datasets"
+    )
+
+
+def _merge_with_metadata(
+    table: pd.DataFrame,
+    table_ids_norm: pd.Series,
+    meta: pd.DataFrame,
+    meta_ids_norm: pd.Series,
+    group_col: str,
+    meta_id_col: Optional[str],
+    verbose: bool
+) -> pd.DataFrame:
+    """Perform the actual merge operation."""
+    # Create mapping from normalized IDs to group values
+    meta_with_norm_ids = meta.copy()
+    meta_with_norm_ids['_norm_id'] = meta_ids_norm
+    
+    # Handle potential duplicate normalized IDs (though we checked earlier)
+    group_mapping = meta_with_norm_ids.drop_duplicates('_norm_id').set_index('_norm_id')[group_col]
+    
+    # Create result table
+    result = table.copy()
+    result[group_col] = table_ids_norm.map(group_mapping)
+    
+    # Validate merge results
+    _validate_merge_results(result, group_col, verbose)
+    
+    return result
+
+
+def _validate_merge_results(
+    result: pd.DataFrame, 
+    group_col: str, 
+    verbose: bool
+) -> None:
+    """Validate that merge was successful."""
+    missing_mask = result[group_col].isna()
+    
+    if missing_mask.any():
+        missing_count = missing_mask.sum()
+        missing_samples = result.index[missing_mask][:5].tolist()
+        
+        raise ValueError(
+            f"{missing_count} samples failed to merge with metadata\n"
+            f"Missing '{group_col}' for samples: {missing_samples}\n"
+            "This indicates samples present in feature table but not in metadata"
+        )
+    
+    if verbose:
+        unique_groups = result[group_col].nunique()
+        total_samples = len(result)
+        logger.info(f"Successfully merged {total_samples} samples with {unique_groups} unique groups")
+
