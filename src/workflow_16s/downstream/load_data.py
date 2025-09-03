@@ -234,45 +234,51 @@ class DownstreamDataLoader:
 
 class ExistingDataLoader:
     levels = TAXONOMIC_LEVELS
+    
     def __init__(self, config: Dict, project_dir: Any):
         self.config = config
         self.project_dir = project_dir
         self.tables = defaultdict(lambda: defaultdict(lambda: {}))
         self.metadata = defaultdict(lambda: defaultdict(lambda: {}))
         self.nfc_facilities = None
-
+    
     def _transform_enabled(self, config_key: str):
         # Explicitly convert config value to boolean
         return bool(self.config.get("features", {}).get(config_key, True))
         
     def run(self) -> None:      
         """Load existing tables and metadata files."""
-
         steps = [
             ("filter", "filtered"),
             ("normalize", "normalized"),
             ("clr_transform", "clr_transformed")
         ]
-
         n_steps = sum([self._transform_enabled(key) for key, _ in steps])
+        
         with get_progress_bar() as progress:
             task_desc = "Checking existing features and metadata files"
             task_id = progress.add_task(_format_task_desc(task_desc), total=n_steps)   
+            
             for key, table_type in steps:
                 if self._transform_enabled(key):
                     for level in self.levels.keys():
                         base = Path(self.project_dir.data) / "merged"
                         table_path = base / "table" / table_type / f"{level}.biom"
                         metadata_path = base / "table" / table_type / f"{level}.tsv"
+                        
                         try:
-                            table = import_biom(table_path) #if table_path.exists() else None
-                            metadata = import_tsv(metadata_path) #if metadata_path.exists() else None
-                            #if table is None or metadata is None:
-                            #    raise
-                            self.tables[table_type][level], self.metadata[table_type][level] = table, metadata
+                            table = import_biom(table_path)
+                            metadata = import_tsv(metadata_path)
+                            self.tables[table_type][level] = table
+                            self.metadata[table_type][level] = metadata
                         except Exception as e:
-                            logger.error(f"Failed to import {table_path} or {metadata_path}: {str(e)}\n"
-                                         f"Traceback: {traceback.format_exc()}")
+                            error_msg = (f"Failed to load required data files:\n"
+                                         f"  Table: {table_path}\n"
+                                         f"  Metadata: {metadata_path}\n"
+                                         f"  Error: {str(e)}\n"
+                                         f"  Traceback: {traceback.format_exc()}")
+                            logger.error(error_msg)
+                            raise RuntimeError(error_msg) from e
                         finally:
                             progress.update(task_id, advance=1)   
                             
@@ -280,16 +286,16 @@ class ExistingDataLoader:
         if self.config.get("nfc_facilities", {}).get("enabled", False):
             logger.info("Finding NFC facilities...")
             try:
-                self.nfc_facilities, _ = self._load_nfc_facilities(self.metadata['raw']['genus'])
+                self.nfc_facilities, *_ = self._load_nfc_facilities(self.metadata['raw']['genus'])
             except Exception as e:
-                logger.error(f"Failed finding NFC facilities: {e}\n"
+                error_msg = (f"Failed to load NFC facilities data: {e}\n"
                              f"Traceback: {traceback.format_exc()}")
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
                 
-    # SPECIAL CASE: LOAD NFC FACILITIES DATA
     def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Loads and processes nuclear fuel cycle facilities data."""
         return update_nfc_facilities_data(config=self.config, metadata=metadata)
-
 
 # ==================================================================================== #
 
