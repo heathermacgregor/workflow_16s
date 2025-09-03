@@ -148,8 +148,19 @@ class DownstreamAnalyzer:
         logger.info("Starting downstream analysis pipeline...")
         try:
             # Data loading and preparation
-            self._load_data()
-            self._prep_data()
+            # Attempt to load existing data if configured
+            if config.get("features", {}).get("load_existing", False):
+                try:
+                    self._load_existing_data()
+                    logger.info("Successfully loaded existing data.")
+                except Exception as e:
+                    logger.warning(f"Failed to load existing data: {e}. Loading new data...")
+                    self._load_data()
+                    self._prep_data()
+            else:
+                # Load new data if not using existing data
+                self._load_data()
+                self._prep_data()
             # Run analyses based on configuration
             self._run_modules()
             # Generate summary
@@ -160,6 +171,12 @@ class DownstreamAnalyzer:
             logger.error(f"Pipeline execution failed: {e}")
             raise
 
+    def _load_existing_data(self):
+        data = ExistingDataLoader(config=self.config.config, project_dir=self.project_dir)
+        data.run()
+        self.results.metadata = data.metadata
+        self.results.tables = data.tables
+        
     def _load_data(self) -> None:
         logger.info("Loading data...")
         data = load_data(
@@ -225,8 +242,7 @@ class DownstreamAnalyzer:
         """Run Beta Diversity (Ordination) Analysis."""
         self.results.ordination = run_beta_diversity(
             config=self.config.config, metadata=self.results.metadata,
-            tables=self.results.tables, output_dir=self.output_dir,
-            group_columns=self.group_columns
+            tables=self.results.tables, project_dir=self.project_dir
         )
     
     def _run_feature_selection(self) -> None:
