@@ -179,7 +179,7 @@ class MinDatAPI:
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.grid(alpha=0.3)
-        plt.savefig(self.output_dir / f'{locality}_mines_map.png', dpi=300, bbox_inches='tight')
+        plt.savefig(Path(self.output_path).parent / f'{locality}_mines_map.png', dpi=300, bbox_inches='tight')
         plt.close()
 
     def _get_uranium_mines_world(self):
