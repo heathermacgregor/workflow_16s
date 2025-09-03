@@ -261,10 +261,10 @@ class ExistingDataLoader:
             for key, table_type in steps:
                 if self._transform_enabled(key):
                     for level in self.levels.keys():
+                        base = Path(project_dir.data) / "merged"
+                        table_path = base / "table" / table_type / f"{level}.biom"
+                        metadata_path = base / "table" / table_type / f"{level}.tsv"
                         try:
-                            base = Path(project_dir.data) / "merged"
-                            table_path = base / "table" / table_type / f"{level}.biom"
-                            metadata_path = base / "table" / table_type / f"{level}.tsv"
                             table = import_biom(table_path) if table_path.exists() else None
                             metadata = import_tsv(metadata_path) if metadata_path.exists() else None
                             if table is None or metadata is None:
