@@ -40,7 +40,7 @@ from workflow_16s.downstream.stats_helpers import (
     DataCache, LocalResultLoader, TestConfig, calculate_config_hash, get_enabled_tasks, 
     run_single_statistical_test
 )
-from workflow_16s.figures.stats import (
+from workflow_16s.figures.downstream.stats import (
     volcano_plot, core_microbiome_barplot, network_plot, 
     correlation_heatmap, statistical_results_table, create_statistical_summary_dashboard
 )
