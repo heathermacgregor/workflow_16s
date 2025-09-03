@@ -207,11 +207,13 @@ class AdvancedTaskProcessor:
         self, 
         project_dir: Any, 
         _data_cache: Any, 
-        tables: Dict
+        tables: Dict,
+        group_columns: Any
     ):
         self.project_dir = project_dir
         self._data_cache = _data_cache
         self.tables = tables
+        self.group_columns = group_columns
         self.results = {}
 
     def run_core_microbiome_analysis(
@@ -500,7 +502,8 @@ class StatisticalAnalysis:
             advanced_processor = AdvancedTaskProcessor(
                 project_dir=self.project_dir,
                 _data_cache=self._data_cache,
-                tables=self.tables
+                tables=self.tables,
+                group_columns=self.group_columns
             )
             core_microbiome_config = advanced_analysis_config.get("core_microbiome_analysis", {})
             if core_microbiome_config.get("enabled", False):
