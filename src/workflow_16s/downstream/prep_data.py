@@ -120,7 +120,7 @@ class DownstreamDataPrepper:
             
     def _transform_enabled(self, config_key: str):
         # Explicitly convert config value to boolean
-        return bool(features_config.get(config_key, True))
+        return bool(self.config.get("features", {}).get(config_key, True))
         
     def _apply_transformations(self, level: str) -> None:      
         """Apply transformations (filtering, normalization, CLR) to specified taxonomic level."""
@@ -132,7 +132,6 @@ class DownstreamDataPrepper:
             ("clr_transform", clr, "clr_transformed")
         ]
 
-        features_config = self.config.get("features", {})
         n_steps = sum([self._transform_enabled(key) for key, _, _ in steps])
         with get_progress_bar() as progress:
             task_desc = "Transforming_features"
