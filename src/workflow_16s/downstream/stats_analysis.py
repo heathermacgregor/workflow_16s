@@ -437,6 +437,7 @@ class AdvancedTaskProcessor:
 
 class StatisticalAnalysis:
     """Statistical Analysis class with result loading."""
+    TestConfig = TestConfig
     def __init__(
         self,
         config: Dict,
