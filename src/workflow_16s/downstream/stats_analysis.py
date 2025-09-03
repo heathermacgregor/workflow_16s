@@ -416,7 +416,9 @@ class AdvancedTaskProcessor:
                             result = spearman_correlation(
                                 table=table,
                                 metadata=metadata,
-                                continuous_column=var
+                                continuous_column=var,
+                                progress=progress,
+                                task_id=main_task
                             )
                             
                             _init_nested_dict(results, [var, table_type, level])
