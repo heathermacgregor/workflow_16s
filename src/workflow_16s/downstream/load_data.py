@@ -14,10 +14,19 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN, TAXONOMIC_LEVELS
-from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
-from workflow_16s.utils.biom import import_biom, import_merged_biom_table, export_h5py, sample_id_map
+from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import (
+    update_nfc_facilities_data
+)
+from workflow_16s.utils.biom import (
+    import_biom, import_merged_biom_table, export_h5py, sample_id_map
+)
 from workflow_16s.utils.dir import Dir, ProjectDir
-from workflow_16s.utils.metadata import clean_metadata, import_tsv, import_merged_metadata_tsv
+from workflow_16s.utils.metadata import (
+    clean_metadata, import_tsv, import_merged_metadata_tsv
+)
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+
+# ========================== INITIALISATION & CONFIGURATION ========================== #
 
 logger = logging.getLogger("workflow_16s")
 
@@ -62,20 +71,23 @@ def align_table_and_metadata(
 class DownstreamDataLoader:
     """Loads and aligns BIOM feature tables and metadata for downstream analysis.
     
-    Handles loading of both ASV and genus-level feature tables along with corresponding
-    metadata files. Supports filtering based on nuclear fuel cycle facilities and
-    alignment of samples between tables and metadata.
+    Handles loading of both ASV and genus-level feature tables along with 
+    corresponding metadata files. Supports filtering based on nuclear fuel cycle 
+    facilities and alignment of samples between tables and metadata.
 
     Attributes:
-        config:                  Configuration dictionary containing processing parameters.
-        target_subfragment_mode: Processing mode for subfragments ('asv', 'genus', or 'any').
+        config:                  Configuration dictionary containing processing 
+                                 parameters.
+        target_subfragment_mode: Processing mode for subfragments ('asv', 'genus', 
+                                 or 'any').
         metadata_id_column:      Column name in metadata containing sample IDs.
-        verbose:                 Boolean indicating whether to output verbose logging messages.
+        verbose:                 Verbosity flag.
         project_dir:             Project directory object containing path definitions.
         existing_subsets:        Pre-existing data subsets from upstream processing.
         tables:                  Dictionary storing loaded feature tables.
         metadata:                Dictionary storing loaded metadata.
-        nfc_facilities:          DataFrame containing nuclear fuel cycle facility data if enabled.
+        nfc_facilities:          DataFrame containing nuclear fuel cycle facility data 
+                                 if enabled.
         table_paths:             List of paths to found BIOM table files.
     """
     ModeConfig = {
@@ -219,27 +231,6 @@ class DownstreamDataLoader:
         logger.info(f"{'Loaded metadata:':<30}{metadata_size}")
         logger.info(f"{'Loaded features:':<30}{table_size} {feature_type}")
 
-# ==================================================================================== #
-
-def load_data(config: Dict, project_dir: Any, existing_subsets: Any = None):
-    """Convenience function to initialize and run the data loader.
-    
-    Args:
-        config:           Configuration dictionary for data loading parameters.
-        project_dir:      Project directory object containing path definitions.
-        existing_subsets: Pre-existing data subsets from upstream processing.
-        
-    Returns:
-        Initialized and executed DownstreamDataLoader instance.
-    """
-    loader = DownstreamDataLoader(
-        config=config,
-        project_dir=project_dir,
-        existing_subsets=existing_subsets
-    )
-    loader.run()
-    return loader
-
 
 class ExistingDataLoader:
     levels = TAXONOMIC_LEVELS
@@ -248,6 +239,7 @@ class ExistingDataLoader:
         self.project_dir = project_dir
         self.tables = defaultdict(lambda: defaultdict(lambda: {}))
         self.metadata = defaultdict(lambda: defaultdict(lambda: {}))
+        self.nfc_facilities = None
 
     def _transform_enabled(self, config_key: str):
         # Explicitly convert config value to boolean
@@ -282,4 +274,55 @@ class ExistingDataLoader:
                             logger.error(f"Failed to export {out_path}: {str(e)}\n"
                                          f"Traceback: {traceback.format_exc()}")
                         finally:
-                            progress.update(task_id, advance=1)     
+                            progress.update(task_id, advance=1)   
+                            
+        # If enabled, find samples within a threshold distance from NFC facilities
+        if self.config.get("nfc_facilities", {}).get("enabled", False):
+            logger.info("Finding NFC facilities...")
+            try:
+                self.nfc_facilities, _ = self._load_nfc_facilities(metadata['raw']['genus'])
+            except Exception as e:
+                logger.error(f"Failed finding NFC facilities: {e}\n"
+                             f"Traceback: {traceback.format_exc()}")
+                
+    # SPECIAL CASE: LOAD NFC FACILITIES DATA
+    def _load_nfc_facilities(self, metadata: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Loads and processes nuclear fuel cycle facilities data."""
+        return update_nfc_facilities_data(config=self.config, metadata=metadata)
+
+
+# ==================================================================================== #
+
+def load_data(config: Dict, project_dir: Any, existing_subsets: Any = None):
+    """Convenience function to initialize and run the data loader.
+    
+    Args:
+        config:           Configuration dictionary for data loading parameters.
+        project_dir:      Project directory object containing path definitions.
+        existing_subsets: Pre-existing data subsets from upstream processing.
+        
+    Returns:
+        Initialized and executed DownstreamDataLoader instance.
+    """
+    loader = DownstreamDataLoader(
+        config=config,
+        project_dir=project_dir,
+        existing_subsets=existing_subsets
+    )
+    loader.run()
+    return loader
+
+
+def load_existing_data(config: Dict, project_dir: Any):
+    """Convenience function to initialize and run the data loader.
+    
+    Args:
+        config:           Configuration dictionary for data loading parameters.
+        project_dir:      Project directory object containing path definitions.
+        
+    Returns:
+        Initialized and executed ExistingDataLoader instance.
+    """
+    data = ExistingDataLoader(config=config, project_dir=project_dir)
+    data.run()
+    return data
