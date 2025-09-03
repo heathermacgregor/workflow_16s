@@ -7,7 +7,7 @@ import logging
 import os
 import requests
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 # Third Party Imports
 import geopandas as gpd
@@ -90,11 +90,11 @@ class MinDatScraper:
 
 
 class MinDatAPI:
-    """API client for retrieving and processing uranium mine data from Mindat.
+    """API client for retrieving and processing uranium mine data from MinDat.
     
     Attributes:
         MPLWorldURL:  URL for Natural Earth countries dataset.
-        output_dir:   Directory for output files.
+        output_path:  Output file path.
         plot_package: Visualization package to use ('mpl' for matplotlib).
         localities:   List of available localities.
         verbose:      Verbosity flag.
@@ -103,7 +103,7 @@ class MinDatAPI:
     def __init__(
         self, 
         api_key: str, 
-        output_path: Union[str, Path] = REFERENCES_DIR,
+        output_path: Optional[Union[str, Path]] = Path(REFERENCES_DIR) / 'mindat.tsv',
         plot_package: str = 'mpl',
         verbose: bool = False
     ):
@@ -164,7 +164,7 @@ class MinDatAPI:
         
         Args:
             locality: Name of locality being plotted.
-            gdf: GeoDataFrame containing mine coordinates.
+            gdf:      GeoDataFrame containing mine coordinates.
         """
         if gdf.empty:
             self.log(f"No data to plot for {locality}")
@@ -187,8 +187,8 @@ class MinDatAPI:
         
         Returns:
             Tuple containing:
-                - Combined DataFrame of all mine data
-                - Combined GeoDataFrame of all geometric data
+            - Combined DataFrame of all mine data
+            - Combined GeoDataFrame of all geometric data
         """
         dfs = []
         for locality in self.localities: 
