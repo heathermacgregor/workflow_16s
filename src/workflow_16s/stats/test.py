@@ -24,7 +24,7 @@ from tqdm import tqdm
 
 # Local Imports
 from workflow_16s import constants
-from workflow_16s.utils.data import merge_table_with_meta, table_to_df
+from workflow_16s.utils.data import merge_table_with_meta, table_to_df, merge_data
 from workflow_16s.stats.utils import validate_inputs
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -54,17 +54,17 @@ def k_means(
 
     Returns:
     """
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    table_with_column = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    data = merge_data(df, metadata, group_column)
     
     kmeans = KMeans(
         n_clusters, 
         random_state=random_state
-    ).fit(table_with_column.drop(group_column, axis=1))
+    ).fit(data.drop(group_column, axis=1))
 
     results = pd.Series(
         kmeans.labels_, 
-        index=table_with_column.index, 
+        index=data.index, 
         name='kmeans_cluster'
     )
     return results
@@ -92,17 +92,17 @@ def ttest(
     Returns:
         DataFrame with significant features (p < Bonferroni-corrected threshold).
     """
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    table_with_column = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    data = merge_data(df, metadata, group_column)
     
     results = []
-    for feature in table_with_column.columns.drop(group_column):
+    for feature in data.columns.drop(data):
         # Subset groups
-        mask_group1 = (table_with_column[group_column] == group_column_values[0])
-        mask_group2 = (table_with_column[group_column] == group_column_values[1])
+        mask_group1 = (data[group_column] == group_column_values[0])
+        mask_group2 = (data[group_column] == group_column_values[1])
         
-        group1_values = table_with_column.loc[mask_group1, feature].dropna()
-        group2_values = table_with_column.loc[mask_group2, feature].dropna()
+        group1_values = data.loc[mask_group1, feature].dropna()
+        group2_values = data.loc[mask_group2, feature].dropna()
         
         # Skip features with < 2 samples in either group
         if len(group1_values) < 2 or len(group2_values) < 2:
@@ -138,10 +138,10 @@ def ttest(
     if results_df.empty:
         if verbose:
             logger.error(
-                    f"{table.shape} {table_with_column.shape} "
-                    f"{table.index} {table_with_column.index} "
-                    f"No features passed for groups: {group_column_values} "
-                    f"in column '{group_column}'"
+                f"{table.shape} {data.shape} "
+                f"{table.index} {data.index} "
+                f"No features passed for groups: {group_column_values} "
+                f"in column '{group_column}'"
             )
         return pd.DataFrame(columns=['feature', 't_statistic', 'p_value'])
 
@@ -174,20 +174,20 @@ def mwu_bonferroni(
         Results with p-values below Bonferroni-corrected threshold.
     """
     df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    table_with_column = merge_table_with_meta(df, metadata, group_column)
+    data = merge_data(df, metadata, group_column)
     
     # Total features tested (for Bonferroni)
-    total_features = len(table_with_column.columns.drop(group_column))
+    total_features = len(data.columns.drop(group_column))
     threshold = 0.01 / total_features
     
     results = []
-    for feature in table_with_column.columns.drop(group_column):
+    for feature in data.columns.drop(group_column):
         # Subset groups safely
-        mask_group1 = (table_with_column[group_column] == group_column_values[0])
-        mask_group2 = (table_with_column[group_column] == group_column_values[1])
+        mask_group1 = (data[group_column] == group_column_values[0])
+        mask_group2 = (data[group_column] == group_column_values[1])
         
-        group1_values = table_with_column.loc[mask_group1, feature].dropna()
-        group2_values = table_with_column.loc[mask_group2, feature].dropna()
+        group1_values = data.loc[mask_group1, feature].dropna()
+        group2_values = data.loc[mask_group2, feature].dropna()
         
         # Skip features with empty groups
         if len(group1_values) < 1 or len(group2_values) < 1:
@@ -270,7 +270,7 @@ def fisher_exact_bonferroni(
     """
     # Convert to DataFrame and merge with metadata
     df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    merged = merge_data(df, metadata, group_column)
     
     # Total features for Bonferroni correction
     total_features = len(merged.columns) - 1  # Exclude group column
@@ -373,8 +373,8 @@ def kruskal_bonferroni(
     Returns:
         DataFrame with significant features after Bonferroni correction.
     """
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    merged = merge_data(df, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
     if group_column_values is None:
@@ -466,7 +466,7 @@ def anova(
           indicating stronger group separation.
     """
     df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    merged = merge_data(df, metadata, group_column)
     
     # Get unique groups if group_column_values not specified
     if group_column_values is None:
@@ -532,7 +532,9 @@ def spearman_correlation(
     metadata: pd.DataFrame,
     continuous_column: str,
     alpha: float = 0.01,
-    min_samples: int = 5
+    min_samples: int = 5,
+    progress: Any,
+    task_id: Any
 ) -> pd.DataFrame:
     """Spearman correlations with type validation and conversion"""
     df = table_to_df(table)
@@ -549,7 +551,7 @@ def spearman_correlation(
         return pd.DataFrame()
     
     try:
-        merged = merge_table_with_meta(df, metadata, continuous_column)
+        merged = merge_data(df, metadata, continuous_column)
         merged = merged.dropna(subset=[continuous_column])
     except KeyError as e:
         logger.error(f"Merge error: {str(e)}")
@@ -566,10 +568,8 @@ def spearman_correlation(
     )
     
     results = []
-    for feature in tqdm(
-        merged.columns.drop(continuous_column), 
-        desc=f"Correlations for {continuous_column}"
-    ):
+    total = len(merged.columns.drop(continuous_column))
+    for i, feature in enumerate(merged.columns.drop(continuous_column)):
         # Convert feature to numeric
         merged[feature] = pd.to_numeric(merged[feature], errors='coerce')
         
@@ -598,6 +598,8 @@ def spearman_correlation(
             })
         except Exception as e:
             logger.warning(f"Correlation failed for {feature}: {str(e)}")
+        finally:
+            progress.update(task_id, description=_format_task_desc(f"Correlation of {feature}: {i} / {total}"))
     
     if not results:
         return pd.DataFrame()
@@ -621,11 +623,13 @@ def enhanced_statistical_tests(
     test_type: str = 'auto',
     correction_method: str = 'fdr_bh',
     alpha: float = 0.05,
-    effect_size_threshold: float = 0.5
+    effect_size_threshold: float = 0.5,
+    progress: Any,
+    task_id: Any
 ) -> pd.DataFrame:
     """Enhanced statistical testing with automatic test selection and effect sizes."""
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    merged = merge_data(df, metadata, group_column)
     
     groups = merged[group_column].unique()
     n_groups = len(groups)
@@ -634,83 +638,89 @@ def enhanced_statistical_tests(
         raise ValueError("Need at least 2 groups for comparison")
     
     results = []
-    
-    for feature in tqdm(df.columns, desc="Statistical testing"):
-        group_data = []
-        for group in groups:
-            data = merged[merged[group_column] == group][feature].dropna()
-            if len(data) >= 3:
-                group_data.append(data)
-        
-        if len(group_data) < 2:
-            continue
-        
-        # Test for normality and equal variances if auto mode
-        normality_ok = True
-        equal_var_ok = True
-        
-        if test_type == 'auto':
-            for data in group_data:
-                if len(data) < 50:
-                    _, p_norm = shapiro(data)
-                    if p_norm < 0.05:
-                        normality_ok = False
-                        break
+
+    total = len(df.columns)
+    for i, feature in enumerate(df.columns):
+        try:
+            group_data = []
+            for group in groups:
+                data = merged[merged[group_column] == group][feature].dropna()
+                if len(data) >= 3:
+                    group_data.append(data)
             
-            if normality_ok:
-                _, p_levene = levene(*group_data)
-                if p_levene < 0.05:
-                    equal_var_ok = False
-        
-        # Choose appropriate test
-        if n_groups == 2:
-            if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                stat, p_val = ttest_ind(*group_data, equal_var=equal_var_ok)
-                test_name = "Welch's t-test" if not equal_var_ok else "Student's t-test"
+            if len(group_data) < 2:
+                continue
+            
+            # Test for normality and equal variances if auto mode
+            normality_ok = True
+            equal_var_ok = True
+            
+            if test_type == 'auto':
+                for data in group_data:
+                    if len(data) < 50:
+                        _, p_norm = shapiro(data)
+                        if p_norm < 0.05:
+                            normality_ok = False
+                            break
                 
-                pooled_std = np.sqrt((np.var(group_data[0], ddof=1) + 
-                                    np.var(group_data[1], ddof=1)) / 2)
-                effect_size = (np.mean(group_data[0]) - np.mean(group_data[1])) / pooled_std
-                
+                if normality_ok:
+                    _, p_levene = levene(*group_data)
+                    if p_levene < 0.05:
+                        equal_var_ok = False
+            
+            # Choose appropriate test
+            if n_groups == 2:
+                if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
+                    stat, p_val = ttest_ind(*group_data, equal_var=equal_var_ok)
+                    test_name = "Welch's t-test" if not equal_var_ok else "Student's t-test"
+                    
+                    pooled_std = np.sqrt((np.var(group_data[0], ddof=1) + 
+                                        np.var(group_data[1], ddof=1)) / 2)
+                    effect_size = (np.mean(group_data[0]) - np.mean(group_data[1])) / pooled_std
+                    
+                else:
+                    stat, p_val = mannwhitneyu(*group_data, alternative='two-sided')
+                    test_name = "Mann-Whitney U"
+                    
+                    n1, n2 = len(group_data[0]), len(group_data[1])
+                    effect_size = 1 - (2 * stat) / (n1 * n2)
+            
             else:
-                stat, p_val = mannwhitneyu(*group_data, alternative='two-sided')
-                test_name = "Mann-Whitney U"
-                
-                n1, n2 = len(group_data[0]), len(group_data[1])
-                effect_size = 1 - (2 * stat) / (n1 * n2)
-        
-        else:
-            if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
-                stat, p_val = f_oneway(*group_data)
-                test_name = "One-way ANOVA"
-                
-                all_data = np.concatenate(group_data)
-                grand_mean = np.mean(all_data)
-                ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in group_data)
-                ss_total = sum((x - grand_mean)**2 for x in all_data)
-                effect_size = ss_between / ss_total if ss_total > 0 else 0
-                
-            else:
-                stat, p_val = kruskal(*group_data)
-                test_name = "Kruskal-Wallis"
-                
-                n_total = sum(len(g) for g in group_data)
-                effect_size = stat / (n_total - 1) if n_total > 1 else 0
-        
-        means = [np.mean(g) for g in group_data]
-        medians = [np.median(g) for g in group_data]
-        
-        results.append({
-            'feature': feature,
-            'test': test_name,
-            'statistic': stat,
-            'p_value': p_val,
-            'effect_size': effect_size,
-            'mean_values': means,
-            'median_values': medians,
-            'n_groups': len(group_data),
-            'total_samples': sum(len(g) for g in group_data)
-        })
+                if test_type == 'parametric' or (test_type == 'auto' and normality_ok):
+                    stat, p_val = f_oneway(*group_data)
+                    test_name = "One-way ANOVA"
+                    
+                    all_data = np.concatenate(group_data)
+                    grand_mean = np.mean(all_data)
+                    ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in group_data)
+                    ss_total = sum((x - grand_mean)**2 for x in all_data)
+                    effect_size = ss_between / ss_total if ss_total > 0 else 0
+                    
+                else:
+                    stat, p_val = kruskal(*group_data)
+                    test_name = "Kruskal-Wallis"
+                    
+                    n_total = sum(len(g) for g in group_data)
+                    effect_size = stat / (n_total - 1) if n_total > 1 else 0
+            
+            means = [np.mean(g) for g in group_data]
+            medians = [np.median(g) for g in group_data]
+            
+            results.append({
+                'feature': feature,
+                'test': test_name,
+                'statistic': stat,
+                'p_value': p_val,
+                'effect_size': effect_size,
+                'mean_values': means,
+                'median_values': medians,
+                'n_groups': len(group_data),
+                'total_samples': sum(len(g) for g in group_data)
+            })
+        except Exception as e:
+            logger.error(f"Error with statistical test of {feature}: {e}")
+        finally:
+            progress.update(task_id, description=_format_task_desc(f"Enhanced statistical tests: {i} / {total}"))
     
     if not results:
         return pd.DataFrame()
@@ -736,13 +746,13 @@ def differential_abundance_analysis(
     method: str = 'deseq2_like',
     alpha: float = 0.05,
     fold_change_threshold: float = 1.5,
-    min_prevalence: float = 0.1
+    min_prevalence: float = 0.1,
+    progress: Any,
+    task_id: Any
 ) -> pd.DataFrame:
     """Comprehensive differential abundance analysis with multiple methods."""
-    
-    
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    merged = merge_data(df, metadata, group_column)
     
     # Filter by prevalence
     prevalence = (df > 0).mean()
@@ -754,43 +764,49 @@ def differential_abundance_analysis(
         raise ValueError("Differential abundance analysis requires exactly 2 groups")
     
     results = []
-    
-    for feature in tqdm(df_filt.columns, desc=f"DA analysis ({method})"):
-        group1_data = merged_filt[merged_filt[group_column] == groups[0]][feature]
-        group2_data = merged_filt[merged_filt[group_column] == groups[1]][feature]
-        
-        if len(group1_data) < 3 or len(group2_data) < 3:
-            continue
-        
-        # Calculate fold change
-        mean1 = group1_data.mean()
-        mean2 = group2_data.mean()
-        fold_change = (mean1 + 1e-8) / (mean2 + 1e-8)
-        log2_fc = np.log2(fold_change)
-        
-        if abs(log2_fc) < np.log2(fold_change_threshold):
-            continue
-        
-        # Statistical testing
-        if method == 'wilcoxon':
-            statistic, p_value = mannwhitneyu(group1_data, group2_data)
-        elif method == 'ttest':
-            statistic, p_value = ttest_ind(group1_data, group2_data)
-        elif method == 'deseq2_like':
-            statistic, p_value = _deseq2_like_test(group1_data, group2_data)
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        results.append({
-            'feature': feature,
-            'log2_fold_change': log2_fc,
-            'fold_change': fold_change,
-            'mean_group1': mean1,
-            'mean_group2': mean2,
-            'statistic': statistic,
-            'p_value': p_value,
-            'prevalence': prevalence[feature]
-        })
+
+    total = len(df_filt.columns)
+    for i, feature in enumerate(df_filt.columns):
+        try:
+            group1_data = merged_filt[merged_filt[group_column] == groups[0]][feature]
+            group2_data = merged_filt[merged_filt[group_column] == groups[1]][feature]
+            
+            if len(group1_data) < 3 or len(group2_data) < 3:
+                continue
+            
+            # Calculate fold change
+            mean1 = group1_data.mean()
+            mean2 = group2_data.mean()
+            fold_change = (mean1 + 1e-8) / (mean2 + 1e-8)
+            log2_fc = np.log2(fold_change)
+            
+            if abs(log2_fc) < np.log2(fold_change_threshold):
+                continue
+            
+            # Statistical testing
+            if method == 'wilcoxon':
+                statistic, p_value = mannwhitneyu(group1_data, group2_data)
+            elif method == 'ttest':
+                statistic, p_value = ttest_ind(group1_data, group2_data)
+            elif method == 'deseq2_like':
+                statistic, p_value = _deseq2_like_test(group1_data, group2_data)
+            else:
+                raise ValueError(f"Unknown method: {method}")
+            
+            results.append({
+                'feature': feature,
+                'log2_fold_change': log2_fc,
+                'fold_change': fold_change,
+                'mean_group1': mean1,
+                'mean_group2': mean2,
+                'statistic': statistic,
+                'p_value': p_value,
+                'prevalence': prevalence[feature]
+            })
+        except Exception as e:
+            logger.error(f"Error with DA analysis of {feature}: {e}")
+        finally:
+            progress.update(task_id, description=_format_task_desc(f"{i} / {total}"))
     
     if not results:
         return pd.DataFrame()
@@ -819,18 +835,18 @@ def _deseq2_like_test(group1: pd.Series, group2: pd.Series) -> Tuple[float, floa
 
 # CORE MICROBIOME ANALYSIS
 def core_microbiome(
-    table: Union[Dict, Any, pd.DataFrame],
+    table: Union[Dict, pd.DataFrame],
     metadata: pd.DataFrame,
     group_column: str,
     prevalence_threshold: float = 0.8,
     abundance_threshold: float = 0.01
 ) -> Dict[str, pd.DataFrame]:
     """Identify core microbiome for each group."""
-    df = table_to_df(table)#, metadata = validate_inputs(table, metadata, group_column)
-    merged = merge_table_with_meta(df, metadata, group_column)
+    df = table_to_df(table)
+    merged = merge_data(df, metadata, group_column)
     
     rel_abundance = df.div(df.sum(axis=1), axis=0)
-    merged_rel = merge_table_with_meta(rel_abundance, metadata, group_column)
+    merged_rel = merge_data(rel_abundance, metadata, group_column)
     
     core_features = {}
     
@@ -866,7 +882,6 @@ def microbial_network_analysis(
     min_prevalence: float = 0.1
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Construct microbial co-occurrence networks."""
-    #df, _ = validate_inputs(table)
     df = table_to_df(table)#
     prevalence = (df > 0).mean()
     df_filt = df.loc[:, prevalence >= min_prevalence]
