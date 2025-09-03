@@ -11,7 +11,7 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s.constants import MODE, GROUP_COLUMNS
-from workflow_16s.downstream.load_data import load_data
+from workflow_16s.downstream.load_data import ExistingDataLoader, load_data
 from workflow_16s.downstream.prep_data import prep_data
 from workflow_16s.downstream.stats_analysis import run_statistical_analysis
 from workflow_16s.downstream.beta_diversity import run_beta_diversity
