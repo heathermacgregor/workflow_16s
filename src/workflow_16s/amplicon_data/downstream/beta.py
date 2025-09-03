@@ -38,7 +38,7 @@ from workflow_16s.stats.beta_diversity import (
 from workflow_16s.utils.data import table_to_df, update_table_and_meta
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.diversity.beta_diversity import pca, pcoa, tsne, umap
-from workflow_16s.figures.beta_diversity import beta_diversity_plot
+from workflow_16s.figures.downstream.beta_diversity import beta_diversity_plot
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
