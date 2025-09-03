@@ -265,10 +265,10 @@ class ExistingDataLoader:
                         table_path = base / "table" / table_type / f"{level}.biom"
                         metadata_path = base / "table" / table_type / f"{level}.tsv"
                         try:
-                            table = import_biom(table_path) if table_path.exists() else None
-                            metadata = import_tsv(metadata_path) if metadata_path.exists() else None
-                            if table is None or metadata is None:
-                                raise
+                            table = import_biom(table_path) #if table_path.exists() else None
+                            metadata = import_tsv(metadata_path) #if metadata_path.exists() else None
+                            #if table is None or metadata is None:
+                            #    raise
                             self.tables[table_type][level], self.metadata[table_type][level] = table, metadata
                         except Exception as e:
                             logger.error(f"Failed to import {table_path} or {metadata_path}: {str(e)}\n"
@@ -280,7 +280,7 @@ class ExistingDataLoader:
         if self.config.get("nfc_facilities", {}).get("enabled", False):
             logger.info("Finding NFC facilities...")
             try:
-                self.nfc_facilities, _ = self._load_nfc_facilities(metadata['raw']['genus'])
+                self.nfc_facilities, _ = self._load_nfc_facilities(self.metadata['raw']['genus'])
             except Exception as e:
                 logger.error(f"Failed finding NFC facilities: {e}\n"
                              f"Traceback: {traceback.format_exc()}")
