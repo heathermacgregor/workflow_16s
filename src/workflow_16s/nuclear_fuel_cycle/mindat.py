@@ -103,7 +103,7 @@ class MinDatAPI:
     def __init__(
         self, 
         api_key: str, 
-        output_dir: Union[str, Path] = REFERENCES_DIR,
+        output_path: Union[str, Path] = REFERENCES_DIR,
         plot_package: str = 'mpl',
         verbose: bool = False
     ):
@@ -111,11 +111,11 @@ class MinDatAPI:
         
         Args:
             api_key:      Mindat API key for authentication.
-            output_dir:   Directory for storing output files. Defaults to REFERENCES_DIR.
+            output_path:  Directory for storing output files. Defaults to REFERENCES_DIR.
             plot_package: Visualization package to use. Currently supports 'mpl'.
         """
         os.environ["MINDAT_API_KEY"] = api_key
-        self.output_dir = output_dir
+        self.output_path = output_path
         self.plot_package = plot_package
         self.verbose = verbose
       
@@ -205,7 +205,8 @@ class MinDatAPI:
         
         if dfs:
             df = pd.concat(dfs, axis=0)
-            df.to_csv(self.output_dir / "mindat_world_mines.tsv", sep="\t", index=False)
+            df['facility'] = [i.split(',')[0] for i in df['txt']]
+            df.to_csv(self.output_path, sep="\t", index=False)
             gdf = gpd_from_df(df)
             if not gdf.empty:
                 if self.plot_package == 'mpl':
@@ -218,6 +219,7 @@ class MinDatAPI:
 # ==================================================================================== #
 
 def world_uranium_mines(
+    config: Dict,
     api_key: str, 
     output_dir: Union[str, Path] = REFERENCES_DIR
 ):
@@ -230,5 +232,9 @@ def world_uranium_mines(
     Returns:
         Tuple containing combined DataFrame and GeoDataFrame of uranium mines.
     """
-    mindat_api = MinDatAPI(api_key, output_dir)
+    output_path = Path(output_dir) / "mindat.tsv"
+    if config.get("nfc_facilities", {}).get("use_local", False):
+        if output_path.exists():
+            return pd.read_csv(output_path, sep='\t', index=False), gpd.GeoDataFrame()
+    mindat_api = MinDatAPI(api_key, output_path)
     return mindat_api._get_uranium_mines_world()
