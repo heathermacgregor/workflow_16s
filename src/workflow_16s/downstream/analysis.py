@@ -149,7 +149,7 @@ class DownstreamAnalyzer:
         try:
             # Data loading and preparation
             # Attempt to load existing data if configured
-            if config.get("features", {}).get("load_existing", False):
+            if self.config.get("features", {}).get("load_existing", False):
                 try:
                     self._load_existing_data()
                     logger.info("Successfully loaded existing data.")
