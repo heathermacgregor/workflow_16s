@@ -133,16 +133,16 @@ class DownstreamDataPrepper:
         ]
 
         features_config = self.config.get("features", {})
-        n_steps = sum([self._transform_enabled(config_key) for key, _, _ in steps])
+        n_steps = sum([self._transform_enabled(key) for key, _, _ in steps])
         with get_progress_bar() as progress:
             task_desc = "Transforming_features"
             task_desc_fmt = _format_task_desc(task_desc)
             task_id = progress.add_task(task_desc_fmt, total=n_steps)   
-            for config_key, func, table_type in steps:
-                if self._transform_enabled(config_key):
+            for key, func, table_type in steps:
+                if self._transform_enabled(key):
                     samples_n_0, features_n_0 = table.shape
                     try:
-                        transformation_desc = f"{task_desc} {level.title()} → {config_key}"
+                        transformation_desc = f"{task_desc} {level.title()} → {key}"
                         transformation_desc_fmt = _format_task_desc(transformation_desc)
                         progress.update(task_id, description=transformation_desc_fmt)
                         table = func(table)
@@ -155,7 +155,7 @@ class DownstreamDataPrepper:
                             f"{features_n_0} → {table.shape[1]} features" 
                         )
                     except Exception as e:
-                        logger.error(f"Preprocessing function failed for {config_key} at {level}: {e}")
+                        logger.error(f"Preprocessing function failed for {key} at {level}: {e}")
                     finally:    
                         progress.update(task_id, advance=1)
         
