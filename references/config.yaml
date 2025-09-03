@@ -127,6 +127,7 @@ maps:
 # Feature Table Preprocessing
 # Toggle which processing steps will be performed on the merged feature table prior to analysis.
 features: 
+  load_existing: True
   filter: True
   normalize: True
   clr_transform: True
