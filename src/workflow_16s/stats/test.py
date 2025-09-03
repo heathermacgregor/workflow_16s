@@ -747,8 +747,8 @@ def differential_abundance_analysis(
     alpha: float = 0.05,
     fold_change_threshold: float = 1.5,
     min_prevalence: float = 0.1,
-    progress: Any,
-    task_id: Any
+    progress: Any = None,
+    task_id: Any = None
 ) -> pd.DataFrame:
     """Comprehensive differential abundance analysis with multiple methods."""
     df = table_to_df(table)
