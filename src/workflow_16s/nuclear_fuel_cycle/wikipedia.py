@@ -90,6 +90,8 @@ class WikipediaScraper:
             "Past capacity (MW)": "capacity_mw_past",
         }
         df = df.rename(columns=rename)
+        df['country'] = df['country_1'].combine_first(df['country_2'])
+        df['n_units'] = df['n_units_1'].combine_first(df['n_units_2'])
         return df
 
     def _uranium_mines(self, url: str = None):
