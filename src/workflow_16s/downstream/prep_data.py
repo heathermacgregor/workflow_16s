@@ -76,6 +76,7 @@ class DownstreamDataPrepper:
                 logger.error(f"Data prep failed for {level}: {e}")
                 
         self._save_tables()
+        self._save_metadata()
         
     def _fetch_data(self, table_type: str, level: str) -> Tuple[pd.DataFrame, Table]:
         """Retrieve table and metadata for specified processing stage and taxonomic level."""
@@ -201,12 +202,45 @@ class DownstreamDataPrepper:
                     try:
                         future.result()
                         if self.verbose:
-                            logger.debug(f"Exported {table_type}/{level} to {out_path}")
+                            logger.debug(f"Exported {table_type}/{level} table to {out_path}")
                     except Exception as e:
                         logger.error(f"Failed to export {out_path}: {str(e)}")
                     finally:
                         progress.update(task_id, advance=1)
-                      
+                        
+    def _save_metadata(self) -> None:
+        """Export all processed tables to BIOM format files in parallel."""
+        base = self.output_dir / "merged" / "metadata"    
+        # Prepare export tasks
+        export_tasks = []
+        for table_type, levels in self.metadata.items():
+            metadata_dir = base / table_type
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            for level, metadata in levels.items():
+                out = metadata_dir / f"{level}.tsv"  # Simplified filename
+                out.parent.mkdir(parents=True, exist_ok=True)
+                export_tasks.append((metadata, out))
+    
+        # Use ThreadPoolExecutor for parallel exports
+        max_workers = self.config.get("threads", 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            for table, out_path in export_tasks:
+                future = executor.submit(export_tsv, table, out_path)
+                futures[future] = (table_type, level, out_path)
+            with get_progress_bar() as progress:
+                task_id = progress.add_task(_format_task_desc("Exporting metadata"), total=len(export_tasks))
+                for future in as_completed(futures):
+                    table_type, level, out_path = futures[future]
+                    try:
+                        future.result()
+                        if self.verbose:
+                            logger.debug(f"Exported {table_type}/{level} metadata to {out_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to export {out_path}: {str(e)}")
+                    finally:
+                        progress.update(task_id, advance=1)      
+                        
 # ==================================================================================== #
 
 def prep_data(config: Dict, metadata: Dict, tables: Dict, project_dir: Any):
