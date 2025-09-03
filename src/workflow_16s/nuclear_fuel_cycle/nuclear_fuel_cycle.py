@@ -138,6 +138,8 @@ class NFCFacilitiesHandler:
             
         facilities_df = pd.concat(dfs, axis=0)
         facilities_df = facilities_df.sort_values(by='facility')
+        if self.facilities_output_path:
+            facilities_df.to_csv(self.facilities_output_path, sep='\t', index=False)
         return facilities_df
 
     def _geocode(self, df: pd.DataFrame):
