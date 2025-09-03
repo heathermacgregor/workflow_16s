@@ -67,7 +67,7 @@ class WikipediaScraper:
                 cells = [td.get_text().strip() for td in row.find_all(['td', 'th'])]
                 station_name = cells[0] if cells[0] else "Unknown Station"
                 row_data = {
-                    'facility_name': station_name,
+                    'facility': station_name,
                     'data_source': f"Table {i+1} - {url}",
                     'last_updated': datetime.now().isoformat()
                 }
