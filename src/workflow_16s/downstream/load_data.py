@@ -271,7 +271,7 @@ class ExistingDataLoader:
                                 raise
                             self.tables[table_type][level], self.metadata[table_type][level] = table, metadata
                         except Exception as e:
-                            logger.error(f"Failed to export {out_path}: {str(e)}\n"
+                            logger.error(f"Failed to import {table_path} or {metadata_path}: {str(e)}\n"
                                          f"Traceback: {traceback.format_exc()}")
                         finally:
                             progress.update(task_id, advance=1)   
