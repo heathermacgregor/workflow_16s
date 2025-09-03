@@ -100,7 +100,7 @@ group_columns:
 
 # NFC Facilities
 nfc_facilities:
-  enabled: False
+  enabled: True
   use_local: True
   databases:
     - name: "GEM"
