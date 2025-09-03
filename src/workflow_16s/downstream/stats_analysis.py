@@ -36,12 +36,19 @@ from workflow_16s.utils.io import export_h5py
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 from workflow_16s.constants import GROUP_COLUMNS, MODE
 from workflow_16s.downstream.load_data import align_table_and_metadata
-from workflow_16s.downstream.stats_helpers import DataCache, LocalResultLoader, TestConfig, calculate_config_hash, get_enabled_tasks, run_single_statistical_test
+from workflow_16s.downstream.stats_helpers import (
+    DataCache, LocalResultLoader, TestConfig, calculate_config_hash, get_enabled_tasks, 
+    run_single_statistical_test
+)
 from workflow_16s.utils.metadata import get_group_column_values
 from workflow_16s.stats.test import microbial_network_analysis
 
-# ==================================================================================== #
+# ========================== INITIALISATION & CONFIGURATION ========================== #
+
 logger = logging.getLogger("workflow_16s")
+
+# ==================================================================================== #
+
 CORE_MICROBIOME_PREVALENCE_THRESHOLD: float = 0.8
 CORE_MICROBIOME_ABUNDANCE_THRESHOLD: float = 0.01
 NETWORK_ANALYSIS_METHODS: List[str] = ['sparcc', 'spearman']
@@ -62,8 +69,8 @@ def _init_nested_dict(dictionary: Dict, keys: List[str]) -> None:
 class TaskProcessor:
     def __init__(
         self, 
-        project_dir: Any, #StatisticalAnalysis.project_dir,
-        _data_cache: Any, #StatisticalAnalysis._data_cache,
+        project_dir: Any, 
+        _data_cache: Any, 
         use_process_pool: Any,
         max_workers: Any,
         name: str, 
@@ -198,8 +205,8 @@ class TaskProcessor:
 class AdvancedTaskProcessor:
     def __init__(
         self, 
-        project_dir: Any, #StatisticalAnalysis.project_dir,
-        _data_cache: Any, #StatisticalAnalysis._data_cache,
+        project_dir: Any, 
+        _data_cache: Any, 
         tables: Dict
     ):
         self.project_dir = project_dir
@@ -455,7 +462,7 @@ class StatisticalAnalysis:
         self.result_loader = LocalResultLoader(
             base_path=self.project_dir / 'stats', 
             max_age_hours=self.max_file_age_hours
-        ) if load_existing else None
+        ) if self.load_existing else None
 
         self.mode = self.config.get("target_subfragment_mode", MODE)
       
