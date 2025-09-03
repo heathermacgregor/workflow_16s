@@ -71,6 +71,15 @@ def import_metadata_tsv(
 
     return df
 
+
+def export_tsv(
+    metadata: pd.DataFrame
+    output_path: Union[str, Path]
+) -> None:
+    """Export a sample metadata DataFrame to a TSV file."""
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    metadata.to_csv(output_path, sep='\t', index=True)
+
 # ==================================================================================== #
 
 def get_group_column_values(group_column: Union[str, Dict], 
