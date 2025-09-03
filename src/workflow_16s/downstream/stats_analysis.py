@@ -575,7 +575,7 @@ class StatisticalAnalysis:
         # Log loading statistics
         self._log_load_statistics()
 
-    def _attempt_to_load_existing(self, tasks) -> Tuple:
+    def _attempt_to_load_existing(self, tasks, name) -> Tuple:
         existing_results, remaining_tasks = {}, []
         # Load existing results if enabled
         if self.load_existing and self.result_loader:
@@ -614,7 +614,7 @@ class StatisticalAnalysis:
         if not tasks:
             return {}
         self.load_statistics['total_tasks'] += len(tasks)
-        existing_results, remaining_tasks = self._attempt_to_load_existing(tasks)
+        existing_results, remaining_tasks = self._attempt_to_load_existing(tasks, name)
         self.load_statistics['calculated_fresh'] += len(remaining_tasks)
         # Separate parallel-safe and sequential tasks from remaining tasks
         parallel_tasks, sequential_tasks = [], []
