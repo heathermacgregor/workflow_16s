@@ -4,6 +4,7 @@
 import glob
 import logging
 import traceback
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -12,11 +13,11 @@ import pandas as pd
 from biom.table import Table
 
 # Local Imports
-from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN
+from workflow_16s.constants import MODE, SAMPLE_ID_COLUMN, TAXONOMIC_LEVELS
 from workflow_16s.nuclear_fuel_cycle.nuclear_fuel_cycle import update_nfc_facilities_data
-from workflow_16s.utils.biom import import_merged_biom_table, export_h5py, sample_id_map
+from workflow_16s.utils.biom import import_biom, import_merged_biom_table, export_h5py, sample_id_map
 from workflow_16s.utils.dir import Dir, ProjectDir
-from workflow_16s.utils.metadata import clean_metadata, import_merged_metadata_tsv
+from workflow_16s.utils.metadata import clean_metadata, import_metadata_tsv as import_tsv, import_merged_metadata_tsv
 
 logger = logging.getLogger("workflow_16s")
 
@@ -238,3 +239,47 @@ def load_data(config: Dict, project_dir: Any, existing_subsets: Any = None):
     )
     loader.run()
     return loader
+
+
+class ExistingDataLoader:
+    levels = TAXONOMIC_LEVELS
+    def __init__(self, config: Dict, project_dir: Any):
+        self.config = config
+        self.project_dir = project_dir
+        self.tables = defaultdict(lambda: defaultdict(lambda: {}))
+        self.metadata = defaultdict(lambda: defaultdict(lambda: {}))
+
+    def _transform_enabled(self, config_key: str):
+        # Explicitly convert config value to boolean
+        return bool(self.config.get("features", {}).get(config_key, True))
+        
+    def run(self) -> None:      
+        """Load existing tables and metadata files."""
+
+        steps = [
+            ("filter", "filtered"),
+            ("normalize", "normalized"),
+            ("clr_transform", "clr_transformed")
+        ]
+
+        n_steps = sum([self._transform_enabled(key) for key, _ in steps])
+        with get_progress_bar() as progress:
+            task_desc = "Checking existing features and metadata files"
+            task_id = progress.add_task(_format_task_desc(task_desc), total=n_steps)   
+            for key, table_type in steps:
+                if self._transform_enabled(key):
+                    for level in self.levels.keys():
+                        try:
+                            base = Path(project_dir.data) / "merged"
+                            table_path = base / "table" / table_type / f"{level}.biom"
+                            metadata_path = base / "table" / table_type / f"{level}.tsv"
+                            table = import_biom(table_path) if table_path.exists() else None
+                            metadata = import_tsv(metadata_path) if metadata_path.exists() else None
+                            if table is None or metadata is None:
+                                raise
+                            self.tables[table_type][level], self.metadata[table_type][level] = table, metadata
+                        except Exception as e:
+                            logger.error(f"Failed to export {out_path}: {str(e)}\n"
+                                         f"Traceback: {traceback.format_exc()}")
+                        finally:
+                            progress.update(task_id, advance=1)     
