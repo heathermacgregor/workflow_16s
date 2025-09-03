@@ -75,7 +75,7 @@ def import_metadata_tsv(
 def import_tsv(
     tsv_path: Union[str, Path]
 ) -> pd.DataFrame:
-    return pd.read_csv(tsv_path, sep='\t', index=True)
+    return pd.read_csv(tsv_path, sep='\t')
 
     
 def export_tsv(
