@@ -7,7 +7,7 @@ import logging
 import os
 import requests
 from pathlib import Path
-from typing import Union
+from typing import Dict, Union
 
 # Third Party Imports
 import geopandas as gpd
