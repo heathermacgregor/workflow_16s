@@ -40,6 +40,10 @@ from workflow_16s.downstream.stats_helpers import (
     DataCache, LocalResultLoader, TestConfig, calculate_config_hash, get_enabled_tasks, 
     run_single_statistical_test
 )
+from workflow_16s.figures.stats import (
+    volcano_plot, core_microbiome_barplot, network_plot, 
+    correlation_heatmap, statistical_results_table, create_statistical_summary_dashboard
+)
 from workflow_16s.utils.metadata import get_group_column_values
 from workflow_16s.stats.test import microbial_network_analysis
 
@@ -228,7 +232,7 @@ class AdvancedTaskProcessor:
            
         for group_column in self.group_columns:
             name = group_column['name']
-            core_results[name] = {}
+            #core_results[name] = {}
               
             with get_progress_bar() as progress:
                 main_desc = f"Running core microbiome analysis for '{name}'"
@@ -238,7 +242,7 @@ class AdvancedTaskProcessor:
                    
                 for table_type in self.tables: 
                     if table_type == "clr_transformed":
-                        core_results[col][table_type] = {}
+                        #core_results[name][table_type] = {}
                         logger.debug(
                             f"Skipping core microbiome analysis for table type '{table_type}'. "
                             f"Will error due to float division by zero."
@@ -263,7 +267,7 @@ class AdvancedTaskProcessor:
                             )
                                 
                             _init_nested_dict(core_results, [name, table_type, level])
-                            core_results[col][table_type][level] = core_features
+                            core_results[name][table_type][level] = core_features
                                 
                             # Save results
                             output_dir = self.project_dir / 'core_microbiome' / name / table_type / level
@@ -272,6 +276,12 @@ class AdvancedTaskProcessor:
                             for group, core_df in core_features.items():
                                 output_path = output_dir / f'core_features_{group}.tsv'
                                 core_df.to_csv(output_path, sep='\t', index=False)
+
+                            # After core microbiome analysis
+                            core_fig = core_microbiome_barplot(
+                                core_results=core_results,
+                                output_dir=output_dir
+                            )
                                     
                         except Exception as e:
                             logger.error(f"Core microbiome analysis failed for {name}/{table_type}/{level}: {e}")
@@ -334,6 +344,13 @@ class AdvancedTaskProcessor:
                             corr_matrix.to_csv(output_dir / 'correlation_matrix.tsv', sep='\t')
                             edges_df.to_csv(output_dir / 'network_edges.tsv', sep='\t', index=False)
                             pd.DataFrame([network_stats]).to_csv(output_dir / 'network_statistics.tsv', sep='\t', index=False)
+
+                            # After network analysis
+                            network_fig = network_plot(
+                                edges_df=edges_df,
+                                network_stats=network_stats,
+                                output_dir=output_dir
+                            )
                             
                         except Exception as e:
                             logger.error(f"Network analysis failed for {method}/{table_type}/{level}: {e}")
@@ -822,15 +839,11 @@ def run_statistical_analysis(
     """Convenience function to run statistical analysis with loading options.
     
     Args:
-        config : 
-            Analysis configuration
-        metadata : 
-            Dictionary of metadata
-        tables : 
-            Dictionary of tables
-        project_dir : 
-            Project directory path
-        use_process_pool :
+        config:           Analysis configuration
+        metadata:         Dictionary of metadata
+        tables:           Dictionary of tables
+        project_dir:      Project directory path
+        use_process_pool:
     
     Returns:
         StatisticalAnalysis instance with results
@@ -847,6 +860,17 @@ def run_statistical_analysis(
 
 # TODO: More evil functions
 '''        
+# After running differential abundance analysis
+volcano_fig = volcano_plot(
+    results_df=differential_results,
+    output_dir=self.project_dir / 'stats' / 'visualizations'
+)
+
+# Create a comprehensive dashboard
+dashboard_fig = create_statistical_summary_dashboard(
+    statistical_results=self.results,
+    output_dir=self.project_dir / 'stats' / 'visualizations'
+)
     def run_comprehensive_analysis(self, **kwargs) -> Dict:
         """Run all available advanced analyses."""
         comprehensive_results = {}
