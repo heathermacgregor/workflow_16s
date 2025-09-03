@@ -533,8 +533,8 @@ def spearman_correlation(
     continuous_column: str,
     alpha: float = 0.01,
     min_samples: int = 5,
-    progress: Any,
-    task_id: Any
+    progress: Any = None,
+    task_id: Any = None
 ) -> pd.DataFrame:
     """Spearman correlations with type validation and conversion"""
     df = table_to_df(table)
@@ -624,8 +624,8 @@ def enhanced_statistical_tests(
     correction_method: str = 'fdr_bh',
     alpha: float = 0.05,
     effect_size_threshold: float = 0.5,
-    progress: Any,
-    task_id: Any
+    progress: Any = None,
+    task_id: Any = None
 ) -> pd.DataFrame:
     """Enhanced statistical testing with automatic test selection and effect sizes."""
     df = table_to_df(table)
