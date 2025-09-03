@@ -28,10 +28,10 @@ class WikipediaScraper:
     - Saves DataFrame to a TSV file
     
     Attributes:
-        BaseURL:    Base URL for Wikipedia pages.
-        output_dir: Directory where output files will be saved.
-        session:    HTTP session for making requests.
-        data:       Combined dataset of scraped facilities.
+        BaseURL:     Base URL for Wikipedia pages.
+        output_path: Output file path.
+        session:     HTTP session for making requests.
+        data:        Combined dataset of scraped facilities.
     """
     BaseURL = "https://en.wikipedia.org/wiki/"
     def __init__(self, output_path: Union[str, Path] = REFERENCES_DIR):
