@@ -235,6 +235,6 @@ def world_uranium_mines(
     output_path = Path(output_dir) / "mindat.tsv"
     if config.get("nfc_facilities", {}).get("use_local", False):
         if output_path.exists():
-            return pd.read_csv(output_path, sep='\t', index=False), gpd.GeoDataFrame()
+            return pd.read_csv(output_path, sep='\t'), gpd.GeoDataFrame()
     mindat_api = MinDatAPI(api_key, output_path)
     return mindat_api._get_uranium_mines_world()
