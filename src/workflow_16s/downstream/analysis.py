@@ -11,7 +11,7 @@ from biom.table import Table
 
 # Local Imports
 from workflow_16s.constants import MODE, GROUP_COLUMNS
-from workflow_16s.downstream.load_data import ExistingDataLoader, load_data
+from workflow_16s.downstream.load_data import load_data, load_existing_data
 from workflow_16s.downstream.prep_data import prep_data
 from workflow_16s.downstream.stats_analysis import run_statistical_analysis
 from workflow_16s.downstream.beta_diversity import run_beta_diversity
@@ -148,19 +148,7 @@ class DownstreamAnalyzer:
         logger.info("Starting downstream analysis pipeline...")
         try:
             # Data loading and preparation
-            # Attempt to load existing data if configured
-            if self.config.config.get("features", {}).get("load_existing", False):
-                try:
-                    self._load_existing_data()
-                    logger.info("Successfully loaded existing data.")
-                except Exception as e:
-                    logger.warning(f"Failed to load existing data: {e}. Loading new data...")
-                    self._load_data()
-                    self._prep_data()
-            else:
-                # Load new data if not using existing data
-                self._load_data()
-                self._prep_data()
+            self._load_and_prep_data()
             # Run analyses based on configuration
             self._run_modules()
             # Generate summary
@@ -171,9 +159,22 @@ class DownstreamAnalyzer:
             logger.error(f"Pipeline execution failed: {e}")
             raise
 
+    def _load_and_prep_data(self):
+        # Try loading existing data if configured
+        if self.config.config.get("features", {}).get("load_existing", False):
+            try:
+                self._load_existing_data()
+                logger.info("Successfully loaded existing data.")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load existing data: {e}. Loading new data...")
+        
+        # Load and prep new data 
+        self._load_data()
+        self._prep_data()      
+            
     def _load_existing_data(self):
-        data = ExistingDataLoader(config=self.config.config, project_dir=self.project_dir)
-        data.run()
+        data = load_existing_data(config=self.config.config, project_dir=self.project_dir)
         self.results.metadata = data.metadata
         self.results.tables = data.tables
         
@@ -190,8 +191,8 @@ class DownstreamAnalyzer:
     def _prep_data(self) -> None:
         logger.info("Prepping data...")
         data = prep_data(
-            config=self.config.config, metadata=self.results.metadata, tables=self.results.tables,
-            project_dir=self.project_dir
+            config=self.config.config, metadata=self.results.metadata, 
+            tables=self.results.tables, project_dir=self.project_dir
         )
         self.results.metadata = data.metadata
         self.results.tables = data.tables
@@ -199,9 +200,12 @@ class DownstreamAnalyzer:
     def _run_modules(self) -> None:
         """Run all enabled analysis modules."""
         analysis_modules = [
-            ('maps', self._run_sample_maps), ('stats', self._run_statistical_analysis),
-            ('alpha_diversity', self._run_alpha_diversity), ('ordination', self._run_beta_diversity),
-            ('ml', self._run_feature_selection), ('top_features', self._run_top_features_analysis)
+            ('maps', self._run_sample_maps), 
+            ('stats', self._run_statistical_analysis),
+            ('alpha_diversity', self._run_alpha_diversity), 
+            ('ordination', self._run_beta_diversity),
+            ('ml', self._run_feature_selection), 
+            ('top_features', self._run_top_features_analysis)
         ]
         
         for module_name, module_func in analysis_modules:
@@ -242,7 +246,8 @@ class DownstreamAnalyzer:
         """Run Beta Diversity (Ordination) Analysis."""
         self.results.ordination = run_beta_diversity(
             config=self.config.config, metadata=self.results.metadata,
-            tables=self.results.tables, project_dir=self.project_dir
+            tables=self.results.tables, project_dir=self.project_dir,
+            group_columns=self.group_columns
         )
     
     def _run_feature_selection(self) -> None:
