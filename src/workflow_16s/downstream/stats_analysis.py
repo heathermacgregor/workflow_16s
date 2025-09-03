@@ -208,11 +208,13 @@ class AdvancedTaskProcessor:
         project_dir: Any, 
         _data_cache: Any, 
         tables: Dict,
+        metadata: Dict,
         group_columns: Any
     ):
         self.project_dir = project_dir
         self._data_cache = _data_cache
         self.tables = tables
+        self.metadata = metadata
         self.group_columns = group_columns
         self.results = {}
 
@@ -503,6 +505,7 @@ class StatisticalAnalysis:
                 project_dir=self.project_dir,
                 _data_cache=self._data_cache,
                 tables=self.tables,
+                metadata=self.metadata,
                 group_columns=self.group_columns
             )
             core_microbiome_config = advanced_analysis_config.get("core_microbiome_analysis", {})
