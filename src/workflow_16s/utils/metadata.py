@@ -57,8 +57,8 @@ def import_metadata_tsv(
     # Normalize column names to lowercase
     df.columns = df.columns.str.lower()
     for col in cols_to_drop:
-        if col in df.columns:
-            df = df.drop(cols_to_drop, axis=1)
+        if col in df.columns and df[col]:
+            df = df.drop(col, axis=1)
 
     sample_id_col = next((col 
                           for col in ['run_accession', '#sampleid', 'sample-id'] 
