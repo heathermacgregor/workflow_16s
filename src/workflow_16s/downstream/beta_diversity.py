@@ -28,6 +28,7 @@ from workflow_16s.amplicon_data.helpers import _init_dict_level
 from workflow_16s.constants import GROUP_COLUMNS, MODE
 from workflow_16s.diversity import beta_diversity 
 from workflow_16s.downstream.load_data import align_table_and_metadata
+from workflow_16s.figures.tools import json_to_fig
 from workflow_16s.figures.downstream.beta_diversity import beta_diversity_plot
 from workflow_16s.utils.dataframe import table_to_df
 from workflow_16s.utils.dir import Dir, ProjectDir
@@ -178,28 +179,32 @@ class Ordination:
         return tuple(tasks) 
 
     @lru_cache(maxsize=32)
-    def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> bool:
+    def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> Union[bool, Dict]:
         """Check if we should skip calculation due to existing figures (cached)."""
         if not self.config.get('ordination', {}).get('load_existing', False):
             self.log(f"Skipping ordination {task}: disabled in config")
             return False
-            
+
+        figures = {}
+        
         # Check if color columns exist in metadata
         metadata = self.metadata[task.table_type][task.level]
         required_color_columns = [col for col in self.color_columns if col in metadata.columns]
         if not required_color_columns:
             self.log(f"Skipping ordination {task}: no valid color columns")
-            return True
+            return figures
         
-        # Check if all required files exist
+        # Check if all required files exist, and load them
         for color_col in required_color_columns:
-            fname = f"{task.method}.{task.table_type}.1-2.{color_col}.html"
-            file_path = output_dir / fname
+            file_path = output_dir / f"{task.method.lowercase()}.{task.table_type}.1-2.{color_col}.json"
             if not file_path.exists() or file_path.stat().st_size == 0:
                 return False
+            else:
+                fig = json_to_fig(file_path)
+                figures[color_col] = fig
                 
         self.log(f"Skipping ordination {task}: all figures exist")
-        return True
+        return figures
 
     def _load_existing_figures(self, task: OrdinationTask, output_dir: Path) -> Dict[str, Any]:
         print("Not supported")
@@ -261,8 +266,6 @@ class Ordination:
         self.results[task.table_type][task.level][task.method] = result
         self.results[task.table_type][task.level]['figures'][task.method] = figures
 
-    
-        
     def _run_single_ordination(self, task: OrdinationTask, progress: Any) -> Optional[Tuple]:
         """Run a single ordination task with optimized error handling."""
         method_desc = (
@@ -275,27 +278,25 @@ class Ordination:
         
         # Create progress task for this method
         method_task = progress.add_task(_format_task_desc(method_desc), total=1)
+
+        # Get the method config
+        method_config = self.TestConfig[task.method]
         
         try:
-            '''
             # Check if we should skip and load existing figures
-            if self._should_skip_existing(task, output_dir):
-                result_tuple = self._skip_and_load_existing(task, task_output_dir)
-                # If we have a valid result tuple with figures, return it immediately
-                if result_tuple and result_tuple[4] is not None:  # Check if figures are not None
-                    self.log(f"Returning existing figures for {task}")
-                    self.log(result_tuple[4])
-                    return result_tuple
-                # If we have figure paths but couldn't load them, continue to calculation
-                self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
-            '''
-            result, figures = self._run_test(task, output_dir)
+            existing_figures = self._should_skip_existing(task, output_dir)
+            if existing_figures is not False:
+                return task.table_type, task.level, task.method, None, existing_figures
+            # If we can't load all the figures, continue to calculation
+            self.log_ok(f"No figures loaded for {task}, proceeding with calculation")
+            result, figures = self._run_test(task, method_config, output_dir)
         except Exception as e:
             logger.error(f"Ordination {task} failed: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
             result, figures = None, None
         finally:
             progress.update(method_task, completed=1, visible=False)
+            progress.update(task, advance=1)
         
         return task.table_type, task.level, task.method, result, figures
             
@@ -309,8 +310,7 @@ class Ordination:
             params["n_jobs"] = 1  # Thread safety
         return params
 
-    def _run_test(self, task: OrdinationTask, output_dir: Union[str, Path]) -> Tuple:
-        method_config = self.TestConfig[task.method]
+    def _run_test(self, task: OrdinationTask, method_config: Any, output_dir: Union[str, Path]) -> Tuple:
         table, metadata = self._fetch_data(task.table_type, task.level)
         table, metadata = align_table_and_meta(table, metadata)
         result = self._calculate(task, method_config, table)
