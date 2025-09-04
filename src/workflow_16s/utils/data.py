@@ -797,8 +797,8 @@ from typing import Optional, Tuple, Set
 def merge_data(
     table: pd.DataFrame,
     meta: pd.DataFrame,
-    group_col: str = "group",  # constants.DEFAULT_GROUP_COLUMN
-    meta_id_col: Optional[str] = "sample_id",  # constants.DEFAULT_META_ID_COLUMN
+    group_col: str = constants.DEFAULT_GROUP_COLUMN,
+    meta_id_col: Optional[str] = constants.DEFAULT_META_ID_COLUMN,
     verbose: bool = False
 ) -> pd.DataFrame:
     """Merge feature table with metadata using intelligent ID matching.
