@@ -128,7 +128,7 @@ class Ordination:
         self.results = defaultdict(lambda: defaultdict(lambda: {'figures': {}}))
             
         # Check which ordination tasks are enabled    
-        self.tasks = self._get_enabled_tasks()          
+        self.tasks = self._get_enabled_tasks(ordination_config)          
         if not self.tasks:
             self.log("No methods enabled for beta diversity analysis (ordination)")
         else:
