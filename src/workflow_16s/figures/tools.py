@@ -286,7 +286,7 @@ class PlotlyScatterPlot:
         if missing:
             raise ValueError(f"Missing required columns: {', '.join(missing)}")
         self.df = DataPrep(self.data, self.metadata, self.verbose).with_placeholder(self.placeholder).prepare(self.color_col, self.symbol_col)
-        self.df['sample_id'] = self.df.index
+        self.df['#sampleid'] = self.df.index
         self.df = self.df.loc[:, ~self.df.columns.duplicated()]
     
     def _color_mapping(self, color_set: List[str] = largecolorset) -> Dict[str, str]:
