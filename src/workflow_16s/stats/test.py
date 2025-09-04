@@ -26,6 +26,7 @@ from tqdm import tqdm
 from workflow_16s import constants
 from workflow_16s.utils.data import merge_table_with_meta, table_to_df, merge_data
 from workflow_16s.stats.utils import validate_inputs
+from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
