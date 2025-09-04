@@ -16,18 +16,9 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
-cols_to_drop = [
-    'fastq_aspera',
-    'fastq_bytes',
-    'fastq_ftp',
-    'fastq_galaxy',
-    'fastq_md5',
-    'bam_aspera',
-    'bam_bytes',
-    'bam_ftp',
-    'bam_galaxy',
-    'bam_md5'
-]
+fastq_columns = ['fastq_aspera', 'fastq_bytes', 'fastq_ftp', 'fastq_galaxy', 'fastq_md5']
+bam_columns = ['bam_aspera', 'bam_bytes', 'bam_ftp', 'bam_galaxy', 'bam_md5']
+cols_to_drop = fastq_columns + bam_columns
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
