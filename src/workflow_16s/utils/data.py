@@ -823,7 +823,7 @@ def merge_data(
     """
     # Input validation
     _validate_inputs(table, meta, group_col, meta_id_col)
-    
+    table, meta = align_table_and_metadata(table, meta)
     # Extract and normalize metadata IDs
     meta_ids_norm, meta_ids_orig = _extract_metadata_ids(
         meta, meta_id_col, verbose
@@ -1025,3 +1025,37 @@ def _validate_merge_results(
         total_samples = len(result)
         logger.info(f"Successfully merged {total_samples} samples with {unique_groups} unique groups")
 
+
+def align_table_and_metadata(
+    table: Table,
+    metadata: pd.DataFrame,
+    sample_id_col: str = SAMPLE_ID_COLUMN
+) -> Tuple[Table, pd.DataFrame]:
+    """Align BIOM table with metadata using sample IDs.
+    
+    Args:
+        table:         BIOM feature table.
+        metadata:      Sample metadata DataFrame.
+        sample_id_col: Metadata column containing sample IDs.
+    
+    Returns:
+        Tuple of (filtered BIOM table, filtered metadata DataFrame)
+    
+    Raises:
+        ValueError: For duplicate lowercase sample IDs in BIOM table.
+    """
+    # Handle empty metadata
+    if metadata.empty:
+        return Table(np.array([]), [], []), pd.DataFrame(columns=[sample_id_col])
+    
+    biom_mapping = sample_id_map(table)
+    shared_ids = [id for id in metadata[sample_id_col] if id in biom_mapping]
+    
+    # Handle no shared IDs
+    if not shared_ids:
+        return Table(np.array([]), [], []), pd.DataFrame(columns=[sample_id_col])
+    
+    filtered_metadata = metadata[metadata[sample_id_col].isin(shared_ids)]
+    original_ids = [biom_mapping[id] for id in filtered_metadata[sample_id_col]]
+    filtered_table = table.filter(original_ids, axis='sample', inplace=False)
+    return filtered_table, filtered_metadata
