@@ -85,9 +85,21 @@ def fig_to_json(fig, output_path, verbose: bool = True):
         #fig.write_html(output_path, include_plotlyjs="cdn")
         log_ok(f"Saved figure to '{output_path}'")
     except Exception as e:
-        logger.error(f"Failed to save figure: {e}")
+        logger.error(f"Failed to save figure: {str(e)}")
 
+def fig_to_html(fig, output_path, verbose: bool = True):
+    log_ok = (lambda msg: logger.debug(msg)) if verbose else (lambda *_: None)
+    output_path = Path(output_path).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fig.write_html(output_path, include_plotlyjs="cdn")
+        log_ok(f"Saved figure to '{filepath}'")
+    except Exception as e:
+        logger.error(f"Failed to save figure: {str(e)}")
 
+def json_to_fig(output_path):
+    return pio.read_json(output_path)
+  
 from functools import wraps
 from contextlib import contextmanager
 
@@ -302,7 +314,6 @@ class PlotlyScatterPlot:
         
         categories = sorted(data.astype(str).unique())
         self.colordict = {c: color_set[i % len(color_set)] for i, c in enumerate(categories)}
-    
 
     def create_fig(
         self, 
@@ -317,6 +328,10 @@ class PlotlyScatterPlot:
 
     def save(self, output_path):
         fig_to_json(self.fig, output_path)
+        fig_to_html(self.fig, output_path)
+
+    def load(self, output_path) -> go.Figure:
+        return pio.read_json(output_path)
       
     def _base_scatter_plot(
         self,
