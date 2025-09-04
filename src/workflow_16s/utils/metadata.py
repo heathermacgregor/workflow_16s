@@ -15,6 +15,19 @@ from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 logger = logging.getLogger("workflow_16s")
 # ==================================================================================== #
 
+cols_to_drop = [
+    'fastq_aspera',
+    'fastq_bytes',
+    'fastq_ftp',
+    'fastq_galaxy',
+    'fastq_md5',
+    'bam_aspera',
+    'bam_bytes',
+    'bam_ftp',
+    'bam_galaxy',
+    'bam_md5'
+]
+
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
     group_columns: List[Dict] = GROUP_COLUMNS,
@@ -42,6 +55,7 @@ def import_metadata_tsv(
   
     # Normalize column names to lowercase
     df.columns = df.columns.str.lower()
+    df = df.drop(cols_to_drop, axis=1)
 
     sample_id_col = next((col 
                           for col in ['run_accession', '#sampleid', 'sample-id'] 
@@ -174,8 +188,23 @@ class MetadataCleaner:
         self._clean_columns()
         self._clean_sample_ids()
         self._collapse_suffix_columns(suffix='_ena')
+        self._collapse_suffix_columns(suffix='_study')
+        self._collapse_suffix_columns(suffix='_deg')
+        self._collapse_suffix_columns(suffix='.1')
         self._collapse_ph_columns()
         self._fill_missing_coordinates()
+        self._other()
+
+    def _other(self) -> None:
+        cols_to_collapse = {
+            'env_biome': 'environment_biome',
+            'env_feature': 'environment_feature',
+            'env_material': 'environment_material',
+            'latitude': 'lat',
+            'longitude': 'lon'
+        }
+        for col1, col2 in cols_to_collapse.values():
+            self.df[col1] = self.df[col1].combine_first(self.df[col2])
 
     def _clean_columns(self) -> None:
         """Remove duplicate columns."""
@@ -201,6 +230,29 @@ class MetadataCleaner:
         df = self.df.copy()
         # Identify all columns ending with the suffix
         columns = [col for col in df.columns if col.endswith(suffix)]
+        # Sort columns by length in descending order to handle nested suffixes
+        columns = sorted(columns, key=len, reverse=True)
+        
+        for col in columns:
+            # Skip if the column is exactly the suffix 
+            if col == suffix:
+                continue
+            # Determine the base column name by removing the suffix
+            base_col = col[:-len(suffix)]
+            if base_col in df.columns:
+                # Combine values: prioritize base_col, fill missing from col
+                df[base_col] = df[base_col].combine_first(df[col])
+            else:
+                # Create base_col from ena_col if it doesn't exist
+                df[base_col] = df[col]
+            # Drop the col after processing
+            df = df.drop(columns=[col])
+        self.df = df
+
+    def _collapse_prefix_columns(self, suffix: str = 'ena_'):
+        df = self.df.copy()
+        # Identify all columns ending with the suffix
+        columns = [col for col in df.columns if col.startswith(suffix)]
         # Sort columns by length in descending order to handle nested suffixes
         columns = sorted(columns, key=len, reverse=True)
         
