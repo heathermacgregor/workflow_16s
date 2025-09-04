@@ -37,7 +37,7 @@ def beta_diversity_plot(
     symbol_col: str = DEFAULT_SYMBOL_COL,
     dimensions: Tuple[int, int] = (1, 2),
     transformation: str = None,
-    output_dir: Union[Path, None] = None,
+    output_path: Union[Path, None] = None,
 ) -> go.Figure:
     """Generate ordination plot (PCA/PCoA/MDS).
         
@@ -50,7 +50,7 @@ def beta_diversity_plot(
         symbol_col:           Column to use for point symbols.
         dimensions:           Tuple of dimensions to plot (x,y).
         transformation:       Data transformation applied.
-        output_dir:           Directory to save outputs.
+        output_path:          Path to save outputs.
             
     Returns:
         Figure.
@@ -76,8 +76,6 @@ def beta_diversity_plot(
     # Create plot
     obj = PlotlyScatterPlot(data, metadata, color_col, symbol_col)
     obj.create_fig(x_col, y_col, x_title, y_title, hover_data=['sample_id', color_col, symbol_col])
-    if output_dir:
-        type = ordination_type.lower()
-        file_stem = output_dir / type / f"{type}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"  
-        obj.save(f"{file_stem}.json")
+    if output_path: 
+        obj.save(f"{output_path}.json")
     return obj.fig
