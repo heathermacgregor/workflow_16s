@@ -154,7 +154,7 @@ def core_microbiome_barplot(
     
     # Save if output directory provided
     if output_dir:
-        output_path = output_dir / "core_microbiome_barplot.html"
+        output_path = output_dir / "core_microbiome_barplot"
         fig_to_json(fig, output_path)
     
     return fig
@@ -237,7 +237,7 @@ def network_plot(
     
     # Save if output directory provided
     if output_dir:
-        output_path = output_dir / "network_plot.html"
+        output_path = output_dir / "network_plot"
         fig_to_json(fig, output_path)
     
     return fig
@@ -315,7 +315,7 @@ def statistical_results_table(
     
     # Save if output directory provided
     if output_dir:
-        output_path = output_dir / "results_table.html"
+        output_path = output_dir / "results_table"
         fig_to_json(fig, output_path)
     
     return fig
@@ -384,7 +384,7 @@ def create_statistical_summary_dashboard(
     
     # Save if output directory provided
     if output_dir:
-        output_path = output_dir / "statistical_dashboard.html"
+        output_path = output_dir / "statistical_dashboard"
         fig_to_json(fig, output_path)
     
     return fig
