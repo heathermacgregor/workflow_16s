@@ -17,6 +17,7 @@ from skbio.stats.composition import clr as CLR
 
 # Local Imports
 from workflow_16s import constants
+from workflow_16s.constants import SAMPLE_ID_COLUMN, DEFAULT_GROUP_COLUMN, DEFAULT_META_ID_COLUMN
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
@@ -96,8 +97,8 @@ def to_biom(table: Union[dict, Table, pd.DataFrame]) -> Table:
 def merge_table_with_meta(
     table: pd.DataFrame,
     meta: pd.DataFrame,
-    group_col: str = constants.DEFAULT_GROUP_COLUMN,
-    meta_id_col: Optional[str] = constants.DEFAULT_META_ID_COLUMN,
+    group_col: str = DEFAULT_GROUP_COLUMN,
+    meta_id_col: Optional[str] = DEFAULT_META_ID_COLUMN,
     verbose: bool = False
 ) -> pd.DataFrame:
     """Merge feature table with metadata column using direct ID matching.
@@ -214,7 +215,7 @@ def merge_table_with_meta(
 def update_table_and_meta(
     table: Table,
     meta: pd.DataFrame,
-    sample_col: str = constants.DEFAULT_META_ID_COLUMN
+    sample_col: str = DEFAULT_META_ID_COLUMN
 ) -> Tuple[Table, pd.DataFrame]:
     """Align BIOM table with metadata using sample IDs.
     
