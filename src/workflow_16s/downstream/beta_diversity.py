@@ -23,18 +23,16 @@ from biom.table import Table
 import plotly.io as pio
 
 # Local Imports
-from workflow_16s import constants
 from workflow_16s.amplicon_data.helpers import _init_dict_level
-from workflow_16s.constants import GROUP_COLUMNS, MODE
+from workflow_16s.constants import GROUP_COLUMNS, MODE, DEFAULT_DATASET_COLUMN, DEFAULT_GROUP_COLUMN
 from workflow_16s.diversity import beta_diversity 
 from workflow_16s.downstream.load_data import align_table_and_metadata
-from workflow_16s.figures.tools import json_to_fig
 from workflow_16s.figures.downstream.beta_diversity import beta_diversity_plot
+from workflow_16s.figures.tools import json_to_fig
 from workflow_16s.utils.dataframe import table_to_df
 from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.dir_utils import SubDirs
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
-
 
 # ========================== INITIALISATION & CONFIGURATION ========================== #
 
@@ -81,8 +79,8 @@ class Ordination:
     }
     
     DefaultColorCols = (
-        constants.DEFAULT_DATASET_COLUMN,
-        constants.DEFAULT_GROUP_COLUMN,
+        DEFAULT_DATASET_COLUMN,
+        DEFAULT_GROUP_COLUMN,
         "env_feature", 
         "env_material", 
         "country"
@@ -123,30 +121,62 @@ class Ordination:
         self.tables = tables
         
         self.color_columns = tuple(set(self.config['maps'].get("color_columns", self.DefaultColorCols) + self.group_columns))
-        
 
-        # Initialize results dict
+        # Initialize results storage as defaultdict
         self.results = defaultdict(lambda: defaultdict(lambda: {'figures': {}}))
             
         # Check which ordination tasks are enabled    
         self.tasks = self._get_enabled_tasks(ordination_config)          
         if not self.tasks:
-            self.log("No methods enabled for beta diversity analysis (ordination)")
+            self.log("No tasks enabled for beta diversity analysis (ordination)")
         else:
             self.log(f"Found {len(self.tasks)} beta diversity analysis (ordination) tasks to process")
 
     def log(self, msg):
         return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
 
-    def _fetch_data(table_type: str, level: str) -> Tuple:
-        metadata = self.metadata.get(table_type, {}).get(level)
-        table = self.tables.get(table_type, {}).get(level)
-        if table is None or metadata is None:
-            raise ValueError(
-                f"Missing table or metadata for level '{level}' and table type '{table_type}'"
-            )
-        return metadata, table
-        
+    def run(self) -> None:
+        """Run ordination analysis with optimized parallel processing."""
+        if not self.tasks:
+            return
+            
+        with get_progress_bar() as progress:
+            desc = "Running beta diversity module"
+            task_id = progress.add_task(_format_task_desc(desc), total=len(self.tasks))
+            
+            max_workers = self._calculate_optimal_workers()
+            self.log(f"Using {max_workers} worker threads")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks at once 
+                future_to_task = {executor.submit(self._run_single_ordination, 
+                                                  task_id, 
+                                                  progress): task for task in self.tasks}
+    
+                # Process completed futures with timeout
+                errors = []
+                try:
+                    for future in as_completed(future_to_task, timeout=2*3600):
+                        task = future_to_task[future]
+                        try:
+                            result = future.result()
+                            if result:  # Only store non-None results
+                                self._store_result(*result)
+                        except Exception as e:
+                            errors.append(e)
+                            self.log(f"Ordination failed for {task_id}: {str(e)}; "
+                                     f"Traceback: {traceback.format_exc()}")
+                        finally:
+                            progress.update(task_id, advance=1)
+                except TimeoutError:
+                    logger.warning("Ordination timeout - proceeding with completed results")
+                
+                if errors: # Log summary of errors if any
+                    logger.warning(f"Completed with {len(errors)} errors out of {len(self.tasks)} tasks")
+                
+            progress.update(task_id, description=_format_task_desc(desc))
+        self.log("Ordination completed")
+
     def _get_enabled_tasks(self, ordination_config) -> Tuple[OrdinationTask, ...]:
         """Get enabled tasks."""
         logger.debug("Retrieving enabled ordination tasks from the config file")
@@ -178,6 +208,15 @@ class Ordination:
         self.log(f"Retrieved {len(tasks)} tasks")
         return tuple(tasks) 
 
+    def _fetch_data(table_type: str, level: str) -> Tuple:
+        """Fetch metadata and feature table for a specified table_type and level."""
+        metadata = self.metadata.get(table_type, {}).get(level)
+        table = self.tables.get(table_type, {}).get(level)
+        if table is None or metadata is None:
+            error_msg = f"Missing table or metadata for level '{level}' and table type '{table_type}'"
+            raise ValueError(error_msg)
+        return metadata, table
+        
     @lru_cache(maxsize=32)
     def _should_skip_existing(self, task: OrdinationTask, output_dir: Path) -> Union[bool, Dict]:
         """Check if we should skip calculation due to existing figures (cached)."""
@@ -206,12 +245,6 @@ class Ordination:
         self.log(f"Skipping ordination {task}: all figures exist")
         return figures
 
-    def _load_existing_figures(self, task: OrdinationTask, output_dir: Path) -> Dict[str, Any]:
-        print("Not supported")
-
-    def _skip_and_load_existing(self, task: OrdinationTask, task_output_dir: Path):
-        print("Not supported")
-
     def _calculate_optimal_workers(self) -> int:
         """Calculate optimal number of worker threads.
         For I/O bound tasks with some CPU computation, use more threads,
@@ -219,47 +252,7 @@ class Ordination:
         cpu_count = os.cpu_count() or 1
         return min(6, max(2, cpu_count // 2 + 1))
 
-    def run(self) -> None:
-        """Run ordination analysis with optimized parallel processing."""
-        if not self.tasks:
-            return
-            
-        with get_progress_bar() as progress:
-            desc = "Running beta diversity module"
-            task_id = progress.add_task(_format_task_desc(desc), total=len(self.tasks))
-            
-            max_workers = self._calculate_optimal_workers()
-            self.log(f"Using {max_workers} worker threads")
-            
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks at once 
-                future_to_task = {executor.submit(self._run_single_ordination, 
-                                                  task, 
-                                                  progress): task for task in self.tasks}
     
-                # Process completed futures with timeout
-                errors = []
-                try:
-                    for future in as_completed(future_to_task, timeout=2*3600):
-                        task = future_to_task[future]
-                        try:
-                            result = future.result()
-                            if result:  # Only store non-None results
-                                self._store_result(*result)
-                        except Exception as e:
-                            errors.append(e)
-                            self.log(f"Ordination failed for {task}: {str(e)}; "
-                                     f"Traceback: {traceback.format_exc()}")
-                        finally:
-                            progress.update(task, advance=1)
-                except TimeoutError:
-                    logger.warning("Ordination timeout - proceeding with completed results")
-                
-                if errors: # Log summary of errors if any
-                    logger.warning(f"Completed with {len(errors)} errors out of {len(self.tasks)} tasks")
-                
-            progress.update(task_id, description=_format_task_desc(desc))
-        self.log("Ordination completed")
 
     def _store_results(self, task, result: Any, figures: Dict) -> None:
         """Store ordination results efficiently."""
