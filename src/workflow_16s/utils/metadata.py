@@ -206,7 +206,7 @@ class MetadataCleaner:
             'latitude': 'lat',
             'longitude': 'lon'
         }
-        for col1, col2 in cols_to_collapse.values():
+        for col1, col2 in cols_to_collapse.items():
             if col1 in self.df.columns and col2 in self.df.columns:
                 self.df[col1] = self.df[col1].combine_first(self.df[col2])
             else:
