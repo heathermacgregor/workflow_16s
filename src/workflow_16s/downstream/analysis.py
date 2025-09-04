@@ -57,14 +57,15 @@ def run_feature_selection(
     config: Dict,
     metadata: Dict,
     tables: Dict,
-    group_columns: List
+    group_columns: List,
+    output_dir: Union[str, Path]
 ):
     results = {}
     for group_column in group_columns:
         if group_column.get('type') == 'bool':
             name = group_column['name']
             fs = FeatureSelection(config, metadata, tables, name)
-            fs.run(output_dir=self.output_dir)
+            fs.run(output_dir=output_dir)
             results[name] = fs.models
     return results
     
@@ -254,7 +255,8 @@ class DownstreamAnalyzer:
         """Run Machine Learning Feature Selection (with CatBoost)."""
         self.results.models = run_feature_selection(
             config=self.config.config, metadata=self.results.metadata,
-            tables=self.results.tables, group_columns=self.group_columns
+            tables=self.results.tables, group_columns=self.group_columns, 
+            output_dir=self.output_dir
         )
 
     def _run_top_features_analysis(self) -> None:
