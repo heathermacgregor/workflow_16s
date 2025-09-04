@@ -8,6 +8,7 @@ import multiprocessing as mp
 import os
 import time
 import warnings
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from functools import lru_cache, partial
@@ -91,7 +92,7 @@ class TaskProcessor:
         tasks: List[Tuple[str, str, str]], 
     ) -> Dict:
         """Process tasks in parallel."""
-        results = {}
+        results = defaultdict(lambda: defaultdict(dict))
         
         if not tasks:
             return results
@@ -130,7 +131,6 @@ class TaskProcessor:
                     task_result = future.result()
                     
                     # Store result and timing
-                    _init_nested_dict(results, [task_result.table_type, task_result.level])
                     results[task_result.table_type][task_result.level][task_result.test] = task_result.result
                     
                     # Record processing time
@@ -146,7 +146,7 @@ class TaskProcessor:
     
     def _sequential(self, tasks: List[Tuple[str, str, str]]) -> Dict:
         """Process tasks sequentially."""
-        results = {}
+        results = defaultdict(lambda: defaultdict(dict))
         
         if not tasks:
             return results
@@ -173,7 +173,6 @@ class TaskProcessor:
                 processing_time = time.time() - start_time
                 
                 # Store result and timing
-                _init_nested_dict(results, [task_result.table_type, task_result.level])
                 results[task_result.table_type][task_result.level][task_result.test] = task_result.result
                 
                 # Record processing time
@@ -228,33 +227,25 @@ class AdvancedTaskProcessor:
         abundance_threshold: float = CORE_MICROBIOME_ABUNDANCE_THRESHOLD
     ) -> Dict:
         """Run core microbiome analysis for all groups."""
-        core_results = {}
-           
+        core_results = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         for group_column in self.group_columns:
             name = group_column['name']
-            #core_results[name] = {}
-              
             with get_progress_bar() as progress:
                 main_desc = f"Running core microbiome analysis for '{name}'"
                 main_desc_fmt = _format_task_desc(main_desc)
                 main_n = len(self.tables) * len(self.tables['raw'])
                 main_task = progress.add_task(main_desc_fmt, total=main_n)
-                   
                 for table_type in self.tables: 
                     if table_type == "clr_transformed":
-                        #core_results[name][table_type] = {}
                         logger.debug(
                             f"Skipping core microbiome analysis for table type '{table_type}'. "
                             f"Will error due to float division by zero."
                         )
                         continue
-                            
                     for level in self.tables[table_type]:
                         level_desc = f"{name} / {table_type.replace('_', ' ').title()} ({level.title()})"
                         level_desc_fmt = _format_task_desc(level_desc)
                         progress.update(main_task, description=level_desc_fmt)
-                           
-                        # Use cached data
                         table, metadata = self._get_cached_data(table_type, level)
                            
                         try:
@@ -265,32 +256,27 @@ class AdvancedTaskProcessor:
                                 prevalence_threshold=prevalence_threshold,
                                 abundance_threshold=abundance_threshold
                             )
-                                
-                            _init_nested_dict(core_results, [name, table_type, level])
-                            core_results[name][table_type][level] = core_features
-                                
+                            # Store results
+                            core_results[name][table_type][level]['features'] = core_features
                             # Save results
                             output_dir = self.project_dir / 'core_microbiome' / name / table_type / level
                             output_dir.mkdir(parents=True, exist_ok=True)
-                               
                             for group, core_df in core_features.items():
                                 output_path = output_dir / f'core_features_{group}.tsv'
                                 core_df.to_csv(output_path, sep='\t', index=False)
 
-                            # After core microbiome analysis
-                            core_fig = core_microbiome_barplot(
-                                core_results=core_results,
+                            # Plot
+                            fig = core_microbiome_barplot(
+                                core_results=core_features,
                                 output_dir=output_dir
                             )
-                                    
+                            # Store plot
+                            core_results[name][table_type][level]['barplot'] = fig
                         except Exception as e:
                             logger.error(f"Core microbiome analysis failed for {name}/{table_type}/{level}: {e}")
-                                
                         finally:
                             progress.update(main_task, advance=1)
-                        
                 progress.update(main_task, description=main_desc_fmt)
-            
         self.results['core_microbiome'] = core_results
         return core_results
 
@@ -300,7 +286,7 @@ class AdvancedTaskProcessor:
         threshold: float = NETWORK_ANALYSIS_THRESHOLD
     ) -> Dict:
         """Run network analysis for multiple correlation methods."""
-        results = {}
+        results = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         for method in methods:
             with get_progress_bar() as progress:
                 main_desc = f"Running network analysis with '{method}'"
@@ -310,9 +296,7 @@ class AdvancedTaskProcessor:
                 
                 for table_type in self.tables:
                     for level in self.tables[table_type]:
-                        _init_nested_dict(results, [table_type, level, method])
                         if table_type == "clr_transformed_presence_absence":
-                            results[table_type][level][method] = {}
                             logger.debug(
                                 f"Skipping network analysis for table type '{table_type}' with '{method}'. "
                                 f"Will error due to `abs_correlation`."
@@ -326,38 +310,37 @@ class AdvancedTaskProcessor:
                                 table=table,
                                 method=method,
                                 threshold=threshold
-                            )
-                                                        
+                            )                          
                             # Generate network statistics
-                            network_stats = self._calculate_network_statistics(edges_df)
-
+                            network_stats = pd.DataFrame([self._calculate_network_statistics(edges_df)])
+                            # Store results
                             results[table_type][level][method] = {
                                 'correlation_matrix': corr_matrix,
                                 'edges': edges_df,
                                 'network_stats': network_stats
                             }
-
                             # Save results
                             output_dir = self.project_dir / 'networks' / table_type / level / method 
                             output_dir.mkdir(parents=True, exist_ok=True)
                         
                             corr_matrix.to_csv(output_dir / 'correlation_matrix.tsv', sep='\t')
                             edges_df.to_csv(output_dir / 'network_edges.tsv', sep='\t', index=False)
-                            pd.DataFrame([network_stats]).to_csv(output_dir / 'network_statistics.tsv', sep='\t', index=False)
+                            network_stats.to_csv(output_dir / 'network_statistics.tsv', sep='\t', index=False)
 
-                            # After network analysis
-                            network_fig = network_plot(
+                            # Plot
+                            fig = network_plot(
                                 edges_df=edges_df,
                                 network_stats=network_stats,
                                 output_dir=output_dir
                             )
-                            
+                            # Store plot
+                            results[table_type][level][method]['plot'] = network                            
                         except Exception as e:
                             logger.error(f"Network analysis failed for {method}/{table_type}/{level}: {e}")
-                            
                         finally:
                             progress.update(main_task, advance=1)
-            self.results['networks'] = results
+        self.results['networks'] = results
+        return results
     
     def _calculate_network_statistics(self, edges_df: pd.DataFrame) -> Dict:
         """Calculate basic network statistics from edge list."""
@@ -391,7 +374,7 @@ class AdvancedTaskProcessor:
 
     def run_batch_correlation_analysis(self, continuous_variables: List[str]) -> Dict:
         """Run correlation analysis for multiple continuous variables."""
-        results = {}
+        results = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         for var in continuous_variables:
             with get_progress_bar() as progress:
                 main_desc = f"Running batch correlation analysis for '{var}'"
@@ -420,8 +403,6 @@ class AdvancedTaskProcessor:
                                 progress=progress,
                                 task_id=main_task
                             )
-                            
-                            _init_nested_dict(results, [var, table_type, level])
                             results[var][table_type][level] = result
                             
                             # Save results
@@ -492,7 +473,9 @@ class StatisticalAnalysis:
       
         self.group_columns = self.config.get("group_columns", GROUP_COLUMNS)
         # Add NFC facilities if enabled
-        if self.config.get("nfc_facilities", {}).get('enabled', False) and 'facility_match' in self.metadata["raw"]["genus"].columns:
+        nfc_facilities_enabled = self.config.get("nfc_facilities", {}).get('enabled', False)
+        nfc_facilities_column = 'facility_match' in self.metadata["raw"]["genus"].columns
+        if nfc_facilities_enabled and nfc_facilities_column:
             self.group_columns.append({
                 'name': 'facility_match', 
                 'type': 'bool', 
