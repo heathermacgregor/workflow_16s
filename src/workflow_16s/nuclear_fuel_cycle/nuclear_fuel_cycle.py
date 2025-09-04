@@ -119,9 +119,9 @@ class NFCFacilitiesHandler:
             database_dfs.append(other_databases.load_nfc_facilities(config=self.config, output_dir=self.output_dir))
         if "MinDat" in self.database_names:
             mindat_results = mindat.world_uranium_mines(self.config, self.mindat_api_key, self.output_dir)
-            database_dfs.append(mindat_results[0][[
-                "facility", "country", "latitude", "longitude", "elements", "refs", "wikipedia", "data_source"
-            ]])
+            database_dfs.append(mindat_results[0])#[[
+                #"facility", "country", "latitude", "longitude", "elements", "refs", "wikipedia", "data_source"
+            #]])
         if "Wikipedia" in self.database_names:
             wikipedia_results = wikipedia.world_nfc_facilities(config=self.config, output_dir=self.output_dir)[[
                 "facility", "country", "facility_start_year", "facility_end_year", "latitude", "longitude", "location", "data_source", "wikipedia", "wikitable"
