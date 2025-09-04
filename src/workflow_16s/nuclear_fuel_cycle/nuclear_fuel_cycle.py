@@ -124,7 +124,7 @@ class NFCFacilitiesHandler:
             ]])
         if "Wikipedia" in self.database_names:
             wikipedia_results = wikipedia.world_nfc_facilities(config=self.config, output_dir=self.output_dir)[[
-                "facility", "country", "facility_start_year", "facility_end_year", "lat_lon", "data_source"
+                "facility", "country", "facility_start_year", "facility_end_year", "latitude", "longitude", "location", "data_source", "wikipedia", "wikitable"
             ]]
             database_dfs.append(wikipedia_results)
         
