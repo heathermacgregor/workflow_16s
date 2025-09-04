@@ -361,7 +361,7 @@ class Ordination:
             "ordination_type": ordination_type,
             "symbol_col": self.symbol_col,
             "dimensions": (1, 2),
-            "transformation": ,
+            "transformation": transformation,
             "output_path": file_stem
         }
         
