@@ -22,8 +22,7 @@ import numpy as np
 from biom.table import Table
 import plotly.io as pio
 
-# Local Imports
-from workflow_16s.amplicon_data.helpers import _init_dict_level
+# Local Imports\
 from workflow_16s.constants import GROUP_COLUMNS, MODE, DEFAULT_DATASET_COLUMN, DEFAULT_GROUP_COLUMN
 from workflow_16s.diversity import beta_diversity 
 from workflow_16s.downstream.load_data import align_table_and_metadata
