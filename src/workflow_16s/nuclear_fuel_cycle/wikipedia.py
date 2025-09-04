@@ -90,8 +90,12 @@ class WikipediaScraper:
             "Past capacity (MW)": "capacity_mw_past",
         }
         df = df.rename(columns=rename)
-        df['latitude'] = [i.split('/')[-1].split('(')[0].split(';')[0] for i in df['lat_lon']]
-        df['longitude'] = [i.split('/')[-1].split('(')[0].split(';')[1] for i in df['lat_lon']]
+        try:
+            df['latitude'] = [i.split('/')[-1].split('(')[0].split(';')[0] for i in df['lat_lon']]
+            df['longitude'] = [i.split('/')[-1].split('(')[0].split(';')[1] for i in df['lat_lon']]
+        except Exception as e:
+            logger.error(str(e))
+            
         better_facility = []
         for i in df['facility']:
             try:
