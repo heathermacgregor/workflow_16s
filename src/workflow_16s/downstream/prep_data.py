@@ -78,6 +78,9 @@ class DownstreamDataPrepper:
                 
         self._save_tables()
         self._save_metadata()
+
+    def log(self, msg):
+        return (lambda msg: logger.debug(msg)) if self.verbose else (lambda *_: None)
         
     def _fetch_data(self, table_type: str, level: str) -> Tuple[pd.DataFrame, Table]:
         """Retrieve table and metadata for specified processing stage and taxonomic level."""
@@ -92,7 +95,6 @@ class DownstreamDataPrepper:
     def _collapse_taxonomy(self, table_type: str = "raw") -> None:
         """Collapse taxonomy tables from base level to all taxonomic levels."""
         # Get base level from mode config (e.g. "asv" or "genus")
-        #base_level = self.ModeConfig[self.mode][0]
         base_level = "genus" if self.config.get("target_subfragment_mode", MODE) == 'any' else "asv"
         base_table, base_metadata = self._fetch_data(table_type, base_level)
 
@@ -106,11 +108,9 @@ class DownstreamDataPrepper:
                 level_desc_fmt = _format_task_desc(level_desc)
                 progress.update(task_id, description=level_desc_fmt)
                 
-                if level == base_level:
-                    # Use base table directly without collapsing
+                if level == base_level: # Use base table directly without collapsing
                     table, metadata = base_table, base_metadata
-                else:
-                    # Collapse from base table to target level
+                else: # Collapse from base table to target level
                     table = collapse_taxa(base_table, level)
                     table, metadata = align_table_and_metadata(table, base_metadata)
 
@@ -121,19 +121,17 @@ class DownstreamDataPrepper:
             progress.update(task_id, description=task_desc_fmt)
             
     def _transform_enabled(self, config_key: str):
-        # Explicitly convert config value to boolean
+        """Explicitly convert config value to boolean."""
         return bool(self.config.get("features", {}).get(config_key, True))
         
     def _apply_transformations(self, level: str) -> None:      
         """Apply transformations (filtering, normalization, CLR) to specified taxonomic level."""
         table, metadata = self._fetch_data("raw", level)
-
         steps = [
             ("filter", filter, "filtered"),
             ("normalize", normalize, "normalized"),
             ("clr_transform", clr, "clr_transformed")
         ]
-
         n_steps = sum([self._transform_enabled(key) for key, _, _ in steps])
         with get_progress_bar() as progress:
             task_desc = "Transforming_features"
@@ -151,10 +149,19 @@ class DownstreamDataPrepper:
                         # Store results
                         self.tables.setdefault(table_type, {})[level] = table
                         self.metadata.setdefault(table_type, {})[level] = metadata
-                        logger.info( 
-                            f"Preprocessing: {samples_n_0} → {table.shape[0]} samples, " 
-                            f"{features_n_0} → {table.shape[1]} features" 
-                        )
+
+                        samples_n_1, features_n_1 = table.shape
+                        samples_msg = f"{samples_n_0} → {samples_n_1} samples"
+                        if samples_n_1 < samples_n_0:
+                            samples_n_lost = samples_n_0 - samples_n_1
+                            samples_perc_lost = samples_n_lost / samples_n_0
+                            samples_msg += f"(-{samples_n_lost} or -{samples_perc_lost}%)"
+                        features_msg = f"{features_n_0} → {features_n_1} features"
+                        if features_n_1 < features_n_0:
+                            features_n_lost = features_n_0 - features_n_1
+                            features_perc_lost = features_n_lost / features_n_0
+                            features_msg += f"(-{features_n_lost} or -{features_perc_lost}%)"
+                        self.log(f"Preprocessing: {samples_msg}, {features_msg}")
                     except Exception as e:
                         logger.error(f"Preprocessing function failed for {key} at {level}: {e}")
                     finally:    
@@ -188,7 +195,6 @@ class DownstreamDataPrepper:
                 out = table_dir / f"{level}.biom"  # Simplified filename
                 out.parent.mkdir(parents=True, exist_ok=True)
                 export_tasks.append((table, out))
-    
         # Use ThreadPoolExecutor for parallel exports
         max_workers = self.config.get("threads", 4)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -221,7 +227,6 @@ class DownstreamDataPrepper:
                 out = metadata_dir / f"{level}.tsv"  # Simplified filename
                 out.parent.mkdir(parents=True, exist_ok=True)
                 export_tasks.append((metadata, out))
-    
         # Use ThreadPoolExecutor for parallel exports
         max_workers = self.config.get("threads", 4)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
