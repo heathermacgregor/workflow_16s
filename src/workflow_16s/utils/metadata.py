@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third Party Imports
 import pandas as pd
+import numpy as np
 
 # Local Imports
 from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN
