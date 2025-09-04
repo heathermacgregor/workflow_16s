@@ -264,7 +264,7 @@ class ExistingDataLoader:
                     for level in self.levels.keys():
                         base = Path(self.project_dir.data) / "merged"
                         table_path = base / "table" / table_type / f"{level}.biom"
-                        metadata_path = base / "table" / table_type / f"{level}.tsv"
+                        metadata_path = base / "metadata" / table_type / f"{level}.tsv"
                         
                         try:
                             table = import_biom(table_path)
