@@ -229,7 +229,7 @@ class Ordination:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks at once 
                 future_to_task = {executor.submit(self._run_single_ordination, 
-                                                  task, self.output_dir, 
+                                                  task, 
                                                   progress): task for task in self.tasks}
     
                 # Process completed futures with timeout
@@ -350,15 +350,19 @@ class Ordination:
         if not valid_color_cols:
             logger.warning(f"No valid color columns found for {task}")
             return {}
-        
+
+        ordination_type = method_config.name
+        transformation = task.table_type
+        type = ordination_type.lower()
+        file_stem = output_dir / type / f"{type}.{transformation or 'raw'}.{x_dim}-{y_dim}.{color_col}"  
         # Base plot parameters
         base_params = {
             "metadata": metadata,
-            "ordination_type": method_config.name,
+            "ordination_type": ordination_type,
             "symbol_col": self.symbol_col,
             "dimensions": (1, 2),
-            "transformation": task.table_type,
-            "output_dir": output_dir
+            "transformation": ,
+            "output_path": file_stem
         }
         
         # Method-specific parameters
