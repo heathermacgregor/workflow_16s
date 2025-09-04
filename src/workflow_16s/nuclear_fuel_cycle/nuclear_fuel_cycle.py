@@ -75,7 +75,8 @@ class NFCFacilitiesHandler:
 
         self.output_dir = Path(output_dir) / "nfc_facilities"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.facilities_output_path = Path(self.output_dir) / 'facilities.tsv'
+        self.facilities_output_path = Path(self.output_dir) / 'facilities_raw.tsv'
+        self.facilities_geocoded_output_path = Path(self.output_dir) / 'facilities.tsv'
         self.matches_output_path = Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv"
         self.matches_only_output_path = Path(self.output_dir) / f"facility_matches_only_{self.max_distance_km}km.tsv"
         
@@ -173,7 +174,7 @@ class NFCFacilitiesHandler:
         df['longitude_deg'] = df['__query__'].map(lambda q: coords[q][1])
         df.drop(columns='__query__', inplace=True)
         if self.facilities_output_path:
-            df.to_csv(self.facilities_output_path, sep='\t', index=False)
+            df.to_csv(self.facilities_geocoded_output_path, sep='\t', index=False)
         return df
 
     def _match_facilities_with_samples(
