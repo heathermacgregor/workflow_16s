@@ -22,7 +22,7 @@ from workflow_16s.utils.biom import (
 )
 from workflow_16s.utils.dir import Dir, ProjectDir
 from workflow_16s.utils.metadata import (
-    clean_metadata, import_tsv, import_merged_metadata_tsv
+    clean_metadata, import_tsv, import_merged_metadata_tsv, MetadataSummarizer
 )
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
 
@@ -129,6 +129,7 @@ class DownstreamDataLoader:
         table = self._load_biom_table(level, subdir)
         metadata = self._load_metadata(level, subdir)
         metadata = clean_metadata(self.config, metadata)
+        MetadataSummarizer(self.config, metadata)
       
         # If enabled, find samples within a threshold distance from NFC facilities
         if self.config.get("nfc_facilities", {}).get("enabled", False):
