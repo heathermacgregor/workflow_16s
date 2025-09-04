@@ -174,7 +174,7 @@ class Ordination:
                     tasks.append(OrdinationTask(table_type, level, method))
                     self.log(f"Added task: {table_type}/{level}/{method}")
         
-        self.log_ok(f"Retrieved {len(tasks)} tasks")
+        self.log(f"Retrieved {len(tasks)} tasks")
         return tuple(tasks) 
 
     @lru_cache(maxsize=32)
