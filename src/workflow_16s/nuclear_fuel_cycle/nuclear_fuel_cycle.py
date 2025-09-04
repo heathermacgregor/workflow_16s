@@ -77,7 +77,8 @@ class NFCFacilitiesHandler:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.facilities_output_path = Path(self.output_dir) / 'facilities.tsv'
         self.matches_output_path = Path(self.output_dir) / f"facility_matches_{self.max_distance_km}km.tsv"
-
+        self.matches_only_output_path = Path(self.output_dir) / f"facility_matches_only_{self.max_distance_km}km.tsv"
+        
         self.mindat_api_key = mindat_api_key
         self.user_agent = user_agent
         
@@ -213,7 +214,7 @@ class NFCFacilitiesHandler:
         
         # Save full matched results
         if self.matches_output_path:
-            #matched_df[result_cols]
+            matched_df[result_cols].to_csv(self.matches_only_output_path, sep='\t', index=False)
             matched_df.to_csv(self.matches_output_path, sep='\t', index=False)
         return matched_df
 
