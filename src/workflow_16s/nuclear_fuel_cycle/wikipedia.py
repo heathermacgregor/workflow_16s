@@ -94,10 +94,14 @@ class WikipediaScraper:
         df['longitude'] = [i.split('/')[-1].split('(')[0].split(';')[1] for i in df['lat_lon']]
         better_facility = []
         for i in df['facility']:
-            facility = i.split('/')[-1].split('(')[-1].split(')')[0]
-            if facility:
-                better_facility.append(facility)
-            else:
+            try:
+                facility = i.split('/')[-1].split('(')[-1].split(')')[0]
+                if facility:
+                    better_facility.append(facility)
+                else:
+                    better_facility.append(i)
+            except Exception as e:
+                logger.info(i)
                 better_facility.append(i)
         df['facility'] = better_facility
         df['country'] = df['country_1'].combine_first(df['country_2'])
