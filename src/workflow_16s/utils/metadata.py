@@ -55,7 +55,9 @@ def import_metadata_tsv(
   
     # Normalize column names to lowercase
     df.columns = df.columns.str.lower()
-    df = df.drop(cols_to_drop, axis=1)
+    for col in cols_to_drop:
+        if col in df.columns:
+            df = df.drop(cols_to_drop, axis=1)
 
     sample_id_col = next((col 
                           for col in ['run_accession', '#sampleid', 'sample-id'] 
@@ -204,7 +206,10 @@ class MetadataCleaner:
             'longitude': 'lon'
         }
         for col1, col2 in cols_to_collapse.values():
-            self.df[col1] = self.df[col1].combine_first(self.df[col2])
+            if col1 in self.df.columns and col2 in self.df.columns:
+                self.df[col1] = self.df[col1].combine_first(self.df[col2])
+            else:
+                continue
 
     def _clean_columns(self) -> None:
         """Remove duplicate columns."""
