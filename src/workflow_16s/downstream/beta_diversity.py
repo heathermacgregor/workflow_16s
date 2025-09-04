@@ -112,7 +112,7 @@ class Ordination:
             return
       
         self.mode = self.config.get("target_subfragment_mode", MODE)
-        self.verbose = self.config("verbose", False)
+        self.verbose = self.config.get("verbose", False)
         self.project_dir = project_dir
 
         self.group_columns = group_columns or self.config.get("group_columns", GROUP_COLUMNS)
