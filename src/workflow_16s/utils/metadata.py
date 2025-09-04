@@ -11,19 +11,26 @@ import pandas as pd
 import numpy as np
 
 # Local Imports
-from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN
+from workflow_16s.constants import GROUP_COLUMNS, SAMPLE_ID_COLUMN, SET_SAMPLE_ID_COLUMN, SET_DATASET_ID_COLUMN
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+
+# ==================================================================================== #
+
 logger = logging.getLogger("workflow_16s")
+
 # ==================================================================================== #
 
 fastq_columns = ['fastq_aspera', 'fastq_bytes', 'fastq_ftp', 'fastq_galaxy', 'fastq_md5']
 bam_columns = ['bam_aspera', 'bam_bytes', 'bam_ftp', 'bam_galaxy', 'bam_md5']
 cols_to_drop = fastq_columns + bam_columns
+cols_to_rename = {}
 
 def import_metadata_tsv(
     tsv_path: Union[str, Path],
     group_columns: List[Dict] = GROUP_COLUMNS,
-    columns_to_rename: Optional[List[Tuple[str, str]]] = None
+    columns_to_rename: Optional[List[Tuple[str, str]]] = None,
+    set_sample_id_column: str = SET_SAMPLE_ID_COLUMN,
+    set_dataset_id_column: str = SET_DATASET_ID_COLUMN
 ) -> pd.DataFrame:
     """Load and standardize a sample metadata TSV file.
     
@@ -54,7 +61,7 @@ def import_metadata_tsv(
     sample_id_col = next((col 
                           for col in ['run_accession', '#sampleid', 'sample-id'] 
                           if col in df.columns), None)
-    df['SAMPLE ID'] = (df[sample_id_col] 
+    df[set_sample_id_column] = (df[sample_id_col] 
                        if sample_id_col 
                        else [f"{tsv_path.parents[5].name}_x{i}" 
                              for i in range(1, len(df)+1)])
@@ -62,7 +69,7 @@ def import_metadata_tsv(
     dataset_id_col = next((col 
                            for col in ['project_accession', 'dataset_id', 'dataset_name'] 
                            if col in df.columns), None)
-    df['DATASET ID'] = (df[dataset_id_col] 
+    df[set_dataset_id_column] = (df[dataset_id_col] 
                         if dataset_id_col 
                         else tsv_path.parents[5].name)
   
