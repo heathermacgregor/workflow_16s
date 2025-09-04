@@ -334,7 +334,7 @@ class AdvancedTaskProcessor:
                                 output_dir=output_dir
                             )
                             # Store plot
-                            results[table_type][level][method]['plot'] = network                            
+                            results[table_type][level][method]['plot'] = fig                            
                         except Exception as e:
                             logger.error(f"Network analysis failed for {method}/{table_type}/{level}: {e}")
                         finally:
