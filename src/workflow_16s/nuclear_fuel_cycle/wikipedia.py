@@ -90,6 +90,16 @@ class WikipediaScraper:
             "Past capacity (MW)": "capacity_mw_past",
         }
         df = df.rename(columns=rename)
+        df['latitude'] = [i.split('/')[-1].split('(')[0].split(';')[0] for i in df['lat_lon']]
+        df['longitude'] = [i.split('/')[-1].split('(')[0].split(';')[1] for i in df['lat_lon']]
+        better_facility = []
+        for i in df['facility']:
+            facility = i.split('/')[-1].split('(')[-1].split(')')[0]
+            if facility:
+                better_facility.append(facility)
+            else:
+                better_facility.append(i)
+        df['facility'] = better_facility
         df['country'] = df['country_1'].combine_first(df['country_2'])
         df['n_units'] = df['n_units_1'].combine_first(df['n_units_2'])
         return df
@@ -123,9 +133,11 @@ class WikipediaScraper:
 
                 row_data = {
                     'facility': mine_name,
-                    'facility_location': location,
+                    'location': location,
                     'country': country,
-                    'data_source': f"Table {i+1} - {url}",
+                    'data_source': "Wikipedia",
+                    'wikipedia': url,
+                    'wikitable': f"Table {i+1}",
                     'last_updated': datetime.now().isoformat()
                 }
                 if len(cells) >= 3:
