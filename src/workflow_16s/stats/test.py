@@ -558,7 +558,7 @@ def spearman_correlation(
         logger.error(f"Merge error: {str(e)}")
         return pd.DataFrame()
     
-    logger.info(
+    logger.debug(
         f"Correlation analysis for '{continuous_column}': "
         f"{len(merged)} samples with valid data"
     )
@@ -612,7 +612,7 @@ def spearman_correlation(
         'rho', key=abs, ascending=False
     )
     
-    logger.info(f"Found {len(sig_df)} significant correlations")
+    logger.debug(f"Found {len(sig_df)} significant correlations")
     return sig_df
 
 
@@ -887,7 +887,7 @@ def microbial_network_analysis(
     prevalence = (df > 0).mean()
     df_filt = df.loc[:, prevalence >= min_prevalence]
     
-    logger.info(f"Network analysis: {df_filt.shape[1]} features after prevalence filtering")
+    logger.debug(f"Network analysis: {df_filt.shape[1]} features after prevalence filtering")
     
     if method == 'sparcc':
         corr_matrix = df_filt.corr(method='spearman')
