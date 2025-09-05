@@ -168,8 +168,8 @@ class NFCFacilitiesHandler:
                 progress.update(task, advance=1)
     
         # Map coords back to DataFrame
-        df['latitude_deg']  = df['__query__'].map(lambda q: coords[q][0])
-        df['longitude_deg'] = df['__query__'].map(lambda q: coords[q][1])
+        df['latitude_osm']  = df['__query__'].map(lambda q: coords[q][0])
+        df['longitude_osm'] = df['__query__'].map(lambda q: coords[q][1])
         df.drop(columns='__query__', inplace=True)
         if self.facilities_output_path:
             df.to_csv(self.facilities_geocoded_output_path, sep='\t', index=False)
