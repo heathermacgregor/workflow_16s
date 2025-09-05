@@ -68,7 +68,9 @@ class WikipediaScraper:
                 station_name = cells[0] if cells[0] else "Unknown Station"
                 row_data = {
                     'facility': station_name,
-                    'data_source': f"Table {i+1} - {url}",
+                    'data_source': "Wikipedia",
+                    'wikipedia': url,
+                    'wikitable': f"Table {i+1}",
                     'last_updated': datetime.now().isoformat()
                 }
                 for n in range(1, len(headers)-1):
