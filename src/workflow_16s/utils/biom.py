@@ -261,7 +261,7 @@ def filter_presence_absence(
 
 def sample_id_map(table: Table) -> Dict[str, str]:
     """Create lowercase to original-case ID mapping for BIOM table samples."""
-    if table.is_empty(): # Handle empty table
+    if df_to_biom(table).is_empty(): # Handle empty table
         return {}
     
     mapping: Dict[str, str] = {}
