@@ -153,7 +153,7 @@ class MinDatAPI:
         
         if 'results' in results and results['results']:
             df = pd.DataFrame(results['results'])
-            df['facility'] = [i.split(',')[0] for i in df['txt']]
+            df['facility'] = [i.split(',')[0] for i in df['txt'] if isinstance(i, str) else i]
             df['data_source'] = "MinDat"
             return df, gpd_from_df(df)
         else:
