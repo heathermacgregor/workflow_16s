@@ -160,10 +160,11 @@ class WikipediaScraper:
         rename = {
             "Year discovered": "facility_discovered_year",	
             "Year commenced": "facility_start_year",	
-            "Grade %U[2]": "grade_%_u",	
+            "Grade %U[2]": "grade_%_u_2",	
+            "Grade %U": "grade_%_u",
             "Annual production (tOre)[3]": "annual_production_tons_ore",	
             "Annual production (tU)[4]": "annual_production_tons_u",	
-            "Scheduled Commencement	Grade %U": "scheduled_commencement_grade_%_u",	
+            "Scheduled Commencement": "scheduled_commencement",	
             "Planned Annual production (tOre)": "planned_annual_production_tons_ore",	
             "Planned Annual production (tU)": "planned_annual_production_tons_u",	
             "Probable commencement": "probable_facility_start_year",	
