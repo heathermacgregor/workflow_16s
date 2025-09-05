@@ -443,5 +443,5 @@ class MetadataSummarizer:
         unique_prefixes = set([i.split('_')[0] for i in all_columns])
         n = len(unique_prefixes)
         for i, prefix in enumerate(unique_prefixes):
-            columns_with_prefix = [i for i in all_columns if i.startswith(prefix)]
+            columns_with_prefix = [i for i in all_columns if i == prefix or i.startswith(f"{prefix}_")]
             logger.info(f"{prefix} ({i} of {n}): {', '.join(columns_with_prefix)}")
