@@ -186,6 +186,7 @@ class MetadataCleaner:
 
     def run_all(self):  
         """[Placeholder]"""
+        self.df = self.df.reindex(sorted(self.df.columns), axis=1) 
         self._clean_columns()
         self._clean_sample_ids()
         self._collapse_suffix_columns(suffix='_ena')
