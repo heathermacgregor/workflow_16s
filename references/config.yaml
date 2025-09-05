@@ -105,8 +105,8 @@ nfc_facilities:
   databases:
     - name: "GEM"
     - name: "NFCIS"
-    - name: "Wikipedia"
-    - name: "MinDat"
+    #- name: "Wikipedia"
+    #- name: "MinDat"
   max_distance_km: 50
   maps:
     enabled: True
