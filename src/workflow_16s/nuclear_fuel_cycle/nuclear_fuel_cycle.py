@@ -137,6 +137,7 @@ class NFCFacilitiesHandler:
         facilities_df = pd.concat(dfs, axis=0)
         facilities_df = facilities_df.sort_values(by='facility')
         facilities_df = facilities_df.reindex(sorted(facilities_df.columns), axis=1)
+        facilities_df['country'] = ['United States of America' for i in facilities_df['country'] if i == 'USA' else i for i in facilities_df['country']]
         logger.info(facilities_df.columns)
         if self.facilities_output_path:
             facilities_df.to_csv(self.facilities_output_path, sep='\t', index=False)
