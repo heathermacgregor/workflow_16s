@@ -19,6 +19,7 @@ from skbio.stats.composition import clr as CLR
 from workflow_16s import constants
 from workflow_16s.constants import SAMPLE_ID_COLUMN, DEFAULT_GROUP_COLUMN, DEFAULT_META_ID_COLUMN
 from workflow_16s.utils.progress import get_progress_bar, _format_task_desc
+from workflow_16s.utils.biom import sample_id_map
 
 # ========================== INITIALIZATION & CONFIGURATION ========================== #
 
