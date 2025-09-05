@@ -91,8 +91,10 @@ class WikipediaScraper:
         }
         df = df.rename(columns=rename)
         try:
-            df['latitude'] = [i.split('/')[-1].split('(')[0].split(';')[0] for i in df['lat_lon']]
-            df['longitude'] = [i.split('/')[-1].split('(')[0].split(';')[1] for i in df['lat_lon']]
+            # 69°42′35″N 170°18′22″E / 69.7097°N 170.3061°E / 69.7097; 170.3061 (Akademik Lomonosov)
+            df['latitude'] = [i.strip().split('/')[2].split('(')[0].split(';')[0] for i in df['lat_lon']]
+            df['longitude'] = [i.strip().split('/')[2].split('(')[0].split(';')[1] for i in df['lat_lon']]
+            logger.info(df[['lat_lon', 'latitude', 'longitude']])
             df = df.drop('lat_lon', axis=1)
         except Exception as e:
             logger.error(str(e))
