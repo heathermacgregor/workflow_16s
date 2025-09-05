@@ -197,7 +197,7 @@ class MinDatAPI:
                 df, gdf = self._get_uranium_mines_locality(locality)
                 if not df.empty:
                     dfs.append(df)
-                    self._mpl_plot_uranium_mines_locality(locality, gdf)
+                    #self._mpl_plot_uranium_mines_locality(locality, gdf)
                 else:
                     self.log(f"No uranium mines found in {locality}")
             except Exception as e:
