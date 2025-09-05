@@ -303,9 +303,6 @@ def upstream(config, logger, project_dir) -> Union[List, None]:
         raise
 
 
-
-
-
 class Workflow16S:
     def __init__(self, config_path: Path = constants.DEFAULT_CONFIG) -> None:
         self.config = get_config(config_path)
@@ -359,7 +356,7 @@ class Workflow16S:
             self.logger.info("Downstream processing completed")
 
             # Generate a comprehensive HTML report
-            output_path = Path(project_dir.final) / "analysis_report_ml_minimal_run.html"
+            output_path = Path(self.project_dir.final) / "analysis_report_ml_minimal_run.html"
             generate_html_report(
                 amplicon_data=results,
                 output_path=output_path,
