@@ -95,7 +95,7 @@ class NFCFacilityDB:
         if dfs:
             self.result = pd.concat(dfs, ignore_index=True)
             if self.output_dir:
-                tsv_path = Path(self.output_dir) / f"nfc_facilities{'_'.join(valid_dbs)}.tsv"
+                tsv_path = Path(self.output_dir) / f"{'_'.join(valid_dbs)}.tsv"
                 self.result.to_csv(tsv_path, sep='\t', index=True)
         else:
             self.result = pd.DataFrame()
