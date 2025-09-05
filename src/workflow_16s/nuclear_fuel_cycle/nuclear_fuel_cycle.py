@@ -25,6 +25,15 @@ logger = logging.getLogger("workflow_16s")
 
 # ==================================================================================== #
 
+mindat_columns_to_keep = [
+    "facility", "country", "latitude", "longitude", "elements", "refs", "wikipedia", 
+    "data_source"
+]
+wikipedia_columns_to_keep = [
+    "facility", "country", "facility_start_year", "facility_end_year", "lat_lon", 
+    "location", "data_source", "wikipedia", "wikitable"
+]
+
 class NFCFacilitiesHandler:
     """Handler for managing Nuclear Fuel Cycle (NFC) facilities data.
     
@@ -112,34 +121,23 @@ class NFCFacilitiesHandler:
         """Aggregate facilities data from all enabled databases."""
         database_dfs = []
         if "GEM" in self.database_names or "NFCIS" in self.database_names:
-            databases = []
-            for db in ["GEM", "NFCIS"]:
-                if db in self.database_names:
-                    databases.append(db)
-            database_dfs.append(other_databases.load_nfc_facilities(config=self.config, output_dir=self.output_dir))
+            other_databases_results = other_databases.load_nfc_facilities(config=self.config, output_dir=self.output_dir)
+            logger.info(other_databases_results.columns)
+            database_dfs.append(other_databases_results)
         if "MinDat" in self.database_names:
-            mindat_results = mindat.world_uranium_mines(self.config, self.mindat_api_key, self.output_dir)
-            database_dfs.append(mindat_results[0][[
-                "facility", "country", "latitude", "longitude", "elements", "refs", "wikipedia", "data_source"
-            ]])
+            mindat_results, _ = mindat.world_uranium_mines(self.config, self.mindat_api_key, self.output_dir)
+            logger.info(mindat_results.columns)
+            database_dfs.append(mindat_results[mindat_columns_to_keep])
         if "Wikipedia" in self.database_names:
-            wikipedia_results = wikipedia.world_nfc_facilities(config=self.config, output_dir=self.output_dir)[[
-                "facility", "country", "facility_start_year", "facility_end_year", "lat_lon", "location", "data_source", "wikipedia", "wikitable"
-            ]]
-            database_dfs.append(wikipedia_results)
+            wikipedia_results = wikipedia.world_nfc_facilities(config=self.config, output_dir=self.output_dir)
+            logger.info(wikipedia_results.columns)
+            database_dfs.append(wikipedia_results[wikipedia_columns_to_keep])
         
-        #database_dfs = [item for sublist in database_dfs for item in sublist]
-        dfs = []
-        for df in database_dfs:
-            logger.info(df)
-            logger.info(type(df))
-            if isinstance(df, gpd.GeoDataFrame):
-                dfs.append(pd.DataFrame(df))  # Convert and append
-            elif isinstance(df, pd.DataFrame):
-                dfs.append(df)  # Directly append
-            
+        dfs = [df for df in database_dfs if isinstance(df, pd.DataFrame)]            
         facilities_df = pd.concat(dfs, axis=0)
         facilities_df = facilities_df.sort_values(by='facility')
+        facilities_df = facilities_df.reindex(sorted(facilities_df.columns), axis=1)
+        logger.info(facilities_df.columns)
         if self.facilities_output_path:
             facilities_df.to_csv(self.facilities_output_path, sep='\t', index=False)
         return facilities_df
