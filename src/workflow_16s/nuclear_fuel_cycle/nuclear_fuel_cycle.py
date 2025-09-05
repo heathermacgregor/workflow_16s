@@ -63,10 +63,10 @@ class NFCFacilitiesHandler:
         """Initialize NFC facilities handler.
         
         Args:
-            config: Configuration dictionary containing NFC facilities settings.
-            output_dir: Output directory path. Defaults to REFERENCES_DIR.
+            config:        Configuration dictionary containing NFC facilities settings.
+            output_dir:     Output directory path. Defaults to REFERENCES_DIR.
             mindat_api_key: Mindat API key. Defaults to MINDAT_API_KEY.
-            user_agent: User agent string for web requests. Defaults to DEFAULT_USER_AGENT.
+            user_agent:     User agent string for web requests. Defaults to DEFAULT_USER_AGENT.
         """
         self.config = config
         enabled = self.config.get("nfc_facilities", {}).get("enabled", True) # TODO: Switch to False
@@ -184,7 +184,7 @@ class NFCFacilitiesHandler:
         
         Args:
             facilities_df: DataFrame containing geocoded facilities.
-            samples_df: DataFrame containing sample metadata with coordinates.
+            samples_df:    DataFrame containing sample metadata with coordinates.
             
         Returns:
             pd.DataFrame: Updated metadata with facility match information.
@@ -226,7 +226,7 @@ class NFCFacilitiesHandler:
         
         Args:
             facilities_df: Geocoded facilities DataFrame.
-            samples_df: Sample metadata DataFrame with coordinates.
+            samples_df:    Sample metadata DataFrame with coordinates.
             
         Returns:
             pd.DataFrame: Combined DataFrame with facility match results.
@@ -305,7 +305,11 @@ class NFCFacilitiesHandler:
 
 # ==================================================================================== #
 
-def update_nfc_facilities_data(config: Dict, metadata: pd.DataFrame, verbose: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def update_nfc_facilities_data(
+    config: Dict, 
+    metadata: pd.DataFrame, 
+    verbose: bool = True
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Convenience function to update NFC facilities data and match with samples.
     
     Args:
